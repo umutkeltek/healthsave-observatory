@@ -102,13 +102,17 @@ without requiring a separate `activity_summaries` payload.
 |--------|--------------------------|
 | `step_count` | `steps` |
 | `distance_walking_running` | `distance_m` |
-| `distance_cycling` | `distance_m` |
-| `distance_wheelchair` | `distance_m` |
 | `flights_climbed` | `floors_climbed` |
 | `active_energy_burned` | `active_calories` |
 | `basal_energy_burned` | `total_calories` |
 | `apple_exercise_time` | `active_minutes` |
-| `apple_stand_time` | `stand_hours` |
+
+`apple_stand_time` stays in `quantity_samples` because HealthKit sends it in
+minutes, while `daily_activity.stand_hours` is populated from
+`activity_summaries.appleStandHours`. `distance_cycling` and
+`distance_wheelchair` also stay in `quantity_samples`; the reference schema has
+only one `daily_activity.distance_m` column, so mapping multiple sport-specific
+distance totals into it would make the stored value depend on batch order.
 
 ### Blood Pressure Correlation
 
@@ -122,13 +126,51 @@ The server preserves the inner metric name when storing to `quantity_samples`.
 
 ### ECG
 
-`ecg` batches are accepted and stored in `quantity_samples`.
+`ecg` batches are accepted for compatibility. HealthSave ECG samples can
+include `start`, `end`, `classification`, `numberOfVoltageMeasurements`,
+`samplingFrequency`, and `averageHeartRate`. ECG records are not persisted by
+this small-footprint server because the current schema has no ECG table.
+
+### Workout Payload Details
+
+Workout samples can include these fields:
+
+```json
+{
+  "name": "Running",
+  "start": "2026-04-10T07:00:00Z",
+  "end": "2026-04-10T07:45:00Z",
+  "duration": 2700,
+  "source": "Apple Watch",
+  "activeEnergy": 420,
+  "distance": 6500,
+  "avgHeartRate": 145,
+  "maxHeartRate": 178,
+  "heartRateData": [
+    {"date": "2026-04-10T07:01:00Z", "qty": 132}
+  ],
+  "route": [
+    {
+      "latitude": 41.01,
+      "longitude": 28.97,
+      "altitude": 42.0,
+      "speed": 2.8,
+      "timestamp": "2026-04-10T07:01:00Z"
+    }
+  ]
+}
+```
+
+The reference server stores the workout summary fields in `workouts`.
+`heartRateData` and `route` are accepted as part of the client payload but are
+not persisted by this small-footprint server.
 
 ### Full HealthKit Metric Catalog
 
 The server accepts any metric name. Below is the complete catalog of metrics
-that HealthSave can send. Metrics not listed above as dedicated or daily
-activity types are stored in `quantity_samples`.
+that HealthSave can send. Quantity-like metrics not listed above as dedicated
+or daily activity types are stored in `quantity_samples` when each sample has
+`date` and `qty` fields.
 
 **Heart & Cardiovascular:**
 `heart_rate`, `resting_heart_rate`, `walking_heart_rate_average`,
@@ -306,5 +348,6 @@ not compatible with the current iOS status UI.
 - Date-only daily activity values can use `YYYY-MM-DD` or an ISO timestamp.
 - Batch ingestion is idempotent for first-class time-series tables through
   `ON CONFLICT` upserts.
-- Unknown metric names are intentionally accepted so new HealthKit types can
-  be stored before they receive first-class dashboards.
+- Unknown metric names are intentionally accepted. Unknown quantity-like
+  samples with `date` and `qty` can be stored before they receive first-class
+  dashboards.

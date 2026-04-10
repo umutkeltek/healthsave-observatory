@@ -127,6 +127,32 @@ async def test_step_count_daily_totals_populate_daily_activity():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("metric", ["apple_stand_time", "distance_cycling", "distance_wheelchair"])
+async def test_non_summary_daily_metrics_remain_quantity_samples(metric):
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": metric,
+            "samples": [
+                {
+                    "date": "2026-04-10T00:00:00+00:00",
+                    "qty": 42,
+                    "source": "HealthKit Statistics",
+                }
+            ],
+        }
+    )
+
+    result = await server.apple_batch(request, session)
+
+    insert_params = session.insert_params_for("quantity_samples")
+    assert result["records"] == 1
+    assert insert_params is not None
+    assert insert_params["metric"] == metric
+    assert session.insert_params_for("daily_activity") is None
+
+
+@pytest.mark.asyncio
 async def test_blood_pressure_correlation_preserves_inner_metric_names():
     session = FakeSession()
     request = FakeRequest(
@@ -357,3 +383,22 @@ def test_api_spec_documents_full_healthsave_metric_catalog():
 
     missing = [metric for metric in expected_metrics if f"`{metric}`" not in api_doc]
     assert missing == []
+
+
+def test_api_spec_documents_quantity_sample_exceptions_and_workout_nested_fields():
+    api_doc = Path("API.md").read_text()
+
+    assert "`apple_stand_time` stays in `quantity_samples`" in api_doc
+    assert "`distance_cycling`" in api_doc
+    assert "`distance_wheelchair`" in api_doc
+    assert "`heartRateData`" in api_doc
+    assert "`route`" in api_doc
+    assert "not persisted by this small-footprint server" in api_doc
+
+
+def test_api_spec_documents_ecg_as_accepted_but_not_persisted():
+    api_doc = Path("API.md").read_text()
+    compact_doc = " ".join(api_doc.split())
+
+    assert "`ecg` batches are accepted for compatibility" in compact_doc
+    assert "ECG records are not persisted by this small-footprint server" in compact_doc
