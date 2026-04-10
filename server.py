@@ -121,13 +121,10 @@ ACTIVITY_FIELDS = {
 DAILY_ACTIVITY_QUANTITY_FIELDS = {
     "step_count": ("steps", to_int),
     "distance_walking_running": ("distance_m", to_float),
-    "distance_cycling": ("distance_m", to_float),
-    "distance_wheelchair": ("distance_m", to_float),
     "flights_climbed": ("floors_climbed", to_int),
     "active_energy_burned": ("active_calories", to_float),
     "basal_energy_burned": ("total_calories", to_float),
     "apple_exercise_time": ("active_minutes", to_int),
-    "apple_stand_time": ("stand_hours", to_int),
 }
 
 
