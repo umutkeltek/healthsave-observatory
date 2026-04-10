@@ -1,0 +1,513 @@
+{
+  "uid": "workouts",
+  "title": "Workouts",
+  "tags": ["health", "workouts", "fitness"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": {"from": "now-90d", "to": "now"},
+  "fiscalYearStartMonth": 0,
+  "liveNow": false,
+  "editable": true,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Workout Calendar",
+      "description": "All workouts plotted by date",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+          "rawSql": "SELECT start_time AS time, duration_ms/60000.0 AS duration_min, sport_type FROM workouts WHERE $__timeFilter(start_time) AND device_id IN ($device) ORDER BY start_time",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "min",
+          "color": {"mode": "fixed", "fixedColor": "red"},
+          "custom": {
+            "drawStyle": "points",
+            "pointSize": 8,
+            "fillOpacity": 0,
+            "lineWidth": 0,
+            "showPoints": "always"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 2,
+      "title": "Workout Type Distribution",
+      "type": "piechart",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+          "rawSql": "SELECT sport_type, count(*) AS count FROM workouts WHERE $__timeFilter(start_time) AND device_id IN ($device) GROUP BY sport_type ORDER BY count DESC",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"}
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "pieType": "pie",
+        "tooltip": {"mode": "single", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "right", "values": ["percent", "value"]}
+      }
+    },
+    {
+      "id": 3,
+      "title": "Workout Duration Trend",
+      "description": "Duration per workout",
+      "type": "barchart",
+      "gridPos": {"h": 8, "w": 16, "x": 8, "y": 8},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+          "rawSql": "SELECT start_time AS time, duration_ms/60000.0 AS duration_min, sport_type FROM workouts WHERE $__timeFilter(start_time) AND device_id IN ($device) ORDER BY start_time",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "min",
+          "color": {"mode": "fixed", "fixedColor": "orange"}
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 4,
+      "title": "Calories per Workout",
+      "type": "barchart",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+          "rawSql": "SELECT start_time AS time, calories, sport_type FROM workouts WHERE calories IS NOT NULL AND $__timeFilter(start_time) AND device_id IN ($device) ORDER BY start_time",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kcal",
+          "color": {"mode": "fixed", "fixedColor": "dark-red"}
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 5,
+      "title": "Workout HR Zones",
+      "description": "Average and max HR per workout",
+      "type": "barchart",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+          "rawSql": "SELECT start_time AS time, avg_hr, max_hr, sport_type FROM workouts WHERE avg_hr IS NOT NULL AND $__timeFilter(start_time) AND device_id IN ($device) ORDER BY start_time",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bpm",
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "stacking": {"mode": "normal", "group": "A"}
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "avg_hr"},
+            "properties": [
+              {"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}},
+              {"id": "displayName", "value": "Avg HR"}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "max_hr"},
+            "properties": [
+              {"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}},
+              {"id": "displayName", "value": "Max HR"}
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {"mode": "single", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"},
+        "stacking": "normal"
+      }
+    },
+    {
+      "id": 10,
+      "title": "Total Workouts This Month",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 24},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+          "rawSql": "SELECT count(*) FROM workouts WHERE start_time > date_trunc('month', now()) AND device_id IN ($device)",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "fixed", "fixedColor": "red"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 5},
+              {"color": "green", "value": 12}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 11,
+      "title": "Total Workout Minutes This Month",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 24},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+          "rawSql": "SELECT sum(duration_ms)/60000 FROM workouts WHERE start_time > date_trunc('month', now()) AND device_id IN ($device)",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "min",
+          "color": {"mode": "fixed", "fixedColor": "orange"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "orange", "value": null},
+              {"color": "green", "value": 300}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 12,
+      "title": "Avg Workout HR",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 24},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+          "rawSql": "SELECT avg(avg_hr)::int FROM workouts WHERE avg_hr IS NOT NULL AND start_time > now() - interval '30 days' AND device_id IN ($device)",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bpm",
+          "color": {"mode": "fixed", "fixedColor": "dark-orange"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "orange", "value": 140},
+              {"color": "red", "value": 170}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 13,
+      "title": "Total Calories Burned (Workouts)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 24},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+          "rawSql": "SELECT sum(calories)::int FROM workouts WHERE start_time > date_trunc('month', now()) AND device_id IN ($device)",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kcal",
+          "color": {"mode": "fixed", "fixedColor": "red"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 2000},
+              {"color": "green", "value": 5000}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 20,
+      "title": "Workout Log",
+      "type": "table",
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 28},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+          "rawSql": "SELECT start_time, sport_type, duration_ms/60000 AS duration_min, avg_hr, max_hr, calories, distance_m/1000.0 AS distance_km FROM workouts WHERE $__timeFilter(start_time) AND device_id IN ($device) ORDER BY start_time DESC",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "fixed", "fixedColor": "red"},
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "start_time"},
+            "properties": [
+              {"id": "displayName", "value": "Start Time"},
+              {"id": "custom.width", "value": 180}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "sport_type"},
+            "properties": [
+              {"id": "displayName", "value": "Sport"}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "duration_min"},
+            "properties": [
+              {"id": "displayName", "value": "Duration (min)"},
+              {"id": "unit", "value": "min"}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "avg_hr"},
+            "properties": [
+              {"id": "displayName", "value": "Avg HR"},
+              {"id": "unit", "value": "bpm"}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "max_hr"},
+            "properties": [
+              {"id": "displayName", "value": "Max HR"},
+              {"id": "unit", "value": "bpm"}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "calories"},
+            "properties": [
+              {"id": "displayName", "value": "Calories"},
+              {"id": "unit", "value": "kcal"}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "distance_km"},
+            "properties": [
+              {"id": "displayName", "value": "Distance (km)"},
+              {"id": "unit", "value": "km"}
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [{"displayName": "Start Time", "desc": true}],
+        "footer": {"show": false}
+      }
+    },
+    {
+      "id": 21,
+      "title": "Distance per Workout",
+      "type": "barchart",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 38},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+          "rawSql": "SELECT start_time AS time, distance_m/1000.0 AS distance_km, sport_type FROM workouts WHERE distance_m IS NOT NULL AND $__timeFilter(start_time) AND device_id IN ($device) ORDER BY start_time",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "km",
+          "color": {"mode": "fixed", "fixedColor": "semi-dark-red"}
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 22,
+      "title": "Workouts by Device",
+      "type": "piechart",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 100},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+          "rawSql": "SELECT d.device_type AS metric, count(*) AS value FROM workouts w JOIN devices d ON d.id = w.device_id WHERE $__timeFilter(w.start_time) AND w.device_id IN ($device) GROUP BY d.device_type",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"}
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "pieType": "pie",
+        "tooltip": {"mode": "single", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "right", "values": ["percent", "value"]}
+      }
+    },
+    {
+      "id": 23,
+      "title": "Avg Workout HR by Device",
+      "type": "bargauge",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 100},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
+          "rawSql": "SELECT d.device_type AS metric, avg(w.avg_hr) AS value FROM workouts w JOIN devices d ON d.id = w.device_id WHERE $__timeFilter(w.start_time) AND w.device_id IN ($device) AND w.avg_hr IS NOT NULL GROUP BY d.device_type",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bpm",
+          "color": {"mode": "palette-classic"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "orange", "value": 140},
+              {"color": "red", "value": 170}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      }
+    }
+  ],
+  "templating": {"list": [
+    {
+      "current": {"selected": true, "text": "All", "value": "$__all"},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "definition": "SELECT id AS __value, device_type AS __text FROM devices ORDER BY device_type",
+      "includeAll": true,
+      "multi": true,
+      "name": "device",
+      "label": "Device",
+      "query": "SELECT id AS __value, device_type AS __text FROM devices ORDER BY device_type",
+      "refresh": 1,
+      "type": "query"
+    }
+  ]},
+  "annotations": {"list": []},
+  "links": []
+}

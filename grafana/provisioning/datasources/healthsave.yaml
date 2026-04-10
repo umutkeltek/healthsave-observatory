@@ -1,0 +1,16 @@
+apiVersion: 1
+datasources:
+  - name: HealthSave
+    uid: healthsave-pg
+    type: postgres
+    url: db:5432
+    user: healthsave
+    secureJsonData:
+      password: ${DB_PASSWORD}
+    jsonData:
+      database: healthsave
+      sslmode: disable
+      timescaledb: true
+      postgresVersion: 1600
+    isDefault: true
+    editable: true

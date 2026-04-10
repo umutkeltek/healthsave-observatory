@@ -1,0 +1,504 @@
+{
+  "uid": "activity-movement",
+  "title": "Activity & Movement",
+  "tags": ["health", "activity", "steps"],
+  "time": {"from": "now-30d", "to": "now"},
+  "refresh": "1m",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "templating": {
+    "list": [
+      {
+        "current": {"selected": true, "text": "All", "value": "$__all"},
+        "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+        "definition": "SELECT id AS __value, device_type AS __text FROM devices ORDER BY device_type",
+        "includeAll": true,
+        "multi": true,
+        "name": "device",
+        "label": "Device",
+        "query": "SELECT id AS __value, device_type AS __text FROM devices ORDER BY device_type",
+        "refresh": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Daily Steps",
+      "type": "barchart",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [{
+        "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+        "rawSql": "SELECT date AS time, steps FROM daily_activity WHERE steps IS NOT NULL AND $__timeFilter(date) AND device_id IN ($device) ORDER BY date",
+        "format": "time_series",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "fixed", "fixedColor": "green"},
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "scheme",
+            "axisCenteredZero": false,
+            "barAlignment": 0
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "orange", "value": null},
+              {"color": "green", "value": 8000}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 2,
+      "title": "Active Calories Trend",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [{
+        "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+        "rawSql": "SELECT date AS time, active_calories FROM daily_activity WHERE active_calories IS NOT NULL AND $__timeFilter(date) AND device_id IN ($device) ORDER BY date",
+        "format": "time_series",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kcal",
+          "color": {"mode": "fixed", "fixedColor": "orange"},
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "pointSize": 4,
+            "lineWidth": 2,
+            "spanNulls": false,
+            "lineInterpolation": "smooth"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 3,
+      "title": "Exercise Minutes",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [{
+        "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+        "rawSql": "SELECT date AS time, active_minutes FROM daily_activity WHERE active_minutes IS NOT NULL AND $__timeFilter(date) AND device_id IN ($device) ORDER BY date",
+        "format": "time_series",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "min",
+          "color": {"mode": "fixed", "fixedColor": "green"},
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "pointSize": 4,
+            "lineWidth": 2,
+            "spanNulls": false,
+            "lineInterpolation": "smooth"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 4,
+      "title": "Distance (km)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [{
+        "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+        "rawSql": "SELECT date AS time, distance_m/1000.0 AS distance_km FROM daily_activity WHERE distance_m IS NOT NULL AND $__timeFilter(date) AND device_id IN ($device) ORDER BY date",
+        "format": "time_series",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "km",
+          "color": {"mode": "fixed", "fixedColor": "green"},
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "pointSize": 4,
+            "lineWidth": 2,
+            "spanNulls": false,
+            "lineInterpolation": "smooth"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 5,
+      "title": "Flights Climbed",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [{
+        "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+        "rawSql": "SELECT date AS time, floors_climbed FROM daily_activity WHERE floors_climbed IS NOT NULL AND $__timeFilter(date) AND device_id IN ($device) ORDER BY date",
+        "format": "time_series",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "fixed", "fixedColor": "orange"},
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "pointSize": 5,
+            "lineWidth": 2,
+            "spanNulls": false,
+            "lineInterpolation": "smooth"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 6,
+      "title": "Avg Daily Steps (30d)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 24},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [{
+        "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+        "rawSql": "SELECT avg(steps)::int AS value FROM daily_activity WHERE date > current_date - 30 AND steps IS NOT NULL AND device_id IN ($device)",
+        "format": "table",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "fixed", "fixedColor": "green"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "orange", "value": null},
+              {"color": "green", "value": 8000}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 7,
+      "title": "Total Calories This Week",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 24},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [{
+        "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+        "rawSql": "SELECT sum(active_calories)::int AS value FROM daily_activity WHERE date > current_date - 7 AND device_id IN ($device)",
+        "format": "table",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kcal",
+          "color": {"mode": "fixed", "fixedColor": "orange"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "orange", "value": null}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 8,
+      "title": "Avg Active Minutes (30d)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 24},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [{
+        "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+        "rawSql": "SELECT avg(active_minutes)::int AS value FROM daily_activity WHERE date > current_date - 30 AND active_minutes IS NOT NULL AND device_id IN ($device)",
+        "format": "table",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "min",
+          "color": {"mode": "fixed", "fixedColor": "green"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "orange", "value": null},
+              {"color": "green", "value": 30}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 9,
+      "title": "Stand Hours Today",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 24},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [{
+        "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+        "rawSql": "SELECT stand_hours AS value FROM daily_activity WHERE date = current_date AND device_id IN ($device) LIMIT 1",
+        "format": "table",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "color": {"mode": "fixed", "fixedColor": "green"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "orange", "value": null},
+              {"color": "green", "value": 10}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 10,
+      "title": "Walking Speed",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 28},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [{
+        "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+        "rawSql": "SELECT time_bucket('1 day', time) AS time, avg(value)::numeric(4,2) AS speed_mps FROM quantity_samples WHERE metric_name='walking_speed' AND $__timeFilter(time) AND device_id IN ($device) GROUP BY 1 ORDER BY 1",
+        "format": "time_series",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m/s",
+          "color": {"mode": "fixed", "fixedColor": "green"},
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "pointSize": 4,
+            "lineWidth": 2,
+            "spanNulls": false,
+            "lineInterpolation": "smooth"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 11,
+      "title": "Walking Step Length",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 28},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [{
+        "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+        "rawSql": "SELECT time_bucket('1 day', time) AS time, avg(value)::numeric(4,3) AS step_length_m FROM quantity_samples WHERE metric_name='walking_step_length' AND $__timeFilter(time) AND device_id IN ($device) GROUP BY 1 ORDER BY 1",
+        "format": "time_series",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "lengthm",
+          "color": {"mode": "fixed", "fixedColor": "orange"},
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "pointSize": 4,
+            "lineWidth": 2,
+            "spanNulls": false,
+            "lineInterpolation": "smooth"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 12,
+      "title": "Walking Asymmetry",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 28},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [{
+        "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+        "rawSql": "SELECT time_bucket('1 day', time) AS time, avg(value*100)::numeric(4,1) AS asymmetry_pct FROM quantity_samples WHERE metric_name='walking_asymmetry' AND $__timeFilter(time) AND device_id IN ($device) GROUP BY 1 ORDER BY 1",
+        "format": "time_series",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": {"mode": "fixed", "fixedColor": "orange"},
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "pointSize": 4,
+            "lineWidth": 2,
+            "spanNulls": false,
+            "lineInterpolation": "smooth"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "orange", "value": 10},
+              {"color": "red", "value": 20}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 13,
+      "title": "Steps Heatmap by Day of Week",
+      "type": "table",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 36},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [{
+        "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+        "rawSql": "SELECT to_char(date, 'Dy') AS day, avg(steps)::int AS avg_steps FROM daily_activity WHERE steps IS NOT NULL AND date > current_date - 90 AND device_id IN ($device) GROUP BY extract(dow from date), to_char(date, 'Dy') ORDER BY extract(dow from date)",
+        "format": "table",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "orange", "value": null},
+              {"color": "light-green", "value": 5000},
+              {"color": "green", "value": 8000},
+              {"color": "dark-green", "value": 12000}
+            ]
+          },
+          "custom": {
+            "align": "center",
+            "cellOptions": {"type": "color-background"}
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "day"},
+            "properties": [
+              {"id": "custom.width", "value": 100},
+              {"id": "custom.cellOptions", "value": {"type": "auto"}}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "avg_steps"},
+            "properties": [
+              {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "gradient"}}
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "md",
+        "footer": {"show": false}
+      }
+    },
+    {
+      "id": 14,
+      "title": "Daily Steps by Device",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 100},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [{
+        "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+        "rawSql": "SELECT da.date AS time, d.device_type AS metric, da.steps AS value FROM daily_activity da JOIN devices d ON d.id = da.device_id WHERE $__timeFilter(da.date) AND da.device_id IN ($device) AND da.steps IS NOT NULL ORDER BY 1",
+        "format": "time_series",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": {"mode": "normal", "group": "A"},
+            "lineWidth": 1,
+            "pointSize": 5
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "desc"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    }
+  ]
+}

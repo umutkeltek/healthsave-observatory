@@ -1,0 +1,102 @@
+# Example Home Assistant package for querying HealthSave data from TimescaleDB.
+# Copy this file into your Home Assistant packages directory and update the
+# thresholds, entity IDs, and actions to match your setup.
+
+sql:
+  - name: HealthSave Latest Heart Rate
+    db_url: !secret healthsave_db_url
+    query: >
+      SELECT bpm
+      FROM heart_rate
+      WHERE time > now() - interval '30 minutes'
+      ORDER BY time DESC
+      LIMIT 1;
+    column: bpm
+    unit_of_measurement: bpm
+    state_class: measurement
+    unique_id: healthsave_latest_heart_rate
+
+  - name: HealthSave Steps Today
+    db_url: !secret healthsave_db_url
+    query: >
+      SELECT COALESCE(steps, 0) AS steps
+      FROM daily_activity
+      WHERE date = current_date
+      ORDER BY date DESC
+      LIMIT 1;
+    column: steps
+    state_class: total
+    unique_id: healthsave_steps_today
+
+  - name: HealthSave Last Sleep Hours
+    db_url: !secret healthsave_db_url
+    query: >
+      SELECT ROUND(COALESCE(total_duration_ms, 0) / 3600000.0, 2) AS sleep_hours
+      FROM sleep_sessions
+      ORDER BY start_time DESC
+      LIMIT 1;
+    column: sleep_hours
+    unit_of_measurement: h
+    state_class: measurement
+    unique_id: healthsave_last_sleep_hours
+
+  - name: HealthSave Resting HR 3d Avg
+    db_url: !secret healthsave_db_url
+    query: >
+      SELECT ROUND(COALESCE(AVG(resting_hr), 0)::numeric, 1) AS resting_hr_avg
+      FROM recovery
+      WHERE time >= now() - interval '3 days';
+    column: resting_hr_avg
+    unit_of_measurement: bpm
+    state_class: measurement
+    unique_id: healthsave_resting_hr_3d_avg
+
+template:
+  - binary_sensor:
+      - name: HealthSave Sleep Window
+        unique_id: healthsave_sleep_window
+        state: >
+          {{ now().hour >= 23 or now().hour < 7 }}
+
+automation:
+  - id: healthsave_sleep_detected
+    alias: HealthSave Sleep Detected
+    mode: single
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.healthsave_latest_heart_rate
+        below: 55
+        for:
+          minutes: 10
+    condition:
+      - condition: state
+        entity_id: binary_sensor.healthsave_sleep_window
+        state: "on"
+    action:
+      - service: light.turn_off
+        target:
+          entity_id: light.bedroom
+      - service: media_player.play_media
+        target:
+          entity_id: media_player.speaker
+        data:
+          media_content_id: ambient_sleep
+          media_content_type: music
+
+  - id: healthsave_resting_hr_alert
+    alias: HealthSave Resting HR Elevated
+    mode: single
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.healthsave_resting_hr_3d_avg
+        above: 62
+        for:
+          hours: 6
+    action:
+      - service: notify.notify
+        data:
+          title: HealthSave recovery check
+          message: >
+            Resting HR 3-day average is
+            {{ states('sensor.healthsave_resting_hr_3d_avg') }} bpm.
+            Consider checking sleep, hydration, illness, or training load.
