@@ -66,6 +66,9 @@ If you are building another client, the batch ingest endpoint is:
 
 `http://your-server-ip:8000/api/apple/batch`
 
+The full request/response contract, including the exact `/api/apple/status`
+shape expected by the iOS app, is documented in [API.md](API.md).
+
 ## What Gets Synced
 
 The server receives and stores 120+ HealthKit metrics:
@@ -150,7 +153,11 @@ Grafana (port 3000)
 | `/health` | GET | Health check |
 | `/api/health` | GET | App-friendly health check |
 | `/api/apple/batch` | POST | Receive metric batch from the client bridge |
-| `/api/apple/status` | GET | Return record counts |
+| `/api/apple/status` | GET | Return flat per-table status objects |
+
+`/api/apple/status` intentionally returns top-level metric objects, not a
+wrapped `{"status":"ok","counts":...}` payload. See [API.md](API.md) for
+the compatibility contract.
 
 ## Deduplication
 
