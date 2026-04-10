@@ -278,6 +278,36 @@ or daily activity types are stored in `quantity_samples` when each sample has
 **iOS 18+ Category Events:**
 `sleep_apnea_event`
 
+### Category Event Sample Format
+
+Category events use the same batch structure as quantity metrics. The `qty`
+field carries the HealthKit category value as an integer. Events with a
+duration include `end_date`:
+
+```json
+{
+  "metric": "mindful_session",
+  "batch_index": 0,
+  "total_batches": 1,
+  "samples": [
+    {
+      "date": "2024-03-15T08:00:00Z",
+      "end_date": "2024-03-15T08:15:00Z",
+      "qty": 0,
+      "source": "Apple Watch"
+    }
+  ]
+}
+```
+
+**Symptom category values:** `0` = not present, `1` = mild, `2` = moderate,
+`3` = severe, `4` = unspecified.
+
+**Menstrual flow values:** `1` = unspecified, `2` = light, `3` = medium,
+`4` = heavy, `5` = none.
+
+**Heart event values:** `0` = the event occurred (no severity scale).
+
 All other metric names are accepted and stored in `quantity_samples` with:
 
 ```json

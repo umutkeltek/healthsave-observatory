@@ -116,6 +116,14 @@ Recommended flow:
 3. Copy `healthsave-package.yaml` into your Home Assistant packages directory
 4. Restart Home Assistant and adjust the example thresholds and entity IDs for your setup
 
+## Community Backends
+
+The ingest API is intentionally simple so anyone can build a compatible backend for their own stack. The first community implementation is already live:
+
+- **[health-data-to-mqtt](https://github.com/bietiekay/health-data-to-mqtt)** by [@bietiekay](https://github.com/bietiekay) — A lightweight Node.js server that stores raw JSON and forwards selected metrics to MQTT. Built for alerting and home automation pipelines where MQTT is the primary transport.
+
+If you've built a compatible backend, open an issue or PR and we'll add it here. The full API contract including every supported metric is documented in [API.md](API.md).
+
 ## Roadmap
 
 This community release is intentionally small and focused on the ingestion pipeline first.
