@@ -1,4 +1,4 @@
-# Health Data Hub API
+# HealthSave API Contract
 
 HealthSave expects the server URL to be the base URL only, for example
 `https://health.example.com`. The app appends the paths below.
@@ -259,8 +259,7 @@ or daily activity types are stored in `quantity_samples` when each sample has
 `pregnancy`, `pregnancy_test_result`, `lactation`,
 `progesterone_test_result`, `infrequent_menstrual_cycles`,
 `irregular_menstrual_cycles`, `persistent_intermenstrual_bleeding`,
-`prolonged_menstrual_periods`, `bleeding_after_pregnancy`,
-`bleeding_during_pregnancy`
+`prolonged_menstrual_periods`
 
 **Symptoms:**
 `abdominal_cramps`, `acne`, `appetite_changes`,
@@ -276,13 +275,15 @@ or daily activity types are stored in `quantity_samples` when each sample has
 `memory_lapse`, `night_sweats`
 
 **iOS 18+ Category Events:**
-`sleep_apnea_event`
+`bleeding_after_pregnancy`, `bleeding_during_pregnancy`, `sleep_apnea_event`
 
 ### Category Event Sample Format
 
-Category events use the same batch structure as quantity metrics. The `qty`
-field carries the HealthKit category value as an integer. Events with a
-duration include `end_date`:
+Category events use the same batch structure as quantity metrics. The iOS app
+sends `date`, `qty`, `source`, and, when available, `endDate` plus `rawValue`.
+For duration-based events, `qty` is the duration in seconds and `rawValue`
+keeps the raw HealthKit category value. For instant events without a duration,
+`qty` is the raw HealthKit category value.
 
 ```json
 {
@@ -292,8 +293,9 @@ duration include `end_date`:
   "samples": [
     {
       "date": "2024-03-15T08:00:00Z",
-      "end_date": "2024-03-15T08:15:00Z",
-      "qty": 0,
+      "endDate": "2024-03-15T08:15:00Z",
+      "qty": 900,
+      "rawValue": 0,
       "source": "Apple Watch"
     }
   ]

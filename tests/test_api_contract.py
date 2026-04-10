@@ -396,6 +396,16 @@ def test_api_spec_documents_quantity_sample_exceptions_and_workout_nested_fields
     assert "not persisted by this small-footprint server" in api_doc
 
 
+def test_api_spec_documents_category_sample_wire_fields():
+    api_doc = Path("API.md").read_text()
+
+    assert "`endDate`" in api_doc
+    assert "`rawValue`" in api_doc
+    assert "`end_date`" not in api_doc
+    assert "duration in seconds" in api_doc
+    assert "raw HealthKit category value" in api_doc
+
+
 def test_api_spec_documents_ecg_as_accepted_but_not_persisted():
     api_doc = Path("API.md").read_text()
     compact_doc = " ".join(api_doc.split())
