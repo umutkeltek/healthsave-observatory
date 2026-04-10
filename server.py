@@ -14,7 +14,7 @@ Env vars:
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from sqlalchemy import text
@@ -44,6 +44,25 @@ def verify_api_key(x_api_key: str = Header(default="")):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
+def to_float(value) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def to_int(value) -> int | None:
+    numeric = to_float(value)
+    return int(numeric) if numeric is not None else None
+
+
+def normalize_blood_oxygen(value) -> float | None:
+    numeric = to_float(value)
+    if numeric is None:
+        return None
+    return numeric * 100 if 0 <= numeric <= 1 else numeric
+
+
 # ─── Metric → Table Mapping ──────────────────────────────────────────
 
 # Metrics that map to dedicated tables with specific column mappings
@@ -62,9 +81,21 @@ DEDICATED_TABLES = {
     "blood_oxygen": {
         "table": "blood_oxygen",
         "columns": {"date": "time", "qty": "spo2_pct"},
+        "transforms": {"spo2_pct": normalize_blood_oxygen},
+        "conflict": ["time", "device_id"],
+    },
+    "oxygen_saturation": {
+        "table": "blood_oxygen",
+        "columns": {"date": "time", "qty": "spo2_pct"},
+        "transforms": {"spo2_pct": normalize_blood_oxygen},
         "conflict": ["time", "device_id"],
     },
     "body_temperature": {
+        "table": "body_temperature",
+        "columns": {"date": "time", "qty": "temp_celsius"},
+        "conflict": ["time", "device_id"],
+    },
+    "wrist_temperature": {
         "table": "body_temperature",
         "columns": {"date": "time", "qty": "temp_celsius"},
         "conflict": ["time", "device_id"],
@@ -83,6 +114,20 @@ ACTIVITY_FIELDS = {
     "appleExerciseTime": "active_minutes",
     "stand_hours": "stand_hours",
     "appleStandHours": "stand_hours",
+}
+
+# HealthSave sends many activity totals as quantity batches rather than as
+# `activity_summaries`; keep Grafana-facing daily totals populated.
+DAILY_ACTIVITY_QUANTITY_FIELDS = {
+    "step_count": ("steps", to_int),
+    "distance_walking_running": ("distance_m", to_float),
+    "distance_cycling": ("distance_m", to_float),
+    "distance_wheelchair": ("distance_m", to_float),
+    "flights_climbed": ("floors_climbed", to_int),
+    "active_energy_burned": ("active_calories", to_float),
+    "basal_energy_burned": ("total_calories", to_float),
+    "apple_exercise_time": ("active_minutes", to_int),
+    "apple_stand_time": ("stand_hours", to_int),
 }
 
 
@@ -135,6 +180,8 @@ async def apple_batch(request: Request, session: AsyncSession = Depends(get_sess
 
     if metric == "activity_summaries":
         count = await _ingest_activity(session, device_id, samples)
+    elif metric in DAILY_ACTIVITY_QUANTITY_FIELDS:
+        count = await _ingest_daily_quantity(session, device_id, metric, samples)
     elif metric == "sleep_analysis":
         count = await _ingest_sleep(session, device_id, samples)
     elif metric == "workouts":
@@ -159,15 +206,28 @@ async def apple_batch(request: Request, session: AsyncSession = Depends(get_sess
 @app.get("/api/apple/status", dependencies=[Depends(verify_api_key)])
 async def apple_status(session: AsyncSession = Depends(get_session)):
     """Return record counts so the iOS app knows what's synced."""
-    tables = ["heart_rate", "hrv", "blood_oxygen", "daily_activity", "sleep_sessions", "workouts", "quantity_samples"]
-    counts = {}
-    for table in tables:
+    queries = {
+        "heart_rate": "SELECT count(*), min(time), max(time) FROM heart_rate",
+        "hrv": "SELECT count(*), min(time), max(time) FROM hrv",
+        "blood_oxygen": "SELECT count(*), min(time), max(time) FROM blood_oxygen",
+        "daily_activity": "SELECT count(*), min(date)::text, max(date)::text FROM daily_activity",
+        "sleep_sessions": "SELECT count(*), min(start_time), max(start_time) FROM sleep_sessions",
+        "workouts": "SELECT count(*), min(start_time), max(start_time) FROM workouts",
+        "quantity_samples": "SELECT count(*), min(time), max(time) FROM quantity_samples",
+    }
+    status = {}
+    for metric, sql in queries.items():
         try:
-            result = await session.execute(text(f"SELECT count(*) FROM {table}"))
-            counts[table] = result.scalar()
+            result = await session.execute(text(sql))
+            row = result.fetchone()
+            status[metric] = {
+                "count": row[0] or 0,
+                "oldest": str(row[1]) if row and row[1] else None,
+                "newest": str(row[2]) if row and row[2] else None,
+            }
         except Exception:
-            counts[table] = 0
-    return {"status": "ok", "counts": counts}
+            status[metric] = {"count": 0, "oldest": None, "newest": None}
+    return status
 
 
 # ─── Date Parsing ─────────────────────────────────────────────────────
@@ -321,6 +381,8 @@ async def _ingest_dedicated(
             val = s.get(src_key)
             if dst_col == "time":
                 val = parse_ts(val)
+            if dst_col in spec.get("transforms", {}):
+                val = spec["transforms"][dst_col](val)
             row[dst_col] = val
         if "defaults" in spec:
             row.update(spec["defaults"])
@@ -366,6 +428,7 @@ async def _ingest_generic(
         v = s.get("qty")
         if t is None or v is None:
             continue
+        sample_metric = s.get("metric") if isinstance(s.get("metric"), str) else metric
         await session.execute(
             text("""
                 INSERT INTO quantity_samples (time, device_id, metric_name, value, unit, source_id)
@@ -376,7 +439,7 @@ async def _ingest_generic(
             {
                 "time": t,
                 "device_id": device_id,
-                "metric": metric,
+                "metric": sample_metric,
                 "value": float(v),
                 "unit": s.get("unit", ""),
                 "source": s.get("source", ""),
@@ -414,6 +477,30 @@ async def _ingest_activity(
                 ON CONFLICT (date, device_id) DO UPDATE SET {updates}
             """),
             row,
+        )
+        count += 1
+    return count
+
+
+async def _ingest_daily_quantity(
+    session: AsyncSession, device_id: int, metric: str, samples: list
+) -> int:
+    column, converter = DAILY_ACTIVITY_QUANTITY_FIELDS[metric]
+    count = 0
+    for sample in samples:
+        d = parse_date(sample.get("date"))
+        value = converter(sample.get("qty"))
+        if not d or value is None:
+            continue
+
+        await session.execute(
+            text(f"""
+                INSERT INTO daily_activity (date, device_id, {column})
+                VALUES (:date, :device_id, :{column})
+                ON CONFLICT (date, device_id) DO UPDATE
+                SET {column} = EXCLUDED.{column}
+            """),
+            {"date": d, "device_id": device_id, column: value},
         )
         count += 1
     return count
