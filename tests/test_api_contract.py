@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -54,6 +55,15 @@ class FakeSession:
     def all_insert_params_for(self, table_name: str) -> list[dict]:
         needle = f"INSERT INTO {table_name}"
         return [params for sql, params in self.calls if needle in sql]
+
+
+class FailingStatusSession(FakeSession):
+    async def execute(self, statement, params=None):
+        sql = " ".join(str(statement).split())
+        self.calls.append((sql, params or {}))
+        if sql.startswith("SELECT count(*)"):
+            raise RuntimeError("database is unavailable")
+        return await super().execute(statement, params)
 
 
 class FakeRequest:
@@ -183,6 +193,130 @@ async def test_blood_pressure_correlation_preserves_inner_metric_names():
         "blood_pressure_systolic",
         "blood_pressure_diastolic",
     ]
+
+
+@pytest.mark.asyncio
+async def test_batch_uses_sample_source_for_device_identity_and_logs_raw_payload():
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "heart_rate",
+            "batch_index": 2,
+            "total_batches": 3,
+            "samples": [
+                {
+                    "date": "2026-04-10T12:00:00+00:00",
+                    "qty": 72,
+                    "source": "Apple Watch Ultra",
+                }
+            ],
+        }
+    )
+
+    result = await server.apple_batch(request, session)
+
+    device_lookups = [
+        params for sql, params in session.calls if sql.startswith("SELECT id FROM devices")
+    ]
+    raw_log = session.insert_params_for("raw_ingestion_log")
+    assert result["records"] == 1
+    assert device_lookups[0]["dt"] == "Apple Watch Ultra"
+    assert raw_log is not None
+    assert raw_log["source_type"] == "healthsave"
+    assert raw_log["endpoint"] == "/api/apple/batch"
+    assert json.loads(raw_log["raw_payload"])["metric"] == "heart_rate"
+
+
+@pytest.mark.asyncio
+async def test_sleep_stage_batches_upsert_sessions_and_write_stage_rows():
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "sleep_analysis",
+            "samples": [
+                {
+                    "date": "2026-04-10T22:00:00+00:00",
+                    "endDate": "2026-04-10T23:00:00+00:00",
+                    "value": "core",
+                    "source": "Apple Watch",
+                },
+                {
+                    "date": "2026-04-10T23:00:00+00:00",
+                    "endDate": "2026-04-11T00:00:00+00:00",
+                    "value": "deep",
+                    "source": "Apple Watch",
+                },
+            ],
+        }
+    )
+
+    result = await server.apple_batch(request, session)
+
+    sleep_session_sql = [sql for sql, _ in session.calls if "INSERT INTO sleep_sessions" in sql]
+    sleep_stage_rows = session.all_insert_params_for("sleep_stages")
+    assert result["records"] == 1
+    assert any("ON CONFLICT" in sql for sql in sleep_session_sql)
+    assert len(sleep_stage_rows) == 2
+    assert {row["stage"] for row in sleep_stage_rows} == {"core", "deep"}
+
+
+@pytest.mark.asyncio
+async def test_workouts_are_upserted_by_device_and_start_time():
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "workouts",
+            "samples": [
+                {
+                    "name": "Running",
+                    "start": "2026-04-10T07:00:00+00:00",
+                    "end": "2026-04-10T07:45:00+00:00",
+                    "duration": 2700,
+                    "source": "Apple Watch",
+                }
+            ],
+        }
+    )
+
+    result = await server.apple_batch(request, session)
+
+    workout_sql = [sql for sql, _ in session.calls if "INSERT INTO workouts" in sql]
+    assert result["records"] == 1
+    assert any("ON CONFLICT" in sql for sql in workout_sql)
+
+
+@pytest.mark.asyncio
+async def test_invalid_quantity_values_are_skipped_without_failing_batch():
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "respiratory_rate",
+            "samples": [
+                {
+                    "date": "2026-04-10T12:00:00+00:00",
+                    "qty": "not-a-number",
+                    "source": "Apple Watch",
+                }
+            ],
+        }
+    )
+
+    result = await server.apple_batch(request, session)
+
+    assert result["records"] == 0
+    assert session.insert_params_for("quantity_samples") is None
+    assert session.committed is True
+
+
+@pytest.mark.asyncio
+async def test_status_logs_database_query_failures(caplog):
+    session = FailingStatusSession()
+
+    with caplog.at_level("WARNING", logger="healthsave"):
+        result = await server.apple_status(session)
+
+    assert result["heart_rate"] == {"count": 0, "oldest": None, "newest": None}
+    assert "Status query failed for heart_rate" in caplog.text
 
 
 def test_api_spec_documents_full_healthsave_metric_catalog():
@@ -412,3 +546,22 @@ def test_api_spec_documents_ecg_as_accepted_but_not_persisted():
 
     assert "`ecg` batches are accepted for compatibility" in compact_doc
     assert "ECG records are not persisted by this small-footprint server" in compact_doc
+
+
+def test_schema_declares_idempotency_constraints_for_retry_safe_sync():
+    schema = Path("schema.sql").read_text()
+
+    assert "uq_sleep_sessions_device_start" in schema
+    assert "ON sleep_sessions (device_id, start_time)" in schema
+    assert "uq_sleep_stages" in schema
+    assert "ON sleep_stages (time, device_id, stage)" in schema
+    assert "uq_workouts_device_start" in schema
+    assert "ON workouts (device_id, start_time)" in schema
+    assert "idx_raw_ingestion_log_ingested_at" in schema
+
+
+def test_readme_documents_existing_install_migration_flow():
+    readme = Path("README.md").read_text()
+
+    assert "migrations/001_audit_hardening.sql" in readme
+    assert "docker compose exec -T db psql" in readme

@@ -31,6 +31,17 @@ Returns the same app-friendly health response.
 }
 ```
 
+### `GET /ready`
+
+Checks that the API can reach the database.
+
+```json
+{
+  "status": "ok",
+  "database": "ok"
+}
+```
+
 ## Batch Ingest
 
 ### `POST /api/apple/batch`
@@ -64,6 +75,10 @@ Success response:
   "records": 1
 }
 ```
+
+The server records the original batch in `raw_ingestion_log` before processing
+and marks the raw log row as processed after the batch commit succeeds. This
+keeps a replay/debug trail without changing the HealthSave response shape.
 
 Empty batch response:
 
@@ -123,6 +138,13 @@ carry an inner `"metric"` field with the sub-type:
 - `blood_pressure_diastolic`
 
 The server preserves the inner metric name when storing to `quantity_samples`.
+
+### Device / Source Identity
+
+Each sample's `source`, `source_id`, `sourceName`, `device`, `deviceName`, or
+`device_id` field is used as the device identity when present. If no source-like
+field is present, the server falls back to `HealthSave`. This prevents samples
+from different devices at the same timestamp from overwriting each other.
 
 ### ECG
 
@@ -379,7 +401,8 @@ not compatible with the current iOS status UI.
 - Timestamp values should be ISO 8601 strings. A trailing `Z` is accepted.
 - Date-only daily activity values can use `YYYY-MM-DD` or an ISO timestamp.
 - Batch ingestion is idempotent for first-class time-series tables through
-  `ON CONFLICT` upserts.
+  `ON CONFLICT` upserts, including sleep sessions and workouts.
 - Unknown metric names are intentionally accepted. Unknown quantity-like
   samples with `date` and `qty` can be stored before they receive first-class
   dashboards.
+- Invalid quantity samples are skipped instead of failing the whole batch.

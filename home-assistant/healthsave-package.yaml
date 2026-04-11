@@ -40,16 +40,16 @@ sql:
     state_class: measurement
     unique_id: healthsave_last_sleep_hours
 
-  - name: HealthSave Resting HR 3d Avg
+  - name: HealthSave HRV 7d Avg
     db_url: !secret healthsave_db_url
     query: >
-      SELECT ROUND(COALESCE(AVG(resting_hr), 0)::numeric, 1) AS resting_hr_avg
-      FROM recovery
-      WHERE time >= now() - interval '3 days';
-    column: resting_hr_avg
-    unit_of_measurement: bpm
+      SELECT ROUND(COALESCE(AVG(value_ms), 0)::numeric, 1) AS hrv_avg
+      FROM hrv
+      WHERE time >= now() - interval '7 days';
+    column: hrv_avg
+    unit_of_measurement: ms
     state_class: measurement
-    unique_id: healthsave_resting_hr_3d_avg
+    unique_id: healthsave_hrv_7d_avg
 
 template:
   - binary_sensor:
@@ -83,13 +83,13 @@ automation:
           media_content_id: ambient_sleep
           media_content_type: music
 
-  - id: healthsave_resting_hr_alert
-    alias: HealthSave Resting HR Elevated
+  - id: healthsave_hrv_low_alert
+    alias: HealthSave HRV Low
     mode: single
     trigger:
       - platform: numeric_state
-        entity_id: sensor.healthsave_resting_hr_3d_avg
-        above: 62
+        entity_id: sensor.healthsave_hrv_7d_avg
+        below: 35
         for:
           hours: 6
     action:
@@ -97,6 +97,6 @@ automation:
         data:
           title: HealthSave recovery check
           message: >
-            Resting HR 3-day average is
-            {{ states('sensor.healthsave_resting_hr_3d_avg') }} bpm.
+            HRV 7-day average is
+            {{ states('sensor.healthsave_hrv_7d_avg') }} ms.
             Consider checking sleep, hydration, illness, or training load.

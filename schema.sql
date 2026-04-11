@@ -6,7 +6,7 @@ CREATE EXTENSION IF NOT EXISTS timescaledb;
 -- ─── Device Registry ─────────────────────────────────────────────────
 CREATE TABLE devices (
     id              SERIAL PRIMARY KEY,
-    device_type     TEXT NOT NULL,
+    device_type     TEXT NOT NULL UNIQUE,
     device_model    TEXT,
     registered_at   TIMESTAMPTZ DEFAULT NOW()
 );
@@ -83,6 +83,7 @@ CREATE TABLE sleep_sessions (
     rem_ms              BIGINT,
     respiratory_rate    FLOAT
 );
+CREATE UNIQUE INDEX uq_sleep_sessions_device_start ON sleep_sessions (device_id, start_time);
 
 -- ─── Sleep Stages ────────────────────────────────────────────────────
 CREATE TABLE sleep_stages (
@@ -93,7 +94,7 @@ CREATE TABLE sleep_stages (
     duration_ms BIGINT
 );
 SELECT create_hypertable('sleep_stages', 'time');
-CREATE UNIQUE INDEX uq_sleep_stages ON sleep_stages (time, device_id);
+CREATE UNIQUE INDEX uq_sleep_stages ON sleep_stages (time, device_id, stage);
 
 -- ─── Workouts ────────────────────────────────────────────────────────
 CREATE TABLE workouts (
@@ -108,6 +109,7 @@ CREATE TABLE workouts (
     calories        FLOAT,
     distance_m      FLOAT
 );
+CREATE UNIQUE INDEX uq_workouts_device_start ON workouts (device_id, start_time);
 
 -- ─── Recovery / Readiness ────────────────────────────────────────────
 CREATE TABLE recovery (
@@ -142,6 +144,7 @@ CREATE TABLE raw_ingestion_log (
     raw_payload JSONB NOT NULL,
     processed   BOOLEAN DEFAULT FALSE
 );
+CREATE INDEX idx_raw_ingestion_log_ingested_at ON raw_ingestion_log (ingested_at DESC);
 
 -- ─── Catch-all for any HealthKit metric ──────────────────────────────
 CREATE TABLE quantity_samples (

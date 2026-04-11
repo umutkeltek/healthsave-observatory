@@ -15,8 +15,11 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
+from json import dumps
+from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -32,6 +35,13 @@ API_KEY = os.getenv("API_KEY", "")
 
 engine = create_async_engine(DATABASE_URL, pool_size=5, max_overflow=5)
 async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+
+class BatchPayload(BaseModel):
+    metric: str = "unknown"
+    batch_index: int = Field(default=0)
+    total_batches: int = Field(default=1)
+    samples: list[dict[str, Any]] = Field(default_factory=list)
 
 
 async def get_session():
@@ -70,11 +80,13 @@ DEDICATED_TABLES = {
     "heart_rate": {
         "table": "heart_rate",
         "columns": {"date": "time", "qty": "bpm", "source": "source_id"},
+        "transforms": {"bpm": to_int},
         "conflict": ["time", "device_id"],
     },
     "heart_rate_variability": {
         "table": "hrv",
         "columns": {"date": "time", "qty": "value_ms", "source": "source_id"},
+        "transforms": {"value_ms": to_float},
         "defaults": {"algorithm": "sdnn"},
         "conflict": ["time", "device_id"],
     },
@@ -93,11 +105,13 @@ DEDICATED_TABLES = {
     "body_temperature": {
         "table": "body_temperature",
         "columns": {"date": "time", "qty": "temp_celsius"},
+        "transforms": {"temp_celsius": to_float},
         "conflict": ["time", "device_id"],
     },
     "wrist_temperature": {
         "table": "body_temperature",
         "columns": {"date": "time", "qty": "temp_celsius"},
+        "transforms": {"temp_celsius": to_float},
         "conflict": ["time", "device_id"],
     },
 }
@@ -148,6 +162,16 @@ async def api_health():
     return {"status": "ok"}
 
 
+@app.get("/ready")
+async def readiness_check(session: AsyncSession = Depends(get_session)):
+    try:
+        await session.execute(text("SELECT 1"))
+    except Exception as exc:
+        log.warning("Readiness check failed: %s", exc)
+        raise HTTPException(status_code=503, detail="database unavailable") from exc
+    return {"status": "ok", "database": "ok"}
+
+
 @app.post("/api/apple/batch", dependencies=[Depends(verify_api_key)])
 async def apple_batch(request: Request, session: AsyncSession = Depends(get_session)):
     """Receive a metric batch from HealthSave iOS app.
@@ -163,31 +187,40 @@ async def apple_batch(request: Request, session: AsyncSession = Depends(get_sess
         ]
     }
     """
-    payload = await request.json()
-    metric = payload.get("metric", "unknown")
-    batch_idx = payload.get("batch_index", 0)
-    total = payload.get("total_batches", 1)
-    samples = payload.get("samples", [])
+    raw_payload = await request.json()
+    try:
+        payload = BatchPayload.model_validate(raw_payload)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+    metric = payload.metric.strip() or "unknown"
+    batch_idx = payload.batch_index
+    total = payload.total_batches
+    samples = payload.samples
 
     if not samples:
+        raw_log_id = await _log_raw_ingestion(session, None, raw_payload)
+        await session.commit()
+        await _mark_raw_ingestion_processed(session, raw_log_id)
+        await session.commit()
         return {"status": "empty", "metric": metric, "batch": batch_idx, "records": 0}
 
-    device_id = await _get_or_create_device(session, "apple_watch")
+    sample_groups = group_samples_by_device(samples)
+    first_device_name, _ = sample_groups[0]
+    first_device_id = await _get_or_create_device(session, first_device_name)
+    raw_log_id = await _log_raw_ingestion(session, first_device_id, raw_payload)
+    await session.commit()
     count = 0
 
-    if metric == "activity_summaries":
-        count = await _ingest_activity(session, device_id, samples)
-    elif metric in DAILY_ACTIVITY_QUANTITY_FIELDS:
-        count = await _ingest_daily_quantity(session, device_id, metric, samples)
-    elif metric == "sleep_analysis":
-        count = await _ingest_sleep(session, device_id, samples)
-    elif metric == "workouts":
-        count = await _ingest_workouts(session, device_id, samples)
-    elif metric in DEDICATED_TABLES:
-        count = await _ingest_dedicated(session, device_id, metric, samples)
-    else:
-        count = await _ingest_generic(session, device_id, metric, samples)
+    for device_name, device_samples in sample_groups:
+        device_id = (
+            first_device_id
+            if device_name == first_device_name
+            else await _get_or_create_device(session, device_name)
+        )
+        count += await _ingest_metric(session, device_id, metric, device_samples)
 
+    await _mark_raw_ingestion_processed(session, raw_log_id)
     await session.commit()
     log.info(f"Ingested {count} records for {metric} (batch {batch_idx + 1}/{total})")
 
@@ -222,7 +255,8 @@ async def apple_status(session: AsyncSession = Depends(get_session)):
                 "oldest": str(row[1]) if row and row[1] else None,
                 "newest": str(row[2]) if row and row[2] else None,
             }
-        except Exception:
+        except Exception as exc:
+            log.warning("Status query failed for %s: %s", metric, exc)
             status[metric] = {"count": 0, "oldest": None, "newest": None}
     return status
 
@@ -262,12 +296,34 @@ def first_present(sample: dict, *keys: str):
     return None
 
 
+def sample_device_name(sample: dict) -> str:
+    value = first_present(
+        sample,
+        "source",
+        "source_id",
+        "sourceName",
+        "device",
+        "deviceName",
+        "device_id",
+    )
+    if value is None:
+        return "HealthSave"
+    name = str(value).strip()
+    return name or "HealthSave"
+
+
+def group_samples_by_device(samples: list[dict]) -> list[tuple[str, list[dict]]]:
+    grouped: dict[str, list[dict]] = {}
+    for sample in samples:
+        grouped.setdefault(sample_device_name(sample), []).append(sample)
+    return list(grouped.items())
+
+
 def duration_ms_between(start: datetime, end: datetime) -> int:
     return max(0, int((end - start).total_seconds() * 1000))
 
 
-def sleep_session_rows(device_id: int, samples: list[dict]) -> list[dict]:
-    """Aggregate HealthKit sleep stage samples into session rows."""
+def sleep_stage_segments(samples: list[dict]) -> list[dict]:
     segments = []
     for sample in samples:
         start = parse_ts(first_present(sample, "start_date", "startDate", "start", "date"))
@@ -282,10 +338,16 @@ def sleep_session_rows(device_id: int, samples: list[dict]) -> list[dict]:
             }
         )
 
+    segments.sort(key=lambda segment: segment["start"])
+    return segments
+
+
+def sleep_session_rows(device_id: int, samples: list[dict]) -> list[dict]:
+    """Aggregate HealthKit sleep stage samples into session rows."""
+    segments = sleep_stage_segments(samples)
     if not segments:
         return []
 
-    segments.sort(key=lambda segment: segment["start"])
     sessions = []
     gap_threshold = timedelta(hours=4)
     current = None
@@ -305,10 +367,13 @@ def sleep_session_rows(device_id: int, samples: list[dict]) -> list[dict]:
                 "rem_ms": 0,
                 "light_ms": 0,
                 "awake_ms": 0,
+                "segments": [],
             }
         else:
             current["end"] = max(current["end"], end)
             current["last_end"] = max(current["last_end"], end)
+
+        current["segments"].append(segment)
 
         bucket = None
         if segment["stage"] == "deep":
@@ -328,9 +393,7 @@ def sleep_session_rows(device_id: int, samples: list[dict]) -> list[dict]:
 
     rows = []
     for session in sessions:
-        total_duration_ms = (
-            session["deep_ms"] + session["rem_ms"] + session["light_ms"]
-        )
+        total_duration_ms = session["deep_ms"] + session["rem_ms"] + session["light_ms"]
         if total_duration_ms == 0 and session["awake_ms"] == 0:
             continue
         rows.append(
@@ -344,6 +407,7 @@ def sleep_session_rows(device_id: int, samples: list[dict]) -> list[dict]:
                 "light": session["light_ms"],
                 "awake": session["awake_ms"],
                 "rr": None,
+                "segments": session["segments"],
             }
         )
     return rows
@@ -364,6 +428,52 @@ async def _get_or_create_device(session: AsyncSession, device_type: str) -> int:
         {"dt": device_type},
     )
     return result.scalar()
+
+
+async def _log_raw_ingestion(
+    session: AsyncSession, device_id: int | None, raw_payload: dict
+) -> int | None:
+    result = await session.execute(
+        text("""
+            INSERT INTO raw_ingestion_log
+                (device_id, source_type, endpoint, raw_payload, processed)
+            VALUES
+                (:device_id, :source_type, :endpoint, CAST(:raw_payload AS jsonb), false)
+            RETURNING id
+        """),
+        {
+            "device_id": device_id,
+            "source_type": "healthsave",
+            "endpoint": "/api/apple/batch",
+            "raw_payload": dumps(raw_payload),
+        },
+    )
+    return result.scalar()
+
+
+async def _mark_raw_ingestion_processed(session: AsyncSession, raw_log_id: int | None) -> None:
+    if raw_log_id is None:
+        return
+    await session.execute(
+        text("UPDATE raw_ingestion_log SET processed = true WHERE id = :id"),
+        {"id": raw_log_id},
+    )
+
+
+async def _ingest_metric(
+    session: AsyncSession, device_id: int, metric: str, samples: list[dict]
+) -> int:
+    if metric == "activity_summaries":
+        return await _ingest_activity(session, device_id, samples)
+    if metric in DAILY_ACTIVITY_QUANTITY_FIELDS:
+        return await _ingest_daily_quantity(session, device_id, metric, samples)
+    if metric == "sleep_analysis":
+        return await _ingest_sleep(session, device_id, samples)
+    if metric == "workouts":
+        return await _ingest_workouts(session, device_id, samples)
+    if metric in DEDICATED_TABLES:
+        return await _ingest_dedicated(session, device_id, metric, samples)
+    return await _ingest_generic(session, device_id, metric, samples)
 
 
 async def _ingest_dedicated(
@@ -398,13 +508,11 @@ async def _ingest_dedicated(
 
     conflict_cols = ", ".join(spec["conflict"])
     col_names = ", ".join(rows[0].keys())
-    placeholders = ", ".join(f":{k}" for k in rows[0].keys())
-    update_set = ", ".join(
-        f"{c} = EXCLUDED.{c}" for c in rows[0] if c not in spec["conflict"]
-    )
+    placeholders = ", ".join(f":{k}" for k in rows[0])
+    update_set = ", ".join(f"{c} = EXCLUDED.{c}" for c in rows[0] if c not in spec["conflict"])
 
     sql = f"""
-        INSERT INTO {spec['table']} ({col_names})
+        INSERT INTO {spec["table"]} ({col_names})
         VALUES ({placeholders})
         ON CONFLICT ({conflict_cols}) DO UPDATE SET {update_set}
     """
@@ -415,14 +523,12 @@ async def _ingest_dedicated(
     return len(rows)
 
 
-async def _ingest_generic(
-    session: AsyncSession, device_id: int, metric: str, samples: list
-) -> int:
+async def _ingest_generic(session: AsyncSession, device_id: int, metric: str, samples: list) -> int:
     """Insert into the catch-all quantity_samples table."""
     count = 0
     for s in samples:
         t = parse_ts(s.get("date"))
-        v = s.get("qty")
+        v = to_float(s.get("qty"))
         if t is None or v is None:
             continue
         sample_metric = s.get("metric") if isinstance(s.get("metric"), str) else metric
@@ -437,7 +543,7 @@ async def _ingest_generic(
                 "time": t,
                 "device_id": device_id,
                 "metric": sample_metric,
-                "value": float(v),
+                "value": v,
                 "unit": s.get("unit", ""),
                 "source": s.get("source", ""),
             },
@@ -446,9 +552,7 @@ async def _ingest_generic(
     return count
 
 
-async def _ingest_activity(
-    session: AsyncSession, device_id: int, samples: list
-) -> int:
+async def _ingest_activity(session: AsyncSession, device_id: int, samples: list) -> int:
     count = 0
     for s in samples:
         d = parse_date(s.get("date"))
@@ -461,7 +565,7 @@ async def _ingest_activity(
                 row[dst_col] = s[src_key]
 
         cols = ", ".join(row.keys())
-        vals = ", ".join(f":{k}" for k in row.keys())
+        vals = ", ".join(f":{k}" for k in row)
         updates = ", ".join(
             f"{k} = COALESCE(EXCLUDED.{k}, daily_activity.{k})"
             for k in row
@@ -503,21 +607,14 @@ async def _ingest_daily_quantity(
     return count
 
 
-async def _ingest_sleep(
-    session: AsyncSession, device_id: int, samples: list
-) -> int:
+async def _ingest_sleep(session: AsyncSession, device_id: int, samples: list) -> int:
     if any("startDate" in sample or "value" in sample for sample in samples):
         rows = sleep_session_rows(device_id, samples)
         count = 0
         for row in rows:
-            await session.execute(
-                text("""
-                    INSERT INTO sleep_sessions (device_id, start_time, end_time, total_duration_ms,
-                        deep_ms, rem_ms, light_ms, awake_ms, respiratory_rate)
-                    VALUES (:device_id, :start, :end, :total, :deep, :rem, :light, :awake, :rr)
-                """),
-                row,
-            )
+            segments = row.pop("segments", [])
+            session_id = await _upsert_sleep_session(session, row)
+            await _upsert_sleep_stages(session, device_id, session_id, segments)
             count += 1
         return count
 
@@ -527,31 +624,71 @@ async def _ingest_sleep(
         end = parse_ts(first_present(s, "end_date", "endDate"))
         if not start or not end:
             continue
-        await session.execute(
-            text("""
-                INSERT INTO sleep_sessions (device_id, start_time, end_time, total_duration_ms,
-                    deep_ms, rem_ms, light_ms, awake_ms, respiratory_rate)
-                VALUES (:device_id, :start, :end, :total, :deep, :rem, :light, :awake, :rr)
-            """),
+        await _upsert_sleep_session(
+            session,
             {
                 "device_id": device_id,
                 "start": start,
                 "end": end,
-                "total": s.get("total_duration_ms"),
-                "deep": s.get("deep_ms"),
-                "rem": s.get("rem_ms"),
-                "light": s.get("light_ms") or s.get("core_ms"),
-                "awake": s.get("awake_ms"),
-                "rr": s.get("respiratory_rate"),
+                "total": to_int(s.get("total_duration_ms")),
+                "deep": to_int(s.get("deep_ms")),
+                "rem": to_int(s.get("rem_ms")),
+                "light": to_int(s.get("light_ms") or s.get("core_ms")),
+                "awake": to_int(s.get("awake_ms")),
+                "rr": to_float(s.get("respiratory_rate")),
             },
         )
         count += 1
     return count
 
 
-async def _ingest_workouts(
-    session: AsyncSession, device_id: int, samples: list
-) -> int:
+async def _upsert_sleep_session(session: AsyncSession, row: dict) -> int:
+    result = await session.execute(
+        text("""
+            INSERT INTO sleep_sessions (device_id, start_time, end_time, total_duration_ms,
+                deep_ms, rem_ms, light_ms, awake_ms, respiratory_rate)
+            VALUES (:device_id, :start, :end, :total, :deep, :rem, :light, :awake, :rr)
+            ON CONFLICT (device_id, start_time) DO UPDATE SET
+                end_time = EXCLUDED.end_time,
+                total_duration_ms = EXCLUDED.total_duration_ms,
+                deep_ms = EXCLUDED.deep_ms,
+                rem_ms = EXCLUDED.rem_ms,
+                light_ms = EXCLUDED.light_ms,
+                awake_ms = EXCLUDED.awake_ms,
+                respiratory_rate = EXCLUDED.respiratory_rate
+            RETURNING id
+        """),
+        row,
+    )
+    return result.scalar()
+
+
+async def _upsert_sleep_stages(
+    session: AsyncSession, device_id: int, session_id: int | None, segments: list[dict]
+) -> None:
+    for segment in segments:
+        duration_ms = duration_ms_between(segment["start"], segment["end"])
+        if duration_ms <= 0:
+            continue
+        await session.execute(
+            text("""
+                INSERT INTO sleep_stages (time, device_id, session_id, stage, duration_ms)
+                VALUES (:time, :device_id, :session_id, :stage, :duration_ms)
+                ON CONFLICT (time, device_id, stage) DO UPDATE SET
+                    session_id = EXCLUDED.session_id,
+                    duration_ms = EXCLUDED.duration_ms
+            """),
+            {
+                "time": segment["start"],
+                "device_id": device_id,
+                "session_id": session_id,
+                "stage": segment["stage"],
+                "duration_ms": duration_ms,
+            },
+        )
+
+
+async def _ingest_workouts(session: AsyncSession, device_id: int, samples: list) -> int:
     count = 0
     for s in samples:
         start = parse_ts(first_present(s, "start_date", "startDate", "start", "date"))
@@ -560,13 +697,23 @@ async def _ingest_workouts(
             continue
         duration_ms = first_present(s, "duration_ms")
         if duration_ms is None:
-            duration_seconds = first_present(s, "duration")
-            duration_ms = int(float(duration_seconds) * 1000) if duration_seconds is not None else None
+            duration_seconds = to_float(first_present(s, "duration"))
+            duration_ms = int(duration_seconds * 1000) if duration_seconds is not None else None
+        else:
+            duration_ms = to_int(duration_ms)
         await session.execute(
             text("""
                 INSERT INTO workouts (device_id, sport_type, start_time, end_time,
                     duration_ms, avg_hr, max_hr, calories, distance_m)
                 VALUES (:device_id, :sport, :start, :end, :dur, :avg_hr, :max_hr, :cal, :dist)
+                ON CONFLICT (device_id, start_time) DO UPDATE SET
+                    sport_type = EXCLUDED.sport_type,
+                    end_time = EXCLUDED.end_time,
+                    duration_ms = EXCLUDED.duration_ms,
+                    avg_hr = EXCLUDED.avg_hr,
+                    max_hr = EXCLUDED.max_hr,
+                    calories = EXCLUDED.calories,
+                    distance_m = EXCLUDED.distance_m
             """),
             {
                 "device_id": device_id,
@@ -574,10 +721,10 @@ async def _ingest_workouts(
                 "start": start,
                 "end": end,
                 "dur": duration_ms,
-                "avg_hr": first_present(s, "avg_hr", "avgHeartRate"),
-                "max_hr": first_present(s, "max_hr", "maxHeartRate"),
-                "cal": first_present(s, "calories", "activeEnergy"),
-                "dist": first_present(s, "distance_m", "distance"),
+                "avg_hr": to_float(first_present(s, "avg_hr", "avgHeartRate")),
+                "max_hr": to_float(first_present(s, "max_hr", "maxHeartRate")),
+                "cal": to_float(first_present(s, "calories", "activeEnergy")),
+                "dist": to_float(first_present(s, "distance_m", "distance")),
             },
         )
         count += 1
