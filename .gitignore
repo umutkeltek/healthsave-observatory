@@ -5,3 +5,8 @@ __pycache__/
 .ruff_cache/
 .venv/
 *.egg-info/
+
+# Internal planning and agent docs - not for the public repo
+docs/
+agents.md
+AGENTS.md
