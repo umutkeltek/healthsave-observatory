@@ -93,9 +93,8 @@ detect_lan_ip() {
 }
 
 # ---------------------------------------------------------------- hardware
-# Adaptive Ollama model recommendation. detect_ram_gb / detect_gpu_kind /
-# recommend_model are pure functions: each writes a single line to stdout
-# and never reads global state. They're sourced in unit tests.
+# Pure functions — each writes one line to stdout, reads no globals, so
+# they can be sourced directly in unit tests.
 detect_ram_gb() {
     local bytes kb
     case "$(uname -s)" in
@@ -121,17 +120,16 @@ detect_ram_gb() {
 }
 
 detect_gpu_kind() {
-    local os arch
+    local os
     os="$(uname -s)"
-    arch="$(uname -m)"
 
-    if [ "$os" = "Darwin" ] && [ "$arch" = "arm64" ]; then
-        echo apple_silicon
-        return
-    fi
     if [ "$os" = "Darwin" ]; then
-        # Intel Mac — Ollama Metal backend is Apple-Silicon only (D8).
-        echo none
+        # Intel Mac → none: Ollama Metal backend is Apple-Silicon only (D8).
+        if [ "$(uname -m)" = "arm64" ]; then
+            echo apple_silicon
+        else
+            echo none
+        fi
         return
     fi
 
@@ -155,7 +153,7 @@ recommend_model() {
     local ram_gb="$1"
     local gpu_kind="$2"
     # Guard non-integer input — fall back to the safe default.
-    if ! [ "$ram_gb" -eq "$ram_gb" ] 2>/dev/null; then
+    if ! [[ "$ram_gb" =~ ^[0-9]+$ ]]; then
         echo llama3.2:3b
         return
     fi
@@ -282,6 +280,12 @@ EOF
     chmod 600 "$ENV_FILE" 2>/dev/null || true
 }
 
+read_env_value() {
+    # read_env_value <KEY> — first matching value from .env, empty if absent.
+    [ -f "$ENV_FILE" ] || return 0
+    grep -E "^$1=" "$ENV_FILE" 2>/dev/null | head -n 1 | cut -d= -f2 || true
+}
+
 set_env_model() {
     # Update OLLAMA_MODEL=<tag> in .env. Portable sed (BSD + GNU) via -i.bak.
     local model_tag="$1"
@@ -371,12 +375,9 @@ cmd_setup() {
         enable_ollama=1
     fi
 
-    OLLAMA_MODEL_CHOICE=""
+    local OLLAMA_MODEL_CHOICE=""
     if [ "$enable_ollama" -eq 1 ]; then
-        # Adaptive model recommendation. Detect hardware, suggest a tier,
-        # let the user accept or override. Result lands in
-        # OLLAMA_MODEL_CHOICE for write_env / pull_model.
-        local ram_gb gpu_kind gpu_label recommended size_hint answer
+        local ram_gb gpu_kind gpu_label recommended size_hint
         ram_gb="$(detect_ram_gb)"
         gpu_kind="$(detect_gpu_kind)"
         gpu_label="$(describe_gpu_kind "$gpu_kind")"
@@ -390,17 +391,8 @@ cmd_setup() {
             size_hint="$(describe_model_size "$recommended")"
             log_info "Detected: ${ram_gb} GB RAM, ${gpu_label}."
             log_info "Recommended model: ${recommended} (${size_hint})"
-            answer=""
-            if [ -t 0 ]; then
-                printf '\nPress Enter to accept, or type a different model tag (e.g. llama3.2:3b):\n'
-                printf '[%s] > ' "$recommended"
-                read -r answer || answer=""
-            fi
-            if [ -z "$answer" ]; then
-                OLLAMA_MODEL_CHOICE="$recommended"
-            else
-                OLLAMA_MODEL_CHOICE="$answer"
-            fi
+            log_info "Press Enter to accept, or type a different tag (e.g. llama3.2:3b)."
+            OLLAMA_MODEL_CHOICE="$(prompt_default 'Ollama model' "$recommended")"
             log_info "Using Ollama model: ${OLLAMA_MODEL_CHOICE}"
         fi
     fi
@@ -441,7 +433,7 @@ cmd_setup() {
         # writing it; fall back to .env, then to the proven 8b default.
         local model_name="${OLLAMA_MODEL_CHOICE:-}"
         if [ -z "$model_name" ]; then
-            model_name="$(grep -E '^OLLAMA_MODEL=' "$ENV_FILE" | head -n 1 | cut -d= -f2 || true)"
+            model_name="$(read_env_value OLLAMA_MODEL)"
         fi
         if [ -z "$model_name" ]; then
             model_name="llama3.1:8b"
@@ -456,7 +448,7 @@ cmd_setup() {
     lan_ip="$(detect_lan_ip)"
     local grafana_user="admin"
     local grafana_pw
-    grafana_pw="$(grep -E '^GRAFANA_PASSWORD=' "$ENV_FILE" | head -n 1 | cut -d= -f2 || true)"
+    grafana_pw="$(read_env_value GRAFANA_PASSWORD)"
 
     echo
     log_ok "Health Data Hub is up."
@@ -509,16 +501,13 @@ cmd_doctor() {
         # Configured model + pulled-status line. Best-effort — never fails
         # the doctor since model presence is informational, not gating.
         local configured_model pulled_marker list_output
-        configured_model=""
-        if [ -f "$ENV_FILE" ]; then
-            configured_model="$(grep -E '^OLLAMA_MODEL=' "$ENV_FILE" | head -n 1 | cut -d= -f2 || true)"
-        fi
+        configured_model="$(read_env_value OLLAMA_MODEL)"
         if [ -z "$configured_model" ]; then
             configured_model="llama3.1:8b"
         fi
         pulled_marker="?"
         if list_output="$(compose exec -T ollama ollama list 2>/dev/null)"; then
-            if printf '%s' "$list_output" | grep -F "$configured_model" >/dev/null 2>&1; then
+            if printf '%s' "$list_output" | grep -iF "$configured_model" >/dev/null 2>&1; then
                 pulled_marker="✓"
             else
                 pulled_marker="✗"
