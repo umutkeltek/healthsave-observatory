@@ -72,7 +72,12 @@ class TrendsListResponse(BaseModel):
     count: int = 0
 
 
+class TriggerRequest(BaseModel):
+    type: str = "daily_briefing"
+
+
 class TriggerResponse(BaseModel):
     status: str = "accepted"
     run_type: str | None = None
     message: str | None = None
+    run_id: int | None = None

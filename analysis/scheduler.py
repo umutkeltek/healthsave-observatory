@@ -1,48 +1,65 @@
 """APScheduler-based cron for the analysis engine.
 
-Phase 1 ships this class shape but does NOT construct
-``AsyncIOScheduler`` at import time and does NOT start it from the
-FastAPI lifespan. That wiring lands in Phase 1.5 once the engine
-can actually produce findings.
-
-Two design rules to preserve:
-
-1. ``AsyncIOScheduler()`` is constructed inside ``__init__``, never at
-   module import. Constructing it at import time causes pytest
-   collection to fail on Python 3.12+ because no event loop is running.
-2. The scheduler is not started by FastAPI ``lifespan`` in this round.
-   ``server/main.py`` deliberately does not import this module.
+Phase 1.5 activation: a single ``daily_briefing`` job is registered when
+``config.analysis.daily_briefing.enabled`` is true. APScheduler is
+imported inside ``start()`` so module import stays cheap for pytest
+collection (``AsyncIOScheduler()`` constructed at import time can fail
+on Python 3.12+ when no event loop is running).
 """
+
+from __future__ import annotations
+
+import logging
+
+log = logging.getLogger("healthsave.analysis")
 
 
 class AnalysisScheduler:
     """Wrap an APScheduler instance that runs the analysis jobs.
 
-    Jobs:
-      * daily briefing — default ``0 7 * * *``
-      * weekly summary — default ``0 8 * * 1``
-      * anomaly check — default ``*/30 * * * *``
-      * trend analysis — default ``0 9 * * 1``
-      * correlation analysis — default ``0 10 1 * *``
-
-    Each job is registered conditionally based on the user's
-    ``config.yaml`` (respecting the ``enabled`` flag).
+    MVP registers only the daily-briefing job; the weekly / anomaly /
+    trend / correlation jobs stay unregistered until Phase 2 lights up
+    their engine methods. Future jobs follow the same pattern: check
+    ``config.analysis.<job>.enabled``, then ``add_job`` with
+    ``max_instances=1`` + ``coalesce=True`` to survive overlapping ticks.
     """
 
     def __init__(self, engine, config) -> None:
         """Store references; do NOT construct AsyncIOScheduler here yet."""
         self.engine = engine
         self.config = config
-        self.scheduler = None  # AsyncIOScheduler() when wired in Phase 1.5
+        self.scheduler = None
 
     def start(self) -> None:
-        """Construct + start AsyncIOScheduler and register all enabled jobs."""
-        raise NotImplementedError(
-            "APScheduler wiring deferred to Phase 1.5 — apscheduler dep installed, not yet imported"
+        """Construct + start AsyncIOScheduler and register the daily briefing.
+
+        No-ops (and logs) when ``daily_briefing.enabled`` is false so
+        Docker users who want the API but not the scheduler can disable
+        via ``config.yaml``.
+        """
+        if not self.config.analysis.daily_briefing.enabled:
+            log.info("daily_briefing disabled in config; scheduler not starting")
+            return
+
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from apscheduler.triggers.cron import CronTrigger
+
+        self.scheduler = AsyncIOScheduler()
+        self.scheduler.add_job(
+            self.engine.run_daily_briefing,
+            CronTrigger.from_crontab(self.config.analysis.daily_briefing.cron),
+            id="daily_briefing",
+            max_instances=1,
+            coalesce=True,
+        )
+        self.scheduler.start()
+        log.info(
+            "AnalysisScheduler started (daily_briefing cron=%s)",
+            self.config.analysis.daily_briefing.cron,
         )
 
-    def shutdown(self, wait: bool = True) -> None:
+    def shutdown(self, wait: bool = False) -> None:
         """Gracefully shut down the scheduler on FastAPI lifespan exit."""
-        raise NotImplementedError(
-            "APScheduler wiring deferred to Phase 1.5 — apscheduler dep installed, not yet imported"
-        )
+        if self.scheduler is not None:
+            self.scheduler.shutdown(wait=wait)
+            self.scheduler = None
