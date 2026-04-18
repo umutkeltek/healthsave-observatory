@@ -6,9 +6,16 @@ or FastAPI.
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+# Mirrors the CHECK constraints in migrations/002_analysis_tables.sql.
+# Keep these enums in sync with the DB when either side changes.
+Severity = Literal["info", "watch", "alert"]
+RunStatus = Literal["running", "completed", "failed", "skipped"]
+Direction = Literal["up", "down", "flat"]
+Sensitivity = Literal["low", "normal", "high"]
 
 
 class Finding(BaseModel):
@@ -16,7 +23,7 @@ class Finding(BaseModel):
 
     finding_type: str
     metric: str | None = None
-    severity: str = "info"
+    severity: Severity = "info"
     structured_data: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime | None = None
 
@@ -35,8 +42,8 @@ class Anomaly(BaseModel):
 
     metric: str
     magnitude: float
-    direction: str
-    severity: str = "info"
+    direction: Direction
+    severity: Severity = "info"
     detected_at: datetime | None = None
     context: dict[str, Any] = Field(default_factory=dict)
 
@@ -46,7 +53,7 @@ class Trend(BaseModel):
 
     metric: str
     slope: float
-    direction: str
+    direction: Direction
     period_days: int
     p_value: float | None = None
     confidence: str | None = None
