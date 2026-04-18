@@ -92,6 +92,120 @@ detect_lan_ip() {
     printf '%s' "$ip"
 }
 
+# ---------------------------------------------------------------- hardware
+# Adaptive Ollama model recommendation. detect_ram_gb / detect_gpu_kind /
+# recommend_model are pure functions: each writes a single line to stdout
+# and never reads global state. They're sourced in unit tests.
+detect_ram_gb() {
+    local bytes kb
+    case "$(uname -s)" in
+        Darwin)
+            bytes="$(sysctl -n hw.memsize 2>/dev/null || true)"
+            if [ -n "$bytes" ] && [ "$bytes" -gt 0 ] 2>/dev/null; then
+                echo $(( bytes / 1024 / 1024 / 1024 ))
+                return
+            fi
+            ;;
+        Linux)
+            if [ -r /proc/meminfo ]; then
+                kb="$(awk '/^MemTotal:/ {print $2; exit}' /proc/meminfo 2>/dev/null || true)"
+                if [ -n "$kb" ] && [ "$kb" -gt 0 ] 2>/dev/null; then
+                    echo $(( kb / 1024 / 1024 ))
+                    return
+                fi
+            fi
+            ;;
+    esac
+    # Fallback: conservative 16 GB assumption (D3).
+    echo 16
+}
+
+detect_gpu_kind() {
+    local os arch
+    os="$(uname -s)"
+    arch="$(uname -m)"
+
+    if [ "$os" = "Darwin" ] && [ "$arch" = "arm64" ]; then
+        echo apple_silicon
+        return
+    fi
+    if [ "$os" = "Darwin" ]; then
+        # Intel Mac — Ollama Metal backend is Apple-Silicon only (D8).
+        echo none
+        return
+    fi
+
+    # Linux (and WSL2 which reports as Linux).
+    if command -v nvidia-smi >/dev/null 2>&1; then
+        if timeout 2s nvidia-smi --version >/dev/null 2>&1; then
+            echo nvidia
+            return
+        fi
+    fi
+    if command -v lspci >/dev/null 2>&1; then
+        if lspci 2>/dev/null | grep -iE 'vga|3d|display' | grep -iE 'amd|radeon|advanced micro' >/dev/null 2>&1; then
+            echo amd
+            return
+        fi
+    fi
+    echo none
+}
+
+recommend_model() {
+    local ram_gb="$1"
+    local gpu_kind="$2"
+    # Guard non-integer input — fall back to the safe default.
+    if ! [ "$ram_gb" -eq "$ram_gb" ] 2>/dev/null; then
+        echo llama3.2:3b
+        return
+    fi
+
+    if [ "$ram_gb" -lt 6 ]; then
+        echo SKIP
+        return
+    fi
+
+    case "$gpu_kind" in
+        nvidia)
+            if   [ "$ram_gb" -lt 10 ]; then echo llama3.2:3b
+            elif [ "$ram_gb" -lt 18 ]; then echo llama3.1:8b
+            elif [ "$ram_gb" -lt 36 ]; then echo llama3.1:8b
+            elif [ "$ram_gb" -lt 96 ]; then echo qwen2.5:14b
+            else                            echo llama3.1:70b
+            fi
+            ;;
+        *)
+            if   [ "$ram_gb" -lt 10 ]; then echo llama3.2:1b
+            elif [ "$ram_gb" -lt 18 ]; then echo llama3.2:3b
+            elif [ "$ram_gb" -lt 36 ]; then echo llama3.1:8b
+            elif [ "$ram_gb" -lt 96 ]; then echo llama3.1:8b
+            else                            echo qwen2.5:32b
+            fi
+            ;;
+    esac
+}
+
+describe_gpu_kind() {
+    case "$1" in
+        apple_silicon) echo 'Apple Silicon GPU (unified memory)' ;;
+        nvidia)        echo 'NVIDIA GPU (CUDA)' ;;
+        amd)           echo 'AMD GPU' ;;
+        *)             echo 'no dedicated GPU' ;;
+    esac
+}
+
+describe_model_size() {
+    case "$1" in
+        llama3.2:1b)   echo '~1.3 GB resident, fast, lower quality' ;;
+        llama3.2:3b)   echo '~2 GB, decent narrative' ;;
+        llama3.1:8b)   echo '~4.7 GB, good narrative quality' ;;
+        qwen2.5:14b)   echo '~9 GB, strong narrative on dGPU' ;;
+        qwen2.5:32b)   echo '~20 GB, large model — rich narrative' ;;
+        llama3.1:70b)  echo '~40 GB, premium quality on big hardware' ;;
+        *)             echo 'custom model tag' ;;
+    esac
+}
+
 docker_available() {
     if ! command -v docker >/dev/null 2>&1; then
         return 1
@@ -166,6 +280,19 @@ LLM_BASE_URL=http://ollama:11434
 OLLAMA_MODEL=llama3.1:8b
 EOF
     chmod 600 "$ENV_FILE" 2>/dev/null || true
+}
+
+set_env_model() {
+    # Update OLLAMA_MODEL=<tag> in .env. Portable sed (BSD + GNU) via -i.bak.
+    local model_tag="$1"
+    [ -z "$model_tag" ] && return 0
+    [ ! -f "$ENV_FILE" ] && return 0
+    if grep -q '^OLLAMA_MODEL=' "$ENV_FILE" 2>/dev/null; then
+        sed -i.bak "s|^OLLAMA_MODEL=.*|OLLAMA_MODEL=${model_tag}|" "$ENV_FILE"
+        rm -f "${ENV_FILE}.bak"
+    else
+        printf 'OLLAMA_MODEL=%s\n' "$model_tag" >>"$ENV_FILE"
+    fi
 }
 
 wait_for_ollama() {
@@ -244,6 +371,40 @@ cmd_setup() {
         enable_ollama=1
     fi
 
+    OLLAMA_MODEL_CHOICE=""
+    if [ "$enable_ollama" -eq 1 ]; then
+        # Adaptive model recommendation. Detect hardware, suggest a tier,
+        # let the user accept or override. Result lands in
+        # OLLAMA_MODEL_CHOICE for write_env / pull_model.
+        local ram_gb gpu_kind gpu_label recommended size_hint answer
+        ram_gb="$(detect_ram_gb)"
+        gpu_kind="$(detect_gpu_kind)"
+        gpu_label="$(describe_gpu_kind "$gpu_kind")"
+        recommended="$(recommend_model "$ram_gb" "$gpu_kind")"
+
+        if [ "$recommended" = "SKIP" ]; then
+            log_warn "Detected: ${ram_gb} GB RAM, ${gpu_label}."
+            log_warn "Your system has less than 6 GB RAM. AI features won't run reliably. Skipping Ollama setup."
+            enable_ollama=0
+        else
+            size_hint="$(describe_model_size "$recommended")"
+            log_info "Detected: ${ram_gb} GB RAM, ${gpu_label}."
+            log_info "Recommended model: ${recommended} (${size_hint})"
+            answer=""
+            if [ -t 0 ]; then
+                printf '\nPress Enter to accept, or type a different model tag (e.g. llama3.2:3b):\n'
+                printf '[%s] > ' "$recommended"
+                read -r answer || answer=""
+            fi
+            if [ -z "$answer" ]; then
+                OLLAMA_MODEL_CHOICE="$recommended"
+            else
+                OLLAMA_MODEL_CHOICE="$answer"
+            fi
+            log_info "Using Ollama model: ${OLLAMA_MODEL_CHOICE}"
+        fi
+    fi
+
     if [ "$enable_ollama" -eq 1 ]; then
         if [ -f "$COMPOSE_OVERRIDE" ]; then
             log_warn "$COMPOSE_OVERRIDE already exists — leaving it as-is."
@@ -254,6 +415,12 @@ cmd_setup() {
             fi
             cp "$COMPOSE_OVERRIDE_EXAMPLE" "$COMPOSE_OVERRIDE"
             log_ok "Copied $COMPOSE_OVERRIDE_EXAMPLE → $COMPOSE_OVERRIDE"
+        fi
+        # Persist the chosen model into .env so direct-compose runs and
+        # pull_model below both pick it up.
+        if [ -n "${OLLAMA_MODEL_CHOICE:-}" ]; then
+            set_env_model "$OLLAMA_MODEL_CHOICE"
+            log_ok "Set OLLAMA_MODEL=${OLLAMA_MODEL_CHOICE} in $ENV_FILE"
         fi
     else
         log_info "Skipping Ollama. The stack will run without a local LLM."
@@ -270,9 +437,12 @@ cmd_setup() {
             log_error "Ollama did not become ready within 120 seconds. Check 'docker compose logs ollama'."
             exit 1
         fi
-        # shellcheck disable=SC1091
-        local model_name
-        model_name="$(grep -E '^OLLAMA_MODEL=' "$ENV_FILE" | head -n 1 | cut -d= -f2 || true)"
+        # Prefer the in-process choice so we don't re-parse .env right after
+        # writing it; fall back to .env, then to the proven 8b default.
+        local model_name="${OLLAMA_MODEL_CHOICE:-}"
+        if [ -z "$model_name" ]; then
+            model_name="$(grep -E '^OLLAMA_MODEL=' "$ENV_FILE" | head -n 1 | cut -d= -f2 || true)"
+        fi
         if [ -z "$model_name" ]; then
             model_name="llama3.1:8b"
         fi
@@ -335,6 +505,28 @@ cmd_doctor() {
         if ! check_endpoint "Ollama /api/tags" "${OLLAMA_URL_DEFAULT}/api/tags"; then
             failures=$((failures + 1))
         fi
+
+        # Configured model + pulled-status line. Best-effort — never fails
+        # the doctor since model presence is informational, not gating.
+        local configured_model pulled_marker list_output
+        configured_model=""
+        if [ -f "$ENV_FILE" ]; then
+            configured_model="$(grep -E '^OLLAMA_MODEL=' "$ENV_FILE" | head -n 1 | cut -d= -f2 || true)"
+        fi
+        if [ -z "$configured_model" ]; then
+            configured_model="llama3.1:8b"
+        fi
+        pulled_marker="?"
+        if list_output="$(compose exec -T ollama ollama list 2>/dev/null)"; then
+            if printf '%s' "$list_output" | grep -F "$configured_model" >/dev/null 2>&1; then
+                pulled_marker="✓"
+            else
+                pulled_marker="✗"
+            fi
+        fi
+        log_info "Configured model: ${configured_model}    Pulled: ${pulled_marker}"
+    else
+        log_info "Configured model: (Ollama disabled)"
     fi
 
     echo
