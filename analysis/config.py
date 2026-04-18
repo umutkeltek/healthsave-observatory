@@ -8,6 +8,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from .types import Sensitivity
+
 
 class BriefingConfig(BaseModel):
     enabled: bool = True
@@ -28,7 +30,7 @@ class AnomalyConfig(BaseModel):
     cron: str = "*/30 * * * *"
     on_ingest: bool = True
     cooldown_minutes: int = 15
-    sensitivity: str = "normal"  # low | normal | high
+    sensitivity: Sensitivity = "normal"
 
 
 class TrendConfig(BaseModel):

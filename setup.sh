@@ -67,7 +67,7 @@ rand_hex() {
     if command -v openssl >/dev/null 2>&1; then
         openssl rand -hex 16
     else
-        head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'
+        head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n'
     fi
 }
 

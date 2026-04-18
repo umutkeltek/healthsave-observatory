@@ -40,7 +40,8 @@ def parse_date(value: str | None) -> date | None:
         return None
     try:
         if "T" in value:
-            return parse_ts(value).date() if parse_ts(value) else None
+            parsed = parse_ts(value)
+            return parsed.date() if parsed else None
         return date.fromisoformat(value)
     except (ValueError, TypeError):
         return None

@@ -71,7 +71,7 @@ async def apple_batch(request: Request, session: AsyncSession = Depends(get_sess
 
     await _mark_raw_ingestion_processed(session, raw_log_id)
     await session.commit()
-    log.info(f"Ingested {count} records for {metric} (batch {batch_idx + 1}/{total})")
+    log.info("Ingested %d records for %s (batch %d/%d)", count, metric, batch_idx + 1, total)
 
     return {
         "status": "processed",
