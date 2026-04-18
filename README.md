@@ -16,7 +16,7 @@ The entire stack runs in Docker on a laptop, a NUC, a Mac mini, a Synology, or a
 
 ## Quick start
 
-You need [Docker](https://www.docker.com/products/docker-desktop/) installed and running, plus a terminal.
+You need [Docker](https://www.docker.com/products/docker-desktop/) installed and running, plus a terminal. On Windows, run this inside WSL2 — `setup.sh` is a bash script.
 
 ```bash
 git clone https://github.com/<your-fork>/datahub.git
@@ -149,8 +149,6 @@ Run `docker compose logs <service>` (e.g. `docker compose logs api`) to see why.
 ---
 
 ## For developers
-
-The rest of this document is the developer-facing reference.
 
 ### Stack
 
