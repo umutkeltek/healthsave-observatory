@@ -1,0 +1,35 @@
+# Opt-in Ollama service for the Phase 1 AI analysis engine.
+#
+# Docker Compose auto-loads any file named ``docker-compose.override.yml``
+# in this directory. We intentionally ship this as ``.example`` so the
+# default ``docker compose up -d`` stays lightweight (no LLM container
+# required). Copy to ``docker-compose.override.yml`` to enable Ollama
+# locally:
+#
+#   cp docker-compose.override.yml.example docker-compose.override.yml
+#   docker compose up -d
+#
+# The ``./setup.sh`` bootstrap handles this copy for you when you answer
+# "y" to the "enable local LLM (Ollama)?" prompt.
+#
+# Expected RAM headroom: llama3.1:8b needs ~8 GB free. On machines with
+# less, pick a smaller model (llama3.1:7b, phi3, etc.) and update
+# OLLAMA_MODEL in .env + config.yaml.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  ollama_data:

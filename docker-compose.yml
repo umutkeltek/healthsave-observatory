@@ -26,6 +26,8 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:-changeme}@db:5432/healthsave
       API_KEY: ${API_KEY:-}
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
     ports:
       - "8000:8000"
     healthcheck:
