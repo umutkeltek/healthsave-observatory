@@ -1,41 +1,206 @@
 # Health Data Hub
 
-Self-hosted server stack for ingesting HealthKit-derived data into TimescaleDB and visualizing it with Grafana.
+Your own server, on your own hardware, turning the health data your phone already collects into an AI-written daily briefing — no cloud, no subscription, no one else reading your numbers.
 
-It currently works with the [HealthSave](https://apps.apple.com/app/id6759843047) iOS app, which acts as a thin HealthKit bridge with background sync, but the backend is intentionally named more broadly so it can evolve beyond a single client over time.
+You point your iPhone at it. It stores everything from your Apple Watch (heart rate, HRV, SpO2, sleep, workouts, steps, and more), graphs it in Grafana, and — if you turn it on — runs a small local AI model that writes you a short narrative every morning about how your body is actually doing.
 
-**Stack:** FastAPI + TimescaleDB + Grafana
+## What you get
 
-## Why This Exists
+- A long-term store for every Apple Health metric your phone collects, queryable with normal SQL
+- A set of ready-made Grafana dashboards (heart, sleep, activity, workouts) that work the moment data starts flowing
+- An optional AI briefing system that turns numbers into plain English ("HRV trended down three days in a row, sleep was light last night, expect a low-energy morning")
+- A clean ingest API anyone can build against — the iOS app is one client, your own scripts can be another
+- Drop-in examples for piping selected metrics into Home Assistant for automations
 
-Apple Health is great for collection, but much less useful once you want long-term storage, custom queries, or home automation built on top of your own data.
+The entire stack runs in Docker on a laptop, a NUC, a Mac mini, a Synology, or a beefy workstation — your choice. Nothing phones home.
 
-This server exists to make that data portable and useful:
-- Store full history in your own database
-- Query it with normal SQL and time-series tooling
-- Build Grafana dashboards without being limited to Apple's UI
-- Feed selected metrics into systems like Home Assistant
+## Quick start
 
-The goal is not to replace the Health app. It is to provide a simple self-hosted backend that makes your health data easier to inspect, automate, and keep long-term.
-
-## Quick Start (non-technical)
-
-One command. It generates secure passwords, creates `.env` and
-`config.yaml`, optionally enables a local LLM (Ollama), and brings
-the whole stack up:
+You need [Docker](https://www.docker.com/products/docker-desktop/) installed and running, plus a terminal.
 
 ```bash
+git clone https://github.com/<your-fork>/datahub.git
+cd datahub
 ./setup.sh
 ```
 
-When it finishes, run `./setup.sh doctor` to verify every service is
-healthy. The final output includes the API URL, Grafana URL with
-credentials, and the exact iOS-app server URL to paste into HealthSave.
+That's it. `setup.sh`:
 
-Re-running `./setup.sh` is safe — existing `.env` and `config.yaml`
-files are preserved.
+1. Generates secure passwords and writes a `.env` for you
+2. Asks if you want the AI briefing system, then **detects your RAM + GPU and recommends the right Ollama model** (you can override)
+3. Brings the whole stack up with `docker compose up -d`
 
-## Quick Start (manual)
+When it finishes, run `./setup.sh doctor` to confirm every service is healthy. The doctor prints the exact iOS-app URL to paste into [HealthSave](https://apps.apple.com/app/id6759843047) under Settings → Server Sync.
+
+Re-running `./setup.sh` is safe — it preserves your existing `.env` and `config.yaml`.
+
+## Hardware recommendations
+
+The AI briefing uses a local language model running through [Ollama](https://ollama.com) (a tiny daemon that runs LLMs on your own machine). Different models need different amounts of RAM. `setup.sh` reads your system RAM + GPU and suggests one — but you can pick any Ollama tag.
+
+| System RAM | No GPU / Apple Silicon | NVIDIA GPU detected |
+|---|---|---|
+| < 6 GB | *too small — skip AI* | *too small — skip AI* |
+| 6–10 GB | `llama3.2:1b` (~1.3 GB) | `llama3.2:3b` |
+| 10–18 GB | `llama3.2:3b` (~2 GB) | `llama3.1:8b` |
+| 18–36 GB | `llama3.1:8b` (~4.7 GB) | `llama3.1:8b` |
+| 36–96 GB | `llama3.1:8b` (proven default) | `qwen2.5:14b` |
+| > 96 GB | `qwen2.5:32b` or `llama3.1:70b` | `llama3.1:70b` |
+
+A quick translation:
+
+- **Apple Silicon Macs** (M1/M2/M3/M4) use unified memory, so system RAM ≈ what the model can use. A 16 GB MacBook Air handles `llama3.2:3b` comfortably; a 64 GB Studio runs `llama3.1:8b` with headroom.
+- **Linux box with an NVIDIA GPU** — Ollama uses CUDA. The recommendation bumps a tier because the GPU absorbs most of the work.
+- **AMD GPU on Linux** — Ollama can use ROCm but coverage varies; treated as CPU-only in the recommendation logic.
+- **Intel Macs and Windows-without-WSL** — fall back to CPU-only conservative defaults; still works, just slower.
+
+You can change the model later (see Troubleshooting).
+
+If you're on something smaller than 6 GB RAM (a Pi 4, an old NAS), `setup.sh` will recommend skipping AI entirely. The ingest pipeline still runs — you just won't get the morning narrative.
+
+## How the AI analysis works
+
+The briefing isn't "feed everything to ChatGPT and hope". It's a **two-brain system**:
+
+- **Brain 1 — the statistical engine.** A small Python module that runs on a schedule, reads your time-series data (heart rate, HRV, sleep, etc.), computes baselines and trends, and flags anything statistically interesting (a 3-day HRV decline, a heart-rate-recovery anomaly, a sleep-stage shift). It produces structured findings, not prose.
+- **Brain 2 — the narrative LLM.** A local Ollama model takes those findings and rewrites them as a short, readable briefing. It doesn't see raw numbers it doesn't need; it sees flagged findings and turns them into "Your HRV has dropped three days running while sleep efficiency stayed flat — this often shows up before a stress spike".
+
+This split is deliberate: the math stays deterministic and auditable; the LLM only handles the part where natural language actually helps. No cloud, no per-query cost, no data leaving your network.
+
+What's included in the MVP:
+
+- Daily HR / HRV / sleep summary
+- Trend detection over 3-day, 7-day, 30-day windows
+- Workout recovery hints when HR or HRV deviates from baseline
+- A `POST /api/insights/trigger` endpoint for running a briefing on demand
+
+What's *not* yet included (and on the roadmap): goal-tracking, anomaly alerting via Home Assistant, multi-person households.
+
+## Your first insight
+
+Briefings need at least one full day of heart-rate data to say anything useful. Once you've synced from HealthSave at least once, you have two ways to see your first briefing:
+
+**Option A — wait for the daily cron.** The analysis worker ticks once a day (default 7am local) and writes a fresh briefing. Easiest, but slow if you just installed.
+
+**Option B — trigger one now.** Hit the trigger endpoint:
+
+```bash
+curl -X POST http://localhost:8000/api/insights/trigger
+```
+
+(Add `-H "X-API-Key: your-key"` if you set an `API_KEY` in `.env`.)
+
+The response includes the run ID; you can poll `GET /api/insights/latest` for the rendered briefing once the run completes (usually 5–30 seconds depending on model size).
+
+If the briefing comes back empty or terse, it usually means there isn't enough data yet. Sync another day's worth and trigger again.
+
+## Connect HealthSave
+
+The easiest way to push HealthKit data into this stack is the [HealthSave iOS app](https://apps.apple.com/app/id6759843047).
+
+HealthSave expects a base server URL and appends the API paths itself:
+
+`http://your-server-ip:8000`
+
+1. Open HealthSave → Settings → Server Sync
+2. Set Server URL to: `http://your-server-ip:8000`
+3. (Optional) Set your API key if you configured one
+4. Tap "Sync New Data"
+
+If you're building another client, the batch ingest endpoint is:
+
+`http://your-server-ip:8000/api/apple/batch`
+
+The full request/response contract, including the exact `/api/apple/status` shape expected by the iOS app, is documented in [API.md](API.md).
+
+## Troubleshooting
+
+**The Ollama container won't start.**
+
+```bash
+docker compose logs ollama
+```
+
+The most common causes are: not enough free RAM (Ollama refuses to load a model that won't fit), the override file missing (re-run `./setup.sh` — it copies the example), or another process holding port 11434 (stop it, or edit `docker-compose.override.yml` to bind a different port).
+
+**My briefing came back empty (or said "not enough data").**
+
+Two things to check:
+
+1. Has HealthSave actually synced? Hit `http://localhost:8000/api/apple/status` — if the table counts are all zero, sync from your phone first.
+2. How much history do you have? The statistical engine needs at least ~24 hours of heart-rate data to compute anything. Newly-installed users typically see a real briefing on day 2.
+
+**I want to change the model after setup.**
+
+Edit the `OLLAMA_MODEL=` line in your `.env`, then pull the new tag and restart:
+
+```bash
+# Edit .env to set OLLAMA_MODEL=<new-tag>
+docker compose exec ollama ollama pull <new-tag>
+docker compose restart api
+```
+
+The tier table above is a starting point — any Ollama model tag works. Browse [ollama.com/library](https://ollama.com/library) for the full list.
+
+**`./setup.sh doctor` says a service isn't running.**
+
+Run `docker compose logs <service>` (e.g. `docker compose logs api`) to see why. Most first-time failures are Docker not having enough memory allocated — bump it in Docker Desktop's preferences and re-run `./setup.sh`.
+
+---
+
+## For developers
+
+The rest of this document is the developer-facing reference.
+
+### Stack
+
+FastAPI + TimescaleDB + Grafana, plus an optional Ollama sidecar for the LLM. Python 3.12, async SQLAlchemy with asyncpg, ruff for lint+format, pytest for tests.
+
+### Architecture
+
+```
+iPhone (HealthSave app)
+    │
+    │  POST /api/apple/batch (JSON over HTTPS)
+    │
+    ▼
+FastAPI (port 8000)
+    │
+    │  INSERT ... ON CONFLICT DO UPDATE (idempotent)
+    │
+    ▼
+TimescaleDB (port 5432)
+    │
+    │  SQL queries + continuous aggregates
+    │
+    ├──────────────────────────────┐
+    ▼                              ▼
+Grafana (port 3000)        Analysis worker
+                                   │
+                                   │  findings (structured)
+                                   ▼
+                           Ollama (port 11434)
+                                   │
+                                   │  briefing (prose)
+                                   ▼
+                           /api/insights/latest
+```
+
+### What gets synced
+
+The server receives and stores 120+ HealthKit metrics:
+
+| Table | Data |
+|-------|------|
+| `heart_rate` | Continuous HR from Apple Watch / Whoop |
+| `hrv` | Heart rate variability (SDNN) |
+| `blood_oxygen` | SpO2 readings |
+| `daily_activity` | Steps, distance, calories, exercise minutes |
+| `sleep_sessions` | Sleep duration, stages, respiratory rate |
+| `workouts` | Workout type, duration, HR zones |
+| `quantity_samples` | Catch-all for any other HealthKit metric |
+
+### Manual quick-start (without `setup.sh`)
 
 ```bash
 cp .env.example .env
@@ -52,59 +217,25 @@ This starts:
 The database port is bound to `127.0.0.1` by default so it is available for
 local tooling without being exposed on your LAN.
 
-## First 5 Minutes
+To opt into Ollama manually, copy `docker-compose.override.yml.example` to `docker-compose.override.yml` and set `OLLAMA_MODEL` in `.env` to the tag you want.
 
-If this is your first run, this is the shortest path to confirming the stack is alive:
+### API Endpoints
 
-1. Start the stack with `docker compose up -d`
-2. Check the API health endpoint at `http://localhost:8000/health`
-3. Check the database readiness endpoint at `http://localhost:8000/ready`
-4. Open Grafana at `http://localhost:3000` and log in with `admin` and your `GRAFANA_PASSWORD`
-5. Confirm the `HealthSave` PostgreSQL datasource is present
-6. Open the `HealthSave Overview` dashboard
-7. In the [HealthSave](https://apps.apple.com/app/id6759843047) app, set Server Sync to the base server URL: `http://your-server-ip:8000`
-8. Run a sync and refresh Grafana
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/api/health` | GET | App-friendly health check |
+| `/ready` | GET | API plus database readiness check |
+| `/api/apple/batch` | POST | Receive metric batch from the client bridge |
+| `/api/apple/status` | GET | Return flat per-table status objects |
+| `/api/insights/latest` | GET | Most recent briefing (if AI enabled) |
+| `/api/insights/trigger` | POST | Run an analysis pass now (if AI enabled) |
 
-What you should expect after the first successful sync:
-- `/api/apple/status` starts showing non-zero table counts
-- `HealthSave Overview` begins to populate with heart rate, HRV, SpO2, activity, sleep, and workout data
-- The activity and workout dashboards become useful immediately if those datasets were included in the sync
+`/api/apple/status` intentionally returns top-level metric objects, not a
+wrapped `{"status":"ok","counts":...}` payload. See [API.md](API.md) for
+the compatibility contract.
 
-## Connect HealthSave
-
-The easiest way to push HealthKit data into this stack is with the [HealthSave iOS app](https://apps.apple.com/app/id6759843047).
-
-HealthSave expects a base server URL and appends the API paths itself:
-
-`http://your-server-ip:8000`
-
-1. Open HealthSave → Settings → Server Sync
-2. Set Server URL to: `http://your-server-ip:8000`
-3. (Optional) Set your API key if you configured one
-4. Tap "Sync New Data"
-
-If you are building another client, the batch ingest endpoint is:
-
-`http://your-server-ip:8000/api/apple/batch`
-
-The full request/response contract, including the exact `/api/apple/status`
-shape expected by the iOS app, is documented in [API.md](API.md).
-
-## What Gets Synced
-
-The server receives and stores 120+ HealthKit metrics:
-
-| Table | Data |
-|-------|------|
-| `heart_rate` | Continuous HR from Apple Watch / Whoop |
-| `hrv` | Heart rate variability (SDNN) |
-| `blood_oxygen` | SpO2 readings |
-| `daily_activity` | Steps, distance, calories, exercise minutes |
-| `sleep_sessions` | Sleep duration, stages, respiratory rate |
-| `workouts` | Workout type, duration, HR zones |
-| `quantity_samples` | Catch-all for any other HealthKit metric |
-
-## Grafana Dashboards
+### Grafana Dashboards
 
 A curated starter dashboard set is included in `grafana/`, so a fresh `docker compose up -d` should bring Grafana up with the datasource and the supported dashboards already wired.
 
@@ -123,7 +254,7 @@ Supported dashboards loaded automatically:
 
 The datasource is auto-provisioned — no manual setup needed.
 
-## Home Assistant Examples
+### Home Assistant Examples
 
 Example Home Assistant config is included in `home-assistant/` for people who want to query TimescaleDB directly and turn selected metrics into entities and automations.
 
@@ -137,7 +268,7 @@ Recommended flow:
 3. Copy `healthsave-package.yaml` into your Home Assistant packages directory
 4. Restart Home Assistant and adjust the example thresholds and entity IDs for your setup
 
-## Community Backends
+### Community Backends
 
 The ingest API is intentionally simple so anyone can build a compatible backend for their own stack. The first community implementation is already live:
 
@@ -145,51 +276,7 @@ The ingest API is intentionally simple so anyone can build a compatible backend 
 
 If you've built a compatible backend, open an issue or PR and we'll add it here. The full API contract including every supported metric is documented in [API.md](API.md).
 
-## Roadmap
-
-This community release is intentionally small and focused on the ingestion pipeline first.
-
-Next things to improve:
-- More dashboard polish and curation across recovery, workouts, and long-term trends
-- More Home Assistant examples for different trigger styles
-- Production deployment notes for reverse proxy, auth, backups, and retention
-
-## Architecture
-
-```
-iPhone (HealthSave app)
-    │
-    │  POST /api/apple/batch (JSON over HTTPS)
-    │
-    ▼
-FastAPI (port 8000)
-    │
-    │  INSERT ... ON CONFLICT DO UPDATE (idempotent)
-    │
-    ▼
-TimescaleDB (port 5432)
-    │
-    │  SQL queries + continuous aggregates
-    │
-    ▼
-Grafana (port 3000)
-```
-
-## API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Health check |
-| `/api/health` | GET | App-friendly health check |
-| `/ready` | GET | API plus database readiness check |
-| `/api/apple/batch` | POST | Receive metric batch from the client bridge |
-| `/api/apple/status` | GET | Return flat per-table status objects |
-
-`/api/apple/status` intentionally returns top-level metric objects, not a
-wrapped `{"status":"ok","counts":...}` payload. See [API.md](API.md) for
-the compatibility contract.
-
-## Deduplication
+### Deduplication
 
 All ingestion is idempotent:
 - Unique indexes on first-class metric identity columns
@@ -202,7 +289,7 @@ The API also stores each received batch in `raw_ingestion_log` before
 processing, then marks it processed after a successful commit. That gives you a
 minimal audit trail and a useful starting point if you ever need replay tooling.
 
-## Updating Existing Installs
+### Updating Existing Installs
 
 Fresh installs load `schema.sql` automatically. Existing Docker volumes keep
 their original schema, so apply migrations manually when upgrading:
@@ -212,7 +299,7 @@ docker compose exec -T db psql -U healthsave -d healthsave < migrations/001_audi
 docker compose exec -T db psql -U healthsave -d healthsave < migrations/002_analysis_tables.sql
 ```
 
-## Development
+### Development
 
 Local verification uses the same commands as CI:
 
@@ -229,7 +316,7 @@ The project targets Python 3.12, matching the Docker image and CI runtime.
 The CI workflow runs formatting, linting, tests, and a Docker build on every
 push and pull request to `main`.
 
-## HTTPS / Reverse Proxy
+### HTTPS / Reverse Proxy
 
 For production, put a reverse proxy in front of the API:
 
@@ -257,7 +344,7 @@ Recommended production posture:
 - Back up the `db_data` Docker volume regularly.
 - Upgrade `TIMESCALE_IMAGE` and `GRAFANA_IMAGE` deliberately, not via `latest`.
 
-## Derived Metrics
+### Derived Metrics
 
 The schema includes continuous aggregates for common derived metrics:
 
@@ -280,3 +367,13 @@ FROM hrv
 GROUP BY bucket, device_id
 WITH NO DATA;
 ```
+
+### Roadmap
+
+This community release is intentionally small and focused on the ingestion pipeline plus the first slice of AI briefings.
+
+Next things to improve:
+- More dashboard polish and curation across recovery, workouts, and long-term trends
+- Goal tracking and trend-based alerts wired into Home Assistant
+- More comprehensive analysis windows (monthly / quarterly trends)
+- Production deployment notes for reverse proxy, auth, backups, and retention
