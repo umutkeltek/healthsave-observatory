@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from .api import health_routes, ingest, status
+from .api import health_routes, ingest, insights, status
 from .db.session import engine
 
 log = logging.getLogger("healthsave")
@@ -28,3 +28,4 @@ app = FastAPI(title="Health Data Hub", version="1.0.0", lifespan=lifespan)
 app.include_router(health_routes.router)
 app.include_router(ingest.router)
 app.include_router(status.router)
+app.include_router(insights.router)
