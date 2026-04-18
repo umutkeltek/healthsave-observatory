@@ -22,8 +22,8 @@ dev = [
     "ruff==0.15.9",
 ]
 
-[tool.setuptools]
-py-modules = ["server"]
+[tool.setuptools.packages.find]
+include = ["server*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
