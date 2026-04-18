@@ -10,6 +10,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY server/ ./server/
+COPY analysis/ ./analysis/
 
 USER appuser
 EXPOSE 8000
