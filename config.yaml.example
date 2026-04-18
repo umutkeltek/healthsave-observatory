@@ -1,0 +1,65 @@
+# Health Data Hub — analysis configuration
+#
+# This file configures the Phase 1 AI analysis engine: schedule of
+# analysis jobs, LLM provider, and notification delivery. All secrets
+# (API keys, database passwords) live in .env, NOT in this file.
+#
+# Copy to config.yaml and edit as desired. The example values below
+# are the local-first defaults — with no changes, every analysis runs
+# on-device against a local Ollama model, and no data ever leaves the
+# Docker network.
+
+analysis:
+  daily_briefing:
+    enabled: true
+    cron: "0 7 * * *"          # Every day at 7:00 AM local time
+    lookback_days: 1
+    baseline_days: 30
+
+  weekly_summary:
+    enabled: true
+    cron: "0 8 * * 1"          # Mondays at 8:00 AM local time
+    lookback_days: 7
+    baseline_days: 28
+
+  anomaly_detection:
+    enabled: true
+    cron: "*/30 * * * *"       # Every 30 minutes
+    on_ingest: true            # Also run after a successful batch sync
+    cooldown_minutes: 15       # Minimum time between runs
+    sensitivity: "normal"      # low | normal | high (maps to stddev threshold)
+
+  trend_analysis:
+    enabled: true
+    cron: "0 9 * * 1"          # Mondays at 9:00 AM
+    period_days: 30
+
+  correlation_analysis:
+    enabled: true
+    cron: "0 10 1 * *"         # 1st of month at 10:00 AM
+    period_days: 90
+
+llm:
+  # Local-first default. No data leaves the Docker network unless you
+  # change this to a cloud provider and supply an api_key.
+  provider: "ollama"
+  model: "llama3.1:8b"
+  base_url: "http://ollama:11434"
+  api_key: ""                   # Left empty for ollama; set for cloud providers
+  temperature: 0.3
+  max_tokens: 1000
+  # Optional fallback list, tried in order if the primary provider fails.
+  fallback: []
+  # Example cloud fallback (uncomment + set api_key in secrets):
+  # fallback:
+  #   - provider: "openai"
+  #     model: "gpt-4o-mini"
+
+notifications:
+  # Outbound webhook (POST JSON payload). Empty = disabled.
+  webhook_url: ""
+  mqtt:
+    enabled: false
+    broker: "localhost"
+    port: 1883
+    topic_prefix: "health/insights"

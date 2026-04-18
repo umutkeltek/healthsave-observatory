@@ -18,7 +18,24 @@ This server exists to make that data portable and useful:
 
 The goal is not to replace the Health app. It is to provide a simple self-hosted backend that makes your health data easier to inspect, automate, and keep long-term.
 
-## Quick Start
+## Quick Start (non-technical)
+
+One command. It generates secure passwords, creates `.env` and
+`config.yaml`, optionally enables a local LLM (Ollama), and brings
+the whole stack up:
+
+```bash
+./setup.sh
+```
+
+When it finishes, run `./setup.sh doctor` to verify every service is
+healthy. The final output includes the API URL, Grafana URL with
+credentials, and the exact iOS-app server URL to paste into HealthSave.
+
+Re-running `./setup.sh` is safe — existing `.env` and `config.yaml`
+files are preserved.
+
+## Quick Start (manual)
 
 ```bash
 cp .env.example .env
