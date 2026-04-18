@@ -192,6 +192,7 @@ their original schema, so apply migrations manually when upgrading:
 
 ```bash
 docker compose exec -T db psql -U healthsave -d healthsave < migrations/001_audit_hardening.sql
+docker compose exec -T db psql -U healthsave -d healthsave < migrations/002_analysis_tables.sql
 ```
 
 ## Development
