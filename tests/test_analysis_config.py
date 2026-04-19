@@ -16,6 +16,7 @@ def test_missing_config_keeps_analysis_disabled_by_default(tmp_path):
     config = load_config(tmp_path / "missing-config.yaml")
 
     assert config.analysis.daily_briefing.enabled is False
+    assert config.analysis.anomaly_detection.enabled is False
 
 
 def test_environment_overrides_llm_model_from_file(tmp_path, monkeypatch):
@@ -44,3 +45,4 @@ def test_example_config_ships_with_daily_briefing_disabled_until_setup_enables_i
     data = yaml.safe_load(Path("config.yaml.example").read_text())
 
     assert data["analysis"]["daily_briefing"]["enabled"] is False
+    assert data["analysis"]["anomaly_detection"]["enabled"] is False

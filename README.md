@@ -69,12 +69,12 @@ This split is deliberate: the math stays deterministic and auditable; the LLM on
 
 What's included in the MVP:
 
-- Daily HR / HRV / sleep summary
-- Trend detection over 3-day, 7-day, 30-day windows
+- Daily HR / HRV summary
+- HR / HRV anomaly detection against your rolling baseline
 - Workout recovery hints when HR or HRV deviates from baseline
 - A `POST /api/insights/trigger` endpoint for running a briefing on demand
 
-What's *not* yet included (and on the roadmap): goal-tracking, anomaly alerting via Home Assistant, multi-person households.
+What's *not* yet included (and on the roadmap): trend detection, goal-tracking, anomaly alerting via Home Assistant, multi-person households.
 
 ## Your first insight
 
@@ -215,7 +215,7 @@ This starts:
 The database port is bound to `127.0.0.1` by default so it is available for
 local tooling without being exposed on your LAN.
 
-To opt into Ollama manually, copy `docker-compose.override.yml.example` to `docker-compose.override.yml`, copy `config.yaml.example` to `config.yaml`, set `analysis.daily_briefing.enabled` to `true`, and set `OLLAMA_MODEL` in `.env` to the tag you want.
+To opt into Ollama manually, copy `docker-compose.override.yml.example` to `docker-compose.override.yml`, copy `config.yaml.example` to `config.yaml`, set `analysis.daily_briefing.enabled` and `analysis.anomaly_detection.enabled` to `true`, and set `OLLAMA_MODEL` in `.env` to the tag you want.
 
 ### API Endpoints
 
@@ -227,6 +227,7 @@ To opt into Ollama manually, copy `docker-compose.override.yml.example` to `dock
 | `/api/apple/batch` | POST | Receive metric batch from the client bridge |
 | `/api/apple/status` | GET | Return flat per-table status objects |
 | `/api/insights/latest` | GET | Most recent briefing (if AI enabled) |
+| `/api/insights/anomalies` | GET | Recent anomaly findings, filterable by `since` and `severity` |
 | `/api/insights/trigger` | POST | Run an analysis pass now (if AI enabled) |
 
 `/api/apple/status` intentionally returns top-level metric objects, not a

@@ -160,7 +160,7 @@ async def test_insights_anomalies_since_filter_passes_param_and_where_clause():
 
     sql, params = session.calls[0]
     assert "created_at >= :since" in sql
-    assert params["since"] == "2026-04-01T00:00:00Z"
+    assert params["since"] == datetime(2026, 4, 1, 0, 0, tzinfo=UTC)
 
 
 @pytest.mark.asyncio
@@ -170,16 +170,16 @@ async def test_insights_anomalies_severity_filter_accepts_comma_separated_values
     await insights_anomalies(since=None, severity="watch,alert", session=session)
 
     sql, params = session.calls[0]
-    assert "severity = ANY(:severities)" in sql
-    assert sorted(params["severities"]) == ["alert", "watch"]
+    assert "severity IN (:severity_0, :severity_1)" in sql
+    assert [params["severity_0"], params["severity_1"]] == ["alert", "watch"]
 
 
 @pytest.mark.asyncio
 async def test_insights_anomalies_severity_filter_ignores_unknown_values():
     session = _AnomalySession([])
 
-    await insights_anomalies(since=None, severity="bogus", session=session)
+    with pytest.raises(Exception) as exc_info:
+        await insights_anomalies(since=None, severity="bogus", session=session)
 
-    # Unknown value → no severity clause added.
-    sql, _ = session.calls[0]
-    assert "severity = ANY" not in sql
+    assert getattr(exc_info.value, "status_code", None) == 422
+    assert session.calls == []

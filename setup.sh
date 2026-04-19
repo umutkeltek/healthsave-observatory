@@ -341,6 +341,31 @@ set_config_daily_briefing_enabled() {
     mv "$tmp" "$CONFIG_FILE"
 }
 
+set_config_anomaly_detection_enabled() {
+    # set_config_anomaly_detection_enabled true|false
+    local enabled="$1"
+    [ ! -f "$CONFIG_FILE" ] && return 0
+    local tmp="${CONFIG_FILE}.tmp.$$"
+    awk -v enabled="$enabled" '
+        BEGIN { in_analysis = 0; in_anomaly = 0 }
+        /^analysis:/ { in_analysis = 1; in_anomaly = 0; print; next }
+        /^[^[:space:]][^:]*:/ {
+            if ($0 !~ /^analysis:/) { in_analysis = 0; in_anomaly = 0 }
+        }
+        in_analysis && /^  anomaly_detection:/ { in_anomaly = 1; print; next }
+        in_analysis && /^  [A-Za-z_][A-Za-z_]*:/ && $1 != "anomaly_detection:" {
+            in_anomaly = 0
+        }
+        in_anomaly && /^    enabled:/ {
+            sub(/enabled:.*/, "enabled: " enabled)
+            print
+            next
+        }
+        { print }
+    ' "$CONFIG_FILE" >"$tmp"
+    mv "$tmp" "$CONFIG_FILE"
+}
+
 set_config_llm_model() {
     # set_config_llm_model <ollama-model-tag>
     local model_tag="$1"
@@ -485,11 +510,13 @@ cmd_setup() {
     ensure_env_value "ANALYSIS_CONFIG_FILE" "./config.yaml"
     if [ "$enable_ollama" -eq 1 ]; then
         set_config_daily_briefing_enabled true
+        set_config_anomaly_detection_enabled true
         if [ -n "${OLLAMA_MODEL_CHOICE:-}" ]; then
             set_config_llm_model "$OLLAMA_MODEL_CHOICE"
         fi
     else
         set_config_daily_briefing_enabled false
+        set_config_anomaly_detection_enabled false
     fi
 
     # --- bring the stack up --------------------------------------------

@@ -102,18 +102,22 @@ class AnomalyDetector:
     def _baseline_days(self) -> int:
         return self.config.analysis.daily_briefing.baseline_days
 
-    async def detect(self, lookback_days: int = 1) -> list[Anomaly]:
+    async def detect(
+        self, lookback_days: int = 1, *, end_at: datetime | None = None
+    ) -> list[Anomaly]:
         """Return anomalies detected in the ``lookback_days`` window.
 
-        The lookback window ends at the start of the current UTC day;
-        baseline is the ``baseline_days`` immediately preceding it. An
-        empty list is the correct result when there is no data, not an
-        error — the engine differentiates "nothing detected" from
+        By default the window ends at ``now`` so ad-hoc checks can catch
+        fresh post-sync data. Callers that need a completed calendar day
+        (daily briefing) pass ``end_at`` set to midnight UTC. Baseline is
+        the ``baseline_days`` immediately preceding the lookback window.
+        An empty list is the correct result when there is no data, not
+        an error — the engine differentiates "nothing detected" from
         "detector crashed" via exception propagation.
         """
-        end = datetime.now(tz=UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        end = end_at or datetime.now(tz=UTC)
         start = end - timedelta(days=lookback_days)
-        baseline_start = end - timedelta(days=self._baseline_days)
+        baseline_start = start - timedelta(days=self._baseline_days)
         threshold = self._threshold
 
         async with self.session_factory() as session:
@@ -340,8 +344,11 @@ class AnomalyDetector:
 
     def _has_sufficient_baseline(self, samples: list[tuple[datetime, float]]) -> bool:
         """Enforce the Phase 2 data-sufficiency gate on the baseline."""
-        minimum = MINIMUM_DATA_REQUIREMENTS["anomaly_detection"]["min_observations"]
-        return len(samples) >= int(minimum)
+        requirements = MINIMUM_DATA_REQUIREMENTS["anomaly_detection"]
+        minimum_observations = int(requirements["min_observations"])
+        minimum_days = int(requirements["min_days"])
+        days_with_data = {sample_time.date() for sample_time, _ in samples}
+        return len(samples) >= minimum_observations and len(days_with_data) >= minimum_days
 
     @staticmethod
     def _mean_stddev(samples: list[tuple[datetime, float]]) -> tuple[float, float]:

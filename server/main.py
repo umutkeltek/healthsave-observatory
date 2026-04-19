@@ -3,7 +3,7 @@
 This is the ONLY file in the package that calls ``FastAPI()``. Routers are
 imported from ``server.api.*`` and mounted via ``include_router``.
 
-Phase 1.5 lifespan wiring:
+Analysis lifespan wiring:
   * Load ``config.yaml`` (defaults when missing) into ``AnalysisConfig``.
   * Construct ``HealthLLMClient`` + ``AnalysisEngine`` + ``AnalysisScheduler``.
   * Stash all three on ``app.state`` so routes and diagnostics can reach them.

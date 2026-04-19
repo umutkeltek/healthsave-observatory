@@ -121,7 +121,7 @@ async def test_detect_tiers_severity_info_watch_alert_for_normal_sensitivity():
     # Using values 90, 100, 110 repeated gives mean=100, stdev ≈ 10.
     baseline_values = [90.0, 100.0, 110.0] * 10
     baseline = [
-        _Row(bucket=obs_time - timedelta(hours=i + 1), value=v)
+        _Row(bucket=obs_time - timedelta(days=i + 1), value=v)
         for i, v in enumerate(baseline_values)
     ]
 
@@ -150,7 +150,7 @@ async def test_detect_tiers_severity_info_watch_alert_for_normal_sensitivity():
 async def test_detect_low_sensitivity_raises_floor_to_2_5_sigma():
     obs_time = datetime(2025, 1, 15, 12, 0, tzinfo=UTC)
     baseline = [
-        _Row(bucket=obs_time - timedelta(hours=i + 1), value=v)
+        _Row(bucket=obs_time - timedelta(days=i + 1), value=v)
         for i, v in enumerate([90.0, 100.0, 110.0] * 10)
     ]
     # z ≈ 2.17 observation — above 2.0 floor, below 2.5 floor; suppressed at low sensitivity.
@@ -165,7 +165,7 @@ async def test_detect_low_sensitivity_raises_floor_to_2_5_sigma():
 async def test_detect_high_sensitivity_lowers_floor_to_1_5_sigma():
     obs_time = datetime(2025, 1, 15, 12, 0, tzinfo=UTC)
     baseline = [
-        _Row(bucket=obs_time - timedelta(hours=i + 1), value=v)
+        _Row(bucket=obs_time - timedelta(days=i + 1), value=v)
         for i, v in enumerate([90.0, 100.0, 110.0] * 10)
     ]
     # z ≈ 1.6 — suppressed at normal but surfaces at high.
@@ -197,6 +197,36 @@ async def test_detect_skips_when_baseline_has_too_few_observations():
     assert anomalies == []
 
 
+@pytest.mark.asyncio
+async def test_detect_skips_when_baseline_has_too_few_distinct_days():
+    """Fourteen points on one day is not a mature 7-day baseline."""
+    obs_time = datetime(2025, 1, 15, 12, 0, tzinfo=UTC)
+    hr_obs = [_Row(bucket=obs_time, value=130.0)]
+    baseline = [
+        _Row(bucket=obs_time - timedelta(hours=i + 1), value=65.0 + (i % 3) * 0.5)
+        for i in range(14)
+    ]
+
+    session_factory = _session_factory([hr_obs, baseline, [], [], []])
+    detector = AnomalyDetector(session_factory, _config("normal"))
+    anomalies = await detector.detect(lookback_days=1)
+    assert anomalies == []
+
+
+@pytest.mark.asyncio
+async def test_detect_can_scan_a_recent_rolling_window_instead_of_previous_midnight():
+    """Ad-hoc anomaly checks need a fresh window ending at the supplied timestamp."""
+    now = datetime(2026, 4, 19, 15, 30, tzinfo=UTC)
+    session_factory = _session_factory([[], [], [], [], []])
+    detector = AnomalyDetector(session_factory, _config("normal"))
+
+    await detector.detect(lookback_days=1, end_at=now)
+
+    _, params = session_factory.session.calls[0]
+    assert params["end"] == now
+    assert params["start"] == now - timedelta(days=1)
+
+
 # ──────────────────────────────────────────────────────────────
 #  HRV detection — same machinery, different metric name
 # ──────────────────────────────────────────────────────────────
@@ -208,7 +238,7 @@ async def test_detect_flags_hrv_drop_as_anomaly():
     obs_time = datetime(2025, 1, 15, 12, 0, tzinfo=UTC)
     # Baseline HRV: tight around 50 ms.
     baseline = [
-        _Row(time=obs_time - timedelta(hours=i + 1), value=50.0 + (i % 3) * 0.5) for i in range(30)
+        _Row(time=obs_time - timedelta(days=i + 1), value=50.0 + (i % 3) * 0.5) for i in range(30)
     ]
     # Observation: huge drop to 10 ms.
     hrv_obs = [_Row(time=obs_time, value=10.0)]
@@ -234,8 +264,7 @@ async def test_context_filter_drops_heart_rate_spike_during_workout():
     obs_time = datetime(2025, 1, 15, 12, 0, tzinfo=UTC)
     hr_obs = [_Row(bucket=obs_time, value=150.0)]
     baseline = [
-        _Row(bucket=obs_time - timedelta(hours=i + 1), value=65.0 + (i % 3) * 0.5)
-        for i in range(30)
+        _Row(bucket=obs_time - timedelta(days=i + 1), value=65.0 + (i % 3) * 0.5) for i in range(30)
     ]
     workout = [
         _Row(
@@ -261,8 +290,7 @@ async def test_context_filter_drops_heart_rate_dip_during_sleep_window():
     hr_obs = [_Row(bucket=obs_time, value=40.0)]
     # Tight baseline around 65 bpm → z well below -2 for a value of 40.
     baseline = [
-        _Row(bucket=obs_time - timedelta(hours=i + 1), value=65.0 + (i % 3) * 0.5)
-        for i in range(30)
+        _Row(bucket=obs_time - timedelta(days=i + 1), value=65.0 + (i % 3) * 0.5) for i in range(30)
     ]
 
     # No workouts needed — sleep-window rule runs on the anomaly timestamp alone.
@@ -279,7 +307,7 @@ async def test_context_filter_downgrades_hrv_drop_shortly_after_workout():
     hrv_obs = [_Row(time=obs_time, value=10.0)]
     # Baseline engineered so z is large negative → would normally be 'alert'.
     baseline = [
-        _Row(time=obs_time - timedelta(hours=i + 1), value=50.0 + (i % 3) * 0.5) for i in range(30)
+        _Row(time=obs_time - timedelta(days=i + 1), value=50.0 + (i % 3) * 0.5) for i in range(30)
     ]
     workout = [
         _Row(
