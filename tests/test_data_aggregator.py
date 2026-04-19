@@ -87,8 +87,8 @@ async def test_summarize_period_computes_delta_vs_baseline():
 @pytest.mark.asyncio
 async def test_summarize_period_returns_empty_when_yesterday_has_no_data():
     yesterday = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
-    baseline = _Row(avg_v=62.0, min_v=50, max_v=140, count_v=720)
-    factory = _session_factory([yesterday, baseline])
+    raw_yesterday = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
+    factory = _session_factory([yesterday, raw_yesterday])
 
     summary = await DataAggregator(factory).summarize_period("daily", 1)
 
@@ -101,7 +101,8 @@ async def test_summarize_period_handles_missing_baseline():
     """Yesterday has data but baseline window is empty (e.g. fresh install)."""
     yesterday = _Row(avg_v=70.0, min_v=58, max_v=110, count_v=24)
     baseline = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
-    factory = _session_factory([yesterday, baseline])
+    raw_baseline = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
+    factory = _session_factory([yesterday, baseline, raw_baseline])
 
     summary = await DataAggregator(factory).summarize_period("daily", 1)
 
@@ -109,3 +110,21 @@ async def test_summarize_period_handles_missing_baseline():
     assert hr["avg_bpm"] == 70.0
     assert hr["baseline_avg_bpm"] is None
     assert hr["delta_pct_vs_baseline"] is None
+
+
+@pytest.mark.asyncio
+async def test_summarize_period_falls_back_to_raw_heart_rate_when_hourly_view_is_empty():
+    empty_hourly = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
+    raw_yesterday = _Row(avg_v=72.0, min_v=60, max_v=128, count_v=1440)
+    baseline = _Row(avg_v=68.0, min_v=50, max_v=140, count_v=720)
+    factory = _session_factory([empty_hourly, raw_yesterday, baseline])
+
+    summary = await DataAggregator(factory).summarize_period("daily", 1)
+
+    hr = summary.metrics["heart_rate"]
+    assert hr["avg_bpm"] == 72.0
+    assert hr["sample_count"] == 1440
+    assert hr["baseline_avg_bpm"] == 68.0
+    queries = [sql for sql, _ in factory.session.calls]
+    assert any("FROM hr_hourly" in sql for sql in queries)
+    assert any("FROM heart_rate" in sql for sql in queries)

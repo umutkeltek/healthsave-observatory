@@ -560,8 +560,18 @@ def test_schema_declares_idempotency_constraints_for_retry_safe_sync():
     assert "idx_raw_ingestion_log_ingested_at" in schema
 
 
+def test_schema_declares_phase_1_5_analysis_tables_for_fresh_installs():
+    schema = Path("schema.sql").read_text()
+
+    assert "CREATE TABLE analysis_runs" in schema
+    assert "CREATE TABLE analysis_findings" in schema
+    assert "CREATE TABLE analysis_insights" in schema
+    assert "idx_insights_type_created" in schema
+
+
 def test_readme_documents_existing_install_migration_flow():
     readme = Path("README.md").read_text()
 
     assert "migrations/001_audit_hardening.sql" in readme
+    assert "migrations/002_analysis_tables.sql" in readme
     assert "docker compose exec -T db psql" in readme
