@@ -8,8 +8,15 @@ You are generating today's morning briefing.
 Period summary (yesterday):
 {period_summary}
 
-Anomalies detected:
+Detected anomalies (values more than a few standard deviations from the
+user's 30-day personal baseline):
 {anomalies}
+
+If the anomaly block reads as "no unusual readings vs baseline", briefly
+affirm that and move on — do not invent anomalies. If it lists any,
+narrate them contextually (one or two sentences each), lead with the
+highest-severity item, and remind the user that a single-day deviation
+is signal, not diagnosis.
 
 Trends detected:
 {trends}
@@ -29,7 +36,7 @@ recent behavior pattern supports it.
 def build_messages(context: dict) -> list[dict]:
     """Build the ``messages`` list for the LLM client."""
     raise NotImplementedError(
-        "Daily-briefing prompt assembly deferred to Phase 1.5 — statistical engine must land first"
+        "Daily-briefing prompt assembly deferred — engine formats the template directly for now"
     )
 
 

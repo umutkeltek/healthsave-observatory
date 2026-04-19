@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,7 +13,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from analysis.config import AnalysisConfig  # noqa: E402
-from server.api.insights import insights_trigger  # noqa: E402
+from server.api.insights import insights_anomalies, insights_trigger  # noqa: E402
 from server.models.insights import TriggerRequest  # noqa: E402
 
 
@@ -58,3 +60,126 @@ async def test_trigger_rejects_daily_briefing_when_analysis_is_disabled():
 
     assert getattr(exc_info.value, "status_code", None) == 409
     assert request.app.state.analysis_engine.calls == 0
+
+
+# ──────────────────────────────────────────────────────────────
+#  /api/insights/anomalies
+# ──────────────────────────────────────────────────────────────
+
+
+class _AnomalyRow(SimpleNamespace):
+    """Stand-in for a SQLAlchemy Row returned from analysis_findings."""
+
+
+class _AnomalyResult:
+    def __init__(self, rows):
+        self._rows = list(rows)
+
+    def fetchall(self):
+        return list(self._rows)
+
+
+class _AnomalySession:
+    """Captures the executed SQL + params so filter behaviour can be asserted."""
+
+    def __init__(self, rows):
+        self._rows = list(rows)
+        self.calls: list[tuple[str, dict]] = []
+
+    async def execute(self, statement, params=None):
+        sql = " ".join(str(statement).split())
+        self.calls.append((sql, params or {}))
+        return _AnomalyResult(self._rows)
+
+
+@pytest.mark.asyncio
+async def test_insights_anomalies_returns_rows_ordered_desc_with_structured_data():
+    now = datetime(2026, 4, 18, 14, 30, tzinfo=UTC)
+    rows = [
+        _AnomalyRow(
+            id=11,
+            metric="hrv",
+            severity="alert",
+            structured_data=json.dumps(
+                {
+                    "metric": "hrv",
+                    "magnitude": -3.4,
+                    "direction": "down",
+                    "severity": "alert",
+                    "detected_at": now.isoformat(),
+                    "context": {"value": 18.0},
+                }
+            ),
+            created_at=now,
+        ),
+        _AnomalyRow(
+            id=9,
+            metric="heart_rate",
+            severity="watch",
+            structured_data={
+                "metric": "heart_rate",
+                "magnitude": 2.7,
+                "direction": "up",
+                "severity": "watch",
+            },
+            created_at=now,
+        ),
+    ]
+    session = _AnomalySession(rows)
+
+    response = await insights_anomalies(since=None, severity=None, session=session)
+
+    assert response.count == 2
+    assert response.anomalies[0].metric == "hrv"
+    assert response.anomalies[0].severity == "alert"
+    assert response.anomalies[0].direction == "down"
+    assert response.anomalies[0].magnitude == -3.4
+    assert response.anomalies[1].metric == "heart_rate"
+
+    sql, params = session.calls[0]
+    assert "finding_type = 'anomaly'" in sql
+    assert "ORDER BY created_at DESC" in sql
+    assert "LIMIT" in sql
+
+
+@pytest.mark.asyncio
+async def test_insights_anomalies_empty_db_returns_empty_list_with_count_zero():
+    session = _AnomalySession([])
+
+    response = await insights_anomalies(since=None, severity=None, session=session)
+
+    assert response.count == 0
+    assert response.anomalies == []
+
+
+@pytest.mark.asyncio
+async def test_insights_anomalies_since_filter_passes_param_and_where_clause():
+    session = _AnomalySession([])
+
+    await insights_anomalies(since="2026-04-01T00:00:00Z", severity=None, session=session)
+
+    sql, params = session.calls[0]
+    assert "created_at >= :since" in sql
+    assert params["since"] == "2026-04-01T00:00:00Z"
+
+
+@pytest.mark.asyncio
+async def test_insights_anomalies_severity_filter_accepts_comma_separated_values():
+    session = _AnomalySession([])
+
+    await insights_anomalies(since=None, severity="watch,alert", session=session)
+
+    sql, params = session.calls[0]
+    assert "severity = ANY(:severities)" in sql
+    assert sorted(params["severities"]) == ["alert", "watch"]
+
+
+@pytest.mark.asyncio
+async def test_insights_anomalies_severity_filter_ignores_unknown_values():
+    session = _AnomalySession([])
+
+    await insights_anomalies(since=None, severity="bogus", session=session)
+
+    # Unknown value → no severity clause added.
+    sql, _ = session.calls[0]
+    assert "severity = ANY" not in sql
