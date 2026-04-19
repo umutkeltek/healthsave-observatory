@@ -83,10 +83,11 @@ What's included in the MVP:
 
 - Daily HR / HRV summary
 - HR / HRV anomaly detection against your rolling baseline
+- HR / HRV trend detection over a configurable 30-day window
 - Workout recovery hints when HR or HRV deviates from baseline
-- A `POST /api/insights/trigger` endpoint for running a briefing on demand
+- A `POST /api/insights/trigger` endpoint for running briefings or trend checks on demand
 
-What's *not* yet included (and on the roadmap): trend detection, goal-tracking, anomaly alerting via Home Assistant, multi-person households.
+What's *not* yet included (and on the roadmap): goal-tracking, anomaly alerting via Home Assistant, multi-person households, correlation analysis, weekly summaries.
 
 ## Your first insight
 
@@ -240,6 +241,7 @@ To opt into Ollama manually, copy `docker-compose.override.yml.example` to `dock
 | `/api/apple/status` | GET | Return flat per-table status objects |
 | `/api/insights/latest` | GET | Most recent briefing (if AI enabled) |
 | `/api/insights/anomalies` | GET | Recent anomaly findings, filterable by `since` and `severity` |
+| `/api/insights/trends` | GET | Recent HR / HRV trend findings, filterable by `period=30d` |
 | `/api/insights/trigger` | POST | Run an analysis pass now (if AI enabled) |
 
 `/api/apple/status` intentionally returns top-level metric objects, not a
