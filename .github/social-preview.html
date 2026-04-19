@@ -1,0 +1,219 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Health Data Hub — Social Preview</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 1280px;
+    height: 640px;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    color: #e6edf3;
+    background: #0d1117;
+    overflow: hidden;
+  }
+
+  .card {
+    width: 1280px;
+    height: 640px;
+    padding: 80px 96px;
+    background:
+      radial-gradient(ellipse at top right, rgba(253, 181, 21, 0.10) 0%, transparent 45%),
+      radial-gradient(ellipse at bottom left, rgba(0, 150, 136, 0.14) 0%, transparent 50%),
+      linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+  }
+
+  .card > * { position: relative; z-index: 1; }
+
+  .top-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .slug {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    color: #8b949e;
+    letter-spacing: 0.01em;
+  }
+
+  .slug .user { color: #e6edf3; }
+  .slug .repo { color: #fdb515; font-weight: 600; }
+
+  .badges {
+    display: flex;
+    gap: 12px;
+  }
+
+  .badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: #8b949e;
+    padding: 6px 14px;
+    border: 1px solid #30363d;
+    border-radius: 999px;
+    background: rgba(22, 27, 34, 0.6);
+    backdrop-filter: blur(4px);
+  }
+
+  .badge.live::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 8px;
+    border-radius: 50%;
+    background: #2ea043;
+    vertical-align: middle;
+    box-shadow: 0 0 8px #2ea043;
+  }
+
+  .middle {
+    margin-top: 40px;
+  }
+
+  .eyebrow {
+    font-size: 18px;
+    font-weight: 500;
+    color: #fdb515;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    margin-bottom: 24px;
+  }
+
+  h1 {
+    font-size: 112px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 0.95;
+    color: #ffffff;
+  }
+
+  h1 .accent {
+    background: linear-gradient(90deg, #fdb515 0%, #f97316 60%, #ef4444 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .subtitle {
+    margin-top: 28px;
+    font-size: 30px;
+    font-weight: 400;
+    line-height: 1.35;
+    color: #c9d1d9;
+    max-width: 920px;
+  }
+
+  .subtitle b { color: #ffffff; font-weight: 600; }
+
+  .stack {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 500;
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: rgba(22, 27, 34, 0.85);
+    border: 1px solid #30363d;
+    color: #e6edf3;
+    white-space: nowrap;
+  }
+
+  .chip .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 10px;
+    vertical-align: middle;
+  }
+
+  .dot.apple       { background: #f5f5f7; }
+  .dot.timescale   { background: #fdb515; }
+  .dot.grafana     { background: #f46800; }
+  .dot.ollama      { background: #8b949e; }
+  .dot.fastapi     { background: #009688; }
+  .dot.docker      { background: #2496ed; }
+  .dot.home        { background: #41bdf5; }
+
+  .footer {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .tagline {
+    font-size: 20px;
+    font-weight: 500;
+    color: #8b949e;
+    text-align: right;
+  }
+  .tagline b { color: #e6edf3; font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="card">
+
+    <div class="top-row">
+      <div class="slug">
+        <span class="user">github.com/umutkeltek/</span><span class="repo">health-data-hub</span>
+      </div>
+      <div class="badges">
+        <span class="badge live">MIT licensed</span>
+        <span class="badge">Python 3.12</span>
+        <span class="badge">Docker-ready</span>
+      </div>
+    </div>
+
+    <div class="middle">
+      <div class="eyebrow">Self-hosted · Local-first · Private</div>
+      <h1>Health Data <span class="accent">Hub</span></h1>
+      <div class="subtitle">
+        Sync <b>Apple Health</b> from your iPhone and Apple Watch into <b>TimescaleDB</b>,
+        visualize in <b>Grafana</b>, and get AI-written daily briefings via a local <b>Ollama</b> model.
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="stack">
+        <span class="chip"><span class="dot apple"></span>Apple Health</span>
+        <span class="chip"><span class="dot timescale"></span>TimescaleDB</span>
+        <span class="chip"><span class="dot grafana"></span>Grafana</span>
+        <span class="chip"><span class="dot fastapi"></span>FastAPI</span>
+        <span class="chip"><span class="dot ollama"></span>Ollama</span>
+        <span class="chip"><span class="dot docker"></span>Docker</span>
+        <span class="chip"><span class="dot home"></span>Home Assistant</span>
+      </div>
+      <div class="tagline"><b>Your data.</b> Your hardware.</div>
+    </div>
+
+  </div>
+</body>
+</html>

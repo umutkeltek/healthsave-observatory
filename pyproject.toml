@@ -5,8 +5,48 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "health-data-hub"
 version = "1.0.0"
-description = "Self-hosted HealthSave ingestion backend for TimescaleDB and Grafana"
+description = "Self-hosted Apple Health server — HealthKit ingest into TimescaleDB, Grafana dashboards, and local LLM briefings via Ollama."
 requires-python = ">=3.12,<3.14"
+license = { text = "MIT" }
+readme = "README.md"
+keywords = [
+    "apple-health",
+    "healthkit",
+    "health-data",
+    "quantified-self",
+    "self-hosted",
+    "timescaledb",
+    "postgresql",
+    "grafana",
+    "fastapi",
+    "ollama",
+    "local-llm",
+    "home-assistant",
+    "docker",
+    "privacy",
+    "wearables",
+    "health-tracking",
+    "time-series",
+    "data-pipeline",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Healthcare Industry",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Database",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Topic :: System :: Monitoring",
+]
 dependencies = [
     "fastapi==0.115.0",
     "pydantic==2.9.2",
