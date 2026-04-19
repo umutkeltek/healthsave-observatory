@@ -286,8 +286,7 @@ async def test_run_anomaly_check_persists_findings_without_calling_llm():
     # analysis_runs row is ``anomaly_check``
     run_inserts = session.all_insert_params_for("analysis_runs")
     assert len(run_inserts) == 1
-    run_sql = next(sql for sql, _ in session.calls if "INSERT INTO analysis_runs" in sql)
-    assert "'anomaly_check'" in run_sql
+    assert run_inserts[0]["run_type"] == "anomaly_check"
     # Two anomaly finding rows.
     findings = session.all_insert_params_for("analysis_findings")
     assert len(findings) == 2

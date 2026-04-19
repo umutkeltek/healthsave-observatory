@@ -12,10 +12,13 @@ stay stubbed until their engine methods land.
 from __future__ import annotations
 
 import json
+from typing import get_args
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from analysis.types import Severity
 
 from ..models.insights import (
     AnomaliesListResponse,
@@ -29,7 +32,7 @@ from ..models.insights import (
 )
 from .deps import get_session, verify_api_key
 
-_ALLOWED_SEVERITIES = {"info", "watch", "alert"}
+_ALLOWED_SEVERITIES = frozenset(get_args(Severity))
 _ANOMALIES_LIMIT = 200
 
 router = APIRouter(prefix="/api/insights", dependencies=[Depends(verify_api_key)])
