@@ -56,6 +56,7 @@ dependencies = [
     "litellm>=1.40.0",
     "apscheduler>=3.10.0",
     "pyyaml>=6.0",
+    "scipy>=1.14.0",
 ]
 
 [project.optional-dependencies]

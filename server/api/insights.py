@@ -4,9 +4,10 @@
 ``insight_type`` from TimescaleDB. ``/anomalies`` now returns real
 anomaly findings from ``analysis_findings`` where
 ``finding_type='anomaly'``, optionally filtered by ``since`` and
-``severity`` query parameters. ``/trigger`` runs the daily briefing
-inline against the engine stashed on ``app.state``. Daily/weekly/trends
-stay stubbed until their engine methods land.
+``severity`` query parameters. ``/trends`` returns persisted trend
+findings, optionally filtered by period. ``/trigger`` runs supported
+analysis jobs inline against the engine stashed on ``app.state``. Daily
+and weekly remain stubs until their historical lookup methods land.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from ..models.insights import (
     AnomalyResponse,
     DailyBriefingResponse,
     InsightsLatestResponse,
+    TrendResponse,
     TrendsListResponse,
     TriggerRequest,
     TriggerResponse,
@@ -35,6 +37,7 @@ from .deps import get_session, verify_api_key
 
 _ALLOWED_SEVERITIES = frozenset(get_args(Severity))
 _ANOMALIES_LIMIT = 200
+_TRENDS_LIMIT = 200
 
 router = APIRouter(prefix="/api/insights", dependencies=[Depends(verify_api_key)])
 
@@ -171,9 +174,54 @@ async def insights_anomalies(
 
 
 @router.get("/trends", response_model=TrendsListResponse)
-async def insights_trends() -> TrendsListResponse:
-    """Return recent trend analyses."""
-    return TrendsListResponse()
+async def insights_trends(
+    period: str | None = Query(
+        default=None,
+        description="Optional day period filter such as 30d or 90d",
+    ),
+    session: AsyncSession = Depends(get_session),
+) -> TrendsListResponse:
+    """Return recent trend findings from the analysis engine."""
+    where_clauses = ["finding_type = 'trend'"]
+    params: dict[str, object] = {}
+
+    if period is not None:
+        if not period.endswith("d") or not period[:-1].isdigit() or int(period[:-1]) <= 0:
+            raise HTTPException(status_code=422, detail="Invalid period; expected format like 30d")
+        params["period_days"] = period[:-1]
+        where_clauses.append("structured_data->>'period_days' = :period_days")
+
+    params["limit"] = _TRENDS_LIMIT
+
+    sql = f"""
+        SELECT id, metric, structured_data, created_at
+        FROM analysis_findings
+        WHERE {" AND ".join(where_clauses)}
+        ORDER BY created_at DESC
+        LIMIT :limit
+    """
+    result = await session.execute(text(sql), params)
+    rows = result.fetchall() if hasattr(result, "fetchall") else list(result)
+
+    trends: list[TrendResponse] = []
+    for row in rows:
+        data = row.structured_data or {}
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except ValueError:
+                data = {}
+        trends.append(
+            TrendResponse(
+                metric=row.metric or data.get("metric"),
+                slope=data.get("slope"),
+                direction=data.get("direction"),
+                period_days=data.get("period_days"),
+                p_value=data.get("p_value"),
+                confidence=data.get("confidence"),
+            )
+        )
+    return TrendsListResponse(trends=trends, count=len(trends))
 
 
 @router.post("/trigger", response_model=TriggerResponse)
@@ -183,11 +231,10 @@ async def insights_trigger(
 ) -> TriggerResponse:
     """Run an ad-hoc analysis job inline.
 
-    Only ``daily_briefing`` is supported for manual triggers in Phase 2. The call runs
-    synchronously against ``app.state.analysis_engine`` - fine for the
-    one active job. Future job types (weekly, anomaly, etc.) should
-    dispatch via ``request.app.state.scheduler`` once their engine
-    methods land.
+    ``daily_briefing`` and ``trend_analysis`` run synchronously against
+    ``app.state.analysis_engine``. Future job types (weekly,
+    correlation, etc.) should dispatch via ``request.app.state.scheduler``
+    once their engine methods land.
     """
     body = body or TriggerRequest()
     if body.type == "daily_briefing":
@@ -200,5 +247,14 @@ async def insights_trigger(
             status="completed" if run_id is not None else "skipped",
             run_type="daily_briefing",
             run_id=run_id,
+        )
+    if body.type == "trend_analysis":
+        if not request.app.state.analysis_config.analysis.trend_analysis.enabled:
+            raise HTTPException(status_code=409, detail="trend_analysis is disabled")
+        findings = await request.app.state.analysis_engine.run_trend_analysis()
+        return TriggerResponse(
+            status="completed" if findings else "skipped",
+            run_type="trend_analysis",
+            message=f"{len(findings)} trend findings persisted",
         )
     raise HTTPException(status_code=400, detail=f"Unsupported type: {body.type}")

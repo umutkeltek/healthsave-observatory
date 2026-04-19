@@ -396,6 +396,43 @@ Correct response shape:
 Do not wrap this endpoint as `{"status":"ok","counts":{...}}`; that shape is
 not compatible with the current iOS status UI.
 
+## Insights
+
+These endpoints are server-side analysis surfaces. They do not change the
+HealthSave iOS ingestion/status contract.
+
+### `GET /api/insights/anomalies`
+
+Returns recent anomaly findings. Optional query parameters:
+
+- `since`: ISO-8601 lower bound on finding creation time
+- `severity`: comma-separated list of `info`, `watch`, `alert`
+
+### `GET /api/insights/trends`
+
+Returns persisted HR / HRV trend findings from the statistical engine.
+Optional query parameters:
+
+- `period`: day window such as `30d` or `90d`
+
+Example response:
+
+```json
+{
+  "trends": [
+    {
+      "metric": "hrv",
+      "slope": -0.9,
+      "direction": "down",
+      "period_days": 30,
+      "p_value": 0.02,
+      "confidence": "medium"
+    }
+  ],
+  "count": 1
+}
+```
+
 ## Compatibility Notes
 
 - Timestamp values should be ISO 8601 strings. A trailing `Z` is accepted.

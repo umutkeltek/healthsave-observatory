@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from analysis.config import AnalysisConfig  # noqa: E402
 from analysis.engine import AnalysisEngine  # noqa: E402
 from analysis.llm.client import InsightResult, LLMUnavailableError  # noqa: E402
-from analysis.types import Anomaly, PeriodSummary  # noqa: E402
+from analysis.types import Anomaly, PeriodSummary, Trend  # noqa: E402
 
 
 class _Row:
@@ -90,6 +90,13 @@ def _make_engine(session, aggregator_return, llm_mock):
     engine = AnalysisEngine(factory, llm_mock, AnalysisConfig())
     engine.aggregator.summarize_period = AsyncMock(return_value=aggregator_return)
     return engine
+
+
+def _make_plain_engine(session, config=None):
+    def factory():
+        return session
+
+    return AnalysisEngine(factory, AsyncMock(), config or AnalysisConfig())
 
 
 @pytest.mark.asyncio
@@ -433,6 +440,63 @@ async def test_run_anomaly_check_dedupes_already_persisted_anomalies():
     findings = session.all_insert_params_for("analysis_findings")
     assert len(findings) == 1
     assert findings[0]["metric"] == "hrv"
+
+
+@pytest.mark.asyncio
+async def test_run_trend_analysis_persists_detected_trends_without_calling_llm():
+    """Phase 2b: trend analysis stores structured trend findings only."""
+    session = _FakeSession(run_queue=[6000, 6001, 6002])
+    config = AnalysisConfig.model_validate({"analysis": {"trend_analysis": {"enabled": True}}})
+    engine = _make_plain_engine(session, config)
+    engine.trend_analyzer.analyze = AsyncMock(
+        side_effect=[
+            Trend(
+                metric="heart_rate",
+                slope=0.42,
+                direction="up",
+                period_days=30,
+                p_value=0.004,
+                confidence="high",
+            ),
+            Trend(
+                metric="hrv",
+                slope=-0.9,
+                direction="down",
+                period_days=30,
+                p_value=0.02,
+                confidence="medium",
+            ),
+        ]
+    )
+
+    findings = await engine.run_trend_analysis()
+
+    assert [finding.metric for finding in findings] == ["heart_rate", "hrv"]
+    run_inserts = session.all_insert_params_for("analysis_runs")
+    assert run_inserts[0]["run_type"] == "trend_analysis"
+    finding_inserts = session.all_insert_params_for("analysis_findings")
+    assert len(finding_inserts) == 2
+    assert {row["finding_type"] for row in finding_inserts} == {"trend"}
+    assert finding_inserts[0]["metric"] == "heart_rate"
+    assert '"slope": 0.42' in finding_inserts[0]["structured_data"]
+    updates = session.all_update_statements()
+    assert any("status = 'completed'" in sql for sql, _ in updates)
+    engine.llm_client.generate_insight.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_run_trend_analysis_skips_when_no_metric_has_significant_trend():
+    session = _FakeSession(run_queue=[7000])
+    config = AnalysisConfig.model_validate({"analysis": {"trend_analysis": {"enabled": True}}})
+    engine = _make_plain_engine(session, config)
+    engine.trend_analyzer.analyze = AsyncMock(side_effect=[None, None])
+
+    findings = await engine.run_trend_analysis()
+
+    assert findings == []
+    assert session.all_insert_params_for("analysis_findings") == []
+    updates = session.all_update_statements()
+    assert any("status = 'skipped'" in sql for sql, _ in updates)
 
 
 @pytest.mark.asyncio

@@ -1,11 +1,13 @@
 """APScheduler-based cron for the analysis engine.
 
-Phase 2 registers two jobs when their respective config blocks are
+Registers jobs when their respective config blocks are
 enabled:
 
 * ``daily_briefing`` - runs the full end-to-end path once a day.
 * ``anomaly_check`` - runs the detector on a 30-minute cron, persists
   findings, no LLM call.
+* ``trend_analysis`` - runs weekly/monthly regression checks and persists
+  structured trend findings, no LLM call.
 
 APScheduler is imported inside ``start()`` so module import stays cheap
 for pytest collection (``AsyncIOScheduler()`` constructed at import time
@@ -36,15 +38,16 @@ class AnalysisScheduler:
     def start(self) -> None:
         """Construct + start AsyncIOScheduler and register enabled jobs.
 
-        No-ops (and logs) when neither ``daily_briefing`` nor
-        ``anomaly_detection`` is enabled so Docker users who want the
-        API but not the scheduler can disable both in ``config.yaml``.
+        No-ops (and logs) when all analysis jobs are disabled so Docker
+        users who want the API but not the scheduler can disable them in
+        ``config.yaml``.
         """
         daily = self.config.analysis.daily_briefing
         anomaly = self.config.analysis.anomaly_detection
+        trend = self.config.analysis.trend_analysis
 
-        if not daily.enabled and not anomaly.enabled:
-            log.info("daily_briefing and anomaly_detection both disabled; scheduler not starting")
+        if not daily.enabled and not anomaly.enabled and not trend.enabled:
+            log.info("all analysis jobs disabled; scheduler not starting")
             return
 
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -71,6 +74,16 @@ class AnalysisScheduler:
                 coalesce=True,
             )
             log.info("registered anomaly_check cron=%s", anomaly.cron)
+
+        if trend.enabled:
+            self.scheduler.add_job(
+                self.engine.run_trend_analysis,
+                CronTrigger.from_crontab(trend.cron),
+                id="trend_analysis",
+                max_instances=1,
+                coalesce=True,
+            )
+            log.info("registered trend_analysis cron=%s", trend.cron)
 
         self.scheduler.start()
         log.info("AnalysisScheduler started")

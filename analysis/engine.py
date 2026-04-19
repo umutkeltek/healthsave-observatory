@@ -4,9 +4,9 @@ Phase 2 activation: ``run_daily_briefing`` now also runs the anomaly
 detector, persists each anomaly as an ``analysis_findings`` row, and
 feeds a formatted anomaly bullet list into the prompt. A lightweight
 sibling, ``run_anomaly_check``, runs the same detector on a 30-minute
-cron without touching the LLM. The remaining run types (weekly /
-trends / correlations) still raise ``NotImplementedError`` pointing at
-Phase 2b.
+cron without touching the LLM. Phase 2b adds trend analysis as another
+structured Brain-1-only run. Weekly summaries and correlations still
+raise ``NotImplementedError`` pointing at Phase 2b.
 """
 
 from __future__ import annotations
@@ -22,9 +22,12 @@ from sqlalchemy import text
 from .llm.prompts.daily_briefing import DAILY_BRIEFING_PROMPT_TEMPLATE
 from .statistical.aggregator import DataAggregator
 from .statistical.anomaly import AnomalyDetector
+from .statistical.trends import TrendAnalyzer
 from .types import Anomaly, Finding, Insight
 
 log = logging.getLogger("healthsave.analysis")
+
+_TREND_METRICS = ("heart_rate", "hrv")
 
 
 class AnalysisEngine:
@@ -43,6 +46,7 @@ class AnalysisEngine:
         self.llm_client = llm_client
         self.aggregator = DataAggregator(session_factory)
         self.anomaly_detector = AnomalyDetector(session_factory, config)
+        self.trend_analyzer = TrendAnalyzer(session_factory)
 
     async def run_daily_briefing(self) -> int | None:
         """Produce yesterday's narrative morning briefing.
@@ -98,7 +102,7 @@ class AnalysisEngine:
             prompt = DAILY_BRIEFING_PROMPT_TEMPLATE.format(
                 period_summary=json.dumps(summary.metrics, indent=2, default=str),
                 anomalies=_format_anomalies_for_prompt(anomalies),
-                trends="(trend analysis deferred to Phase 2b)",
+                trends="(trend analysis runs separately; see /api/insights/trends)",
                 correlations="(correlation analysis deferred to Phase 2b)",
                 days_of_data=_daily_data_days(summary.metrics),
                 minimum_required=1,
@@ -186,10 +190,36 @@ class AnalysisEngine:
 
     async def run_trend_analysis(self) -> list[Finding]:
         """Compute trend findings across enabled metrics."""
-        raise NotImplementedError(
-            "Trend analysis run deferred to Phase 2b - "
-            "current scope is daily briefing + anomaly check"
-        )
+        async with (
+            self.session_factory() as session,
+            self._run_context(session, "trend_analysis") as run_id,
+        ):
+            trends = []
+            period_days = self.config.analysis.trend_analysis.period_days
+            for metric in _TREND_METRICS:
+                trend = await self.trend_analyzer.analyze(metric, days=period_days)
+                if trend is not None:
+                    trends.append(trend)
+
+            if not trends:
+                await self._mark_run_skipped(session, run_id)
+                await session.commit()
+                return []
+
+            findings: list[Finding] = []
+            for trend in trends:
+                finding = Finding(
+                    finding_type="trend",
+                    metric=trend.metric,
+                    severity="info",
+                    structured_data=trend.model_dump(mode="json"),
+                )
+                await self._insert_finding(session, run_id=run_id, finding=finding)
+                findings.append(finding)
+
+            await self._mark_run_completed(session, run_id)
+            await session.commit()
+            return findings
 
     async def run_correlation_analysis(self) -> list[Finding]:
         """Compute Spearman correlations for the configured metric pairs."""
