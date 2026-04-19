@@ -89,8 +89,8 @@ async def insights_trends() -> TrendsListResponse:
 
 @router.post("/trigger", response_model=TriggerResponse)
 async def insights_trigger(
-    body: TriggerRequest,
     request: Request,
+    body: TriggerRequest | None = None,
 ) -> TriggerResponse:
     """Run an ad-hoc analysis job inline.
 
@@ -100,7 +100,10 @@ async def insights_trigger(
     dispatch via ``request.app.state.scheduler`` once their engine
     methods land.
     """
+    body = body or TriggerRequest()
     if body.type == "daily_briefing":
+        if not request.app.state.analysis_config.analysis.daily_briefing.enabled:
+            raise HTTPException(status_code=409, detail="daily_briefing is disabled")
         # Engine returns a run_id on completion, None when the run was
         # skipped (no data). Both cases are successful, just distinct.
         run_id = await request.app.state.analysis_engine.run_daily_briefing()

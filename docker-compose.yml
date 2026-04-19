@@ -26,8 +26,12 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:-changeme}@db:5432/healthsave
       API_KEY: ${API_KEY:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+      LLM_API_KEY: ${LLM_API_KEY:-}
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
+      - ${ANALYSIS_CONFIG_FILE:-./config.yaml.example}:/app/config.yaml:ro
     ports:
       - "8000:8000"
     healthcheck:

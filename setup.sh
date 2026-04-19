@@ -7,8 +7,8 @@
 #   ./setup.sh doctor     # post-install health checks
 #   ./setup.sh --help     # show usage
 #
-# Designed to be idempotent: re-running preserves an existing .env /
-# config.yaml and just re-validates the stack.
+# Designed to be idempotent: re-running preserves existing passwords and
+# updates only AI-related config based on the setup answers.
 
 set -euo pipefail
 
@@ -276,6 +276,10 @@ GRAFANA_IMAGE=grafana/grafana-oss:11.2.0
 LLM_PROVIDER=ollama
 LLM_BASE_URL=http://ollama:11434
 OLLAMA_MODEL=llama3.1:8b
+
+# setup.sh creates config.yaml and keeps Compose pointed at it.
+# Manual docker compose users can keep .env.example's config.yaml.example.
+ANALYSIS_CONFIG_FILE=./config.yaml
 EOF
     chmod 600 "$ENV_FILE" 2>/dev/null || true
 }
@@ -297,6 +301,66 @@ set_env_model() {
     else
         printf 'OLLAMA_MODEL=%s\n' "$model_tag" >>"$ENV_FILE"
     fi
+}
+
+ensure_env_value() {
+    # ensure_env_value <KEY> <VALUE> — add or replace KEY in .env.
+    local key="$1"
+    local value="$2"
+    [ ! -f "$ENV_FILE" ] && return 0
+    if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
+        sed -i.bak "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
+        rm -f "${ENV_FILE}.bak"
+    else
+        printf '%s=%s\n' "$key" "$value" >>"$ENV_FILE"
+    fi
+}
+
+set_config_daily_briefing_enabled() {
+    # set_config_daily_briefing_enabled true|false
+    local enabled="$1"
+    [ ! -f "$CONFIG_FILE" ] && return 0
+    local tmp="${CONFIG_FILE}.tmp.$$"
+    awk -v enabled="$enabled" '
+        BEGIN { in_analysis = 0; in_daily = 0 }
+        /^analysis:/ { in_analysis = 1; in_daily = 0; print; next }
+        /^[^[:space:]][^:]*:/ {
+            if ($0 !~ /^analysis:/) { in_analysis = 0; in_daily = 0 }
+        }
+        in_analysis && /^  daily_briefing:/ { in_daily = 1; print; next }
+        in_analysis && /^  [A-Za-z_][A-Za-z_]*:/ && $1 != "daily_briefing:" {
+            in_daily = 0
+        }
+        in_daily && /^    enabled:/ {
+            sub(/enabled:.*/, "enabled: " enabled)
+            print
+            next
+        }
+        { print }
+    ' "$CONFIG_FILE" >"$tmp"
+    mv "$tmp" "$CONFIG_FILE"
+}
+
+set_config_llm_model() {
+    # set_config_llm_model <ollama-model-tag>
+    local model_tag="$1"
+    [ -z "$model_tag" ] && return 0
+    [ ! -f "$CONFIG_FILE" ] && return 0
+    local tmp="${CONFIG_FILE}.tmp.$$"
+    awk -v model="$model_tag" '
+        BEGIN { in_llm = 0 }
+        /^llm:/ { in_llm = 1; print; next }
+        /^[^[:space:]][^:]*:/ {
+            if ($0 !~ /^llm:/) { in_llm = 0 }
+        }
+        in_llm && /^  model:/ {
+            sub(/model:.*/, "model: \"" model "\"")
+            print
+            next
+        }
+        { print }
+    ' "$CONFIG_FILE" >"$tmp"
+    mv "$tmp" "$CONFIG_FILE"
 }
 
 wait_for_ollama() {
@@ -418,6 +482,16 @@ cmd_setup() {
         log_info "Skipping Ollama. The stack will run without a local LLM."
     fi
 
+    ensure_env_value "ANALYSIS_CONFIG_FILE" "./config.yaml"
+    if [ "$enable_ollama" -eq 1 ]; then
+        set_config_daily_briefing_enabled true
+        if [ -n "${OLLAMA_MODEL_CHOICE:-}" ]; then
+            set_config_llm_model "$OLLAMA_MODEL_CHOICE"
+        fi
+    else
+        set_config_daily_briefing_enabled false
+    fi
+
     # --- bring the stack up --------------------------------------------
     log_info "Starting Docker services (this may take a few minutes on first run)..."
     compose up -d
@@ -527,14 +601,16 @@ cmd_doctor() {
 }
 
 # --------------------------------------------------------------- dispatch
-cmd="${1:-setup}"
-case "$cmd" in
-    setup|"")     cmd_setup ;;
-    doctor)       cmd_doctor ;;
-    --help|-h|help) print_usage ;;
-    *)
-        log_error "Unknown command: ${cmd}"
-        print_usage
-        exit 2
-        ;;
-esac
+if [ "${HEALTHSAVE_SETUP_TEST:-0}" != "1" ]; then
+    cmd="${1:-setup}"
+    case "$cmd" in
+        setup|"")     cmd_setup ;;
+        doctor)       cmd_doctor ;;
+        --help|-h|help) print_usage ;;
+        *)
+            log_error "Unknown command: ${cmd}"
+            print_usage
+            exit 2
+            ;;
+    esac
+fi

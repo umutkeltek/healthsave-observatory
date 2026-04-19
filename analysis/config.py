@@ -18,6 +18,7 @@ which maps to :class:`AnalysisConfig` (analysis / llm / notifications).
 """
 
 import logging
+import os
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -32,21 +33,21 @@ class ConfigError(ValueError):
 
 
 class BriefingConfig(BaseModel):
-    enabled: bool = True
+    enabled: bool = False
     cron: str = "0 7 * * *"
     lookback_days: int = 1
     baseline_days: int = 30
 
 
 class WeeklyConfig(BaseModel):
-    enabled: bool = True
+    enabled: bool = False
     cron: str = "0 8 * * 1"
     lookback_days: int = 7
     baseline_days: int = 28
 
 
 class AnomalyConfig(BaseModel):
-    enabled: bool = True
+    enabled: bool = False
     cron: str = "*/30 * * * *"
     on_ingest: bool = True
     cooldown_minutes: int = 15
@@ -54,13 +55,13 @@ class AnomalyConfig(BaseModel):
 
 
 class TrendConfig(BaseModel):
-    enabled: bool = True
+    enabled: bool = False
     cron: str = "0 9 * * 1"
     period_days: int = 30
 
 
 class CorrelationConfig(BaseModel):
-    enabled: bool = True
+    enabled: bool = False
     cron: str = "0 10 1 * *"
     period_days: int = 90
 
@@ -110,6 +111,23 @@ class AnalysisConfig(BaseModel):
     notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
 
 
+def _with_environment_overrides(config: AnalysisConfig) -> AnalysisConfig:
+    """Let Docker/.env values override checked-in YAML defaults."""
+    llm_updates = {}
+    if provider := os.getenv("LLM_PROVIDER"):
+        llm_updates["provider"] = provider
+    if model := os.getenv("OLLAMA_MODEL") or os.getenv("LLM_MODEL"):
+        llm_updates["model"] = model
+    if base_url := os.getenv("LLM_BASE_URL"):
+        llm_updates["base_url"] = base_url
+    if api_key := os.getenv("LLM_API_KEY"):
+        llm_updates["api_key"] = api_key
+
+    if llm_updates:
+        config.llm = config.llm.model_copy(update=llm_updates)
+    return config
+
+
 def load_config(path: Path | str) -> AnalysisConfig:
     """Load ``config.yaml`` into :class:`AnalysisConfig`.
 
@@ -121,7 +139,7 @@ def load_config(path: Path | str) -> AnalysisConfig:
     path = Path(path)
     if not path.exists():
         log.info("config.yaml not found at %s; using defaults", path)
-        return AnalysisConfig()
+        return _with_environment_overrides(AnalysisConfig())
 
     import yaml  # deferred import, keeps module-load light
 
@@ -129,4 +147,4 @@ def load_config(path: Path | str) -> AnalysisConfig:
         data = yaml.safe_load(path.read_text()) or {}
     except yaml.YAMLError as exc:
         raise ConfigError(f"malformed config.yaml at {path}: {exc}") from exc
-    return AnalysisConfig.model_validate(data)
+    return _with_environment_overrides(AnalysisConfig.model_validate(data))

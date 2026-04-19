@@ -5,37 +5,36 @@
 # (API keys, database passwords) live in .env, NOT in this file.
 #
 # Copy to config.yaml and edit as desired. The example values below
-# are the local-first defaults — with no changes, every analysis runs
-# on-device against a local Ollama model, and no data ever leaves the
-# Docker network.
+# are safe defaults: ingestion works immediately, while AI briefing stays
+# off until setup.sh or you explicitly enable daily_briefing below.
 
 analysis:
   daily_briefing:
-    enabled: true
+    enabled: false
     cron: "0 7 * * *"          # Every day at 7:00 AM local time
     lookback_days: 1
     baseline_days: 30
 
   weekly_summary:
-    enabled: true
+    enabled: false
     cron: "0 8 * * 1"          # Mondays at 8:00 AM local time
     lookback_days: 7
     baseline_days: 28
 
   anomaly_detection:
-    enabled: true
+    enabled: false
     cron: "*/30 * * * *"       # Every 30 minutes
     on_ingest: true            # Also run after a successful batch sync
     cooldown_minutes: 15       # Minimum time between runs
     sensitivity: "normal"      # low | normal | high (maps to stddev threshold)
 
   trend_analysis:
-    enabled: true
+    enabled: false
     cron: "0 9 * * 1"          # Mondays at 9:00 AM
     period_days: 30
 
   correlation_analysis:
-    enabled: true
+    enabled: false
     cron: "0 10 1 * *"         # 1st of month at 10:00 AM
     period_days: 90
 

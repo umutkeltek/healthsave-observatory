@@ -32,7 +32,7 @@ That's it. `setup.sh`:
 
 When it finishes, run `./setup.sh doctor` to confirm every service is healthy. The doctor prints the exact iOS-app URL to paste into [HealthSave](https://apps.apple.com/app/id6759843047) under Settings → Server Sync.
 
-Re-running `./setup.sh` is safe — it preserves your existing `.env` and `config.yaml`.
+Re-running `./setup.sh` is safe — it preserves passwords and updates only the AI-related config based on your answers.
 
 ## Hardware recommendations
 
@@ -215,7 +215,7 @@ This starts:
 The database port is bound to `127.0.0.1` by default so it is available for
 local tooling without being exposed on your LAN.
 
-To opt into Ollama manually, copy `docker-compose.override.yml.example` to `docker-compose.override.yml` and set `OLLAMA_MODEL` in `.env` to the tag you want.
+To opt into Ollama manually, copy `docker-compose.override.yml.example` to `docker-compose.override.yml`, copy `config.yaml.example` to `config.yaml`, set `analysis.daily_briefing.enabled` to `true`, and set `OLLAMA_MODEL` in `.env` to the tag you want.
 
 ### API Endpoints
 
