@@ -12,6 +12,7 @@ stay stubbed until their engine methods land.
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import get_args
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -87,7 +88,9 @@ async def insights_weekly() -> WeeklySummaryResponse:
 
 @router.get("/anomalies", response_model=AnomaliesListResponse)
 async def insights_anomalies(
-    since: str | None = Query(default=None, description="ISO-8601 lower bound on created_at"),
+    since: datetime | str | None = Query(
+        default=None, description="ISO-8601 lower bound on created_at"
+    ),
     severity: str | None = Query(
         default=None,
         description="Comma-separated list: info, watch, alert",
@@ -105,16 +108,33 @@ async def insights_anomalies(
     where_clauses = ["finding_type = 'anomaly'"]
     params: dict[str, object] = {}
 
+    if isinstance(since, str):
+        try:
+            since = datetime.fromisoformat(since.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Invalid since timestamp") from exc
+
     if since is not None:
         where_clauses.append("created_at >= :since")
         params["since"] = since
 
     if severity is not None:
-        requested = {s.strip() for s in severity.split(",") if s.strip()}
-        filtered = sorted(requested & _ALLOWED_SEVERITIES)
+        requested = {s.strip().lower() for s in severity.split(",") if s.strip()}
+        unknown = requested - _ALLOWED_SEVERITIES
+        if unknown:
+            allowed = ", ".join(sorted(_ALLOWED_SEVERITIES))
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid severity: {', '.join(sorted(unknown))}. Allowed: {allowed}",
+            )
+        filtered = sorted(requested)
         if filtered:
-            where_clauses.append("severity = ANY(:severities)")
-            params["severities"] = filtered
+            severity_placeholders = []
+            for index, value in enumerate(filtered):
+                param_name = f"severity_{index}"
+                severity_placeholders.append(f":{param_name}")
+                params[param_name] = value
+            where_clauses.append(f"severity IN ({', '.join(severity_placeholders)})")
 
     params["limit"] = _ANOMALIES_LIMIT
 
@@ -163,7 +183,7 @@ async def insights_trigger(
 ) -> TriggerResponse:
     """Run an ad-hoc analysis job inline.
 
-    Only ``daily_briefing`` is supported in Phase 1.5. The call runs
+    Only ``daily_briefing`` is supported for manual triggers in Phase 2. The call runs
     synchronously against ``app.state.analysis_engine`` — fine for the
     one active job. Future job types (weekly, anomaly, etc.) should
     dispatch via ``request.app.state.scheduler`` once their engine

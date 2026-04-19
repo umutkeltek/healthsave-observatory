@@ -1,6 +1,6 @@
 """Analysis configuration models and loader.
 
-Phase 1.5 activation: ``load_config`` now parses ``config.yaml`` via
+Phase 2 activation: ``load_config`` parses ``config.yaml`` via
 ``pyyaml`` (imported lazily to keep module import cheap) and validates
 the structure against the Pydantic models below. The top-level YAML
 shape is::
@@ -47,7 +47,7 @@ class WeeklyConfig(BaseModel):
 
 
 class AnomalyConfig(BaseModel):
-    enabled: bool = True
+    enabled: bool = False
     cron: str = "*/30 * * * *"
     on_ingest: bool = True
     cooldown_minutes: int = 15

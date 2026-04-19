@@ -11,6 +11,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import server  # noqa: E402
+from analysis.config import AnalysisConfig  # noqa: E402
 
 
 class FakeResult:
@@ -74,6 +75,19 @@ class FakeRequest:
         return self.payload
 
 
+class FakeBackgroundTasks:
+    def __init__(self):
+        self.tasks = []
+
+    def add_task(self, func, *args, **kwargs):
+        self.tasks.append((func, args, kwargs))
+
+
+class FakeAnalysisEngine:
+    async def run_anomaly_check(self):
+        return 1
+
+
 @pytest.mark.asyncio
 async def test_status_endpoint_returns_flat_metric_objects():
     session = FakeSession()
@@ -109,6 +123,53 @@ async def test_oxygen_saturation_alias_populates_blood_oxygen_table():
     assert insert_params is not None
     assert insert_params["spo2_pct"] == 97.0
     assert session.insert_params_for("quantity_samples") is None
+
+
+@pytest.mark.asyncio
+async def test_batch_ingest_schedules_anomaly_check_when_on_ingest_enabled():
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "heart_rate",
+            "samples": [
+                {
+                    "date": "2026-04-10T12:00:00+00:00",
+                    "qty": 72,
+                    "source": "Apple Watch",
+                }
+            ],
+        }
+    )
+    request.app = type(
+        "App",
+        (),
+        {
+            "state": type(
+                "State",
+                (),
+                {
+                    "analysis_config": AnalysisConfig.model_validate(
+                        {
+                            "analysis": {
+                                "anomaly_detection": {
+                                    "enabled": True,
+                                    "on_ingest": True,
+                                }
+                            }
+                        }
+                    ),
+                    "analysis_engine": FakeAnalysisEngine(),
+                },
+            )()
+        },
+    )()
+    background_tasks = FakeBackgroundTasks()
+
+    result = await server.apple_batch(request, session, background_tasks)
+
+    assert result["records"] == 1
+    assert len(background_tasks.tasks) == 1
+    assert background_tasks.tasks[0][0].__name__ == "run_anomaly_check"
 
 
 @pytest.mark.asyncio

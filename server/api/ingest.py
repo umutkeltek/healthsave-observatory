@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +22,11 @@ router = APIRouter()
 
 
 @router.post("/api/apple/batch", dependencies=[Depends(verify_api_key)])
-async def apple_batch(request: Request, session: AsyncSession = Depends(get_session)):
+async def apple_batch(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    background_tasks: BackgroundTasks = None,
+):
     """Receive a metric batch from HealthSave iOS app.
 
     Expected payload:
@@ -72,6 +76,7 @@ async def apple_batch(request: Request, session: AsyncSession = Depends(get_sess
     await _mark_raw_ingestion_processed(session, raw_log_id)
     await session.commit()
     log.info("Ingested %d records for %s (batch %d/%d)", count, metric, batch_idx + 1, total)
+    _schedule_anomaly_check_if_enabled(request, background_tasks, count)
 
     return {
         "status": "processed",
@@ -80,3 +85,19 @@ async def apple_batch(request: Request, session: AsyncSession = Depends(get_sess
         "total_batches": total,
         "records": count,
     }
+
+
+def _schedule_anomaly_check_if_enabled(
+    request: Request, background_tasks: BackgroundTasks | None, records: int
+) -> None:
+    """Schedule a post-ingest anomaly check when Phase 2 config opts in."""
+    if records <= 0 or background_tasks is None:
+        return
+    state = getattr(getattr(request, "app", None), "state", None)
+    config = getattr(state, "analysis_config", None)
+    engine = getattr(state, "analysis_engine", None)
+    if config is None or engine is None:
+        return
+    anomaly = config.analysis.anomaly_detection
+    if anomaly.enabled and anomaly.on_ingest:
+        background_tasks.add_task(engine.run_anomaly_check)

@@ -14,7 +14,8 @@ from __future__ import annotations
 import json
 import logging
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import text
 
@@ -64,21 +65,20 @@ class AnalysisEngine:
                 await session.commit()
                 return None
 
-            hr = summary.metrics.get("heart_rate")
             finding_ids: list[int] = []
-            if hr is not None:
-                hr_finding_id = await self._insert_finding(
+            for metric, metric_summary in summary.metrics.items():
+                summary_finding_id = await self._insert_finding(
                     session,
                     run_id=run_id,
                     finding=Finding(
                         finding_type="summary",
-                        metric="heart_rate",
+                        metric=metric,
                         severity="info",
-                        structured_data=hr,
+                        structured_data=metric_summary,
                     ),
                 )
-                if hr_finding_id is not None:
-                    finding_ids.append(hr_finding_id)
+                if summary_finding_id is not None:
+                    finding_ids.append(summary_finding_id)
 
             anomalies = await self._detect_anomalies_safely()
             for anomaly in anomalies:
@@ -100,7 +100,7 @@ class AnalysisEngine:
                 anomalies=_format_anomalies_for_prompt(anomalies),
                 trends="(trend analysis deferred to Phase 2b)",
                 correlations="(correlation analysis deferred to Phase 2b)",
-                days_of_data=(hr or {}).get("sample_count", 0),
+                days_of_data=_daily_data_days(summary.metrics),
                 minimum_required=1,
             )
 
@@ -148,32 +148,34 @@ class AnalysisEngine:
         Returns the run id on completion, or ``None`` when the run was
         skipped because the detector found nothing.
         """
-        async with (
-            self.session_factory() as session,
-            self._run_context(session, "anomaly_check") as run_id,
-        ):
-            anomalies = await self.anomaly_detector.detect(lookback_days=1)
-
-            if not anomalies:
-                await self._mark_run_skipped(session, run_id)
-                await session.commit()
+        async with self.session_factory() as session:
+            if await self._within_cooldown(session, "anomaly_check"):
                 return None
 
-            for anomaly in anomalies:
-                await self._insert_finding(
-                    session,
-                    run_id=run_id,
-                    finding=Finding(
-                        finding_type="anomaly",
-                        metric=anomaly.metric,
-                        severity=anomaly.severity,
-                        structured_data=anomaly.model_dump(mode="json"),
-                    ),
-                )
+            async with self._run_context(session, "anomaly_check") as run_id:
+                anomalies = await self.anomaly_detector.detect(lookback_days=1)
+                anomalies = await self._filter_existing_anomalies(session, anomalies)
 
-            await self._mark_run_completed(session, run_id)
-            await session.commit()
-            return run_id
+                if not anomalies:
+                    await self._mark_run_skipped(session, run_id)
+                    await session.commit()
+                    return None
+
+                for anomaly in anomalies:
+                    await self._insert_finding(
+                        session,
+                        run_id=run_id,
+                        finding=Finding(
+                            finding_type="anomaly",
+                            metric=anomaly.metric,
+                            severity=anomaly.severity,
+                            structured_data=anomaly.model_dump(mode="json"),
+                        ),
+                    )
+
+                await self._mark_run_completed(session, run_id)
+                await session.commit()
+                return run_id
 
     async def run_weekly_summary(self) -> Insight:
         """Produce the weekly rollup narrative."""
@@ -319,6 +321,53 @@ class AnalysisEngine:
         row = result.fetchone()
         return row.id if row is not None else None
 
+    async def _within_cooldown(self, session, run_type: str) -> bool:
+        """Return True when a recent run makes another ad-hoc run redundant."""
+        cooldown = self.config.analysis.anomaly_detection.cooldown_minutes
+        if cooldown <= 0:
+            return False
+        since = datetime.now(tz=UTC) - timedelta(minutes=cooldown)
+        result = await session.execute(
+            text(
+                """
+                SELECT id
+                FROM analysis_runs
+                WHERE run_type = :run_type
+                  AND started_at >= :since
+                  AND status IN ('running', 'completed', 'skipped')
+                ORDER BY started_at DESC
+                LIMIT 1
+                """
+            ),
+            {"run_type": run_type, "since": since},
+        )
+        row = result.fetchone()
+        return row is not None
+
+    async def _filter_existing_anomalies(self, session, anomalies: list[Anomaly]) -> list[Anomaly]:
+        """Suppress anomalies already persisted by earlier rolling checks."""
+        if not anomalies:
+            return []
+
+        detected_times = [a.detected_at for a in anomalies if a.detected_at is not None]
+        since = min(detected_times) - timedelta(days=1) if detected_times else datetime.now(tz=UTC)
+        result = await session.execute(
+            text(
+                """
+                SELECT metric, structured_data
+                FROM analysis_findings
+                WHERE finding_type = 'anomaly'
+                  AND created_at >= :since
+                """
+            ),
+            {"since": since},
+        )
+        existing = {
+            _anomaly_key_from_data(row.metric, row.structured_data)
+            for row in self._fetchall(result)
+        }
+        return [anomaly for anomaly in anomalies if _anomaly_key(anomaly) not in existing]
+
     async def _detect_anomalies_safely(self) -> list[Anomaly]:
         """Run the detector, swallowing errors so the briefing keeps flowing.
 
@@ -330,9 +379,21 @@ class AnalysisEngine:
         if not self.config.analysis.anomaly_detection.enabled:
             return []
         try:
-            return await self.anomaly_detector.detect(lookback_days=1)
+            end = datetime.now(tz=UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+            return await self.anomaly_detector.detect(lookback_days=1, end_at=end)
         except Exception as exc:  # pragma: no cover - defensive
             log.warning("anomaly detection failed; continuing briefing: %s", exc)
+            return []
+
+    @staticmethod
+    def _fetchall(result) -> list[Any]:
+        fetchall = getattr(result, "fetchall", None)
+        if callable(fetchall):
+            rows = fetchall()
+            return list(rows) if rows is not None else []
+        try:
+            return list(result)
+        except TypeError:
             return []
 
 
@@ -343,4 +404,31 @@ def _format_anomalies_for_prompt(anomalies: list[Anomaly]) -> str:
     return "\n".join(
         f"- {a.metric}: {a.direction} deviation, severity={a.severity}, z={a.magnitude:.2f}"
         for a in anomalies
+    )
+
+
+def _daily_data_days(metrics: dict[str, dict]) -> int:
+    """Daily briefing sufficiency is day-based, not sample-count based."""
+    return 1 if any((metric.get("sample_count") or 0) > 0 for metric in metrics.values()) else 0
+
+
+def _anomaly_key(anomaly: Anomaly) -> tuple[str, str | None, str]:
+    detected_at = anomaly.detected_at.isoformat() if anomaly.detected_at is not None else None
+    return (anomaly.metric, detected_at, anomaly.direction)
+
+
+def _anomaly_key_from_data(
+    metric: str | None, structured_data
+) -> tuple[str | None, str | None, str | None]:
+    if isinstance(structured_data, str):
+        try:
+            structured_data = json.loads(structured_data)
+        except ValueError:
+            structured_data = {}
+    if not isinstance(structured_data, dict):
+        structured_data = {}
+    return (
+        metric or structured_data.get("metric"),
+        structured_data.get("detected_at"),
+        structured_data.get("direction"),
     )

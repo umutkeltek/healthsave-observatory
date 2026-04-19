@@ -8,6 +8,7 @@ LLM-failure re-raise paths.
 from __future__ import annotations
 
 import sys
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -27,11 +28,15 @@ class _Row:
 
 
 class _Result:
-    def __init__(self, row=None):
+    def __init__(self, row=None, rows=None):
         self._row = row
+        self._rows = list(rows) if rows is not None else ([] if row is None else [row])
 
     def fetchone(self):
         return self._row
+
+    def fetchall(self):
+        return list(self._rows)
 
 
 class _FakeSession:
@@ -43,10 +48,11 @@ class _FakeSession:
     statements.
     """
 
-    def __init__(self, run_queue: list[int]):
+    def __init__(self, run_queue: list[int], select_queue: list[list[_Row]] | None = None):
         self.calls: list[tuple[str, dict]] = []
         self.committed = False
         self._queue = list(run_queue)
+        self._select_queue = list(select_queue or [])
 
     async def __aenter__(self):
         return self
@@ -57,6 +63,9 @@ class _FakeSession:
     async def execute(self, statement, params=None):
         sql = " ".join(str(statement).split())
         self.calls.append((sql, params or {}))
+        if sql.startswith("SELECT") and self._select_queue:
+            rows = self._select_queue.pop(0)
+            return _Result(row=rows[0] if rows else None, rows=rows)
         if "RETURNING id" in sql and self._queue:
             return _Result(_Row(id=self._queue.pop(0)))
         return _Result()
@@ -160,8 +169,8 @@ async def test_run_daily_briefing_skips_when_summary_is_empty():
 @pytest.mark.asyncio
 async def test_run_daily_briefing_persists_anomaly_findings_and_includes_them_in_prompt():
     """Phase 2: detector-supplied anomalies become finding rows + prompt lines."""
-    # run_id=900, hr_finding_id=901, anomaly_finding_id=902.
-    session = _FakeSession(run_queue=[900, 901, 902])
+    # run_id=900, hr_finding_id=901, hrv_finding_id=902, anomaly_finding_id=903.
+    session = _FakeSession(run_queue=[900, 901, 902, 903])
     summary = PeriodSummary(
         period="daily",
         metrics={
@@ -193,6 +202,7 @@ async def test_run_daily_briefing_persists_anomaly_findings_and_includes_them_in
     )
 
     engine = _make_engine(session, summary, llm_mock)
+    engine.config.analysis.anomaly_detection.enabled = True
     engine.anomaly_detector.detect = AsyncMock(
         return_value=[Anomaly(metric="hrv", magnitude=-3.1, direction="down", severity="alert")]
     )
@@ -200,23 +210,63 @@ async def test_run_daily_briefing_persists_anomaly_findings_and_includes_them_in
     run_id = await engine.run_daily_briefing()
 
     assert run_id == 900
-    # Two finding rows: HR summary + HRV anomaly
+    # Three finding rows: HR summary + HRV summary + HRV anomaly
     findings = session.all_insert_params_for("analysis_findings")
-    assert len(findings) == 2
+    assert len(findings) == 3
     assert findings[0]["finding_type"] == "summary"
     assert findings[0]["metric"] == "heart_rate"
-    assert findings[1]["finding_type"] == "anomaly"
+    assert findings[1]["finding_type"] == "summary"
     assert findings[1]["metric"] == "hrv"
-    assert findings[1]["severity"] == "alert"
+    assert findings[2]["finding_type"] == "anomaly"
+    assert findings[2]["metric"] == "hrv"
+    assert findings[2]["severity"] == "alert"
 
-    # Insight references BOTH finding ids.
+    # Insight references all summary/anomaly finding ids.
     insight_inserts = session.all_insert_params_for("analysis_insights")
-    assert insight_inserts[0]["findings_used"] == [901, 902]
+    assert insight_inserts[0]["findings_used"] == [901, 902, 903]
 
     # Anomalies were formatted into the LLM prompt.
     prompt_arg = llm_mock.generate_insight.await_args.args[0]
     assert "hrv: down deviation" in prompt_arg
     assert "severity=alert" in prompt_arg
+
+
+@pytest.mark.asyncio
+async def test_run_daily_briefing_persists_hrv_only_summary_and_reports_data_available():
+    """HRV-only data should still be auditable and should not report 0/1 data."""
+    session = _FakeSession(run_queue=[1100, 1101])
+    summary = PeriodSummary(
+        period="daily",
+        metrics={
+            "hrv": {
+                "avg_ms": 40.0,
+                "min_ms": 25,
+                "max_ms": 60,
+                "sample_count": 18,
+                "baseline_avg_ms": 52.0,
+                "delta_pct_vs_baseline": -23.0,
+            }
+        },
+    )
+    llm_mock = AsyncMock()
+    llm_mock.generate_insight.return_value = InsightResult(
+        narrative="Your HRV was lower yesterday. Not medical advice.",
+        tokens_in=10,
+        tokens_out=20,
+        model="ollama/llama3.1:8b",
+        insight_type="daily_briefing",
+    )
+
+    engine = _make_engine(session, summary, llm_mock)
+    run_id = await engine.run_daily_briefing()
+
+    assert run_id == 1100
+    findings = session.all_insert_params_for("analysis_findings")
+    assert len(findings) == 1
+    assert findings[0]["finding_type"] == "summary"
+    assert findings[0]["metric"] == "hrv"
+    prompt_arg = llm_mock.generate_insight.await_args.args[0]
+    assert "Data sufficiency: 1/1 days of history." in prompt_arg
 
 
 @pytest.mark.asyncio
@@ -246,6 +296,7 @@ async def test_run_daily_briefing_anomaly_detector_failure_does_not_fail_the_bri
     )
 
     engine = _make_engine(session, summary, llm_mock)
+    engine.config.analysis.anomaly_detection.enabled = True
     engine.anomaly_detector.detect = AsyncMock(side_effect=RuntimeError("boom"))
 
     run_id = await engine.run_daily_briefing()
@@ -317,6 +368,71 @@ async def test_run_anomaly_check_skips_when_detector_finds_nothing():
     assert session.all_insert_params_for("analysis_findings") == []
     updates = session.all_update_statements()
     assert any("status = 'skipped'" in sql for sql, _ in updates)
+
+
+@pytest.mark.asyncio
+async def test_run_anomaly_check_respects_recent_cooldown_without_creating_run():
+    """Cooldown is checked before creating another analysis_runs row."""
+    session = _FakeSession(run_queue=[4000], select_queue=[[_Row(id=3999)]])
+    llm_mock = AsyncMock()
+    config = AnalysisConfig.model_validate(
+        {"analysis": {"anomaly_detection": {"enabled": True, "cooldown_minutes": 15}}}
+    )
+
+    def factory():
+        return session
+
+    engine = AnalysisEngine(factory, llm_mock, config)
+    engine.anomaly_detector.detect = AsyncMock(return_value=[])
+
+    run_id = await engine.run_anomaly_check()
+
+    assert run_id is None
+    assert session.all_insert_params_for("analysis_runs") == []
+    engine.anomaly_detector.detect.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_run_anomaly_check_dedupes_already_persisted_anomalies():
+    """Rolling checks should not insert the same anomaly every cron tick."""
+    observed_at = "2026-04-19T12:00:00+00:00"
+    existing = _Row(
+        metric="heart_rate",
+        structured_data={
+            "metric": "heart_rate",
+            "detected_at": observed_at,
+            "direction": "up",
+        },
+    )
+    session = _FakeSession(run_queue=[5000, 5001], select_queue=[[], [existing]])
+    llm_mock = AsyncMock()
+    config = AnalysisConfig.model_validate(
+        {"analysis": {"anomaly_detection": {"enabled": True, "cooldown_minutes": 15}}}
+    )
+
+    def factory():
+        return session
+
+    engine = AnalysisEngine(factory, llm_mock, config)
+    engine.anomaly_detector.detect = AsyncMock(
+        return_value=[
+            Anomaly(
+                metric="heart_rate",
+                magnitude=3.0,
+                direction="up",
+                severity="alert",
+                detected_at=datetime.fromisoformat(observed_at),
+            ),
+            Anomaly(metric="hrv", magnitude=-3.2, direction="down", severity="alert"),
+        ]
+    )
+
+    run_id = await engine.run_anomaly_check()
+
+    assert run_id == 5000
+    findings = session.all_insert_params_for("analysis_findings")
+    assert len(findings) == 1
+    assert findings[0]["metric"] == "hrv"
 
 
 @pytest.mark.asyncio
