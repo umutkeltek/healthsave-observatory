@@ -28,7 +28,7 @@ Close with one proposed focus area for the coming week.
 def build_messages(context: dict) -> list[dict]:
     """Build the ``messages`` list for the LLM client."""
     raise NotImplementedError(
-        "Weekly-summary prompt assembly deferred to Phase 1.5 — statistical engine must land first"
+        "Weekly-summary prompt assembly deferred to Phase 1.5 - statistical engine must land first"
     )
 
 

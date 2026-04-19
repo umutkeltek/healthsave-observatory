@@ -14,7 +14,7 @@ package as ``import server`` and calls ``server.apple_batch`` /
 ``server.apple_status`` directly, so we re-export those handlers plus
 the handful of helpers and data tables that are reasonable to reach for
 from the top-level namespace. Internal ingestion state is not re-exported
-here — call it through ``server.ingestion.*`` in new code.
+here - call it through ``server.ingestion.*`` in new code.
 """
 
 from .api.deps import API_KEY, verify_api_key

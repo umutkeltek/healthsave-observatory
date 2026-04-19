@@ -69,7 +69,7 @@ class HealthLLMClient:
         wrapped in :class:`LLMUnavailableError` so upstream callers only
         need to catch one type.
         """
-        import litellm  # deferred import — keeps module-load light
+        import litellm  # deferred import - keeps module-load light
 
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -95,7 +95,7 @@ class HealthLLMClient:
 
         try:
             response = await litellm.acompletion(**kwargs)
-        except Exception as exc:  # noqa: BLE001 — intentional wrap-and-raise
+        except Exception as exc:  # noqa: BLE001 - intentional wrap-and-raise
             raise LLMUnavailableError(f"LLM call failed: {exc}") from exc
 
         raw = response.choices[0].message.content or ""

@@ -3,12 +3,12 @@
 See ``docs/HEALTH_DOMAIN_SUPPLEMENT.md`` §5.1. This module is the last
 line of defense between the LLM and the user:
 
-  * :data:`CRITICAL_THRESHOLDS` — hard numbers that OVERRIDE the LLM
+  * :data:`CRITICAL_THRESHOLDS` - hard numbers that OVERRIDE the LLM
     entirely. When crossed we emit a static alert, never a generated
     narrative.
-  * :data:`DISCLAIMER_TEXT` — mandatory disclaimer appended to every
+  * :data:`DISCLAIMER_TEXT` - mandatory disclaimer appended to every
     non-critical insight.
-  * :func:`inject_disclaimer` — idempotent helper that appends the
+  * :func:`inject_disclaimer` - idempotent helper that appends the
     disclaimer only when the LLM has not already produced one.
 """
 

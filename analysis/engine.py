@@ -1,4 +1,4 @@
-"""Analysis engine — orchestrator for statistical + LLM runs.
+"""Analysis engine - orchestrator for statistical + LLM runs.
 
 Phase 2 activation: ``run_daily_briefing`` now also runs the anomaly
 detector, persists each anomaly as an ``analysis_findings`` row, and
@@ -180,21 +180,21 @@ class AnalysisEngine:
     async def run_weekly_summary(self) -> Insight:
         """Produce the weekly rollup narrative."""
         raise NotImplementedError(
-            "Weekly summary run deferred to Phase 2b — "
+            "Weekly summary run deferred to Phase 2b - "
             "current scope is daily briefing + anomaly check"
         )
 
     async def run_trend_analysis(self) -> list[Finding]:
         """Compute trend findings across enabled metrics."""
         raise NotImplementedError(
-            "Trend analysis run deferred to Phase 2b — "
+            "Trend analysis run deferred to Phase 2b - "
             "current scope is daily briefing + anomaly check"
         )
 
     async def run_correlation_analysis(self) -> list[Finding]:
         """Compute Spearman correlations for the configured metric pairs."""
         raise NotImplementedError(
-            "Correlation analysis run deferred to Phase 2b — "
+            "Correlation analysis run deferred to Phase 2b - "
             "current scope is daily briefing + anomaly check"
         )
 
@@ -208,7 +208,7 @@ class AnalysisEngine:
 
         Yields the new ``run_id``. On exception inside the block, marks
         the run ``failed`` (best-effort) and re-raises the ORIGINAL
-        exception — callers want the root cause, not a bookkeeping
+        exception - callers want the root cause, not a bookkeeping
         error that masks it.
         """
         run_id = await self._begin_run(session, run_type)

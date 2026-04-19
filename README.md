@@ -8,27 +8,27 @@
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com/)
 [![Ollama](https://img.shields.io/badge/Ollama-local%20LLM-000000.svg)](https://ollama.com/)
 
-> **Self-hosted Apple Health server** — sync HealthKit data from your iPhone and Apple Watch into TimescaleDB, visualize it in Grafana, and get an AI-written daily briefing via a local Ollama model. Private. Local-first. Your data stays on your hardware.
+> **Self-hosted Apple Health server** - sync HealthKit data from your iPhone and Apple Watch into TimescaleDB, visualize it in Grafana, and get an AI-written daily briefing via a local Ollama model. Private. Local-first. Your data stays on your hardware.
 
 **Keywords:** `apple-health` · `healthkit` · `self-hosted` · `quantified-self` · `timescaledb` · `grafana` · `fastapi` · `ollama` · `local-llm` · `home-assistant` · `docker` · `privacy` · `health-data` · `wearables`
 
-Your own server, on your own hardware, turning the health data your phone already collects into an AI-written daily briefing — no cloud, no subscription, no one else reading your numbers.
+Your own server, on your own hardware, turning the health data your phone already collects into an AI-written daily briefing - no cloud, no subscription, no one else reading your numbers.
 
-You point your iPhone at it. It stores everything from your Apple Watch (heart rate, HRV, SpO2, sleep, workouts, steps, and more), graphs it in Grafana, and — if you turn it on — runs a small local AI model that writes you a short narrative every morning about how your body is actually doing.
+You point your iPhone at it. It stores everything from your Apple Watch (heart rate, HRV, SpO2, sleep, workouts, steps, and more), graphs it in Grafana, and - if you turn it on - runs a small local AI model that writes you a short narrative every morning about how your body is actually doing.
 
 ## What you get
 
 - A long-term store for every Apple Health metric your phone collects, queryable with normal SQL
 - A set of ready-made Grafana dashboards (heart, sleep, activity, workouts) that work the moment data starts flowing
 - An optional AI briefing system that turns numbers into plain English ("HRV trended down three days in a row, sleep was light last night, expect a low-energy morning")
-- A clean ingest API anyone can build against — the iOS app is one client, your own scripts can be another
+- A clean ingest API anyone can build against - the iOS app is one client, your own scripts can be another
 - Drop-in examples for piping selected metrics into Home Assistant for automations
 
-The entire stack runs in Docker on a laptop, a NUC, a Mac mini, a Synology, or a beefy workstation — your choice. Nothing phones home.
+The entire stack runs in Docker on a laptop, a NUC, a Mac mini, a Synology, or a beefy workstation - your choice. Nothing phones home.
 
 ## Quick start
 
-You need [Docker](https://www.docker.com/products/docker-desktop/) installed and running, plus a terminal. On Windows, run this inside WSL2 — `setup.sh` is a bash script.
+You need [Docker](https://www.docker.com/products/docker-desktop/) installed and running, plus a terminal. On Windows, run this inside WSL2 - `setup.sh` is a bash script.
 
 ```bash
 git clone https://github.com/<your-fork>/datahub.git
@@ -44,15 +44,15 @@ That's it. `setup.sh`:
 
 When it finishes, run `./setup.sh doctor` to confirm every service is healthy. The doctor prints the exact iOS-app URL to paste into [HealthSave](https://apps.apple.com/app/id6759843047) under Settings → Server Sync.
 
-Re-running `./setup.sh` is safe — it preserves passwords and updates only the AI-related config based on your answers.
+Re-running `./setup.sh` is safe - it preserves passwords and updates only the AI-related config based on your answers.
 
 ## Hardware recommendations
 
-The AI briefing uses a local language model running through [Ollama](https://ollama.com) (a tiny daemon that runs LLMs on your own machine). Different models need different amounts of RAM. `setup.sh` reads your system RAM + GPU and suggests one — but you can pick any Ollama tag.
+The AI briefing uses a local language model running through [Ollama](https://ollama.com) (a tiny daemon that runs LLMs on your own machine). Different models need different amounts of RAM. `setup.sh` reads your system RAM + GPU and suggests one - but you can pick any Ollama tag.
 
 | System RAM | No GPU / Apple Silicon | NVIDIA GPU detected |
 |---|---|---|
-| < 6 GB | *too small — skip AI* | *too small — skip AI* |
+| < 6 GB | *too small - skip AI* | *too small - skip AI* |
 | 6–10 GB | `llama3.2:1b` (~1.3 GB) | `llama3.2:3b` |
 | 10–18 GB | `llama3.2:3b` (~2 GB) | `llama3.1:8b` |
 | 18–36 GB | `llama3.1:8b` (~4.7 GB) | `llama3.1:8b` |
@@ -62,20 +62,20 @@ The AI briefing uses a local language model running through [Ollama](https://oll
 A quick translation:
 
 - **Apple Silicon Macs** (M1/M2/M3/M4) use unified memory, so system RAM ≈ what the model can use. A 16 GB MacBook Air handles `llama3.2:3b` comfortably; a 64 GB Studio runs `llama3.1:8b` with headroom.
-- **Linux box with an NVIDIA GPU** — Ollama uses CUDA. The recommendation bumps a tier because the GPU absorbs most of the work.
-- **AMD GPU on Linux** — Ollama can use ROCm but coverage varies; treated as CPU-only in the recommendation logic.
-- **Intel Macs and Windows-without-WSL** — fall back to CPU-only conservative defaults; still works, just slower.
+- **Linux box with an NVIDIA GPU** - Ollama uses CUDA. The recommendation bumps a tier because the GPU absorbs most of the work.
+- **AMD GPU on Linux** - Ollama can use ROCm but coverage varies; treated as CPU-only in the recommendation logic.
+- **Intel Macs and Windows-without-WSL** - fall back to CPU-only conservative defaults; still works, just slower.
 
 You can change the model later (see Troubleshooting).
 
-If you're on something smaller than 6 GB RAM (a Pi 4, an old NAS), `setup.sh` will recommend skipping AI entirely. The ingest pipeline still runs — you just won't get the morning narrative.
+If you're on something smaller than 6 GB RAM (a Pi 4, an old NAS), `setup.sh` will recommend skipping AI entirely. The ingest pipeline still runs - you just won't get the morning narrative.
 
 ## How the AI analysis works
 
 The briefing isn't "feed everything to ChatGPT and hope". It's a **two-brain system**:
 
-- **Brain 1 — the statistical engine.** A small Python module that runs on a schedule, reads your time-series data (heart rate, HRV, sleep, etc.), computes baselines and trends, and flags anything statistically interesting (a 3-day HRV decline, a heart-rate-recovery anomaly, a sleep-stage shift). It produces structured findings, not prose.
-- **Brain 2 — the narrative LLM.** A local Ollama model takes those findings and rewrites them as a short, readable briefing. It doesn't see raw numbers it doesn't need; it sees flagged findings and turns them into "Your HRV has dropped three days running while sleep efficiency stayed flat — this often shows up before a stress spike".
+- **Brain 1 - the statistical engine.** A small Python module that runs on a schedule, reads your time-series data (heart rate, HRV, sleep, etc.), computes baselines and trends, and flags anything statistically interesting (a 3-day HRV decline, a heart-rate-recovery anomaly, a sleep-stage shift). It produces structured findings, not prose.
+- **Brain 2 - the narrative LLM.** A local Ollama model takes those findings and rewrites them as a short, readable briefing. It doesn't see raw numbers it doesn't need; it sees flagged findings and turns them into "Your HRV has dropped three days running while sleep efficiency stayed flat - this often shows up before a stress spike".
 
 This split is deliberate: the math stays deterministic and auditable; the LLM only handles the part where natural language actually helps. No cloud, no per-query cost, no data leaving your network.
 
@@ -92,9 +92,9 @@ What's *not* yet included (and on the roadmap): trend detection, goal-tracking, 
 
 Briefings need at least one full day of heart-rate data to say anything useful. Once you've synced from HealthSave at least once, you have two ways to see your first briefing:
 
-**Option A — wait for the daily cron.** The analysis worker ticks once a day (default 7am local) and writes a fresh briefing. Easiest, but slow if you just installed.
+**Option A - wait for the daily cron.** The analysis worker ticks once a day (default 7am local) and writes a fresh briefing. Easiest, but slow if you just installed.
 
-**Option B — trigger one now.** Hit the trigger endpoint:
+**Option B - trigger one now.** Hit the trigger endpoint:
 
 ```bash
 curl -X POST http://localhost:8000/api/insights/trigger
@@ -133,13 +133,13 @@ The full request/response contract, including the exact `/api/apple/status` shap
 docker compose logs ollama
 ```
 
-The most common causes are: not enough free RAM (Ollama refuses to load a model that won't fit), the override file missing (re-run `./setup.sh` — it copies the example), or another process holding port 11434 (stop it, or edit `docker-compose.override.yml` to bind a different port).
+The most common causes are: not enough free RAM (Ollama refuses to load a model that won't fit), the override file missing (re-run `./setup.sh` - it copies the example), or another process holding port 11434 (stop it, or edit `docker-compose.override.yml` to bind a different port).
 
 **My briefing came back empty (or said "not enough data").**
 
 Two things to check:
 
-1. Has HealthSave actually synced? Hit `http://localhost:8000/api/apple/status` — if the table counts are all zero, sync from your phone first.
+1. Has HealthSave actually synced? Hit `http://localhost:8000/api/apple/status` - if the table counts are all zero, sync from your phone first.
 2. How much history do you have? The statistical engine needs at least ~24 hours of heart-rate data to compute anything. Newly-installed users typically see a real briefing on day 2.
 
 **I want to change the model after setup.**
@@ -152,11 +152,11 @@ docker compose exec ollama ollama pull <new-tag>
 docker compose restart api
 ```
 
-The tier table above is a starting point — any Ollama model tag works. Browse [ollama.com/library](https://ollama.com/library) for the full list.
+The tier table above is a starting point - any Ollama model tag works. Browse [ollama.com/library](https://ollama.com/library) for the full list.
 
 **`./setup.sh doctor` says a service isn't running.**
 
-Run `docker compose logs <service>` (e.g. `docker compose logs api`) to see why. Most first-time failures are Docker not having enough memory allocated — bump it in Docker Desktop's preferences and re-run `./setup.sh`.
+Run `docker compose logs <service>` (e.g. `docker compose logs api`) to see why. Most first-time failures are Docker not having enough memory allocated - bump it in Docker Desktop's preferences and re-run `./setup.sh`.
 
 ---
 
@@ -263,7 +263,7 @@ Supported dashboards loaded automatically:
 | Activity & Movement | `grafana/dashboards/activity.json` | `daily_activity`, `quantity_samples` | Supported | Gait-related panels only populate if those optional metrics are synced |
 | Workouts | `grafana/dashboards/workouts.json` | `workouts` | Supported | Focused workout view with type, duration, calories, and HR panels |
 
-The datasource is auto-provisioned — no manual setup needed.
+The datasource is auto-provisioned - no manual setup needed.
 
 ### Home Assistant Examples
 
@@ -283,7 +283,7 @@ Recommended flow:
 
 The ingest API is intentionally simple so anyone can build a compatible backend for their own stack. The first community implementation is already live:
 
-- **[health-data-to-mqtt](https://github.com/bietiekay/health-data-to-mqtt)** by [@bietiekay](https://github.com/bietiekay) — A lightweight Node.js server that stores raw JSON and forwards selected metrics to MQTT. Built for alerting and home automation pipelines where MQTT is the primary transport.
+- **[health-data-to-mqtt](https://github.com/bietiekay/health-data-to-mqtt)** by [@bietiekay](https://github.com/bietiekay) - A lightweight Node.js server that stores raw JSON and forwards selected metrics to MQTT. Built for alerting and home automation pipelines where MQTT is the primary transport.
 
 If you've built a compatible backend, open an issue or PR and we'll add it here. The full API contract including every supported metric is documented in [API.md](API.md).
 
@@ -359,8 +359,8 @@ Recommended production posture:
 
 The schema includes continuous aggregates for common derived metrics:
 
-- `hr_hourly` — Hourly avg/min/max heart rate
-- `sleep_daily` — Daily sleep stage breakdown
+- `hr_hourly` - Hourly avg/min/max heart rate
+- `sleep_daily` - Daily sleep stage breakdown
 
 Add your own with TimescaleDB continuous aggregates:
 

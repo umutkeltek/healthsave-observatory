@@ -3,7 +3,7 @@
 Phase 2 scope: heart-rate **and HRV**. HR uses the ``hr_hourly``
 continuous aggregate with a raw ``heart_rate`` fallback for fresh
 installs. HRV has no continuous aggregate, so the raw ``hrv`` table is
-the primary path — Apple Watch only records 5-30 HRV samples per day,
+the primary path - Apple Watch only records 5-30 HRV samples per day,
 so aggregating raw rows directly is fine at MVP scale (30 days of data
 is well under 5000 rows).
 """
@@ -31,7 +31,7 @@ class DataAggregator:
         MVP computes yesterday's heart-rate + HRV window (``days`` back,
         default 1) against a 30-day baseline. Returns an empty-metrics
         :class:`PeriodSummary` when BOTH lookback metrics have no samples
-        — the engine uses this to short-circuit the LLM call and record
+        - the engine uses this to short-circuit the LLM call and record
         the run as ``skipped``. When only HR or only HRV is present, the
         returned ``metrics`` dict includes just the non-empty metric.
         """
@@ -150,7 +150,7 @@ class DataAggregator:
         """Aggregate raw ``hrv`` rows over ``[start, end)`` into avg/min/max/count.
 
         HRV has no continuous aggregate (D11) because Apple Watch records
-        only 5-30 samples per day — aggregating the raw hypertable
+        only 5-30 samples per day - aggregating the raw hypertable
         directly is fast enough for MVP windows.
         """
         result = await session.execute(

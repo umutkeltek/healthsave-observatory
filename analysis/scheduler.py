@@ -3,8 +3,8 @@
 Phase 2 registers two jobs when their respective config blocks are
 enabled:
 
-* ``daily_briefing`` — runs the full end-to-end path once a day.
-* ``anomaly_check`` — runs the detector on a 30-minute cron, persists
+* ``daily_briefing`` - runs the full end-to-end path once a day.
+* ``anomaly_check`` - runs the detector on a 30-minute cron, persists
   findings, no LLM call.
 
 APScheduler is imported inside ``start()`` so module import stays cheap

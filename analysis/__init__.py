@@ -2,11 +2,11 @@
 
 Two-brain architecture:
 
-1. ``analysis.statistical`` — SQL-driven aggregation, anomaly detection,
+1. ``analysis.statistical`` - SQL-driven aggregation, anomaly detection,
    trend analysis, correlation analysis, baselines, and composite score
    computation. Pure numeric output, no natural language.
 
-2. ``analysis.llm`` — LiteLLM-based narrator that turns structured
+2. ``analysis.llm`` - LiteLLM-based narrator that turns structured
    findings into short, safety-reviewed narratives.
 
 Phase 1 ships the package skeleton only. Every class has the right

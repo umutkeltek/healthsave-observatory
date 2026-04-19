@@ -1,4 +1,4 @@
-# Health Data Hub — analysis configuration
+# Health Data Hub - analysis configuration
 #
 # This file configures the Phase 2 AI analysis engine: schedule of
 # analysis jobs, LLM provider, and notification delivery. All secrets

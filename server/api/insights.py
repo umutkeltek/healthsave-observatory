@@ -1,4 +1,4 @@
-"""GET/POST /api/insights/* — Phase 2 activation.
+"""GET/POST /api/insights/* - Phase 2 activation.
 
 ``/latest`` reads the most-recent ``analysis_insights`` row per
 ``insight_type`` from TimescaleDB. ``/anomalies`` now returns real
@@ -184,7 +184,7 @@ async def insights_trigger(
     """Run an ad-hoc analysis job inline.
 
     Only ``daily_briefing`` is supported for manual triggers in Phase 2. The call runs
-    synchronously against ``app.state.analysis_engine`` — fine for the
+    synchronously against ``app.state.analysis_engine`` - fine for the
     one active job. Future job types (weekly, anomaly, etc.) should
     dispatch via ``request.app.state.scheduler`` once their engine
     methods land.
