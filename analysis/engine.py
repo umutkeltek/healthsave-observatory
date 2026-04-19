@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 from sqlalchemy import text
@@ -52,154 +53,92 @@ class AnalysisEngine:
         completed_at timestamp. Re-raises on failure after marking the
         run ``failed`` with an error message.
         """
-        run_id: int | None = None
-        async with self.session_factory() as session:
-            try:
-                result = await session.execute(
-                    text(
-                        """
-                        INSERT INTO analysis_runs (run_type, status, started_at)
-                        VALUES ('daily_briefing', 'running', :now)
-                        RETURNING id
-                        """
-                    ),
-                    {"now": datetime.now(tz=UTC)},
-                )
-                row = result.fetchone()
-                run_id = row.id if row is not None else None
+        async with (
+            self.session_factory() as session,
+            self._run_context(session, "daily_briefing") as run_id,
+        ):
+            summary = await self.aggregator.summarize_period(period="daily", days=1)
 
-                summary = await self.aggregator.summarize_period(period="daily", days=1)
-
-                if not summary.metrics:
-                    await session.execute(
-                        text(
-                            """
-                            UPDATE analysis_runs
-                               SET status = 'skipped',
-                                   completed_at = :now
-                             WHERE id = :id
-                            """
-                        ),
-                        {"now": datetime.now(tz=UTC), "id": run_id},
-                    )
-                    await session.commit()
-                    return None
-
-                hr = summary.metrics.get("heart_rate")
-                finding_ids: list[int] = []
-                if hr is not None:
-                    hr_finding_id = await self._insert_finding(
-                        session,
-                        run_id=run_id,
-                        finding=Finding(
-                            finding_type="summary",
-                            metric="heart_rate",
-                            severity="info",
-                            structured_data=hr,
-                        ),
-                    )
-                    if hr_finding_id is not None:
-                        finding_ids.append(hr_finding_id)
-
-                anomalies = await self._detect_anomalies_safely()
-                for anomaly in anomalies:
-                    anomaly_finding_id = await self._insert_finding(
-                        session,
-                        run_id=run_id,
-                        finding=Finding(
-                            finding_type="anomaly",
-                            metric=anomaly.metric,
-                            severity=anomaly.severity,
-                            structured_data=anomaly.model_dump(mode="json"),
-                        ),
-                    )
-                    if anomaly_finding_id is not None:
-                        finding_ids.append(anomaly_finding_id)
-
-                prompt = DAILY_BRIEFING_PROMPT_TEMPLATE.format(
-                    period_summary=json.dumps(summary.metrics, indent=2, default=str),
-                    anomalies=_format_anomalies_for_prompt(anomalies),
-                    trends="(trend analysis deferred to Phase 2b)",
-                    correlations="(correlation analysis deferred to Phase 2b)",
-                    days_of_data=(hr or {}).get("sample_count", 0),
-                    minimum_required=1,
-                )
-
-                insight_result = await self.llm_client.generate_insight(
-                    prompt, insight_type="daily_briefing"
-                )
-
-                insight = Insight(
-                    insight_type="daily_briefing",
-                    narrative=insight_result.narrative,
-                    findings_used=finding_ids,
-                )
-
-                await session.execute(
-                    text(
-                        """
-                        INSERT INTO analysis_insights
-                            (run_id, insight_type, narrative, findings_used)
-                        VALUES (:run_id, :insight_type, :narrative, :findings_used)
-                        """
-                    ),
-                    {
-                        "run_id": run_id,
-                        "insight_type": insight.insight_type,
-                        "narrative": insight.narrative,
-                        "findings_used": insight.findings_used,
-                    },
-                )
-
-                await session.execute(
-                    text(
-                        """
-                        UPDATE analysis_runs
-                           SET status = 'completed',
-                               completed_at = :now,
-                               llm_provider = :provider,
-                               llm_tokens_in = :tokens_in,
-                               llm_tokens_out = :tokens_out
-                         WHERE id = :id
-                        """
-                    ),
-                    {
-                        "now": datetime.now(tz=UTC),
-                        "provider": insight_result.model,
-                        "tokens_in": insight_result.tokens_in,
-                        "tokens_out": insight_result.tokens_out,
-                        "id": run_id,
-                    },
-                )
+            if not summary.metrics:
+                await self._mark_run_skipped(session, run_id)
                 await session.commit()
-                return run_id
-            except Exception as exc:
-                # Best-effort failure marking. If the original failure left the
-                # session in an unrecoverable state, we still re-raise the
-                # ORIGINAL exception — callers want the root cause, not a
-                # bookkeeping error that masks it.
-                if run_id is not None:
-                    try:
-                        await session.execute(
-                            text(
-                                """
-                                UPDATE analysis_runs
-                                   SET status = 'failed',
-                                       completed_at = :now,
-                                       error_message = :error
-                                 WHERE id = :id
-                                """
-                            ),
-                            {
-                                "now": datetime.now(tz=UTC),
-                                "error": str(exc),
-                                "id": run_id,
-                            },
-                        )
-                        await session.commit()
-                    except Exception:
-                        pass
-                raise
+                return None
+
+            hr = summary.metrics.get("heart_rate")
+            finding_ids: list[int] = []
+            if hr is not None:
+                hr_finding_id = await self._insert_finding(
+                    session,
+                    run_id=run_id,
+                    finding=Finding(
+                        finding_type="summary",
+                        metric="heart_rate",
+                        severity="info",
+                        structured_data=hr,
+                    ),
+                )
+                if hr_finding_id is not None:
+                    finding_ids.append(hr_finding_id)
+
+            anomalies = await self._detect_anomalies_safely()
+            for anomaly in anomalies:
+                anomaly_finding_id = await self._insert_finding(
+                    session,
+                    run_id=run_id,
+                    finding=Finding(
+                        finding_type="anomaly",
+                        metric=anomaly.metric,
+                        severity=anomaly.severity,
+                        structured_data=anomaly.model_dump(mode="json"),
+                    ),
+                )
+                if anomaly_finding_id is not None:
+                    finding_ids.append(anomaly_finding_id)
+
+            prompt = DAILY_BRIEFING_PROMPT_TEMPLATE.format(
+                period_summary=json.dumps(summary.metrics, indent=2, default=str),
+                anomalies=_format_anomalies_for_prompt(anomalies),
+                trends="(trend analysis deferred to Phase 2b)",
+                correlations="(correlation analysis deferred to Phase 2b)",
+                days_of_data=(hr or {}).get("sample_count", 0),
+                minimum_required=1,
+            )
+
+            insight_result = await self.llm_client.generate_insight(
+                prompt, insight_type="daily_briefing"
+            )
+
+            insight = Insight(
+                insight_type="daily_briefing",
+                narrative=insight_result.narrative,
+                findings_used=finding_ids,
+            )
+
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO analysis_insights
+                        (run_id, insight_type, narrative, findings_used)
+                    VALUES (:run_id, :insight_type, :narrative, :findings_used)
+                    """
+                ),
+                {
+                    "run_id": run_id,
+                    "insight_type": insight.insight_type,
+                    "narrative": insight.narrative,
+                    "findings_used": insight.findings_used,
+                },
+            )
+
+            await self._mark_run_completed(
+                session,
+                run_id,
+                llm_provider=insight_result.model,
+                llm_tokens_in=insight_result.tokens_in,
+                llm_tokens_out=insight_result.tokens_out,
+            )
+            await session.commit()
+            return run_id
 
     async def run_anomaly_check(self) -> int | None:
         """Lightweight detector run with no LLM narration.
@@ -209,87 +148,32 @@ class AnalysisEngine:
         Returns the run id on completion, or ``None`` when the run was
         skipped because the detector found nothing.
         """
-        run_id: int | None = None
-        async with self.session_factory() as session:
-            try:
-                result = await session.execute(
-                    text(
-                        """
-                        INSERT INTO analysis_runs (run_type, status, started_at)
-                        VALUES ('anomaly_check', 'running', :now)
-                        RETURNING id
-                        """
-                    ),
-                    {"now": datetime.now(tz=UTC)},
-                )
-                row = result.fetchone()
-                run_id = row.id if row is not None else None
+        async with (
+            self.session_factory() as session,
+            self._run_context(session, "anomaly_check") as run_id,
+        ):
+            anomalies = await self.anomaly_detector.detect(lookback_days=1)
 
-                anomalies = await self.anomaly_detector.detect(lookback_days=1)
-
-                if not anomalies:
-                    await session.execute(
-                        text(
-                            """
-                            UPDATE analysis_runs
-                               SET status = 'skipped',
-                                   completed_at = :now
-                             WHERE id = :id
-                            """
-                        ),
-                        {"now": datetime.now(tz=UTC), "id": run_id},
-                    )
-                    await session.commit()
-                    return None
-
-                for anomaly in anomalies:
-                    await self._insert_finding(
-                        session,
-                        run_id=run_id,
-                        finding=Finding(
-                            finding_type="anomaly",
-                            metric=anomaly.metric,
-                            severity=anomaly.severity,
-                            structured_data=anomaly.model_dump(mode="json"),
-                        ),
-                    )
-
-                await session.execute(
-                    text(
-                        """
-                        UPDATE analysis_runs
-                           SET status = 'completed',
-                               completed_at = :now
-                         WHERE id = :id
-                        """
-                    ),
-                    {"now": datetime.now(tz=UTC), "id": run_id},
-                )
+            if not anomalies:
+                await self._mark_run_skipped(session, run_id)
                 await session.commit()
-                return run_id
-            except Exception as exc:
-                if run_id is not None:
-                    try:
-                        await session.execute(
-                            text(
-                                """
-                                UPDATE analysis_runs
-                                   SET status = 'failed',
-                                       completed_at = :now,
-                                       error_message = :error
-                                 WHERE id = :id
-                                """
-                            ),
-                            {
-                                "now": datetime.now(tz=UTC),
-                                "error": str(exc),
-                                "id": run_id,
-                            },
-                        )
-                        await session.commit()
-                    except Exception:
-                        pass
-                raise
+                return None
+
+            for anomaly in anomalies:
+                await self._insert_finding(
+                    session,
+                    run_id=run_id,
+                    finding=Finding(
+                        finding_type="anomaly",
+                        metric=anomaly.metric,
+                        severity=anomaly.severity,
+                        structured_data=anomaly.model_dump(mode="json"),
+                    ),
+                )
+
+            await self._mark_run_completed(session, run_id)
+            await session.commit()
+            return run_id
 
     async def run_weekly_summary(self) -> Insight:
         """Produce the weekly rollup narrative."""
@@ -315,6 +199,103 @@ class AnalysisEngine:
     # ──────────────────────────────────────────────────────────────
     #  Internals
     # ──────────────────────────────────────────────────────────────
+
+    @asynccontextmanager
+    async def _run_context(self, session, run_type: str):
+        """Lifecycle wrapper for an ``analysis_runs`` row.
+
+        Yields the new ``run_id``. On exception inside the block, marks
+        the run ``failed`` (best-effort) and re-raises the ORIGINAL
+        exception — callers want the root cause, not a bookkeeping
+        error that masks it.
+        """
+        run_id = await self._begin_run(session, run_type)
+        try:
+            yield run_id
+        except Exception as exc:
+            await self._mark_run_failed(session, run_id, exc)
+            raise
+
+    async def _begin_run(self, session, run_type: str) -> int | None:
+        """Insert an ``analysis_runs`` row with ``status='running'`` and return its id."""
+        result = await session.execute(
+            text(
+                """
+                INSERT INTO analysis_runs (run_type, status, started_at)
+                VALUES (:run_type, 'running', :now)
+                RETURNING id
+                """
+            ),
+            {"run_type": run_type, "now": datetime.now(tz=UTC)},
+        )
+        row = result.fetchone()
+        return row.id if row is not None else None
+
+    async def _mark_run_skipped(self, session, run_id: int | None) -> None:
+        await session.execute(
+            text(
+                """
+                UPDATE analysis_runs
+                   SET status = 'skipped',
+                       completed_at = :now
+                 WHERE id = :id
+                """
+            ),
+            {"now": datetime.now(tz=UTC), "id": run_id},
+        )
+
+    async def _mark_run_completed(
+        self,
+        session,
+        run_id: int | None,
+        *,
+        llm_provider: str | None = None,
+        llm_tokens_in: int | None = None,
+        llm_tokens_out: int | None = None,
+    ) -> None:
+        await session.execute(
+            text(
+                """
+                UPDATE analysis_runs
+                   SET status = 'completed',
+                       completed_at = :now,
+                       llm_provider = :provider,
+                       llm_tokens_in = :tokens_in,
+                       llm_tokens_out = :tokens_out
+                 WHERE id = :id
+                """
+            ),
+            {
+                "now": datetime.now(tz=UTC),
+                "provider": llm_provider,
+                "tokens_in": llm_tokens_in,
+                "tokens_out": llm_tokens_out,
+                "id": run_id,
+            },
+        )
+
+    async def _mark_run_failed(self, session, run_id: int | None, exc: Exception) -> None:
+        """Best-effort ``status='failed'`` UPDATE. Swallows secondary errors so the
+        ORIGINAL exception from the caller is what propagates.
+        """
+        if run_id is None:
+            return
+        try:
+            await session.execute(
+                text(
+                    """
+                    UPDATE analysis_runs
+                       SET status = 'failed',
+                           completed_at = :now,
+                           error_message = :error
+                     WHERE id = :id
+                    """
+                ),
+                {"now": datetime.now(tz=UTC), "error": str(exc), "id": run_id},
+            )
+            await session.commit()
+        except Exception:
+            log.exception("failed to mark analysis_runs.id=%s as failed", run_id)
 
     async def _insert_finding(self, session, *, run_id: int | None, finding: Finding) -> int | None:
         """Persist one finding and return its id (or None if the row failed)."""

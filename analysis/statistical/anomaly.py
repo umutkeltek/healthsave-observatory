@@ -52,20 +52,29 @@ _SENSITIVITY_FLOOR: dict[Sensitivity, float] = {
     "high": 1.5,
 }
 
+# Severity tier boundaries above the sensitivity floor.
+_WATCH_Z = 2.5
+_ALERT_Z = 3.0
+
+# Context-filter windows (D6/D7 in the PRD).
+_POST_WORKOUT_WINDOW = timedelta(hours=4)
+_SLEEP_START_HOUR = 23
+_SLEEP_END_HOUR = 7
+
 
 def _severity_for(z: float, threshold: float) -> Severity | None:
     """Tier a z-score into ``info``/``watch``/``alert`` or suppress it.
 
     Below ``threshold`` → None (suppressed). Tier boundaries above the
-    floor are fixed: ``[floor, 2.5) → info``, ``[2.5, 3.0) → watch``,
-    ``[3.0, ∞) → alert``.
+    floor are fixed: ``[floor, _WATCH_Z) → info``, ``[_WATCH_Z, _ALERT_Z) → watch``,
+    ``[_ALERT_Z, ∞) → alert``.
     """
     abs_z = abs(z)
     if abs_z < threshold:
         return None
-    if abs_z < 2.5:
+    if abs_z < _WATCH_Z:
         return "info"
-    if abs_z < 3.0:
+    if abs_z < _ALERT_Z:
         return "watch"
     return "alert"
 
@@ -258,7 +267,7 @@ class AnomalyDetector:
         if not times:
             return anomalies
 
-        min_t = min(times) - timedelta(hours=4)
+        min_t = min(times) - _POST_WORKOUT_WINDOW
         max_t = max(times)
         workouts = await self._fetch_workouts(session, min_t, max_t)
 
@@ -285,13 +294,20 @@ class AnomalyDetector:
             ):
                 continue
 
-            # Rule 3: HRV-down within 4h of a workout end → downgrade.
+            # Rule 3: HRV-down within the post-workout window → downgrade.
             if anomaly.metric == "hrv" and anomaly.direction == "down":
                 recent_workout = any(
-                    w["end"] <= detected <= w["end"] + timedelta(hours=4) for w in workouts
+                    w["end"] <= detected <= w["end"] + _POST_WORKOUT_WINDOW for w in workouts
                 )
                 if recent_workout and anomaly.severity in ("watch", "alert"):
-                    anomaly = anomaly.model_copy(update={"severity": "info"})
+                    # Record why we downgraded so the API/LLM can explain it.
+                    downgrade_context = {
+                        **anomaly.context,
+                        "downgrade_reason": "post_workout",
+                    }
+                    anomaly = anomaly.model_copy(
+                        update={"severity": "info", "context": downgrade_context}
+                    )
 
             kept.append(anomaly)
         return kept
@@ -337,9 +353,9 @@ class AnomalyDetector:
 
     @staticmethod
     def _in_sleep_window(when: datetime) -> bool:
-        """True when ``when`` falls in the 23:00-07:00 nightly sleep window."""
+        """True when ``when`` falls in the nightly sleep window."""
         hour = when.hour
-        return hour >= 23 or hour < 7
+        return hour >= _SLEEP_START_HOUR or hour < _SLEEP_END_HOUR
 
     @staticmethod
     def _fetchall(result) -> list[Any]:
