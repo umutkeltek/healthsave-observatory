@@ -128,3 +128,55 @@ async def test_summarize_period_falls_back_to_raw_heart_rate_when_hourly_view_is
     queries = [sql for sql, _ in factory.session.calls]
     assert any("FROM hr_hourly" in sql for sql in queries)
     assert any("FROM heart_rate" in sql for sql in queries)
+
+
+@pytest.mark.asyncio
+async def test_summarize_period_populates_hrv_metrics_when_raw_rows_present():
+    """HRV happy path: yesterday HRV + baseline HRV both have samples."""
+    empty_hr_hourly = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
+    empty_hr_raw = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
+    yesterday_hrv = _Row(avg_v=52.0, min_v=28, max_v=95, count_v=24)
+    baseline_hrv = _Row(avg_v=58.0, min_v=25, max_v=105, count_v=480)
+    factory = _session_factory([empty_hr_hourly, empty_hr_raw, yesterday_hrv, baseline_hrv])
+
+    summary = await DataAggregator(factory).summarize_period("daily", 1)
+
+    # HR has no samples, so no heart_rate entry in metrics.
+    assert "heart_rate" not in summary.metrics
+    hrv = summary.metrics["hrv"]
+    assert hrv["avg_ms"] == 52.0
+    assert hrv["min_ms"] == 28
+    assert hrv["max_ms"] == 95
+    assert hrv["sample_count"] == 24
+    assert hrv["baseline_avg_ms"] == 58.0
+    assert hrv["delta_pct_vs_baseline"] == pytest.approx(-10.3448, rel=1e-3)
+
+    queries = [sql for sql, _ in factory.session.calls]
+    assert any("FROM hrv" in sql for sql in queries)
+
+
+@pytest.mark.asyncio
+async def test_summarize_period_skips_hrv_when_lookback_is_empty():
+    """HRV empty path: only HR present — ``metrics['hrv']`` absent, HR fine."""
+    yesterday_hr = _Row(avg_v=68.0, min_v=55, max_v=125, count_v=24)
+    baseline_hr = _Row(avg_v=65.0, min_v=50, max_v=140, count_v=720)
+    empty_hrv = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
+    factory = _session_factory([yesterday_hr, baseline_hr, empty_hrv])
+
+    summary = await DataAggregator(factory).summarize_period("daily", 1)
+
+    assert "heart_rate" in summary.metrics
+    assert "hrv" not in summary.metrics
+
+
+@pytest.mark.asyncio
+async def test_summarize_period_returns_empty_metrics_when_neither_hr_nor_hrv_have_data():
+    """Totally-empty path: no HR, no HRV → ``metrics == {}`` (engine will skip)."""
+    empty_hr_hourly = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
+    empty_hr_raw = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
+    empty_hrv = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
+    factory = _session_factory([empty_hr_hourly, empty_hr_raw, empty_hrv])
+
+    summary = await DataAggregator(factory).summarize_period("daily", 1)
+
+    assert summary.metrics == {}

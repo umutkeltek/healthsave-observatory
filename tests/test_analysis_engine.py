@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from analysis.config import AnalysisConfig  # noqa: E402
 from analysis.engine import AnalysisEngine  # noqa: E402
 from analysis.llm.client import InsightResult, LLMUnavailableError  # noqa: E402
-from analysis.types import PeriodSummary  # noqa: E402
+from analysis.types import Anomaly, PeriodSummary  # noqa: E402
 
 
 class _Row:
@@ -155,6 +155,169 @@ async def test_run_daily_briefing_skips_when_summary_is_empty():
     assert any("status = 'skipped'" in sql for sql, _ in updates)
     assert any(params.get("id") == 303 for _, params in updates)
     assert session.committed is True
+
+
+@pytest.mark.asyncio
+async def test_run_daily_briefing_persists_anomaly_findings_and_includes_them_in_prompt():
+    """Phase 2: detector-supplied anomalies become finding rows + prompt lines."""
+    # run_id=900, hr_finding_id=901, anomaly_finding_id=902.
+    session = _FakeSession(run_queue=[900, 901, 902])
+    summary = PeriodSummary(
+        period="daily",
+        metrics={
+            "heart_rate": {
+                "avg_bpm": 72.0,
+                "min_bpm": 58,
+                "max_bpm": 140,
+                "sample_count": 24,
+                "baseline_avg_bpm": 65.0,
+                "delta_pct_vs_baseline": 10.77,
+            },
+            "hrv": {
+                "avg_ms": 38.0,
+                "min_ms": 20,
+                "max_ms": 62,
+                "sample_count": 18,
+                "baseline_avg_ms": 52.0,
+                "delta_pct_vs_baseline": -26.92,
+            },
+        },
+    )
+    llm_mock = AsyncMock()
+    llm_mock.generate_insight.return_value = InsightResult(
+        narrative="Your HRV dipped yesterday. Not medical advice.",
+        tokens_in=50,
+        tokens_out=80,
+        model="ollama/llama3.1:8b",
+        insight_type="daily_briefing",
+    )
+
+    engine = _make_engine(session, summary, llm_mock)
+    engine.anomaly_detector.detect = AsyncMock(
+        return_value=[Anomaly(metric="hrv", magnitude=-3.1, direction="down", severity="alert")]
+    )
+
+    run_id = await engine.run_daily_briefing()
+
+    assert run_id == 900
+    # Two finding rows: HR summary + HRV anomaly
+    findings = session.all_insert_params_for("analysis_findings")
+    assert len(findings) == 2
+    assert findings[0]["finding_type"] == "summary"
+    assert findings[0]["metric"] == "heart_rate"
+    assert findings[1]["finding_type"] == "anomaly"
+    assert findings[1]["metric"] == "hrv"
+    assert findings[1]["severity"] == "alert"
+
+    # Insight references BOTH finding ids.
+    insight_inserts = session.all_insert_params_for("analysis_insights")
+    assert insight_inserts[0]["findings_used"] == [901, 902]
+
+    # Anomalies were formatted into the LLM prompt.
+    prompt_arg = llm_mock.generate_insight.await_args.args[0]
+    assert "hrv: down deviation" in prompt_arg
+    assert "severity=alert" in prompt_arg
+
+
+@pytest.mark.asyncio
+async def test_run_daily_briefing_anomaly_detector_failure_does_not_fail_the_briefing():
+    """Detector errors are swallowed; briefing proceeds with an empty anomaly list."""
+    session = _FakeSession(run_queue=[1000, 1001])
+    summary = PeriodSummary(
+        period="daily",
+        metrics={
+            "heart_rate": {
+                "avg_bpm": 68.0,
+                "min_bpm": 55,
+                "max_bpm": 120,
+                "sample_count": 24,
+                "baseline_avg_bpm": 65.0,
+                "delta_pct_vs_baseline": 4.6,
+            }
+        },
+    )
+    llm_mock = AsyncMock()
+    llm_mock.generate_insight.return_value = InsightResult(
+        narrative="All clear. Not medical advice.",
+        tokens_in=10,
+        tokens_out=20,
+        model="ollama/llama3.1:8b",
+        insight_type="daily_briefing",
+    )
+
+    engine = _make_engine(session, summary, llm_mock)
+    engine.anomaly_detector.detect = AsyncMock(side_effect=RuntimeError("boom"))
+
+    run_id = await engine.run_daily_briefing()
+
+    assert run_id == 1000
+    # Only the HR summary finding is inserted — no anomalies.
+    findings = session.all_insert_params_for("analysis_findings")
+    assert len(findings) == 1
+    assert findings[0]["finding_type"] == "summary"
+
+    # Prompt still well-formed.
+    prompt_arg = llm_mock.generate_insight.await_args.args[0]
+    assert "no unusual readings vs baseline" in prompt_arg
+
+
+@pytest.mark.asyncio
+async def test_run_anomaly_check_persists_findings_without_calling_llm():
+    """``run_anomaly_check`` is the lightweight cron variant — no LLM."""
+    session = _FakeSession(run_queue=[2000, 2001, 2002])
+    llm_mock = AsyncMock()
+
+    config = AnalysisConfig.model_validate({"analysis": {"anomaly_detection": {"enabled": True}}})
+
+    def factory():
+        return session
+
+    engine = AnalysisEngine(factory, llm_mock, config)
+    engine.anomaly_detector.detect = AsyncMock(
+        return_value=[
+            Anomaly(metric="heart_rate", magnitude=2.7, direction="up", severity="watch"),
+            Anomaly(metric="hrv", magnitude=-3.2, direction="down", severity="alert"),
+        ]
+    )
+
+    run_id = await engine.run_anomaly_check()
+
+    assert run_id == 2000
+    # analysis_runs row is ``anomaly_check``
+    run_inserts = session.all_insert_params_for("analysis_runs")
+    assert len(run_inserts) == 1
+    run_sql = next(sql for sql, _ in session.calls if "INSERT INTO analysis_runs" in sql)
+    assert "'anomaly_check'" in run_sql
+    # Two anomaly finding rows.
+    findings = session.all_insert_params_for("analysis_findings")
+    assert len(findings) == 2
+    assert {f["metric"] for f in findings} == {"heart_rate", "hrv"}
+    # Runs completes (not skipped).
+    updates = session.all_update_statements()
+    assert any("status = 'completed'" in sql for sql, _ in updates)
+    # LLM never called.
+    llm_mock.generate_insight.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_run_anomaly_check_skips_when_detector_finds_nothing():
+    """Empty anomaly list → skipped run, no findings inserted."""
+    session = _FakeSession(run_queue=[3000])
+    llm_mock = AsyncMock()
+    config = AnalysisConfig.model_validate({"analysis": {"anomaly_detection": {"enabled": True}}})
+
+    def factory():
+        return session
+
+    engine = AnalysisEngine(factory, llm_mock, config)
+    engine.anomaly_detector.detect = AsyncMock(return_value=[])
+
+    run_id = await engine.run_anomaly_check()
+
+    assert run_id is None
+    assert session.all_insert_params_for("analysis_findings") == []
+    updates = session.all_update_statements()
+    assert any("status = 'skipped'" in sql for sql, _ in updates)
 
 
 @pytest.mark.asyncio

@@ -47,7 +47,10 @@ class WeeklyConfig(BaseModel):
 
 
 class AnomalyConfig(BaseModel):
-    enabled: bool = False
+    # Phase 2 activation: anomaly detection on HR + HRV is shipped.
+    # Users who don't want it can set
+    # ``analysis.anomaly_detection.enabled: false`` in config.yaml.
+    enabled: bool = True
     cron: str = "*/30 * * * *"
     on_ingest: bool = True
     cooldown_minutes: int = 15

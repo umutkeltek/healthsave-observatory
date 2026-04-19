@@ -1,21 +1,25 @@
-"""GET/POST /api/insights/* — Phase 1.5 activation.
+"""GET/POST /api/insights/* — Phase 2 activation.
 
-``/latest`` now reads the most-recent ``analysis_insights`` row per
-``insight_type`` from TimescaleDB and returns real narrative data.
-``/trigger`` runs the daily briefing inline against the engine stashed
-on ``app.state``. The other routes (daily/weekly/anomalies/trends)
-remain stubs — Phase 2 will light them up alongside the corresponding
-engine methods.
+``/latest`` reads the most-recent ``analysis_insights`` row per
+``insight_type`` from TimescaleDB. ``/anomalies`` now returns real
+anomaly findings from ``analysis_findings`` where
+``finding_type='anomaly'``, optionally filtered by ``since`` and
+``severity`` query parameters. ``/trigger`` runs the daily briefing
+inline against the engine stashed on ``app.state``. Daily/weekly/trends
+stay stubbed until their engine methods land.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+import json
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.insights import (
     AnomaliesListResponse,
+    AnomalyResponse,
     DailyBriefingResponse,
     InsightsLatestResponse,
     TrendsListResponse,
@@ -24,6 +28,9 @@ from ..models.insights import (
     WeeklySummaryResponse,
 )
 from .deps import get_session, verify_api_key
+
+_ALLOWED_SEVERITIES = {"info", "watch", "alert"}
+_ANOMALIES_LIMIT = 200
 
 router = APIRouter(prefix="/api/insights", dependencies=[Depends(verify_api_key)])
 
@@ -76,9 +83,68 @@ async def insights_weekly() -> WeeklySummaryResponse:
 
 
 @router.get("/anomalies", response_model=AnomaliesListResponse)
-async def insights_anomalies() -> AnomaliesListResponse:
-    """Return recent anomaly detections."""
-    return AnomaliesListResponse()
+async def insights_anomalies(
+    since: str | None = Query(default=None, description="ISO-8601 lower bound on created_at"),
+    severity: str | None = Query(
+        default=None,
+        description="Comma-separated list: info, watch, alert",
+    ),
+    session: AsyncSession = Depends(get_session),
+) -> AnomaliesListResponse:
+    """Return recent anomaly findings from the analysis engine.
+
+    Reads ``analysis_findings`` where ``finding_type='anomaly'``, ordered
+    by ``created_at DESC``. Optional ``since`` limits rows to those
+    created at-or-after the timestamp. Optional ``severity`` is a
+    comma-separated list (``info,watch,alert``) matched against the
+    finding's severity column.
+    """
+    where_clauses = ["finding_type = 'anomaly'"]
+    params: dict[str, object] = {}
+
+    if since is not None:
+        where_clauses.append("created_at >= :since")
+        params["since"] = since
+
+    if severity is not None:
+        requested = {s.strip() for s in severity.split(",") if s.strip()}
+        filtered = sorted(requested & _ALLOWED_SEVERITIES)
+        if filtered:
+            where_clauses.append("severity = ANY(:severities)")
+            params["severities"] = filtered
+
+    params["limit"] = _ANOMALIES_LIMIT
+
+    sql = f"""
+        SELECT id, metric, severity, structured_data, created_at
+        FROM analysis_findings
+        WHERE {" AND ".join(where_clauses)}
+        ORDER BY created_at DESC
+        LIMIT :limit
+    """
+    result = await session.execute(text(sql), params)
+    rows = result.fetchall() if hasattr(result, "fetchall") else list(result)
+
+    anomalies: list[AnomalyResponse] = []
+    for row in rows:
+        data = row.structured_data or {}
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except ValueError:
+                data = {}
+        anomalies.append(
+            AnomalyResponse(
+                id=row.id,
+                metric=row.metric or data.get("metric"),
+                severity=row.severity,
+                magnitude=data.get("magnitude"),
+                direction=data.get("direction"),
+                detected_at=data.get("detected_at") or row.created_at,
+                context=data.get("context") or {},
+            )
+        )
+    return AnomaliesListResponse(anomalies=anomalies, count=len(anomalies))
 
 
 @router.get("/trends", response_model=TrendsListResponse)
