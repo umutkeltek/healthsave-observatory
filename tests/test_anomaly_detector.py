@@ -1,6 +1,6 @@
 """Unit tests for :class:`analysis.statistical.anomaly.AnomalyDetector`.
 
-Follows the Phase 1/1.5 ``FakeSession`` discipline — no live DB. Each
+Follows the Phase 1/1.5 ``FakeSession`` discipline - no live DB. Each
 test queues a sequence of pre-canned rowsets keyed by the order in
 which the detector executes its SQL queries (HR obs → HR baseline →
 HRV obs → HRV baseline → workouts). Severity tiering, context
@@ -23,7 +23,7 @@ from analysis.statistical.anomaly import AnomalyDetector  # noqa: E402
 
 
 class _Row(SimpleNamespace):
-    """Lightweight row stub — attribute access mimics SQLAlchemy ``Row``."""
+    """Lightweight row stub - attribute access mimics SQLAlchemy ``Row``."""
 
 
 class _Result:
@@ -108,7 +108,7 @@ async def test_detect_flags_heart_rate_spike_with_normal_sensitivity():
 
 
 # ──────────────────────────────────────────────────────────────
-#  Severity tiering — each band
+#  Severity tiering - each band
 # ──────────────────────────────────────────────────────────────
 
 
@@ -125,7 +125,7 @@ async def test_detect_tiers_severity_info_watch_alert_for_normal_sensitivity():
         for i, v in enumerate(baseline_values)
     ]
 
-    # Three observations — expected z-scores ≈ 2.17, 2.65, 3.61 → info, watch, alert.
+    # Three observations - expected z-scores ≈ 2.17, 2.65, 3.61 → info, watch, alert.
     # (baseline stddev ≈ 8.305)
     hr_obs = [
         _Row(bucket=obs_time, value=118.0),  # z ≈ 2.17 → info
@@ -142,7 +142,7 @@ async def test_detect_tiers_severity_info_watch_alert_for_normal_sensitivity():
 
 
 # ──────────────────────────────────────────────────────────────
-#  Sensitivity floors — low raises floor, high lowers it
+#  Sensitivity floors - low raises floor, high lowers it
 # ──────────────────────────────────────────────────────────────
 
 
@@ -153,7 +153,7 @@ async def test_detect_low_sensitivity_raises_floor_to_2_5_sigma():
         _Row(bucket=obs_time - timedelta(days=i + 1), value=v)
         for i, v in enumerate([90.0, 100.0, 110.0] * 10)
     ]
-    # z ≈ 2.17 observation — above 2.0 floor, below 2.5 floor; suppressed at low sensitivity.
+    # z ≈ 2.17 observation - above 2.0 floor, below 2.5 floor; suppressed at low sensitivity.
     hr_obs = [_Row(bucket=obs_time, value=118.0)]
     session_factory = _session_factory([hr_obs, baseline, [], [], []])
     detector = AnomalyDetector(session_factory, _config("low"))
@@ -168,7 +168,7 @@ async def test_detect_high_sensitivity_lowers_floor_to_1_5_sigma():
         _Row(bucket=obs_time - timedelta(days=i + 1), value=v)
         for i, v in enumerate([90.0, 100.0, 110.0] * 10)
     ]
-    # z ≈ 1.6 — suppressed at normal but surfaces at high.
+    # z ≈ 1.6 - suppressed at normal but surfaces at high.
     hr_obs = [_Row(bucket=obs_time, value=116.0)]
     session_factory = _session_factory([hr_obs, baseline, [], [], []])
     detector = AnomalyDetector(session_factory, _config("high"))
@@ -178,7 +178,7 @@ async def test_detect_high_sensitivity_lowers_floor_to_1_5_sigma():
 
 
 # ──────────────────────────────────────────────────────────────
-#  Data-sufficiency gate — thin baseline short-circuits
+#  Data-sufficiency gate - thin baseline short-circuits
 # ──────────────────────────────────────────────────────────────
 
 
@@ -228,7 +228,7 @@ async def test_detect_can_scan_a_recent_rolling_window_instead_of_previous_midni
 
 
 # ──────────────────────────────────────────────────────────────
-#  HRV detection — same machinery, different metric name
+#  HRV detection - same machinery, different metric name
 # ──────────────────────────────────────────────────────────────
 
 
@@ -255,7 +255,7 @@ async def test_detect_flags_hrv_drop_as_anomaly():
 
 
 # ──────────────────────────────────────────────────────────────
-#  Context filter — workout drops HR-up, sleep drops HR-down
+#  Context filter - workout drops HR-up, sleep drops HR-down
 # ──────────────────────────────────────────────────────────────
 
 
@@ -293,7 +293,7 @@ async def test_context_filter_drops_heart_rate_dip_during_sleep_window():
         _Row(bucket=obs_time - timedelta(days=i + 1), value=65.0 + (i % 3) * 0.5) for i in range(30)
     ]
 
-    # No workouts needed — sleep-window rule runs on the anomaly timestamp alone.
+    # No workouts needed - sleep-window rule runs on the anomaly timestamp alone.
     session_factory = _session_factory([hr_obs, baseline, [], [], []])
     detector = AnomalyDetector(session_factory, _config("normal"))
     anomalies = await detector.detect(lookback_days=1)
@@ -324,7 +324,7 @@ async def test_context_filter_downgrades_hrv_drop_shortly_after_workout():
     a = anomalies[0]
     assert a.metric == "hrv"
     assert a.direction == "down"
-    # Downgraded — regardless of raw magnitude, severity is info.
+    # Downgraded - regardless of raw magnitude, severity is info.
     assert a.severity == "info"
 
 

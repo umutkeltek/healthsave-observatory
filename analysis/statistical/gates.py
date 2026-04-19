@@ -1,4 +1,4 @@
-"""Data-sufficiency gates — block analysis when there isn't enough data.
+"""Data-sufficiency gates - block analysis when there isn't enough data.
 
 See ``docs/HEALTH_DOMAIN_SUPPLEMENT.md`` §5.4. Constants are duplicated
 here so the gate logic is inspectable without reading the supplement.
@@ -32,5 +32,5 @@ MINIMUM_DATA_REQUIREMENTS: dict[str, dict[str, float]] = {
 def check_sufficiency(analysis_type: str, available_data: DataSummary) -> SufficiencyResult:
     """Return whether the available data satisfies the requirement."""
     raise NotImplementedError(
-        "Sufficiency gating deferred to Phase 1.5 — statistical engine wiring pending"
+        "Sufficiency gating deferred to Phase 1.5 - statistical engine wiring pending"
     )

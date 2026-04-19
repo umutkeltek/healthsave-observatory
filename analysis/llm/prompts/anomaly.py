@@ -25,7 +25,7 @@ concrete suggestion only if the finding actionably suggests one.
 def build_messages(anomaly: dict, context: dict) -> list[dict]:
     """Build the ``messages`` list for the LLM client."""
     raise NotImplementedError(
-        "Anomaly-prompt assembly deferred to Phase 1.5 — statistical engine must land first"
+        "Anomaly-prompt assembly deferred to Phase 1.5 - statistical engine must land first"
     )
 
 

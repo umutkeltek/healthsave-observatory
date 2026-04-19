@@ -1,8 +1,8 @@
-"""GET /api/apple/status — flat per-table record counts.
+"""GET /api/apple/status - flat per-table record counts.
 
 The iOS app parses this response with top-level metric keys (no
 ``{"status":"ok","counts":...}`` wrapper). Do NOT change the response
-shape without coordinating an iOS app release — see CLAUDE.md.
+shape without coordinating an iOS app release - see CLAUDE.md.
 """
 
 import logging

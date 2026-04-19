@@ -1,4 +1,4 @@
-"""Trend analysis — linear regression over daily aggregates."""
+"""Trend analysis - linear regression over daily aggregates."""
 
 from ..types import Trend
 
@@ -14,10 +14,10 @@ class TrendAnalyzer:
 
         Algorithm outline (to implement in Phase 1.5):
           1. Fetch daily aggregates for the window
-          2. Fit linear regression (``scipy.stats.linregress`` — Phase 1.5)
+          2. Fit linear regression (``scipy.stats.linregress`` - Phase 1.5)
           3. Return a :class:`Trend` if the slope is significant (p < 0.05)
           4. Include magnitude, direction, and confidence interval
         """
         raise NotImplementedError(
-            "Trend analysis deferred to Phase 1.5 — scipy dep will land with it"
+            "Trend analysis deferred to Phase 1.5 - scipy dep will land with it"
         )

@@ -46,7 +46,7 @@ def _install_fake_litellm(monkeypatch, acompletion_mock):
     """
     fake_litellm = SimpleNamespace(acompletion=acompletion_mock)
     monkeypatch.setitem(sys.modules, "litellm", fake_litellm)
-    # Some paths may have already imported via client module — set attribute too
+    # Some paths may have already imported via client module - set attribute too
     # so ``analysis.llm.client.litellm`` references the fake when it exists.
     if hasattr(llm_client, "litellm"):
         monkeypatch.setattr(llm_client, "litellm", fake_litellm, raising=False)
@@ -87,7 +87,7 @@ async def test_generate_insight_preserves_existing_disclaimer(monkeypatch):
     client = llm_client.HealthLLMClient(LLMConfig(provider="ollama", model="llama3.1:8b"))
     result = await client.generate_insight("p", insight_type="daily_briefing")
 
-    # Exactly one "not medical advice" — the existing one, not double-stamped
+    # Exactly one "not medical advice" - the existing one, not double-stamped
     assert result.narrative.lower().count("not medical advice") == 1
 
 

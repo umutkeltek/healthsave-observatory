@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "health-data-hub"
 version = "1.0.0"
-description = "Self-hosted Apple Health server — HealthKit ingest into TimescaleDB, Grafana dashboards, and local LLM briefings via Ollama."
+description = "Self-hosted Apple Health server - HealthKit ingest into TimescaleDB, Grafana dashboards, and local LLM briefings via Ollama."
 requires-python = ">=3.12,<3.14"
 license = { text = "MIT" }
 readme = "README.md"

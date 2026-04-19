@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Health Data Hub — one-command bootstrap for non-technical users.
+# Health Data Hub - one-command bootstrap for non-technical users.
 #
 # Usage:
 #   ./setup.sh            # interactive setup
@@ -93,7 +93,7 @@ detect_lan_ip() {
 }
 
 # ---------------------------------------------------------------- hardware
-# Pure functions — each writes one line to stdout, reads no globals, so
+# Pure functions - each writes one line to stdout, reads no globals, so
 # they can be sourced directly in unit tests.
 detect_ram_gb() {
     local bytes kb
@@ -152,7 +152,7 @@ detect_gpu_kind() {
 recommend_model() {
     local ram_gb="$1"
     local gpu_kind="$2"
-    # Guard non-integer input — fall back to the safe default.
+    # Guard non-integer input - fall back to the safe default.
     if ! [[ "$ram_gb" =~ ^[0-9]+$ ]]; then
         echo llama3.2:3b
         return
@@ -198,7 +198,7 @@ describe_model_size() {
         llama3.2:3b)   echo '~2 GB, decent narrative' ;;
         llama3.1:8b)   echo '~4.7 GB, good narrative quality' ;;
         qwen2.5:14b)   echo '~9 GB, strong narrative on dGPU' ;;
-        qwen2.5:32b)   echo '~20 GB, large model — rich narrative' ;;
+        qwen2.5:32b)   echo '~20 GB, large model - rich narrative' ;;
         llama3.1:70b)  echo '~40 GB, premium quality on big hardware' ;;
         *)             echo 'custom model tag' ;;
     esac
@@ -269,7 +269,7 @@ TIMESCALE_IMAGE=timescale/timescaledb:2.17.2-pg16
 GRAFANA_IMAGE=grafana/grafana-oss:11.2.0
 
 # LLM provider for the Phase 1 AI analysis engine. The local-first
-# default runs fully on-device via Ollama — no data ever leaves the
+# default runs fully on-device via Ollama - no data ever leaves the
 # Docker network. Change these only if you explicitly want to use a
 # cloud provider (in which case also set the provider's api_key in
 # config.yaml).
@@ -285,7 +285,7 @@ EOF
 }
 
 read_env_value() {
-    # read_env_value <KEY> — first matching value from .env, empty if absent.
+    # read_env_value <KEY> - first matching value from .env, empty if absent.
     [ -f "$ENV_FILE" ] || return 0
     grep -E "^$1=" "$ENV_FILE" 2>/dev/null | head -n 1 | cut -d= -f2 || true
 }
@@ -304,7 +304,7 @@ set_env_model() {
 }
 
 ensure_env_value() {
-    # ensure_env_value <KEY> <VALUE> — add or replace KEY in .env.
+    # ensure_env_value <KEY> <VALUE> - add or replace KEY in .env.
     local key="$1"
     local value="$2"
     [ ! -f "$ENV_FILE" ] && return 0
@@ -416,7 +416,7 @@ check_endpoint() {
 
 # ------------------------------------------------------------------ setup
 cmd_setup() {
-    log_info "Health Data Hub bootstrap — self-hosted setup"
+    log_info "Health Data Hub bootstrap - self-hosted setup"
 
     if ! docker_available; then
         log_error "Docker is not running. Start Docker Desktop (or the Docker daemon) and re-run ./setup.sh."
@@ -425,10 +425,10 @@ cmd_setup() {
 
     # --- .env (preserve if present) -------------------------------------
     if [ -f "$ENV_FILE" ]; then
-        log_warn "$ENV_FILE already exists — keeping the existing values."
+        log_warn "$ENV_FILE already exists - keeping the existing values."
     else
         if [ ! -f "$ENV_EXAMPLE" ]; then
-            log_error "$ENV_EXAMPLE is missing — cannot generate $ENV_FILE."
+            log_error "$ENV_EXAMPLE is missing - cannot generate $ENV_FILE."
             exit 1
         fi
         local generated_db_pw
@@ -448,10 +448,10 @@ cmd_setup() {
 
     # --- config.yaml (preserve if present) ------------------------------
     if [ -f "$CONFIG_FILE" ]; then
-        log_warn "$CONFIG_FILE already exists — keeping the existing values."
+        log_warn "$CONFIG_FILE already exists - keeping the existing values."
     else
         if [ ! -f "$CONFIG_EXAMPLE" ]; then
-            log_error "$CONFIG_EXAMPLE is missing — cannot generate $CONFIG_FILE."
+            log_error "$CONFIG_EXAMPLE is missing - cannot generate $CONFIG_FILE."
             exit 1
         fi
         cp "$CONFIG_EXAMPLE" "$CONFIG_FILE"
@@ -488,10 +488,10 @@ cmd_setup() {
 
     if [ "$enable_ollama" -eq 1 ]; then
         if [ -f "$COMPOSE_OVERRIDE" ]; then
-            log_warn "$COMPOSE_OVERRIDE already exists — leaving it as-is."
+            log_warn "$COMPOSE_OVERRIDE already exists - leaving it as-is."
         else
             if [ ! -f "$COMPOSE_OVERRIDE_EXAMPLE" ]; then
-                log_error "$COMPOSE_OVERRIDE_EXAMPLE is missing — cannot enable Ollama."
+                log_error "$COMPOSE_OVERRIDE_EXAMPLE is missing - cannot enable Ollama."
                 exit 1
             fi
             cp "$COMPOSE_OVERRIDE_EXAMPLE" "$COMPOSE_OVERRIDE"
@@ -558,7 +558,7 @@ cmd_setup() {
     echo "  Grafana:        ${GRAFANA_URL_DEFAULT}  (user: ${grafana_user}, pass: ${grafana_pw})"
     echo "  iOS app URL:    http://${lan_ip}:8000"
     echo
-    log_info "Next step: ./setup.sh doctor   — verify every service is healthy."
+    log_info "Next step: ./setup.sh doctor   - verify every service is healthy."
 }
 
 # ------------------------------------------------------------------ doctor
@@ -567,7 +567,7 @@ cmd_doctor() {
     local failures=0
 
     if ! docker_available; then
-        log_error "Docker is not running — cannot continue."
+        log_error "Docker is not running - cannot continue."
         exit 1
     fi
 
@@ -599,7 +599,7 @@ cmd_doctor() {
             failures=$((failures + 1))
         fi
 
-        # Configured model + pulled-status line. Best-effort — never fails
+        # Configured model + pulled-status line. Best-effort - never fails
         # the doctor since model presence is informational, not gating.
         local configured_model pulled_marker list_output
         configured_model="$(read_env_value OLLAMA_MODEL)"

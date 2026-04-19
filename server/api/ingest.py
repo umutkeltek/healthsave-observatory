@@ -1,4 +1,4 @@
-"""POST /api/apple/batch — receive a metric batch from a HealthSave client."""
+"""POST /api/apple/batch - receive a metric batch from a HealthSave client."""
 
 import logging
 

@@ -157,7 +157,7 @@ async def test_summarize_period_populates_hrv_metrics_when_raw_rows_present():
 
 @pytest.mark.asyncio
 async def test_summarize_period_skips_hrv_when_lookback_is_empty():
-    """HRV empty path: only HR present — ``metrics['hrv']`` absent, HR fine."""
+    """HRV empty path: only HR present - ``metrics['hrv']`` absent, HR fine."""
     yesterday_hr = _Row(avg_v=68.0, min_v=55, max_v=125, count_v=24)
     baseline_hr = _Row(avg_v=65.0, min_v=50, max_v=140, count_v=720)
     empty_hrv = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)

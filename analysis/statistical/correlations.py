@@ -20,5 +20,5 @@ class CorrelationAnalyzer:
     async def analyze(self, days: int = 30) -> list[Correlation]:
         """Compute Spearman rank correlation for the configured metric pairs."""
         raise NotImplementedError(
-            "Correlation analysis deferred to Phase 1.5 — scipy dep will land with it"
+            "Correlation analysis deferred to Phase 1.5 - scipy dep will land with it"
         )

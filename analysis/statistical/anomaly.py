@@ -1,12 +1,12 @@
-"""Anomaly detection — z-score deviation from a 30-day personal baseline.
+"""Anomaly detection - z-score deviation from a 30-day personal baseline.
 
 Phase 2 scope covers two metrics:
 
-* ``heart_rate`` — hourly aggregates over yesterday vs hourly
+* ``heart_rate`` - hourly aggregates over yesterday vs hourly
   distribution over the preceding 30 days. Uses ``hr_hourly`` with a raw
   ``heart_rate`` fallback that mirrors
   :class:`~analysis.statistical.aggregator.DataAggregator`.
-* ``hrv`` — raw rows in the ``hrv`` hypertable, since Apple Watch only
+* ``hrv`` - raw rows in the ``hrv`` hypertable, since Apple Watch only
   records ~5-30 HRV samples per day and no continuous aggregate exists.
 
 Both metrics go through the same z-score machinery: compute
@@ -22,7 +22,7 @@ explainable anomalies:
 * HRV drops within 4h of a workout end → downgrade from
   watch/alert to info.
 
-The detector never raises from SQL errors — the engine wraps its
+The detector never raises from SQL errors - the engine wraps its
 call-site in best-effort logic so a missing ``hrv`` row or an empty
 workouts table can't fail the daily briefing.
 """
@@ -112,7 +112,7 @@ class AnomalyDetector:
         (daily briefing) pass ``end_at`` set to midnight UTC. Baseline is
         the ``baseline_days`` immediately preceding the lookback window.
         An empty list is the correct result when there is no data, not
-        an error — the engine differentiates "nothing detected" from
+        an error - the engine differentiates "nothing detected" from
         "detector crashed" via exception propagation.
         """
         end = end_at or datetime.now(tz=UTC)
@@ -369,7 +369,7 @@ class AnomalyDetector:
         """Materialise a SQLAlchemy result set into a list (test-friendly).
 
         Real ``sqlalchemy.engine.Result`` supports ``.fetchall()``. Some
-        test fakes only expose iteration — so we fall back to ``list(result)``
+        test fakes only expose iteration - so we fall back to ``list(result)``
         when ``fetchall`` is absent.
         """
         fetchall = getattr(result, "fetchall", None)

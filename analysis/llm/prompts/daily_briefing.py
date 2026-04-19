@@ -13,7 +13,7 @@ user's 30-day personal baseline):
 {anomalies}
 
 If the anomaly block reads as "no unusual readings vs baseline", briefly
-affirm that and move on — do not invent anomalies. If it lists any,
+affirm that and move on - do not invent anomalies. If it lists any,
 narrate them contextually (one or two sentences each), lead with the
 highest-severity item, and remind the user that a single-day deviation
 is signal, not diagnosis.
@@ -36,7 +36,7 @@ recent behavior pattern supports it.
 def build_messages(context: dict) -> list[dict]:
     """Build the ``messages`` list for the LLM client."""
     raise NotImplementedError(
-        "Daily-briefing prompt assembly deferred — engine formats the template directly for now"
+        "Daily-briefing prompt assembly deferred - engine formats the template directly for now"
     )
 
 

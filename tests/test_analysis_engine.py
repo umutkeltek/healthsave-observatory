@@ -44,7 +44,7 @@ class _FakeSession:
 
     ``run_queue`` supplies the ``RETURNING id`` rows (first call: run_id,
     second call: finding_id). Other ``execute`` calls return an empty
-    ``_Result`` — the engine only reads rows from the INSERT...RETURNING
+    ``_Result`` - the engine only reads rows from the INSERT...RETURNING
     statements.
     """
 
@@ -302,7 +302,7 @@ async def test_run_daily_briefing_anomaly_detector_failure_does_not_fail_the_bri
     run_id = await engine.run_daily_briefing()
 
     assert run_id == 1000
-    # Only the HR summary finding is inserted — no anomalies.
+    # Only the HR summary finding is inserted - no anomalies.
     findings = session.all_insert_params_for("analysis_findings")
     assert len(findings) == 1
     assert findings[0]["finding_type"] == "summary"
@@ -314,7 +314,7 @@ async def test_run_daily_briefing_anomaly_detector_failure_does_not_fail_the_bri
 
 @pytest.mark.asyncio
 async def test_run_anomaly_check_persists_findings_without_calling_llm():
-    """``run_anomaly_check`` is the lightweight cron variant — no LLM."""
+    """``run_anomaly_check`` is the lightweight cron variant - no LLM."""
     session = _FakeSession(run_queue=[2000, 2001, 2002])
     llm_mock = AsyncMock()
 
