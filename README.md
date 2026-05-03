@@ -7,6 +7,7 @@
 [![TimescaleDB](https://img.shields.io/badge/TimescaleDB-PostgreSQL-FDB515.svg?logo=postgresql&logoColor=white)](https://www.timescale.com/)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com/)
 [![Ollama](https://img.shields.io/badge/Ollama-local%20LLM-000000.svg)](https://ollama.com/)
+[![Download on the App Store](https://img.shields.io/badge/Download-App%20Store-0D96F6?logo=apple&logoColor=white)](https://apps.apple.com/app/id6759843047)
 
 > **Self-hosted Apple Health server** - sync HealthKit data from your iPhone and Apple Watch into TimescaleDB, visualize it in Grafana, and get an AI-written daily briefing via a local Ollama model. Private. Local-first. Your data stays on your hardware.
 
@@ -15,6 +16,10 @@
 Your own server, on your own hardware, turning the health data your phone already collects into an AI-written daily briefing - no cloud, no subscription, no one else reading your numbers.
 
 You point your iPhone at it. It stores everything from your Apple Watch (heart rate, HRV, SpO2, sleep, workouts, steps, and more), graphs it in Grafana, and - if you turn it on - runs a small local AI model that writes you a short narrative every morning about how your body is actually doing.
+
+## Don't want to self-host?
+
+[HealthSave](https://apps.apple.com/app/id6759843047) is the iOS app side of this stack. It runs standalone — Dashboard, Trends, Export to CSV / JSON / PDF, all on-device. Self-hosting is only needed if you want long-term storage, Grafana dashboards, or AI briefings.
 
 ## What you get
 
@@ -31,8 +36,8 @@ The entire stack runs in Docker on a laptop, a NUC, a Mac mini, a Synology, or a
 You need [Docker](https://www.docker.com/products/docker-desktop/) installed and running, plus a terminal. On Windows, run this inside WSL2 - `setup.sh` is a bash script.
 
 ```bash
-git clone https://github.com/<your-fork>/datahub.git
-cd datahub
+git clone https://github.com/umutkeltek/health-data-hub.git
+cd health-data-hub
 ./setup.sh
 ```
 
