@@ -73,17 +73,59 @@ def test_no_unexpected_v1_routes() -> None:
     )
 
 
+_PINNED_FASTAPI = "0.115.0"
+_PINNED_PYDANTIC = "2.9.2"
+
+
+def _runtime_versions_match_pinned() -> tuple[bool, str]:
+    """The OpenAPI JSON output is sensitive to FastAPI/Pydantic minor
+    versions. The committed lock is canonical only when generated under
+    the pinned env (the project Dockerfile uses these). We skip the
+    strict snapshot test on mismatched envs and tell the reader how to
+    regenerate; the route-inventory tests still run unconditionally.
+    """
+    try:
+        import fastapi  # noqa: PLC0415
+        import pydantic  # noqa: PLC0415
+    except ImportError as exc:
+        return False, str(exc)
+
+    fastapi_v = getattr(fastapi, "__version__", "unknown")
+    pydantic_v = getattr(pydantic, "VERSION", "unknown")
+    if fastapi_v != _PINNED_FASTAPI or pydantic_v != _PINNED_PYDANTIC:
+        return False, (
+            f"runtime fastapi={fastapi_v}, pydantic={pydantic_v}; "
+            f"pinned fastapi=={_PINNED_FASTAPI}, pydantic=={_PINNED_PYDANTIC}"
+        )
+    return True, ""
+
+
 def test_openapi_matches_locked_snapshot() -> None:
-    """Full OpenAPI schema must match the committed lock file."""
+    """Full OpenAPI schema must match the committed lock file.
+
+    Only enforced under the project's pinned FastAPI/Pydantic versions
+    (the Dockerfile env, which CI uses). On a mismatched host this is
+    skipped — regenerate the lock via ``make regen-lock`` (which builds
+    the Docker image) before claiming drift.
+    """
     if not LOCK_PATH.exists():
         pytest.skip(
             f"lock file not generated yet: {LOCK_PATH}. "
-            "Run `python -m scripts.generate_v1_lock` to create it."
+            "Run `make regen-lock` (regenerates inside Docker)."
         )
+
+    matched, reason = _runtime_versions_match_pinned()
+    if not matched:
+        pytest.skip(
+            f"runtime FastAPI/Pydantic do not match the pinned canonical env: {reason}. "
+            "The lock is byte-exact only under the pinned versions. "
+            "CI runs the pinned env automatically; locally use `make regen-lock` "
+            "(Docker) for any lock regeneration. Route-inventory tests still ran."
+        )
+
     live = app.openapi()
     locked = json.loads(LOCK_PATH.read_text())
     assert live == locked, (
         "v1 OpenAPI drift detected. If the change is intentional, run "
-        "`python -m scripts.generate_v1_lock` and commit the diff with "
-        "an iOS-coordination note."
+        "`make regen-lock` and commit the diff with an iOS-coordination note."
     )

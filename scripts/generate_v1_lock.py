@@ -6,6 +6,23 @@ the live app's OpenAPI to this file and fails on any drift. Bump the
 lock by running this script; commit the diff with a message that names
 the v1 change and the iOS-app coordination plan.
 
+> **IMPORTANT — reproducibility.** The OpenAPI JSON depends on the
+> installed FastAPI + Pydantic versions; running this on a host with
+> different versions than the project's pinned ones produces
+> serializer-noise drift that fails CI even when the wire contract is
+> unchanged. **Always regenerate the lock inside the Docker image**
+> (which pins the same versions production and CI use):
+>
+>     make regen-lock
+>
+> Equivalent to:
+>     docker build -t hdh-lockgen . \\
+>     && docker run --rm hdh-lockgen \\
+>         python -m scripts.generate_v1_lock > contracts/openapi/v1.locked.json
+>
+> Running this script directly on a different host Python is fine for
+> ``--check`` debugging but never the source of truth for the lock file.
+
 Usage:
     python -m scripts.generate_v1_lock          # writes the lock file
     python -m scripts.generate_v1_lock --check  # exits 1 on drift
@@ -34,6 +51,26 @@ def dump_openapi() -> dict:
     return app.openapi()
 
 
+_PINNED_FASTAPI = "0.115.0"
+_PINNED_PYDANTIC = "2.9.2"
+
+
+def _runtime_versions_match_pinned() -> tuple[bool, str]:
+    try:
+        import fastapi
+        import pydantic
+    except ImportError as exc:
+        return False, str(exc)
+    fastapi_v = getattr(fastapi, "__version__", "unknown")
+    pydantic_v = getattr(pydantic, "VERSION", "unknown")
+    if fastapi_v != _PINNED_FASTAPI or pydantic_v != _PINNED_PYDANTIC:
+        return False, (
+            f"runtime fastapi={fastapi_v}, pydantic={pydantic_v}; "
+            f"pinned fastapi=={_PINNED_FASTAPI}, pydantic=={_PINNED_PYDANTIC}"
+        )
+    return True, ""
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -50,11 +87,22 @@ def main() -> int:
         if not LOCK_PATH.exists():
             print(f"missing lock file: {LOCK_PATH}", file=sys.stderr)
             return 1
+
+        matched, reason = _runtime_versions_match_pinned()
+        if not matched:
+            print(
+                f"SKIP: runtime FastAPI/Pydantic do not match the pinned env: {reason}. "
+                "The lock is byte-exact only under the pinned versions. "
+                "Use `make regen-lock` (Docker) for any drift work.",
+                file=sys.stderr,
+            )
+            return 0
+
         committed = LOCK_PATH.read_text()
         if committed != serialized:
             print(
                 "v1 OpenAPI drift detected. "
-                "If intentional, re-run without --check and commit the diff "
+                "If intentional, run `make regen-lock` and commit the diff "
                 "alongside an iOS-coordination note.",
                 file=sys.stderr,
             )
