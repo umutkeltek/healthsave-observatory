@@ -1,0 +1,26 @@
+{
+  "additionalProperties": false,
+  "description": "A pointer to a piece of evidence backing a claim.",
+  "properties": {
+    "kind": {
+      "enum": [
+        "measurement",
+        "finding",
+        "observation",
+        "external"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "ref": {
+      "title": "Ref",
+      "type": "string"
+    }
+  },
+  "required": [
+    "kind",
+    "ref"
+  ],
+  "title": "EvidenceRef",
+  "type": "object"
+}

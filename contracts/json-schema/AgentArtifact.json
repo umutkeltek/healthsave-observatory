@@ -1,0 +1,56 @@
+{
+  "additionalProperties": false,
+  "description": "A persisted output of an agent run \u2014 narrative, chart, plan.",
+  "properties": {
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "narrative",
+        "chart_spec",
+        "experiment_plan",
+        "intervention_proposal"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "owner_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "payload": {
+      "title": "Payload",
+      "type": "object"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "workspace_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "run_id",
+    "kind",
+    "payload",
+    "created_at"
+  ],
+  "title": "AgentArtifact",
+  "type": "object"
+}

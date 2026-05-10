@@ -1,0 +1,73 @@
+{
+  "additionalProperties": false,
+  "description": "The result of executing an approved proposal.",
+  "properties": {
+    "decision_id": {
+      "format": "uuid",
+      "title": "Decision Id",
+      "type": "string"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
+    },
+    "executed_at": {
+      "format": "date-time",
+      "title": "Executed At",
+      "type": "string"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "owner_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "proposal_id": {
+      "format": "uuid",
+      "title": "Proposal Id",
+      "type": "string"
+    },
+    "result": {
+      "default": {},
+      "title": "Result",
+      "type": "object"
+    },
+    "status": {
+      "enum": [
+        "succeeded",
+        "failed",
+        "skipped"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "workspace_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "proposal_id",
+    "decision_id",
+    "executed_at",
+    "status"
+  ],
+  "title": "ActionExecution",
+  "type": "object"
+}

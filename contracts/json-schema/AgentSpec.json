@@ -1,0 +1,52 @@
+{
+  "additionalProperties": false,
+  "description": "An agent's declared identity. Loaded from the plugin manifest.\n\nProcess-level metadata, not user data \u2014 does not extend\n:class:`WithOwnership`.",
+  "properties": {
+    "capabilities": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "plugin_id": {
+      "title": "Plugin Id",
+      "type": "string"
+    },
+    "triggers": {
+      "items": {
+        "enum": [
+          "cron",
+          "ingest_event",
+          "metric_threshold",
+          "manual"
+        ],
+        "type": "string"
+      },
+      "title": "Triggers",
+      "type": "array"
+    },
+    "version": {
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "plugin_id",
+    "version",
+    "name",
+    "description",
+    "triggers",
+    "capabilities"
+  ],
+  "title": "AgentSpec",
+  "type": "object"
+}

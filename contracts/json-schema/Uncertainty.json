@@ -1,0 +1,29 @@
+{
+  "additionalProperties": false,
+  "description": "How sure the narrator is about a claim.",
+  "properties": {
+    "confidence": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason"
+    }
+  },
+  "required": [
+    "confidence"
+  ],
+  "title": "Uncertainty",
+  "type": "object"
+}

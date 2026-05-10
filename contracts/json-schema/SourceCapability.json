@@ -1,0 +1,50 @@
+{
+  "additionalProperties": false,
+  "description": "What a Source plugin claims it can produce.\n\nDeclared in the plugin manifest; used by the ingestion runtime\nfor scheduling and by the dashboard for \"available sources\" UI.",
+  "properties": {
+    "auth_required": {
+      "default": false,
+      "title": "Auth Required",
+      "type": "boolean"
+    },
+    "delivery": {
+      "enum": [
+        "polling",
+        "webhook",
+        "stream"
+      ],
+      "title": "Delivery",
+      "type": "string"
+    },
+    "metrics": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Metrics",
+      "type": "array"
+    },
+    "plugin_id": {
+      "title": "Plugin Id",
+      "type": "string"
+    },
+    "rate_limit_per_minute": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Rate Limit Per Minute"
+    }
+  },
+  "required": [
+    "plugin_id",
+    "metrics",
+    "delivery"
+  ],
+  "title": "SourceCapability",
+  "type": "object"
+}

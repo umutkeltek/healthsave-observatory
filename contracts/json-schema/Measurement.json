@@ -1,0 +1,136 @@
+{
+  "$defs": {
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "Always-attached \"where did this come from\" capsule.\n\n``raw_payload_ref`` is opaque \u2014 typically a row id in\n``raw_ingestion_log`` so a future replay can reach the exact\nbytes. Storage detail intentionally lives on the other side of\nthe storage port.",
+      "properties": {
+        "captured_at": {
+          "format": "date-time",
+          "title": "Captured At",
+          "type": "string"
+        },
+        "raw_payload_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Payload Ref"
+        },
+        "sdk_version": {
+          "title": "Sdk Version",
+          "type": "string"
+        },
+        "source_plugin_id": {
+          "title": "Source Plugin Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_plugin_id",
+        "sdk_version",
+        "captured_at"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The canonical health measurement.\n\nTime-instant samples set ``interval_start == interval_end``.\nTime-interval samples (sleep stages, workouts, ECG) set both.",
+  "properties": {
+    "confidence": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Confidence"
+    },
+    "device_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Device Id"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "interval_end": {
+      "format": "date-time",
+      "title": "Interval End",
+      "type": "string"
+    },
+    "interval_start": {
+      "format": "date-time",
+      "title": "Interval Start",
+      "type": "string"
+    },
+    "metric": {
+      "title": "Metric",
+      "type": "string"
+    },
+    "normalization_version": {
+      "default": "v1",
+      "title": "Normalization Version",
+      "type": "string"
+    },
+    "owner_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "source_id": {
+      "format": "uuid",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "unit": {
+      "title": "Unit",
+      "type": "string"
+    },
+    "value": {
+      "title": "Value",
+      "type": "number"
+    },
+    "workspace_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "metric",
+    "unit",
+    "value",
+    "interval_start",
+    "interval_end",
+    "source_id",
+    "provenance"
+  ],
+  "title": "Measurement",
+  "type": "object"
+}

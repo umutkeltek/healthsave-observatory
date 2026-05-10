@@ -1,0 +1,32 @@
+{
+  "additionalProperties": false,
+  "description": "A user-visible suggestion. Defaults to requiring approval \u2014\nsuggestions are advisory, not auto-actuated.",
+  "properties": {
+    "rationale": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Rationale"
+    },
+    "requires_approval": {
+      "default": true,
+      "title": "Requires Approval",
+      "type": "boolean"
+    },
+    "text": {
+      "title": "Text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "text"
+  ],
+  "title": "SuggestedAction",
+  "type": "object"
+}

@@ -1,0 +1,79 @@
+{
+  "additionalProperties": false,
+  "description": "One execution of an agent. The aggregate root for the lifecycle.",
+  "properties": {
+    "ended_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ended At"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "owner_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "plugin_id": {
+      "title": "Plugin Id",
+      "type": "string"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "running",
+        "completed",
+        "failed",
+        "cancelled"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "trigger_kind": {
+      "enum": [
+        "cron",
+        "ingest_event",
+        "metric_threshold",
+        "manual"
+      ],
+      "title": "Trigger Kind",
+      "type": "string"
+    },
+    "trigger_metadata": {
+      "default": {},
+      "title": "Trigger Metadata",
+      "type": "object"
+    },
+    "workspace_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "plugin_id",
+    "started_at",
+    "status",
+    "trigger_kind"
+  ],
+  "title": "AgentRun",
+  "type": "object"
+}

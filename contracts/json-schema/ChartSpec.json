@@ -1,0 +1,47 @@
+{
+  "additionalProperties": false,
+  "description": "Declarative chart spec \u2014 what to render, not how.\n\nThe web app maps this to whichever chart library is current\n(Recharts/ECharts/Tremor); swapping the library is a ``apps/web``\njob, not a contract change.",
+  "properties": {
+    "aggregation": {
+      "default": "raw",
+      "enum": [
+        "raw",
+        "hourly",
+        "daily"
+      ],
+      "title": "Aggregation",
+      "type": "string"
+    },
+    "annotations_enabled": {
+      "default": true,
+      "title": "Annotations Enabled",
+      "type": "boolean"
+    },
+    "chart_kind": {
+      "enum": [
+        "line",
+        "bar",
+        "area",
+        "scatter"
+      ],
+      "title": "Chart Kind",
+      "type": "string"
+    },
+    "metric": {
+      "title": "Metric",
+      "type": "string"
+    },
+    "range_days": {
+      "default": 30,
+      "exclusiveMinimum": 0,
+      "title": "Range Days",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "metric",
+    "chart_kind"
+  ],
+  "title": "ChartSpec",
+  "type": "object"
+}
