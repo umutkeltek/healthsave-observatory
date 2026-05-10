@@ -216,7 +216,7 @@ async def test_ingest_rejects_malformed_x_user_id_header():
 
 
 def test_schema_includes_owner_id_on_every_metric_table():
-    schema = Path("schema.sql").read_text()
+    schema = Path("db/schema.sql").read_text()
 
     expected_tables = [
         "heart_rate",
@@ -243,7 +243,7 @@ def test_schema_includes_owner_id_on_every_metric_table():
 
 
 def test_migration_003_widens_unique_indexes_with_owner_id():
-    migration = Path("migrations/003_multi_user.sql").read_text()
+    migration = Path("db/migrations/003_multi_user.sql").read_text()
 
     assert "00000000-0000-0000-0000-000000000001" in migration
     assert "ALTER TABLE heart_rate" in migration
