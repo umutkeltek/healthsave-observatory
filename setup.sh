@@ -154,7 +154,7 @@ recommend_model() {
     local gpu_kind="$2"
     # Guard non-integer input - fall back to the safe default.
     if ! [[ "$ram_gb" =~ ^[0-9]+$ ]]; then
-        echo llama3.2:3b
+        echo gemma3:4b
         return
     fi
 
@@ -163,21 +163,25 @@ recommend_model() {
         return
     fi
 
+    # Picks default to the 2026 generations (Llama 3.3, Qwen 3, Gemma 3,
+    # Llama 4 Scout). Older tags like llama3.1:8b still work; the
+    # recommendation just reflects what's current and best-in-class for
+    # narrative briefings.
     case "$gpu_kind" in
         nvidia)
-            if   [ "$ram_gb" -lt 10 ]; then echo llama3.2:3b
-            elif [ "$ram_gb" -lt 18 ]; then echo llama3.1:8b
-            elif [ "$ram_gb" -lt 36 ]; then echo llama3.1:8b
-            elif [ "$ram_gb" -lt 96 ]; then echo qwen2.5:14b
-            else                            echo llama3.1:70b
+            if   [ "$ram_gb" -lt 10 ]; then echo gemma3:4b
+            elif [ "$ram_gb" -lt 18 ]; then echo qwen3:8b
+            elif [ "$ram_gb" -lt 36 ]; then echo qwen3:14b
+            elif [ "$ram_gb" -lt 96 ]; then echo gemma3:27b
+            else                            echo llama4:scout
             fi
             ;;
         *)
             if   [ "$ram_gb" -lt 10 ]; then echo llama3.2:1b
-            elif [ "$ram_gb" -lt 18 ]; then echo llama3.2:3b
-            elif [ "$ram_gb" -lt 36 ]; then echo llama3.1:8b
-            elif [ "$ram_gb" -lt 96 ]; then echo llama3.1:8b
-            else                            echo qwen2.5:32b
+            elif [ "$ram_gb" -lt 18 ]; then echo gemma3:4b
+            elif [ "$ram_gb" -lt 36 ]; then echo qwen3:8b
+            elif [ "$ram_gb" -lt 96 ]; then echo qwen3:14b
+            else                            echo llama3.3:70b
             fi
             ;;
     esac
@@ -194,12 +198,20 @@ describe_gpu_kind() {
 
 describe_model_size() {
     case "$1" in
+        # Current recommendations (2026 generation)
         llama3.2:1b)   echo '~1.3 GB resident, fast, lower quality' ;;
-        llama3.2:3b)   echo '~2 GB, decent narrative' ;;
-        llama3.1:8b)   echo '~4.7 GB, good narrative quality' ;;
-        qwen2.5:14b)   echo '~9 GB, strong narrative on dGPU' ;;
-        qwen2.5:32b)   echo '~20 GB, large model - rich narrative' ;;
-        llama3.1:70b)  echo '~40 GB, premium quality on big hardware' ;;
+        gemma3:4b)     echo '~3 GB, friendly prose, fits low-RAM machines' ;;
+        qwen3:8b)      echo '~5 GB, strong all-rounder, current default' ;;
+        qwen3:14b)     echo '~9 GB, sharper narrative, fits 16 GB GPUs' ;;
+        gemma3:27b)    echo '~17 GB, premium prose on dGPU' ;;
+        llama3.3:70b)  echo '~40 GB, top-tier quality on big hardware' ;;
+        llama4:scout)  echo '~40 GB active (MoE, 109 B total), reasoning + prose' ;;
+        # Still supported / pre-existing pulls
+        llama3.2:3b)   echo '~2 GB, prior-generation 3 B narrative model' ;;
+        llama3.1:8b)   echo '~5 GB, prior-generation default, still capable' ;;
+        qwen2.5:14b)   echo '~9 GB, prior-generation strong narrative on dGPU' ;;
+        qwen2.5:32b)   echo '~20 GB, prior-generation 32 B model' ;;
+        llama3.1:70b)  echo '~40 GB, prior-generation premium model' ;;
         *)             echo 'custom model tag' ;;
     esac
 }
