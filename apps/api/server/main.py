@@ -10,6 +10,15 @@ Analysis lifespan wiring (post-Phase 4 split):
   * Stash both on ``app.state`` so routes can reach them.
   * The ``AnalysisScheduler`` runs in ``apps/worker`` — NOT here.
     API uptime is no longer coupled to scheduler bugs/memory.
+
+Phase 5G defense-in-depth: ``_assert_lifespan_state`` runs once after
+the app.state attributes are populated and raises ``RuntimeError`` if
+any required attribute is missing. This catches a future regression in
+``lifespan()`` (e.g. someone removes the ``a.state.session_factory =
+async_session`` line) at boot time — instead of silently falling
+through to insights.py's degraded-mode counter at first request. The
+counter is the runtime warning; this assertion is the build-time safety
+net.
 """
 
 import logging
@@ -29,6 +38,31 @@ from .ingestion.registry import resolve_from_env
 log = logging.getLogger("healthsave")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 
+_REQUIRED_STATE_ATTRS: tuple[str, ...] = (
+    "analysis_config",
+    "analysis_engine",
+    "session_factory",
+    "storage",
+    "audit_log",
+)
+
+
+def _assert_lifespan_state(a: FastAPI) -> None:
+    """Fail loudly at startup if a required app.state attribute is missing.
+
+    Phase 5G fix for audit MAJOR M6: pre-5G a regression in lifespan()
+    that forgot to set ``session_factory`` would only surface at first
+    request, where insights._record_trigger_run silently degraded to
+    'just await coro' with no log line. The audit caught the silent
+    path. This assertion catches the cause at boot.
+    """
+    missing = [name for name in _REQUIRED_STATE_ATTRS if not hasattr(a.state, name)]
+    if missing:
+        raise RuntimeError(
+            f"FastAPI lifespan did not populate required app.state attributes: "
+            f"{missing}. This is a regression in apps/api/server/main.py::lifespan."
+        )
+
 
 @asynccontextmanager
 async def lifespan(a: FastAPI):
@@ -40,12 +74,16 @@ async def lifespan(a: FastAPI):
     a.state.analysis_config = analysis_config
     a.state.analysis_engine = analysis_engine
     # Phase 4D: trigger handler writes pipeline_runs records via this
-    # factory. Tests that don't set it get a no-op (graceful degrade).
+    # factory. A missing attribute is a Phase 5G regression — caught
+    # by _assert_lifespan_state below; insights.py also bumps a
+    # PIPELINE_RUNS_LEDGER_FAILURES{phase=session_factory_missing}
+    # counter at request time as a runtime safety net.
     a.state.session_factory = async_session
     storage, audit_log = resolve_from_env()
     a.state.storage = storage
     a.state.audit_log = audit_log
     log.info("storage backend resolved: %s", type(storage).__name__)
+    _assert_lifespan_state(a)
     try:
         yield
     finally:
