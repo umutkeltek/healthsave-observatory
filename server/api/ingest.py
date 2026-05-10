@@ -7,14 +7,14 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..ingestion.handlers import (
-    _get_or_create_device,
-    _ingest_metric,
-    _log_raw_ingestion,
-    _mark_raw_ingestion_processed,
-)
 from ..ingestion.owner import OWNER_HEADER, resolve_owner_id
 from ..ingestion.parsers import group_samples_by_device
+from ..ingestion.storage import (
+    AuditLog,
+    IngestStorage,
+    default_audit_log,
+    default_storage,
+)
 from ..models.batch import BatchPayload
 from .deps import get_session, verify_api_key
 from .metrics import INGEST_BATCHES, INGEST_DURATION, INGEST_ROWS
@@ -55,23 +55,27 @@ async def apple_batch(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"invalid {OWNER_HEADER}: {exc}") from exc
 
+    storage = _resolve_storage(request)
+    audit = _resolve_audit_log(request)
+
     metric = payload.metric.strip() or "unknown"
     batch_idx = payload.batch_index
     total = payload.total_batches
     samples = payload.samples
 
     if not samples:
-        raw_log_id = await _log_raw_ingestion(session, None, raw_payload)
+        raw_log_id = await audit.log_raw(session, None, raw_payload) if audit else None
         await session.commit()
-        await _mark_raw_ingestion_processed(session, raw_log_id)
-        await session.commit()
+        if audit and raw_log_id is not None:
+            await audit.mark_processed(session, raw_log_id)
+            await session.commit()
         _observe_ingest_metrics(metric=metric, rows=0, started_at=started_at)
         return {"status": "empty", "metric": metric, "batch": batch_idx, "records": 0}
 
     sample_groups = group_samples_by_device(samples)
     first_device_name, _ = sample_groups[0]
-    first_device_id = await _get_or_create_device(session, first_device_name)
-    raw_log_id = await _log_raw_ingestion(session, first_device_id, raw_payload)
+    first_device_id = await storage.get_or_create_device(session, first_device_name)
+    raw_log_id = await audit.log_raw(session, first_device_id, raw_payload) if audit else None
     await session.commit()
     count = 0
 
@@ -79,11 +83,12 @@ async def apple_batch(
         device_id = (
             first_device_id
             if device_name == first_device_name
-            else await _get_or_create_device(session, device_name)
+            else await storage.get_or_create_device(session, device_name)
         )
-        count += await _ingest_metric(session, device_id, metric, device_samples, owner_id)
+        count += await storage.ingest_metric(session, device_id, metric, device_samples, owner_id)
 
-    await _mark_raw_ingestion_processed(session, raw_log_id)
+    if audit and raw_log_id is not None:
+        await audit.mark_processed(session, raw_log_id)
     await session.commit()
     _observe_ingest_metrics(metric=metric, rows=count, started_at=started_at)
     log.info("Ingested %d records for %s (batch %d/%d)", count, metric, batch_idx + 1, total)
@@ -96,6 +101,32 @@ async def apple_batch(
         "total_batches": total,
         "records": count,
     }
+
+
+def _resolve_storage(request: Request) -> IngestStorage:
+    """Read the configured storage backend off ``app.state``, falling back
+    to the module-level default for unit tests that hit the route without
+    a full FastAPI app + lifespan."""
+    state = getattr(getattr(request, "app", None), "state", None)
+    storage = getattr(state, "storage", None)
+    return storage if storage is not None else default_storage
+
+
+def _resolve_audit_log(request: Request) -> AuditLog | None:
+    """Read the optional audit log backend off ``app.state``.
+
+    Returns ``None`` when the configured backend doesn't ship one
+    (InfluxDB-style append-only stores). The route skips audit calls
+    in that case.
+    """
+    state = getattr(getattr(request, "app", None), "state", None)
+    if state is None:
+        return default_audit_log
+    # ``hasattr`` lets a backend explicitly disable audit by setting the
+    # attribute to None on app.state, distinct from "not configured".
+    if hasattr(state, "audit_log"):
+        return state.audit_log
+    return default_audit_log
 
 
 def _observe_ingest_metrics(*, metric: str, rows: int, started_at: float) -> None:
