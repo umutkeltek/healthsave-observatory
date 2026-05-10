@@ -214,6 +214,9 @@ SELECT add_continuous_aggregate_policy('sleep_daily',
     schedule_interval => INTERVAL '1 hour');
 
 -- ─── Phase 1.5 Analysis Tables ────────────────────────────────────────
+-- owner_id + workspace_id added by Phase 5G (migration 005). Fresh
+-- installs get them here with the single-user sentinel default; the
+-- migration handles upgrades.
 CREATE TABLE analysis_runs (
     id              BIGSERIAL PRIMARY KEY,
     run_type        TEXT NOT NULL,
@@ -226,7 +229,9 @@ CREATE TABLE analysis_runs (
     llm_provider    TEXT,
     llm_tokens_in   INTEGER,
     llm_tokens_out  INTEGER,
-    error_message   TEXT
+    error_message   TEXT,
+    owner_id        UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    workspace_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001'
 );
 
 CREATE TABLE analysis_findings (
@@ -237,7 +242,9 @@ CREATE TABLE analysis_findings (
     severity        TEXT
         CHECK (severity IN ('info', 'watch', 'alert')),
     structured_data JSONB NOT NULL,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    owner_id        UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    workspace_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001'
 );
 
 CREATE TABLE analysis_insights (
@@ -246,7 +253,9 @@ CREATE TABLE analysis_insights (
     insight_type    TEXT NOT NULL,
     narrative       TEXT NOT NULL,
     findings_used   BIGINT[],
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    owner_id        UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    workspace_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001'
 );
 
 CREATE INDEX idx_insights_type_created
@@ -255,6 +264,12 @@ CREATE INDEX idx_findings_run
     ON analysis_findings (run_id);
 CREATE INDEX idx_runs_type_status
     ON analysis_runs (run_type, status);
+CREATE INDEX idx_runs_owner_started
+    ON analysis_runs (owner_id, started_at DESC);
+CREATE INDEX idx_findings_owner_created
+    ON analysis_findings (owner_id, created_at DESC);
+CREATE INDEX idx_insights_owner_type_created
+    ON analysis_insights (owner_id, insight_type, created_at DESC);
 
 -- Pipeline runs ledger (Phase 4B): one row per scheduled or manual job
 -- invocation. See db/migrations/004_pipeline_runs.sql for the upgrade

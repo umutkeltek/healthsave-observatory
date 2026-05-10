@@ -634,6 +634,37 @@ def test_schema_declares_phase_1_5_analysis_tables_for_fresh_installs():
     assert "idx_insights_type_created" in schema
 
 
+def test_phase_5g_analysis_tables_carry_owner_and_workspace_ids():
+    """Phase 5G migration 005 retrofitted owner_id + workspace_id onto
+    the three analysis tables (analysis_runs / findings / insights).
+    Fresh installs must include both columns from db/schema.sql; this
+    test pins both halves.
+    """
+    schema = Path("db/schema.sql").read_text()
+    migration = Path("db/migrations/005_analysis_owner.sql").read_text()
+
+    for table in ("analysis_runs", "analysis_findings", "analysis_insights"):
+        # Fresh-install schema declares both columns inline on the table.
+        assert table in schema
+        # Heuristic: each table block is followed by both column lines
+        # before the next CREATE/CREATE INDEX. Use a window.
+        start = schema.index(f"CREATE TABLE {table} (")
+        end = schema.index(");", start)
+        block = schema[start:end]
+        assert "owner_id" in block, f"{table} missing owner_id in fresh schema"
+        assert "workspace_id" in block, f"{table} missing workspace_id in fresh schema"
+
+    # Migration retrofits both columns onto each table.
+    for table in ("analysis_runs", "analysis_findings", "analysis_insights"):
+        assert f"ALTER TABLE {table}" in migration
+    assert "owner_id UUID NOT NULL" in migration
+    assert "workspace_id UUID NOT NULL" in migration
+    # And it ships the per-owner read indexes the dashboard will want.
+    assert "idx_runs_owner_started" in migration
+    assert "idx_findings_owner_created" in migration
+    assert "idx_insights_owner_type_created" in migration
+
+
 def test_readme_documents_existing_install_migration_flow():
     readme = Path("README.md").read_text()
 
