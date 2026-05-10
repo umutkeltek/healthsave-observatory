@@ -255,3 +255,51 @@ CREATE INDEX idx_findings_run
     ON analysis_findings (run_id);
 CREATE INDEX idx_runs_type_status
     ON analysis_runs (run_type, status);
+
+-- Pipeline runs ledger (Phase 4B): one row per scheduled or manual job
+-- invocation. See db/migrations/004_pipeline_runs.sql for the upgrade
+-- path on existing installs.
+CREATE TABLE pipeline_runs (
+    id              BIGSERIAL PRIMARY KEY,
+    job_kind        TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'running', 'succeeded', 'failed', 'cancelled', 'skipped')),
+    started_at      TIMESTAMPTZ,
+    ended_at        TIMESTAMPTZ,
+    result          JSONB,
+    error           TEXT,
+    leased_by       TEXT,
+    leased_at       TIMESTAMPTZ,
+    lease_expires   TIMESTAMPTZ,
+    attempt         INTEGER NOT NULL DEFAULT 1,
+    max_attempts    INTEGER NOT NULL DEFAULT 3,
+    next_attempt_at TIMESTAMPTZ,
+    triggered_by    TEXT NOT NULL DEFAULT 'scheduler'
+        CHECK (triggered_by IN ('scheduler', 'manual', 'api', 'event')),
+    owner_id        UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    workspace_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (idempotency_key)
+);
+
+CREATE INDEX idx_pipeline_runs_status_created
+    ON pipeline_runs (status, created_at DESC);
+CREATE INDEX idx_pipeline_runs_job_kind_created
+    ON pipeline_runs (job_kind, created_at DESC);
+CREATE INDEX idx_pipeline_runs_owner
+    ON pipeline_runs (owner_id, workspace_id, created_at DESC);
+
+CREATE OR REPLACE FUNCTION pipeline_runs_set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER pipeline_runs_updated_at
+    BEFORE UPDATE ON pipeline_runs
+    FOR EACH ROW
+    EXECUTE FUNCTION pipeline_runs_set_updated_at();
