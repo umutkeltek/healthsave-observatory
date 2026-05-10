@@ -34,9 +34,9 @@ from compat_v1.models import (
     WeeklySummaryResponse,
 )
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from runtime import runs as pipeline_runs
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from storage.timescale import runs as pipeline_runs
 
 from .deps import get_session, verify_api_key
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from runtime import runs
+from storage.timescale import runs
 from worker.listener import _coerce_result, _idempotency_key
 
 
