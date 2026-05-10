@@ -22,6 +22,8 @@ from compat_v1.models import (
     AnomalyResponse,
     DailyBriefingResponse,
     InsightsLatestResponse,
+    RunsListResponse,
+    RunSummaryResponse,
     TrendResponse,
     TrendsListResponse,
     TriggerRequest,
@@ -29,6 +31,7 @@ from compat_v1.models import (
     WeeklySummaryResponse,
 )
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from runtime import runs as pipeline_runs
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,6 +40,7 @@ from .deps import get_session, verify_api_key
 _ALLOWED_SEVERITIES = frozenset(get_args(Severity))
 _ANOMALIES_LIMIT = 200
 _TRENDS_LIMIT = 200
+_RUNS_LIMIT = 200
 
 router = APIRouter(prefix="/api/insights", dependencies=[Depends(verify_api_key)])
 
@@ -258,3 +262,38 @@ async def insights_trigger(
             message=f"{len(findings)} trend findings persisted",
         )
     raise HTTPException(status_code=400, detail=f"Unsupported type: {body.type}")
+
+
+@router.get("/runs", response_model=RunsListResponse)
+async def insights_runs(
+    job_kind: str | None = Query(
+        default=None,
+        description="Filter to a specific scheduler job (e.g. 'daily_briefing').",
+    ),
+    limit: int = Query(default=100, ge=1, le=_RUNS_LIMIT),
+    session: AsyncSession = Depends(get_session),
+) -> RunsListResponse:
+    """Recent rows from the pipeline_runs ledger.
+
+    The ledger is written by the ``apps/worker`` APScheduler listener
+    (Phase 4B). This route is the read-side surface — newest first,
+    optional ``job_kind`` filter, capped at 200 per request.
+
+    Status values: pending, running, succeeded, failed, cancelled,
+    skipped. ``triggered_by`` is one of: scheduler, manual, api, event.
+    """
+    rows = await pipeline_runs.fetch_recent(session, job_kind=job_kind, limit=limit)
+    summaries = [
+        RunSummaryResponse(
+            id=r.id,
+            job_kind=r.job_kind,
+            status=r.status,
+            started_at=r.started_at,
+            ended_at=r.ended_at,
+            error=r.error,
+            attempt=r.attempt,
+            triggered_by=r.triggered_by,
+        )
+        for r in rows
+    ]
+    return RunsListResponse(runs=summaries, count=len(summaries))

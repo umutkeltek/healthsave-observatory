@@ -142,6 +142,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/insights/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Insights Runs
+         * @description Recent rows from the pipeline_runs ledger.
+         *
+         *     The ledger is written by the ``apps/worker`` APScheduler listener
+         *     (Phase 4B). This route is the read-side surface — newest first,
+         *     optional ``job_kind`` filter, capped at 200 per request.
+         *
+         *     Status values: pending, running, succeeded, failed, cancelled,
+         *     skipped. ``triggered_by`` is one of: scheduler, manual, api, event.
+         */
+        get: operations["insights_runs_api_insights_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/insights/trends": {
         parameters: {
             query?: never;
@@ -329,6 +356,44 @@ export interface components {
             /** Recent Findings */
             recent_findings?: components["schemas"]["FindingResponse"][];
             weekly_summary?: components["schemas"]["WeeklySummaryResponse"] | null;
+        };
+        /**
+         * RunSummaryResponse
+         * @description One row from the pipeline_runs ledger as the dashboard sees it.
+         */
+        RunSummaryResponse: {
+            /**
+             * Attempt
+             * @default 1
+             */
+            attempt: number;
+            /** Ended At */
+            ended_at?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Id */
+            id: number;
+            /** Job Kind */
+            job_kind: string;
+            /** Started At */
+            started_at?: string | null;
+            /** Status */
+            status: string;
+            /**
+             * Triggered By
+             * @default scheduler
+             */
+            triggered_by: string;
+        };
+        /** RunsListResponse */
+        RunsListResponse: {
+            /**
+             * Count
+             * @default 0
+             */
+            count: number;
+            /** Runs */
+            runs?: components["schemas"]["RunSummaryResponse"][];
         };
         /** TrendResponse */
         TrendResponse: {
@@ -577,6 +642,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InsightsLatestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    insights_runs_api_insights_runs_get: {
+        parameters: {
+            query?: {
+                /** @description Filter to a specific scheduler job (e.g. 'daily_briefing'). */
+                job_kind?: string | null;
+                limit?: number;
+            };
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunsListResponse"];
                 };
             };
             /** @description Validation Error */

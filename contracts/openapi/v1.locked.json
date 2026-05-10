@@ -280,6 +280,93 @@
         "title": "InsightsLatestResponse",
         "type": "object"
       },
+      "RunSummaryResponse": {
+        "description": "One row from the pipeline_runs ledger as the dashboard sees it.",
+        "properties": {
+          "attempt": {
+            "default": 1,
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "job_kind": {
+            "title": "Job Kind",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "triggered_by": {
+            "default": "scheduler",
+            "title": "Triggered By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "job_kind",
+          "status"
+        ],
+        "title": "RunSummaryResponse",
+        "type": "object"
+      },
+      "RunsListResponse": {
+        "properties": {
+          "count": {
+            "default": 0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/RunSummaryResponse"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "title": "RunsListResponse",
+        "type": "object"
+      },
       "TrendResponse": {
         "properties": {
           "confidence": {
@@ -790,6 +877,77 @@
           }
         },
         "summary": "Insights Latest"
+      }
+    },
+    "/api/insights/runs": {
+      "get": {
+        "description": "Recent rows from the pipeline_runs ledger.\n\nThe ledger is written by the ``apps/worker`` APScheduler listener\n(Phase 4B). This route is the read-side surface \u2014 newest first,\noptional ``job_kind`` filter, capped at 200 per request.\n\nStatus values: pending, running, succeeded, failed, cancelled,\nskipped. ``triggered_by`` is one of: scheduler, manual, api, event.",
+        "operationId": "insights_runs_api_insights_runs_get",
+        "parameters": [
+          {
+            "description": "Filter to a specific scheduler job (e.g. 'daily_briefing').",
+            "in": "query",
+            "name": "job_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to a specific scheduler job (e.g. 'daily_briefing').",
+              "title": "Job Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunsListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Insights Runs"
       }
     },
     "/api/insights/trends": {

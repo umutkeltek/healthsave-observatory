@@ -36,6 +36,7 @@ V1_ROUTES_FROZEN: frozenset[str] = frozenset(
         "GET /api/insights/anomalies",
         "GET /api/insights/trends",
         "POST /api/insights/trigger",
+        "GET /api/insights/runs",
     }
 )
 
