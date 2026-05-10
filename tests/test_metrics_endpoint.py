@@ -22,6 +22,7 @@ from server.api.metrics import (  # noqa: E402
     INGEST_ROWS,
     reset_metrics,
 )
+
 from tests.test_api_contract import FakeRequest, FakeSession  # noqa: E402
 
 
