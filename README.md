@@ -368,6 +368,51 @@ The ingest API is intentionally simple so anyone can build a compatible backend 
 
 If you've built a compatible backend, open an issue or PR and we'll add it here. The full API contract including every supported metric is documented in [API.md](API.md).
 
+### Pluggable Storage Backends
+
+The default backend is TimescaleDB (a Postgres extension), which is what `setup.sh` provisions. If you already run a different time-series store and don't want to add a second one, the ingest path is pluggable: write a Python module that implements the `IngestStorage` protocol, register it, and point the server at it via env vars.
+
+**Built-in backends:**
+
+| Name | Backed by | Audit log | Notes |
+|------|-----------|-----------|-------|
+| `postgres` (default) | TimescaleDB hypertables | yes (`raw_ingestion_log`) | Joins, transactions, continuous aggregates |
+
+**Selecting a backend:**
+
+```bash
+HDH_STORAGE_BACKEND=postgres docker compose up -d   # explicit (also the default)
+```
+
+**Writing your own (e.g. InfluxDB, ClickHouse, DuckDB, MQTT-only):**
+
+1. Implement `server.ingestion.storage.IngestStorage` in your own package — two methods: `get_or_create_device()` and `ingest_metric()`.
+2. Optionally implement `server.ingestion.storage.AuditLog` if your store supports an audit row pattern. Append-only stores (InfluxDB) skip this; the route notices and skips audit calls.
+3. Register a factory at module-import time:
+
+   ```python
+   # mycorp_health/influx_backend.py
+   from server.ingestion.registry import register_backend
+
+   def _influx_factory(config):
+       from .influx_storage import InfluxIngestStorage
+       return InfluxIngestStorage(config), None  # append-only, no AuditLog
+
+   register_backend("influxdb", _influx_factory)
+   ```
+
+4. Tell the server to load your plugin and use it:
+
+   ```bash
+   HDH_STORAGE_PLUGINS=mycorp_health.influx_backend \
+   HDH_STORAGE_BACKEND=influxdb \
+   docker compose up -d
+   ```
+
+`HDH_STORAGE_PLUGINS` is comma-separated — multiple plugin modules are imported in order before the backend lookup runs. A failed plugin import is logged but doesn't abort startup, so a missing optional dependency degrades to "fall back to the built-in default" rather than "server doesn't boot."
+
+The protocols, the registry, and a worked example live in `server/ingestion/storage.py` and `server/ingestion/registry.py`. If you ship a backend, open an issue and we'll list it under [Community Backends](#community-backends).
+
 ### Deduplication
 
 All ingestion is idempotent:
