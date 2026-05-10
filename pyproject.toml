@@ -87,6 +87,7 @@ include = [
     "runtime*",
     "storage*",
     "worker*",
+    "plugin_sdk*",
 ]
 
 [tool.pytest.ini_options]
