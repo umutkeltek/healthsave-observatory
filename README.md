@@ -350,11 +350,11 @@ The datasource is auto-provisioned - no manual setup needed.
 
 ### Home Assistant Examples
 
-Example Home Assistant config is included in `home-assistant/` for people who want to query TimescaleDB directly and turn selected metrics into entities and automations.
+Example Home Assistant config is included in `integrations/home-assistant/` for people who want to query TimescaleDB directly and turn selected metrics into entities and automations.
 
 Included files:
-- `home-assistant/healthsave-package.yaml`
-- `home-assistant/secrets.example.yaml`
+- `integrations/home-assistant/healthsave-package.yaml`
+- `integrations/home-assistant/secrets.example.yaml`
 
 Recommended flow:
 1. Add a read-only PostgreSQL user for Home Assistant if possible
