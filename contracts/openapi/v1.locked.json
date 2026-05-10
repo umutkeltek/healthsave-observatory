@@ -718,7 +718,7 @@
     },
     "/api/insights/anomalies": {
       "get": {
-        "description": "Return recent anomaly findings from the analysis engine.\n\nReads ``analysis_findings`` where ``finding_type='anomaly'``, ordered\nby ``created_at DESC``. Optional ``since`` limits rows to those\ncreated at-or-after the timestamp. Optional ``severity`` is a\ncomma-separated list (``info,watch,alert``) matched against the\nfinding's severity column.",
+        "description": "Return recent anomaly findings from the analysis engine.\n\nReads ``analysis_findings`` where ``finding_type='anomaly'``, ordered\nby ``created_at DESC``. Optional ``since`` limits rows to those\ncreated at-or-after the timestamp. Optional ``severity`` is a\ncomma-separated list (``info,watch,alert``) matched against the\nfinding's severity column. SQL lives in\n``storage.timescale.briefings`` \u2014 this handler does parameter\nvalidation and wire-shape mapping only.",
         "operationId": "insights_anomalies_api_insights_anomalies_get",
         "parameters": [
           {
@@ -952,7 +952,7 @@
     },
     "/api/insights/trends": {
       "get": {
-        "description": "Return recent trend findings from the analysis engine.",
+        "description": "Return recent trend findings from the analysis engine.\n\nSQL lives in ``storage.timescale.briefings`` \u2014 this handler does\nparameter validation (period format) and wire-shape mapping only.",
         "operationId": "insights_trends_api_insights_trends_get",
         "parameters": [
           {

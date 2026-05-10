@@ -13,28 +13,30 @@ Each module typically exposes:
   session directly without injecting a repository.
 """
 
+from . import briefings, runs
+from .briefings import (
+    FindingRow,
+    NarrativeRow,
+    TimescaleBriefingRepository,
+)
 from .runs import (
     PipelineRun,
     PipelineStatus,
     TimescaleRunRepository,
     TriggeredBy,
-    claim_run,
-    default_repository,
-    fetch_recent,
-    mark_failed,
-    mark_skipped,
-    mark_succeeded,
 )
 
 __all__ = [
+    # modules — preferred for module-level convenience calls
+    "briefings",
+    "runs",
+    # runs — public types
     "PipelineRun",
     "PipelineStatus",
     "TimescaleRunRepository",
     "TriggeredBy",
-    "claim_run",
-    "default_repository",
-    "fetch_recent",
-    "mark_failed",
-    "mark_skipped",
-    "mark_succeeded",
+    # briefings — public types
+    "FindingRow",
+    "NarrativeRow",
+    "TimescaleBriefingRepository",
 ]
