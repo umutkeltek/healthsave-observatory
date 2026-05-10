@@ -95,6 +95,20 @@ def main() -> int:
             if committed != live:
                 drifted.append(f"diff: {target.relative_to(REPO_ROOT)}")
 
+        # Bundle drift check
+        from pydantic.json_schema import models_json_schema  # noqa: PLC0415
+
+        bundle_path = SCHEMAS_DIR / "_bundle.json"
+        _defs_pairs, bundle = models_json_schema(
+            [(m, "validation") for m in ALL_MODELS],
+            ref_template="#/$defs/{model}",
+        )
+        bundle_live = json.dumps(bundle, indent=2, sort_keys=True) + "\n"
+        if not bundle_path.exists():
+            drifted.append(f"missing: {bundle_path.relative_to(REPO_ROOT)}")
+        elif bundle_path.read_text() != bundle_live:
+            drifted.append(f"diff: {bundle_path.relative_to(REPO_ROOT)}")
+
         if drifted:
             print(
                 "v2 JSON Schema drift detected:\n  " + "\n  ".join(drifted),
@@ -113,7 +127,19 @@ def main() -> int:
         target = SCHEMAS_DIR / f"{model_cls.__name__}.json"
         target.write_text(_serialize(model_cls))
         written += 1
-    print(f"wrote {written} schema files to {SCHEMAS_DIR}")
+
+    # Bundle: one JSON file with every type under $defs, deduped, with
+    # cross-references intact. The TS codegen consumes this bundle so
+    # it produces one TS file with no duplicated interface declarations.
+    from pydantic.json_schema import models_json_schema  # noqa: PLC0415
+
+    _defs_pairs, bundle = models_json_schema(
+        [(m, "validation") for m in ALL_MODELS],
+        ref_template="#/$defs/{model}",
+    )
+    bundle_path = SCHEMAS_DIR / "_bundle.json"
+    bundle_path.write_text(json.dumps(bundle, indent=2, sort_keys=True) + "\n")
+    print(f"wrote {written} schema files + 1 bundle to {SCHEMAS_DIR}")
     return 0
 
 

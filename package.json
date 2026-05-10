@@ -1,0 +1,12 @@
+{
+  "name": "health-data-hub",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Bun workspace root — TypeScript packages live under packages/ts/.",
+  "workspaces": [
+    "packages/ts/*"
+  ],
+  "engines": {
+    "bun": ">=1.3.0"
+  }
+}

@@ -1,0 +1,1637 @@
+{
+  "$defs": {
+    "ActionDecision": {
+      "additionalProperties": false,
+      "description": "The policy layer's verdict on a proposal.",
+      "properties": {
+        "decided_at": {
+          "format": "date-time",
+          "title": "Decided At",
+          "type": "string"
+        },
+        "decided_by": {
+          "enum": [
+            "user",
+            "policy",
+            "auto"
+          ],
+          "title": "Decided By",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "approved",
+            "rejected",
+            "deferred"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "owner_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "proposal_id": {
+          "format": "uuid",
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "rationale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rationale"
+        },
+        "workspace_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Workspace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "proposal_id",
+        "decided_at",
+        "decision",
+        "decided_by"
+      ],
+      "title": "ActionDecision",
+      "type": "object"
+    },
+    "ActionExecution": {
+      "additionalProperties": false,
+      "description": "The result of executing an approved proposal.",
+      "properties": {
+        "decision_id": {
+          "format": "uuid",
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "executed_at": {
+          "format": "date-time",
+          "title": "Executed At",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "owner_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "proposal_id": {
+          "format": "uuid",
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "result": {
+          "default": {},
+          "title": "Result",
+          "type": "object"
+        },
+        "status": {
+          "enum": [
+            "succeeded",
+            "failed",
+            "skipped"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "workspace_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Workspace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "proposal_id",
+        "decision_id",
+        "executed_at",
+        "status"
+      ],
+      "title": "ActionExecution",
+      "type": "object"
+    },
+    "ActionProposal": {
+      "additionalProperties": false,
+      "description": "An action the agent wants to take. Every state mutation begins here.\n\n``capability`` references the manifest-declared capability the\nagent claims is sufficient to execute this action; the policy\nlayer cross-checks.",
+      "properties": {
+        "action_kind": {
+          "enum": [
+            "notify",
+            "create_experiment",
+            "create_briefing",
+            "request_user_input",
+            "tag_measurement"
+          ],
+          "title": "Action Kind",
+          "type": "string"
+        },
+        "capability": {
+          "title": "Capability",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "owner_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "payload": {
+          "title": "Payload",
+          "type": "object"
+        },
+        "proposed_at": {
+          "format": "date-time",
+          "title": "Proposed At",
+          "type": "string"
+        },
+        "rationale": {
+          "title": "Rationale",
+          "type": "string"
+        },
+        "run_id": {
+          "format": "uuid",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "workspace_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Workspace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "run_id",
+        "proposed_at",
+        "action_kind",
+        "payload",
+        "rationale",
+        "capability"
+      ],
+      "title": "ActionProposal",
+      "type": "object"
+    },
+    "AgentArtifact": {
+      "additionalProperties": false,
+      "description": "A persisted output of an agent run \u2014 narrative, chart, plan.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "narrative",
+            "chart_spec",
+            "experiment_plan",
+            "intervention_proposal"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "owner_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "payload": {
+          "title": "Payload",
+          "type": "object"
+        },
+        "run_id": {
+          "format": "uuid",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "workspace_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Workspace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "run_id",
+        "kind",
+        "payload",
+        "created_at"
+      ],
+      "title": "AgentArtifact",
+      "type": "object"
+    },
+    "AgentEvent": {
+      "additionalProperties": false,
+      "description": "One event in the agent timeline.\n\nStreamed over Server-Sent Events to ``apps/web``'s agent activity\nfeed; persisted as the audit trail. The dashboard reads this\nshape directly via the generated TS client.",
+      "properties": {
+        "emitted_at": {
+          "format": "date-time",
+          "title": "Emitted At",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "run_started",
+            "run_completed",
+            "run_failed",
+            "observation",
+            "proposal_created",
+            "proposal_approved",
+            "proposal_rejected",
+            "execution_succeeded",
+            "execution_failed",
+            "artifact_created"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "owner_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "payload": {
+          "title": "Payload",
+          "type": "object"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        },
+        "workspace_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Workspace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "emitted_at",
+        "kind",
+        "payload"
+      ],
+      "title": "AgentEvent",
+      "type": "object"
+    },
+    "AgentRun": {
+      "additionalProperties": false,
+      "description": "One execution of an agent. The aggregate root for the lifecycle.",
+      "properties": {
+        "ended_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ended At"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "owner_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "plugin_id": {
+          "title": "Plugin Id",
+          "type": "string"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "running",
+            "completed",
+            "failed",
+            "cancelled"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "trigger_kind": {
+          "enum": [
+            "cron",
+            "ingest_event",
+            "metric_threshold",
+            "manual"
+          ],
+          "title": "Trigger Kind",
+          "type": "string"
+        },
+        "trigger_metadata": {
+          "default": {},
+          "title": "Trigger Metadata",
+          "type": "object"
+        },
+        "workspace_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Workspace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "plugin_id",
+        "started_at",
+        "status",
+        "trigger_kind"
+      ],
+      "title": "AgentRun",
+      "type": "object"
+    },
+    "AgentSpec": {
+      "additionalProperties": false,
+      "description": "An agent's declared identity. Loaded from the plugin manifest.\n\nProcess-level metadata, not user data \u2014 does not extend\n:class:`WithOwnership`.",
+      "properties": {
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "plugin_id": {
+          "title": "Plugin Id",
+          "type": "string"
+        },
+        "triggers": {
+          "items": {
+            "enum": [
+              "cron",
+              "ingest_event",
+              "metric_threshold",
+              "manual"
+            ],
+            "type": "string"
+          },
+          "title": "Triggers",
+          "type": "array"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plugin_id",
+        "version",
+        "name",
+        "description",
+        "triggers",
+        "capabilities"
+      ],
+      "title": "AgentSpec",
+      "type": "object"
+    },
+    "Annotation": {
+      "additionalProperties": false,
+      "description": "A point or range marker on a chart \u2014 anomaly, intervention, event.",
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        },
+        "kind": {
+          "enum": [
+            "point",
+            "range"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "at",
+        "text"
+      ],
+      "title": "Annotation",
+      "type": "object"
+    },
+    "ChartSpec": {
+      "additionalProperties": false,
+      "description": "Declarative chart spec \u2014 what to render, not how.\n\nThe web app maps this to whichever chart library is current\n(Recharts/ECharts/Tremor); swapping the library is a ``apps/web``\njob, not a contract change.",
+      "properties": {
+        "aggregation": {
+          "default": "raw",
+          "enum": [
+            "raw",
+            "hourly",
+            "daily"
+          ],
+          "title": "Aggregation",
+          "type": "string"
+        },
+        "annotations_enabled": {
+          "default": true,
+          "title": "Annotations Enabled",
+          "type": "boolean"
+        },
+        "chart_kind": {
+          "enum": [
+            "line",
+            "bar",
+            "area",
+            "scatter"
+          ],
+          "title": "Chart Kind",
+          "type": "string"
+        },
+        "metric": {
+          "title": "Metric",
+          "type": "string"
+        },
+        "range_days": {
+          "default": 30,
+          "exclusiveMinimum": 0,
+          "title": "Range Days",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "metric",
+        "chart_kind"
+      ],
+      "title": "ChartSpec",
+      "type": "object"
+    },
+    "Claim": {
+      "additionalProperties": false,
+      "description": "One assertion inside a narrative, with optional evidence + uncertainty.",
+      "properties": {
+        "evidence": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Uncertainty"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "Claim",
+      "type": "object"
+    },
+    "Device": {
+      "additionalProperties": false,
+      "description": "A physical or logical device emitting samples for a Source.",
+      "properties": {
+        "hardware_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hardware Id"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "owner_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "source_id": {
+          "format": "uuid",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "workspace_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Workspace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "source_id"
+      ],
+      "title": "Device",
+      "type": "object"
+    },
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "description": "A pointer to a piece of evidence backing a claim.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "measurement",
+            "finding",
+            "observation",
+            "external"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "ref": {
+          "title": "Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "ref"
+      ],
+      "title": "EvidenceRef",
+      "type": "object"
+    },
+    "IngestionError": {
+      "additionalProperties": false,
+      "description": "One error captured during an IngestionRun. Append-only.",
+      "properties": {
+        "error_kind": {
+          "title": "Error Kind",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "occurred_at": {
+          "format": "date-time",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "owner_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "payload_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payload Ref"
+        },
+        "run_id": {
+          "format": "uuid",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "workspace_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Workspace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "run_id",
+        "occurred_at",
+        "error_kind",
+        "message"
+      ],
+      "title": "IngestionError",
+      "type": "object"
+    },
+    "IngestionRun": {
+      "additionalProperties": false,
+      "description": "One execution of a Source plugin pulling/receiving data.",
+      "properties": {
+        "ended_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ended At"
+        },
+        "errors_count": {
+          "default": 0,
+          "title": "Errors Count",
+          "type": "integer"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "measurements_count": {
+          "default": 0,
+          "title": "Measurements Count",
+          "type": "integer"
+        },
+        "owner_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "source_id": {
+          "format": "uuid",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "running",
+            "succeeded",
+            "failed",
+            "partial",
+            "cancelled"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "workspace_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Workspace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source_id",
+        "started_at",
+        "status"
+      ],
+      "title": "IngestionRun",
+      "type": "object"
+    },
+    "Insight": {
+      "additionalProperties": false,
+      "description": "A structured observation about the user's data.\n\nSeverity matches the existing ``analysis.types.Severity`` literal so\nthe v1 statistical engine output round-trips cleanly into v2 narratives.",
+      "properties": {
+        "claims": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Claim"
+          },
+          "title": "Claims",
+          "type": "array"
+        },
+        "metric": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Metric"
+        },
+        "severity": {
+          "default": "info",
+          "enum": [
+            "info",
+            "watch",
+            "alert"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary"
+      ],
+      "title": "Insight",
+      "type": "object"
+    },
+    "Measurement": {
+      "additionalProperties": false,
+      "description": "The canonical health measurement.\n\nTime-instant samples set ``interval_start == interval_end``.\nTime-interval samples (sleep stages, workouts, ECG) set both.",
+      "properties": {
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "device_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Device Id"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "interval_end": {
+          "format": "date-time",
+          "title": "Interval End",
+          "type": "string"
+        },
+        "interval_start": {
+          "format": "date-time",
+          "title": "Interval Start",
+          "type": "string"
+        },
+        "metric": {
+          "title": "Metric",
+          "type": "string"
+        },
+        "normalization_version": {
+          "default": "v1",
+          "title": "Normalization Version",
+          "type": "string"
+        },
+        "owner_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "source_id": {
+          "format": "uuid",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        },
+        "workspace_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Workspace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "metric",
+        "unit",
+        "value",
+        "interval_start",
+        "interval_end",
+        "source_id",
+        "provenance"
+      ],
+      "title": "Measurement",
+      "type": "object"
+    },
+    "NarrativeArtifact": {
+      "additionalProperties": false,
+      "description": "A streamable narrative \u2014 daily briefing, weekly summary, etc.\n\nThe wire shape is the *persisted* form. Streaming chunks go over\nSSE during render; once complete, the whole artifact is one row\nin this shape. The dashboard's ``BriefingCard`` reads this.",
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "insights": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Insight"
+          },
+          "title": "Insights",
+          "type": "array"
+        },
+        "kind": {
+          "enum": [
+            "daily_briefing",
+            "weekly_summary",
+            "anomaly_explanation",
+            "intervention_proposal"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "narrator_plugin_id": {
+          "title": "Narrator Plugin Id",
+          "type": "string"
+        },
+        "narrator_version": {
+          "title": "Narrator Version",
+          "type": "string"
+        },
+        "owner_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "rendered_at": {
+          "format": "date-time",
+          "title": "Rendered At",
+          "type": "string"
+        },
+        "suggested_actions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SuggestedAction"
+          },
+          "title": "Suggested Actions",
+          "type": "array"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "workspace_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Workspace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "rendered_at",
+        "text",
+        "narrator_plugin_id",
+        "narrator_version"
+      ],
+      "title": "NarrativeArtifact",
+      "type": "object"
+    },
+    "NarrativeCard": {
+      "additionalProperties": false,
+      "description": "A composed UI card \u2014 chart + briefing inline.\n\nThe load-bearing primitive of the agent-platform UX: chart and\nits narrative ship in one HTTP/SSE response, not two requests.",
+      "properties": {
+        "chart": {
+          "$ref": "#/$defs/ChartSpec"
+        },
+        "narrative": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NarrativeArtifact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "series": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SeriesResponse"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "chart"
+      ],
+      "title": "NarrativeCard",
+      "type": "object"
+    },
+    "NormalizedMeasurement": {
+      "additionalProperties": false,
+      "description": "One canonical sample after a Source plugin has parsed it.\n\nWraps a :class:`Measurement` and pins the raw payload it derives\nfrom. The split lets us evolve normalization independently of the\ncanonical wire shape.",
+      "properties": {
+        "measurement": {
+          "$ref": "#/$defs/Measurement"
+        },
+        "owner_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "raw_payload_id": {
+          "format": "uuid",
+          "title": "Raw Payload Id",
+          "type": "string"
+        },
+        "workspace_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Workspace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "raw_payload_id",
+        "measurement"
+      ],
+      "title": "NormalizedMeasurement",
+      "type": "object"
+    },
+    "Observation": {
+      "additionalProperties": false,
+      "description": "What the agent observed during a run. Append-only.\n\nFindings are intentionally a free-form ``dict`` to keep the\ncontract stable across narrators evolving their statistical\noutput shape.",
+      "properties": {
+        "captured_at": {
+          "format": "date-time",
+          "title": "Captured At",
+          "type": "string"
+        },
+        "findings": {
+          "title": "Findings",
+          "type": "object"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "metric": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Metric"
+        },
+        "owner_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "run_id": {
+          "format": "uuid",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "workspace_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Workspace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "run_id",
+        "captured_at",
+        "findings"
+      ],
+      "title": "Observation",
+      "type": "object"
+    },
+    "PluginCapability": {
+      "additionalProperties": false,
+      "description": "A capability a plugin declares it needs.\n\nCapabilities use the ``read:<scope>`` / ``write:<scope>`` form\n(e.g. ``read:hrv``, ``write:notifications``) so the policy layer\ncan match on prefix.",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "PluginCapability",
+      "type": "object"
+    },
+    "PluginManifest": {
+      "additionalProperties": false,
+      "description": "Every plugin's plugin.yaml validates against this.\n\n``sdk_version`` is the SDK version range the plugin targets\n(semver, e.g. ``\">=0.1,<0.2\"``). The loader rejects plugins\nwhose declared range doesn't include the running core SDK.\nAdding this from day one means we can evolve the SDK contract\nwithout silently breaking community plugins.",
+      "properties": {
+        "config_schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Config Schema"
+        },
+        "consumes": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Consumes",
+          "type": "array"
+        },
+        "emits": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Emits",
+          "type": "array"
+        },
+        "entrypoint": {
+          "title": "Entrypoint",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "source",
+            "narrator",
+            "agent"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "language": {
+          "default": "python",
+          "enum": [
+            "python",
+            "typescript"
+          ],
+          "title": "Language",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "permissions": {
+          "$ref": "#/$defs/PluginPermissions",
+          "default": {
+            "capabilities": [],
+            "network": false,
+            "secrets": []
+          }
+        },
+        "requires": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Requires",
+          "type": "array"
+        },
+        "sdk_version": {
+          "title": "Sdk Version",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "version",
+        "sdk_version",
+        "entrypoint"
+      ],
+      "title": "PluginManifest",
+      "type": "object"
+    },
+    "PluginPermissions": {
+      "additionalProperties": false,
+      "description": "Runtime permissions a plugin requests.",
+      "properties": {
+        "capabilities": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PluginCapability"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "network": {
+          "default": false,
+          "title": "Network",
+          "type": "boolean"
+        },
+        "secrets": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Secrets",
+          "type": "array"
+        }
+      },
+      "title": "PluginPermissions",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "Always-attached \"where did this come from\" capsule.\n\n``raw_payload_ref`` is opaque \u2014 typically a row id in\n``raw_ingestion_log`` so a future replay can reach the exact\nbytes. Storage detail intentionally lives on the other side of\nthe storage port.",
+      "properties": {
+        "captured_at": {
+          "format": "date-time",
+          "title": "Captured At",
+          "type": "string"
+        },
+        "raw_payload_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Payload Ref"
+        },
+        "sdk_version": {
+          "title": "Sdk Version",
+          "type": "string"
+        },
+        "source_plugin_id": {
+          "title": "Source Plugin Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_plugin_id",
+        "sdk_version",
+        "captured_at"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "RawSourcePayload": {
+      "additionalProperties": false,
+      "description": "A payload as the source plugin received it, pre-normalization.\n\nPersisted before parsing so we can replay against new normalization\ncode without re-fetching. ``payload_hash`` is sha256 of the canonical\nJSON form for dedup + idempotency.",
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "owner_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "payload": {
+          "title": "Payload",
+          "type": "object"
+        },
+        "payload_hash": {
+          "title": "Payload Hash",
+          "type": "string"
+        },
+        "received_at": {
+          "format": "date-time",
+          "title": "Received At",
+          "type": "string"
+        },
+        "source_id": {
+          "format": "uuid",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "workspace_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Workspace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source_id",
+        "received_at",
+        "payload_hash",
+        "payload"
+      ],
+      "title": "RawSourcePayload",
+      "type": "object"
+    },
+    "SeriesResponse": {
+      "additionalProperties": false,
+      "description": "Time-series data for a chart, plus annotations.\n\n``points`` is ``(timestamp, value)`` pairs \u2014 typed as a list of\ntwo-element tuples so the TS codegen produces a sensible\n``[string, number][]`` rather than an opaque object.",
+      "properties": {
+        "annotations": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Annotation"
+          },
+          "title": "Annotations",
+          "type": "array"
+        },
+        "metric": {
+          "title": "Metric",
+          "type": "string"
+        },
+        "owner_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "points": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Points",
+          "type": "array"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "workspace_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Workspace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "metric",
+        "unit",
+        "points"
+      ],
+      "title": "SeriesResponse",
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "description": "A source of health data \u2014 Apple HealthKit, Oura, manual log, etc.",
+      "properties": {
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "sensor",
+            "manual",
+            "computed",
+            "external_api"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "owner_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "plugin_id": {
+          "title": "Plugin Id",
+          "type": "string"
+        },
+        "workspace_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Workspace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "plugin_id",
+        "display_name",
+        "kind"
+      ],
+      "title": "Source",
+      "type": "object"
+    },
+    "SourceCapability": {
+      "additionalProperties": false,
+      "description": "What a Source plugin claims it can produce.\n\nDeclared in the plugin manifest; used by the ingestion runtime\nfor scheduling and by the dashboard for \"available sources\" UI.",
+      "properties": {
+        "auth_required": {
+          "default": false,
+          "title": "Auth Required",
+          "type": "boolean"
+        },
+        "delivery": {
+          "enum": [
+            "polling",
+            "webhook",
+            "stream"
+          ],
+          "title": "Delivery",
+          "type": "string"
+        },
+        "metrics": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Metrics",
+          "type": "array"
+        },
+        "plugin_id": {
+          "title": "Plugin Id",
+          "type": "string"
+        },
+        "rate_limit_per_minute": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rate Limit Per Minute"
+        }
+      },
+      "required": [
+        "plugin_id",
+        "metrics",
+        "delivery"
+      ],
+      "title": "SourceCapability",
+      "type": "object"
+    },
+    "SuggestedAction": {
+      "additionalProperties": false,
+      "description": "A user-visible suggestion. Defaults to requiring approval \u2014\nsuggestions are advisory, not auto-actuated.",
+      "properties": {
+        "rationale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rationale"
+        },
+        "requires_approval": {
+          "default": true,
+          "title": "Requires Approval",
+          "type": "boolean"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "SuggestedAction",
+      "type": "object"
+    },
+    "Uncertainty": {
+      "additionalProperties": false,
+      "description": "How sure the narrator is about a claim.",
+      "properties": {
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "confidence"
+      ],
+      "title": "Uncertainty",
+      "type": "object"
+    }
+  }
+}
