@@ -12,9 +12,11 @@
 # The ``./setup.sh`` bootstrap handles this copy for you when you answer
 # "y" to the "enable local LLM (Ollama)?" prompt.
 #
-# Expected RAM headroom: llama3.1:8b needs ~8 GB free. On machines with
-# less, pick a smaller model (llama3.1:7b, phi3, etc.) and update
-# OLLAMA_MODEL in .env + config.yaml.
+# Expected RAM headroom: an 8 B-class model (llama3.1:8b, qwen3:8b)
+# needs ~8 GB free. On smaller machines pick a smaller model
+# (gemma3:4b, llama3.2:3b, llama3.2:1b) and update OLLAMA_MODEL in
+# .env + config.yaml. See README "Hardware recommendations" for the
+# full per-RAM-tier table (2026 model picks).
 
 services:
   ollama:
