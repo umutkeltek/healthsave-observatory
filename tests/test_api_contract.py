@@ -640,3 +640,37 @@ def test_readme_documents_existing_install_migration_flow():
     assert "db/migrations/001_audit_hardening.sql" in readme
     assert "db/migrations/002_analysis_tables.sql" in readme
     assert "docker compose exec -T db psql" in readme
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Phase 5G: lifespan-state assertion guards a future regression that
+# silently drops a required app.state attribute.
+# ──────────────────────────────────────────────────────────────────────
+
+
+def test_assert_lifespan_state_passes_when_all_attrs_present():
+    """The happy path: every required attribute is populated."""
+    from types import SimpleNamespace
+
+    from server.main import _REQUIRED_STATE_ATTRS, _assert_lifespan_state
+
+    fake_state = SimpleNamespace(**{name: object() for name in _REQUIRED_STATE_ATTRS})
+    fake_app = SimpleNamespace(state=fake_state)
+
+    # Must not raise.
+    _assert_lifespan_state(fake_app)
+
+
+def test_assert_lifespan_state_raises_when_attr_missing():
+    """A future regression that omits ``session_factory`` is caught at boot."""
+    from types import SimpleNamespace
+
+    from server.main import _REQUIRED_STATE_ATTRS, _assert_lifespan_state
+
+    # Drop session_factory specifically (the audit's M6 example).
+    present = {name: object() for name in _REQUIRED_STATE_ATTRS if name != "session_factory"}
+    fake_state = SimpleNamespace(**present)
+    fake_app = SimpleNamespace(state=fake_state)
+
+    with pytest.raises(RuntimeError, match=r"session_factory"):
+        _assert_lifespan_state(fake_app)
