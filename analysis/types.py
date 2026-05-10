@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-# Mirrors the CHECK constraints in migrations/002_analysis_tables.sql.
+# Mirrors the CHECK constraints in db/migrations/002_analysis_tables.sql.
 # Keep these enums in sync with the DB when either side changes.
 Severity = Literal["info", "watch", "alert"]
 RunStatus = Literal["running", "completed", "failed", "skipped"]

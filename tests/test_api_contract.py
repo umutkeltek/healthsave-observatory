@@ -611,7 +611,7 @@ def test_api_spec_documents_ecg_as_accepted_but_not_persisted():
 
 
 def test_schema_declares_idempotency_constraints_for_retry_safe_sync():
-    schema = Path("schema.sql").read_text()
+    schema = Path("db/schema.sql").read_text()
 
     # Unique indexes are widened with owner_id for multi-user support;
     # the original (device_id, start/time) prefix is preserved so retries
@@ -626,7 +626,7 @@ def test_schema_declares_idempotency_constraints_for_retry_safe_sync():
 
 
 def test_schema_declares_phase_1_5_analysis_tables_for_fresh_installs():
-    schema = Path("schema.sql").read_text()
+    schema = Path("db/schema.sql").read_text()
 
     assert "CREATE TABLE analysis_runs" in schema
     assert "CREATE TABLE analysis_findings" in schema
@@ -637,6 +637,6 @@ def test_schema_declares_phase_1_5_analysis_tables_for_fresh_installs():
 def test_readme_documents_existing_install_migration_flow():
     readme = Path("README.md").read_text()
 
-    assert "migrations/001_audit_hardening.sql" in readme
-    assert "migrations/002_analysis_tables.sql" in readme
+    assert "db/migrations/001_audit_hardening.sql" in readme
+    assert "db/migrations/002_analysis_tables.sql" in readme
     assert "docker compose exec -T db psql" in readme

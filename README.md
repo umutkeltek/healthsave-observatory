@@ -430,13 +430,13 @@ minimal audit trail and a useful starting point if you ever need replay tooling.
 
 ### Updating Existing Installs
 
-Fresh installs load `schema.sql` automatically. Existing Docker volumes keep
+Fresh installs load `db/schema.sql` automatically. Existing Docker volumes keep
 their original schema, so apply migrations manually when upgrading:
 
 ```bash
-docker compose exec -T db psql -U healthsave -d healthsave < migrations/001_audit_hardening.sql
-docker compose exec -T db psql -U healthsave -d healthsave < migrations/002_analysis_tables.sql
-docker compose exec -T db psql -U healthsave -d healthsave < migrations/003_multi_user.sql
+docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/001_audit_hardening.sql
+docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/002_analysis_tables.sql
+docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/003_multi_user.sql
 ```
 
 ### Multi-user / Household
