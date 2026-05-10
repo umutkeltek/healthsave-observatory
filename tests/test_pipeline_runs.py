@@ -186,6 +186,121 @@ async def test_fetch_recent_decodes_string_result_payload() -> None:
 # ---------------- listener helpers ----------------
 
 
+@pytest.mark.asyncio
+async def test_lookup_id_by_idempotency_key_returns_id() -> None:
+    """Phase 5G: lifted out of worker.listener._lookup_run_id."""
+    session = _FakeSession()
+    session.next_result = _FakeResult(row=type("R", (), {"id": 17})())
+
+    rid = await runs.lookup_id_by_idempotency_key(session, idempotency_key="abc")
+
+    assert rid == 17
+    sql, params = _last_call(session)
+    assert "SELECT id FROM pipeline_runs" in sql
+    assert "idempotency_key = :key" in sql
+    assert params["key"] == "abc"
+
+
+@pytest.mark.asyncio
+async def test_lookup_id_by_idempotency_key_returns_none_when_missing() -> None:
+    session = _FakeSession()
+    session.next_result = _FakeResult(row=None)
+
+    rid = await runs.lookup_id_by_idempotency_key(session, idempotency_key="missing")
+
+    assert rid is None
+
+
+@pytest.mark.asyncio
+async def test_ensure_terminal_inserts_or_updates_via_upsert() -> None:
+    """Phase 5G race-fix: INSERT … ON CONFLICT DO UPDATE.
+
+    Both branches of the conflict resolution share the same SQL — we
+    pin the SQL shape so a future refactor cannot silently revert to
+    a vulnerable INSERT-then-UPDATE pair.
+    """
+    session = _FakeSession()
+    session.next_result = _FakeResult(row=type("R", (), {"id": 99})())
+
+    rid = await runs.ensure_terminal(
+        session,
+        job_kind="daily_briefing",
+        idempotency_key="daily_briefing:2026-05-11",
+        status="succeeded",
+        triggered_by="scheduler",
+        leased_by="worker:1",
+        result={"engine_run_id": 7},
+    )
+
+    assert rid == 99
+    sql, params = _last_call(session)
+    assert "INSERT INTO pipeline_runs" in sql
+    assert "ON CONFLICT (idempotency_key) DO UPDATE" in sql
+    assert "RETURNING id" in sql
+    assert params["status"] == "succeeded"
+    assert params["job_kind"] == "daily_briefing"
+    assert params["idempotency_key"] == "daily_briefing:2026-05-11"
+    assert params["leased_by"] == "worker:1"
+    # result is JSON-encoded for the jsonb column
+    import json as _json
+
+    assert _json.loads(params["result"]) == {"engine_run_id": 7}
+
+
+@pytest.mark.asyncio
+async def test_ensure_terminal_truncates_long_error() -> None:
+    session = _FakeSession()
+    session.next_result = _FakeResult(row=type("R", (), {"id": 1})())
+    huge = "x" * 10000
+
+    await runs.ensure_terminal(
+        session,
+        job_kind="daily_briefing",
+        idempotency_key="key-err",
+        status="failed",
+        error=huge,
+    )
+
+    _, params = _last_call(session)
+    assert params["error"] is not None
+    assert len(params["error"]) == 8000
+
+
+@pytest.mark.asyncio
+async def test_ensure_terminal_skipped_writes_reason_into_error_column() -> None:
+    """EVENT_JOB_MISSED path — Phase 5G surfaced this gap."""
+    session = _FakeSession()
+    session.next_result = _FakeResult(row=type("R", (), {"id": 2})())
+
+    rid = await runs.ensure_terminal(
+        session,
+        job_kind="daily_briefing",
+        idempotency_key="key-missed",
+        status="skipped",
+        error="missed scheduled run at 2026-05-11T00:00:00+00:00",
+    )
+
+    assert rid == 2
+    _, params = _last_call(session)
+    assert params["status"] == "skipped"
+    assert "missed scheduled run" in params["error"]
+
+
+@pytest.mark.asyncio
+async def test_reap_stuck_runs_updates_running_rows() -> None:
+    session = _FakeSession()
+    session.next_result = _FakeResult()
+    # FakeResult has no rowcount attribute → reaper returns 0 (defensive default).
+    n = await runs.reap_stuck_runs(session, max_age_seconds=3600)
+
+    assert n == 0
+    sql, params = _last_call(session)
+    assert "UPDATE pipeline_runs" in sql
+    assert "WHERE status = 'running'" in sql
+    assert "make_interval(secs => :max_age_seconds)" in sql
+    assert params["max_age_seconds"] == 3600
+
+
 def test_idempotency_key_handles_list_and_datetime() -> None:
     dt = datetime(2026, 5, 10, 6, 0, tzinfo=UTC)
     assert _idempotency_key("daily_briefing", dt) == f"daily_briefing:{dt.isoformat()}"

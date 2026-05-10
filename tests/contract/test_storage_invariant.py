@@ -54,7 +54,11 @@ ALLOWLIST: dict[str, str] = {
         "stays — engine/session bootstrap (FastAPI lifecycle, not data access)"
     ),
     "apps/worker/worker/listener.py": (
-        "stays — AsyncSessionFactory typing for the APScheduler listener"
+        "stays — AsyncSessionFactory typing for the APScheduler listener. "
+        "Phase 5G lifted the inline _lookup_run_id SQL into "
+        "storage.timescale.runs.lookup_id_by_idempotency_key; the only "
+        "remaining sqlalchemy import here is the `async_sessionmaker` "
+        "type hint."
     ),
     # AsyncSession typing in route handler signatures (Depends pattern).
     # These do not run raw SQL — they pass the session to repositories.
