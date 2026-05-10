@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import server  # noqa: E402
 from server.ingestion.owner import DEFAULT_OWNER_ID, OWNER_HEADER, resolve_owner_id  # noqa: E402
+
 from tests.test_api_contract import FakeRequest, FakeSession  # noqa: E402
 
 CUSTOM_OWNER = "11111111-2222-3333-4444-555555555555"

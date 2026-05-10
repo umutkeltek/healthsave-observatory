@@ -16,12 +16,11 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
-
 from analysis.config import load_config
 from analysis.engine import AnalysisEngine
 from analysis.llm.client import HealthLLMClient
 from analysis.scheduler import AnalysisScheduler
+from fastapi import FastAPI
 
 from .api import health_routes, ingest, insights, metrics, status
 from .db.session import async_session, engine

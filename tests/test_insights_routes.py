@@ -13,8 +13,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from analysis.config import AnalysisConfig  # noqa: E402
+from compat_v1.models import TriggerRequest  # noqa: E402
 from server.api.insights import insights_anomalies, insights_trends, insights_trigger  # noqa: E402
-from server.models.insights import TriggerRequest  # noqa: E402
 
 
 class _FakeEngine:
