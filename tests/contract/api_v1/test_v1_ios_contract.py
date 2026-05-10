@@ -20,18 +20,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT))
 
+from compat_v1 import IOS_FROZEN_ROUTES  # noqa: E402
 from server.main import app  # noqa: E402
-
-# Routes the live HealthSave iOS app calls. Mirror these from
-# Sources/HealthSync/Config.swift exactly; renaming the constant on
-# either side breaks the App Store binary.
-IOS_FROZEN_ROUTES: frozenset[str] = frozenset(
-    {
-        "POST /api/apple/batch",
-        "GET /api/apple/status",
-        "GET /api/health",
-    }
-)
 
 # Field names the iOS app puts on the wire for POST /api/apple/batch.
 # Mirror these from Sources/HealthSync/SyncEngine.swift
