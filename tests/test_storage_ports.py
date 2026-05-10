@@ -15,11 +15,19 @@ is a separate concern and lives where the consumers' tests live.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import replace
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from storage.ports import RunRepository
+from storage.ports import BriefingRepository, RunRepository
+from storage.timescale.briefings import (
+    FindingRow,
+    NarrativeRow,
+    TimescaleBriefingRepository,
+)
+from storage.timescale.briefings import default_repository as briefing_default_repository
 from storage.timescale.runs import (
     PipelineRun,
     TimescaleRunRepository,
@@ -174,6 +182,144 @@ async def test_in_memory_repo_fetch_recent_filters_by_job_kind() -> None:
 
     daily = await repo.fetch_recent(session=None, job_kind="daily_briefing")
     assert {r.idempotency_key for r in daily} == {"a", "c"}
+
+
+# ──────────────────────────────────────────────────────────────
+#  BriefingRepository (Phase 5B)
+# ──────────────────────────────────────────────────────────────
+
+
+def test_timescale_briefing_repo_satisfies_protocol() -> None:
+    assert isinstance(briefing_default_repository, BriefingRepository)
+    assert isinstance(TimescaleBriefingRepository(), BriefingRepository)
+
+
+class _InMemoryBriefingRepository:
+    """Reference fake implementation of :class:`BriefingRepository`."""
+
+    def __init__(self) -> None:
+        self.narratives: list[NarrativeRow] = []
+        self.findings: list[tuple[str, FindingRow]] = []  # (finding_type, row)
+
+    async def latest_narratives_by_type(
+        self,
+        session: Any,
+        *,
+        insight_types: Iterable[str] = ("daily_briefing", "weekly_summary"),
+    ) -> dict[str, NarrativeRow]:
+        wanted = set(insight_types)
+        out: dict[str, NarrativeRow] = {}
+        for row in self.narratives:
+            if row.insight_type not in wanted:
+                continue
+            existing = out.get(row.insight_type)
+            if existing is None or row.created_at > existing.created_at:
+                out[row.insight_type] = row
+        return out
+
+    async def fetch_anomalies(
+        self,
+        session: Any,
+        *,
+        since: datetime | None = None,
+        severities: Iterable[str] | None = None,
+        limit: int = 200,
+    ) -> list[FindingRow]:
+        out = [r for ft, r in self.findings if ft == "anomaly"]
+        if since is not None:
+            out = [r for r in out if r.created_at >= since]
+        if severities is not None:
+            allow = set(severities)
+            out = [r for r in out if r.severity in allow]
+        out.sort(key=lambda r: r.created_at, reverse=True)
+        return out[:limit]
+
+    async def fetch_trends(
+        self,
+        session: Any,
+        *,
+        period_days: str | None = None,
+        limit: int = 200,
+    ) -> list[FindingRow]:
+        out = [r for ft, r in self.findings if ft == "trend"]
+        if period_days is not None:
+            out = [r for r in out if str(r.structured_data.get("period_days")) == period_days]
+        out.sort(key=lambda r: r.created_at, reverse=True)
+        return out[:limit]
+
+
+def test_in_memory_briefing_repo_satisfies_protocol() -> None:
+    fake = _InMemoryBriefingRepository()
+    assert isinstance(fake, BriefingRepository)
+
+
+@pytest.mark.asyncio
+async def test_in_memory_briefing_repo_walks_all_three_methods() -> None:
+    """End-to-end: write narratives + findings, query each method,
+    verify filters."""
+    repo: BriefingRepository = _InMemoryBriefingRepository()
+
+    repo.narratives.append(
+        NarrativeRow(
+            insight_type="daily_briefing",
+            narrative="HRV stable",
+            created_at=datetime(2026, 5, 10, 6, 0, tzinfo=UTC),
+        )
+    )
+    # An older daily briefing — should be hidden by the newer one.
+    repo.narratives.append(
+        NarrativeRow(
+            insight_type="daily_briefing",
+            narrative="old",
+            created_at=datetime(2026, 4, 1, tzinfo=UTC),
+        )
+    )
+
+    repo.findings.append(
+        (
+            "anomaly",
+            FindingRow(
+                id=1,
+                metric="hrv",
+                severity="alert",
+                structured_data={"magnitude": 2.4, "direction": "down"},
+                created_at=datetime(2026, 5, 10, tzinfo=UTC),
+            ),
+        )
+    )
+    repo.findings.append(
+        (
+            "trend",
+            FindingRow(
+                id=2,
+                metric="heart_rate",
+                severity=None,
+                structured_data={"slope": 0.42, "period_days": 30},
+                created_at=datetime(2026, 5, 10, tzinfo=UTC),
+            ),
+        )
+    )
+
+    latest = await repo.latest_narratives_by_type(
+        session=None, insight_types=("daily_briefing", "weekly_summary")
+    )
+    assert "daily_briefing" in latest
+    assert latest["daily_briefing"].narrative == "HRV stable"
+    assert "weekly_summary" not in latest
+
+    anoms = await repo.fetch_anomalies(session=None)
+    assert len(anoms) == 1 and anoms[0].metric == "hrv"
+
+    trends = await repo.fetch_trends(session=None, period_days="30")
+    assert len(trends) == 1 and trends[0].metric == "heart_rate"
+
+    trends_none = await repo.fetch_trends(session=None, period_days="999")
+    assert trends_none == []
+
+
+# ──────────────────────────────────────────────────────────────
+#  Module-level convenience surface
+# ──────────────────────────────────────────────────────────────
 
 
 def test_module_level_functions_share_default_repository() -> None:

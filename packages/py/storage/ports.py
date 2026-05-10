@@ -28,8 +28,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from datetime import datetime
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from .timescale.briefings import FindingRow, NarrativeRow
     from .timescale.runs import PipelineRun, TriggeredBy
 
 
@@ -89,3 +93,43 @@ class RunRepository(Protocol):
         job_kind: str | None = None,
         limit: int = 100,
     ) -> list[PipelineRun]: ...
+
+
+@runtime_checkable
+class BriefingRepository(Protocol):
+    """Read-side data access for the analysis surface.
+
+    Reads ``analysis_insights`` (latest narratives) and
+    ``analysis_findings`` (anomalies, trends). Wire-shape mapping
+    happens in the API route handler — this Protocol returns the
+    storage-shaped frozen dataclasses ``NarrativeRow`` and
+    ``FindingRow``.
+
+    Inputs are assumed pre-validated. The route handler rejects
+    unknown severity values, malformed ``since`` timestamps, and
+    bad ``period`` strings *before* calling these methods.
+    """
+
+    async def latest_narratives_by_type(
+        self,
+        session: AsyncSession,
+        *,
+        insight_types: Iterable[str] = ("daily_briefing", "weekly_summary"),
+    ) -> dict[str, NarrativeRow]: ...
+
+    async def fetch_anomalies(
+        self,
+        session: AsyncSession,
+        *,
+        since: datetime | None = None,
+        severities: Iterable[str] | None = None,
+        limit: int = 200,
+    ) -> list[FindingRow]: ...
+
+    async def fetch_trends(
+        self,
+        session: AsyncSession,
+        *,
+        period_days: str | None = None,
+        limit: int = 200,
+    ) -> list[FindingRow]: ...

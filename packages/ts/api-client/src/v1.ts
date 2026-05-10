@@ -91,7 +91,9 @@ export interface paths {
          *     by ``created_at DESC``. Optional ``since`` limits rows to those
          *     created at-or-after the timestamp. Optional ``severity`` is a
          *     comma-separated list (``info,watch,alert``) matched against the
-         *     finding's severity column.
+         *     finding's severity column. SQL lives in
+         *     ``storage.timescale.briefings`` — this handler does parameter
+         *     validation and wire-shape mapping only.
          */
         get: operations["insights_anomalies_api_insights_anomalies_get"];
         put?: never;
@@ -179,6 +181,9 @@ export interface paths {
         /**
          * Insights Trends
          * @description Return recent trend findings from the analysis engine.
+         *
+         *     SQL lives in ``storage.timescale.briefings`` — this handler does
+         *     parameter validation (period format) and wire-shape mapping only.
          */
         get: operations["insights_trends_api_insights_trends_get"];
         put?: never;

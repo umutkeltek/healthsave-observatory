@@ -12,7 +12,6 @@ and weekly remain stubs until their historical lookup methods land.
 
 from __future__ import annotations
 
-import json
 import logging
 import uuid
 from collections.abc import Awaitable
@@ -34,8 +33,8 @@ from compat_v1.models import (
     WeeklySummaryResponse,
 )
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from storage.timescale import briefings
 from storage.timescale import runs as pipeline_runs
 
 from .deps import get_session, verify_api_key
@@ -125,18 +124,9 @@ async def insights_latest(
     session: AsyncSession = Depends(get_session),
 ) -> InsightsLatestResponse:
     """Return the most recent daily briefing + weekly summary narratives."""
-    result = await session.execute(
-        text(
-            """
-            SELECT DISTINCT ON (insight_type)
-                insight_type, narrative, created_at
-            FROM analysis_insights
-            WHERE insight_type IN ('daily_briefing', 'weekly_summary')
-            ORDER BY insight_type, created_at DESC
-            """
-        )
+    rows = await briefings.latest_narratives_by_type(
+        session, insight_types=("daily_briefing", "weekly_summary")
     )
-    rows = {row.insight_type: row for row in result}
     daily = rows.get("daily_briefing")
     weekly = rows.get("weekly_summary")
     return InsightsLatestResponse(
@@ -184,21 +174,17 @@ async def insights_anomalies(
     by ``created_at DESC``. Optional ``since`` limits rows to those
     created at-or-after the timestamp. Optional ``severity`` is a
     comma-separated list (``info,watch,alert``) matched against the
-    finding's severity column.
+    finding's severity column. SQL lives in
+    ``storage.timescale.briefings`` — this handler does parameter
+    validation and wire-shape mapping only.
     """
-    where_clauses = ["finding_type = 'anomaly'"]
-    params: dict[str, object] = {}
-
     if isinstance(since, str):
         try:
             since = datetime.fromisoformat(since.replace("Z", "+00:00"))
         except ValueError as exc:
             raise HTTPException(status_code=422, detail="Invalid since timestamp") from exc
 
-    if since is not None:
-        where_clauses.append("created_at >= :since")
-        params["since"] = since
-
+    severities: frozenset[str] | None = None
     if severity is not None:
         requested = {s.strip().lower() for s in severity.split(",") if s.strip()}
         unknown = requested - _ALLOWED_SEVERITIES
@@ -208,46 +194,24 @@ async def insights_anomalies(
                 status_code=422,
                 detail=f"Invalid severity: {', '.join(sorted(unknown))}. Allowed: {allowed}",
             )
-        filtered = sorted(requested)
-        if filtered:
-            severity_placeholders = []
-            for index, value in enumerate(filtered):
-                param_name = f"severity_{index}"
-                severity_placeholders.append(f":{param_name}")
-                params[param_name] = value
-            where_clauses.append(f"severity IN ({', '.join(severity_placeholders)})")
+        if requested:
+            severities = frozenset(requested)
 
-    params["limit"] = _ANOMALIES_LIMIT
-
-    sql = f"""
-        SELECT id, metric, severity, structured_data, created_at
-        FROM analysis_findings
-        WHERE {" AND ".join(where_clauses)}
-        ORDER BY created_at DESC
-        LIMIT :limit
-    """
-    result = await session.execute(text(sql), params)
-    rows = result.fetchall() if hasattr(result, "fetchall") else list(result)
-
-    anomalies: list[AnomalyResponse] = []
-    for row in rows:
-        data = row.structured_data or {}
-        if isinstance(data, str):
-            try:
-                data = json.loads(data)
-            except ValueError:
-                data = {}
-        anomalies.append(
-            AnomalyResponse(
-                id=row.id,
-                metric=row.metric or data.get("metric"),
-                severity=row.severity,
-                magnitude=data.get("magnitude"),
-                direction=data.get("direction"),
-                detected_at=data.get("detected_at") or row.created_at,
-                context=data.get("context") or {},
-            )
+    findings = await briefings.fetch_anomalies(
+        session, since=since, severities=severities, limit=_ANOMALIES_LIMIT
+    )
+    anomalies = [
+        AnomalyResponse(
+            id=row.id,
+            metric=row.metric or row.structured_data.get("metric"),
+            severity=row.severity,
+            magnitude=row.structured_data.get("magnitude"),
+            direction=row.structured_data.get("direction"),
+            detected_at=row.structured_data.get("detected_at") or row.created_at,
+            context=row.structured_data.get("context") or {},
         )
+        for row in findings
+    ]
     return AnomaliesListResponse(anomalies=anomalies, count=len(anomalies))
 
 
@@ -259,46 +223,29 @@ async def insights_trends(
     ),
     session: AsyncSession = Depends(get_session),
 ) -> TrendsListResponse:
-    """Return recent trend findings from the analysis engine."""
-    where_clauses = ["finding_type = 'trend'"]
-    params: dict[str, object] = {}
+    """Return recent trend findings from the analysis engine.
 
+    SQL lives in ``storage.timescale.briefings`` — this handler does
+    parameter validation (period format) and wire-shape mapping only.
+    """
+    period_days: str | None = None
     if period is not None:
         if not period.endswith("d") or not period[:-1].isdigit() or int(period[:-1]) <= 0:
             raise HTTPException(status_code=422, detail="Invalid period; expected format like 30d")
-        params["period_days"] = period[:-1]
-        where_clauses.append("structured_data->>'period_days' = :period_days")
+        period_days = period[:-1]
 
-    params["limit"] = _TRENDS_LIMIT
-
-    sql = f"""
-        SELECT id, metric, structured_data, created_at
-        FROM analysis_findings
-        WHERE {" AND ".join(where_clauses)}
-        ORDER BY created_at DESC
-        LIMIT :limit
-    """
-    result = await session.execute(text(sql), params)
-    rows = result.fetchall() if hasattr(result, "fetchall") else list(result)
-
-    trends: list[TrendResponse] = []
-    for row in rows:
-        data = row.structured_data or {}
-        if isinstance(data, str):
-            try:
-                data = json.loads(data)
-            except ValueError:
-                data = {}
-        trends.append(
-            TrendResponse(
-                metric=row.metric or data.get("metric"),
-                slope=data.get("slope"),
-                direction=data.get("direction"),
-                period_days=data.get("period_days"),
-                p_value=data.get("p_value"),
-                confidence=data.get("confidence"),
-            )
+    findings = await briefings.fetch_trends(session, period_days=period_days, limit=_TRENDS_LIMIT)
+    trends = [
+        TrendResponse(
+            metric=row.metric or row.structured_data.get("metric"),
+            slope=row.structured_data.get("slope"),
+            direction=row.structured_data.get("direction"),
+            period_days=row.structured_data.get("period_days"),
+            p_value=row.structured_data.get("p_value"),
+            confidence=row.structured_data.get("confidence"),
         )
+        for row in findings
+    ]
     return TrendsListResponse(trends=trends, count=len(trends))
 
 
