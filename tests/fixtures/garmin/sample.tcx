@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic Garmin TCX fixture. All timestamps and heart-rate values are fabricated. -->
+<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2">
+  <Activities>
+    <Activity Sport="Running">
+      <Id>2026-04-10T07:00:00Z</Id>
+      <Lap StartTime="2026-04-10T07:00:00Z">
+        <Track>
+          <Trackpoint>
+            <Time>2026-04-10T07:00:00Z</Time>
+            <HeartRateBpm><Value>78</Value></HeartRateBpm>
+          </Trackpoint>
+          <Trackpoint>
+            <Time>2026-04-10T07:00:10Z</Time>
+            <HeartRateBpm><Value>92</Value></HeartRateBpm>
+          </Trackpoint>
+          <Trackpoint>
+            <Time>2026-04-10T07:00:20Z</Time>
+            <HeartRateBpm><Value>118</Value></HeartRateBpm>
+          </Trackpoint>
+          <Trackpoint>
+            <Time>2026-04-10T07:00:30Z</Time>
+            <HeartRateBpm><Value>134</Value></HeartRateBpm>
+          </Trackpoint>
+          <Trackpoint>
+            <Time>2026-04-10T07:00:40Z</Time>
+            <HeartRateBpm><Value>141</Value></HeartRateBpm>
+          </Trackpoint>
+          <Trackpoint>
+            <Time>2026-04-10T07:00:50Z</Time>
+            <HeartRateBpm><Value>146</Value></HeartRateBpm>
+          </Trackpoint>
+        </Track>
+      </Lap>
+    </Activity>
+  </Activities>
+</TrainingCenterDatabase>

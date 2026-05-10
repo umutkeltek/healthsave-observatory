@@ -1,0 +1,17 @@
+{
+  "dailySleepDTO": {
+    "calendarDate": "2026-04-09",
+    "sleepStartTimestampGMT": "2026-04-09T22:00:00Z",
+    "sleepEndTimestampGMT": "2026-04-10T06:00:00Z"
+  },
+  "sleepLevels": [
+    {"startGMT": "2026-04-09T22:00:00Z", "endGMT": "2026-04-09T22:45:00Z", "activityLevel": 1.0},
+    {"startGMT": "2026-04-09T22:45:00Z", "endGMT": "2026-04-09T23:30:00Z", "activityLevel": 0.0},
+    {"startGMT": "2026-04-09T23:30:00Z", "endGMT": "2026-04-10T00:15:00Z", "activityLevel": 1.0},
+    {"startGMT": "2026-04-10T00:15:00Z", "endGMT": "2026-04-10T01:30:00Z", "activityLevel": 2.0},
+    {"startGMT": "2026-04-10T01:30:00Z", "endGMT": "2026-04-10T02:00:00Z", "activityLevel": 0.0},
+    {"startGMT": "2026-04-10T02:00:00Z", "endGMT": "2026-04-10T05:30:00Z", "activityLevel": 1.0},
+    {"startGMT": "2026-04-10T05:30:00Z", "endGMT": "2026-04-10T05:45:00Z", "activityLevel": 3.0},
+    {"startGMT": "2026-04-10T05:45:00Z", "endGMT": "2026-04-10T06:00:00Z", "activityLevel": 1.0}
+  ]
+}

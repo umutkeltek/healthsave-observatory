@@ -26,7 +26,7 @@ You point your iPhone at it. It stores everything from your Apple Watch (heart r
 - A long-term store for every Apple Health metric your phone collects, queryable with normal SQL
 - A set of ready-made Grafana dashboards (heart, sleep, activity, workouts) that work the moment data starts flowing
 - An optional AI briefing system that turns numbers into plain English ("HRV trended down three days in a row, sleep was light last night, expect a low-energy morning")
-- A clean ingest API anyone can build against - the iOS app is one client, your own scripts can be another
+- A clean ingest API anyone can build against - the iOS app is one client, Garmin Connect exports are another via [`scripts/import_garmin.py`](scripts/import_garmin.py)
 - Drop-in examples for piping selected metrics into Home Assistant for automations
 
 The entire stack runs in Docker on a laptop, a NUC, a Mac mini, a Synology, or a beefy workstation - your choice. Nothing phones home.
@@ -287,6 +287,45 @@ sum by (metric) (rate(hdh_ingest_rows_total[5m]))
 
 Pair `rate(hdh_ai_briefing_runs_total{result="failure"}[1h])` with an
 alert if you want a heads-up when nightly analysis starts failing.
+
+### Garmin Imports
+
+Garmin Connect users can sideload data into the same `/api/apple/batch`
+endpoint via `scripts/import_garmin.py`. The script supports the bulk
+"Export Your Data" ZIP, individual FIT/TCX activity files, and the
+JSON files Garmin includes for daily steps and sleep stages.
+
+Install the optional FIT-parsing dependency once:
+
+```bash
+pip install -e ".[garmin]"   # adds fitparse for FIT activity files
+```
+
+(TCX, JSON, and ZIP parsing use only the standard library.)
+
+Run it:
+
+```bash
+# Bulk export ZIP - walks every supported file inside
+python scripts/import_garmin.py \
+  --zip GarminConnect_Export.zip \
+  --server http://localhost:8000 \
+  --api-key $HDH_API_KEY
+
+# Individual files
+python scripts/import_garmin.py --tcx run.tcx --steps-json steps.json --sleep-json sleep.json
+
+# Sanity-check the payload before sending
+python scripts/import_garmin.py --tcx run.tcx --dry-run
+```
+
+Mapping:
+
+| Source | HealthSave metric | Server table |
+|--------|-------------------|--------------|
+| FIT/TCX heart-rate records | `heart_rate` | `heart_rate` |
+| Daily step totals (JSON) | `step_count` | `daily_activity.steps` |
+| Sleep stages (JSON) | `sleep_analysis` | `sleep_sessions` + `sleep_stages` |
 
 ### Grafana Dashboards
 
