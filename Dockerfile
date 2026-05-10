@@ -14,6 +14,7 @@ COPY apps/worker/worker/ ./worker/
 COPY packages/py/analysis/ ./analysis/
 COPY packages/py/compat_v1/ ./compat_v1/
 COPY packages/py/contracts/ ./contracts/
+COPY packages/py/runtime/ ./runtime/
 COPY scripts/ ./scripts/
 
 USER appuser

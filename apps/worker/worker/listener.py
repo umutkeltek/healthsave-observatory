@@ -20,9 +20,8 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from runtime import runs
 from sqlalchemy.ext.asyncio import async_sessionmaker
-
-from . import runs
 
 if TYPE_CHECKING:
     from apscheduler.events import JobExecutionEvent, JobSubmissionEvent

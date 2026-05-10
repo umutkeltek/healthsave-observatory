@@ -81,3 +81,21 @@ class TriggerResponse(BaseModel):
     run_type: str | None = None
     message: str | None = None
     run_id: int | None = None
+
+
+class RunSummaryResponse(BaseModel):
+    """One row from the pipeline_runs ledger as the dashboard sees it."""
+
+    id: int
+    job_kind: str
+    status: str
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    error: str | None = None
+    attempt: int = 1
+    triggered_by: str = "scheduler"
+
+
+class RunsListResponse(BaseModel):
+    runs: list[RunSummaryResponse] = Field(default_factory=list)
+    count: int = 0
