@@ -168,21 +168,29 @@ def _trigger_request(*, factory, engine):
 
 @pytest.mark.asyncio
 async def test_trigger_writes_pipeline_run_on_success() -> None:
+    """Phase 5G: ledger writes use ensure_terminal (INSERT … ON CONFLICT
+    DO UPDATE) instead of bare UPDATE so the post-claim race window is
+    closed. Test pins the new SQL shape + the status/job_kind/triggered_by
+    params (which the ensure_terminal upsert needs in case the row
+    didn't exist yet)."""
     factory = _LedgerFakeFactory(claim_id=42)
     request = _trigger_request(factory=factory, engine=_OkEngine())
 
     response = await insights_trigger(request, TriggerRequest(type="daily_briefing"))
 
     assert response.status == "completed"
-    # Two sessions opened: claim, mark_succeeded.
+    # Two sessions opened: claim, ensure_terminal(succeeded).
     assert len(factory.sessions) == 2
     sql_claim, params_claim = factory.sessions[0].calls[-1]
     assert "INSERT INTO pipeline_runs" in sql_claim
+    assert "ON CONFLICT (idempotency_key) DO NOTHING" in sql_claim
     assert params_claim["job_kind"] == "daily_briefing"
     assert params_claim["triggered_by"] == "api"
     sql_mark, params_mark = factory.sessions[1].calls[-1]
-    assert "status = 'succeeded'" in sql_mark
-    assert params_mark["run_id"] == 42
+    assert "ON CONFLICT (idempotency_key) DO UPDATE" in sql_mark
+    assert params_mark["status"] == "succeeded"
+    assert params_mark["job_kind"] == "daily_briefing"
+    assert params_mark["triggered_by"] == "api"
     # engine_run_id (42) gets coerced into the JSON result payload.
     assert '"engine_run_id": 42' in params_mark["result"]
 
@@ -195,11 +203,11 @@ async def test_trigger_writes_pipeline_run_on_failure() -> None:
     with pytest.raises(RuntimeError, match="engine exploded"):
         await insights_trigger(request, TriggerRequest(type="daily_briefing"))
 
-    # Two sessions: claim, mark_failed.
+    # Two sessions: claim, ensure_terminal(failed).
     assert len(factory.sessions) == 2
     sql_mark, params_mark = factory.sessions[1].calls[-1]
-    assert "status = 'failed'" in sql_mark
-    assert params_mark["run_id"] == 7
+    assert "ON CONFLICT (idempotency_key) DO UPDATE" in sql_mark
+    assert params_mark["status"] == "failed"
     assert "engine exploded" in params_mark["error"]
 
 

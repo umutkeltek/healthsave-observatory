@@ -38,8 +38,27 @@ from storage.timescale import briefings
 from storage.timescale import runs as pipeline_runs
 
 from .deps import get_session, verify_api_key
+from .metrics import PIPELINE_RUNS_LEDGER_FAILURES
 
 _log = logging.getLogger("healthsave.api.insights")
+
+
+def _bump_ledger_failure(phase: str) -> None:
+    """Increment ``PIPELINE_RUNS_LEDGER_FAILURES{phase}`` defensively.
+
+    Phase 5G CRITICAL fix: the audit caught that pre-5G ledger writes
+    silently swallowed every failure (claim, mark_succeeded, mark_failed).
+    A 200 OK trigger could ship while the pipeline_runs row was missing
+    or stuck 'running' forever, hiding DB connectivity loss, schema
+    drift, asyncpg statement timeouts, ON CONFLICT collisions on
+    re-used idempotency_keys. The counter is the operator-side surface;
+    the trigger response shape (TriggerResponse) is unchanged so iOS
+    and other v1 clients see no wire-contract drift.
+    """
+    try:
+        PIPELINE_RUNS_LEDGER_FAILURES.labels(phase=phase).inc()
+    except Exception:  # pragma: no cover - metrics import optional
+        _log.debug("failed to record PIPELINE_RUNS_LEDGER_FAILURES{phase=%s}", phase)
 
 
 async def _record_trigger_run(request: Request, *, job_kind: str, coro: Awaitable[Any]) -> Any:
@@ -53,6 +72,15 @@ async def _record_trigger_run(request: Request, *, job_kind: str, coro: Awaitabl
     """
     session_factory = getattr(request.app.state, "session_factory", None)
     if session_factory is None:
+        # Phase 5G: degraded mode is real (test fixtures, partial-init
+        # prod). Surface a counter so a missing factory in production
+        # is NOT silent — log + bump under a stable phase label so
+        # ops can alert on it.
+        _log.warning(
+            "session_factory missing on app.state; trigger %s will run without ledger row",
+            job_kind,
+        )
+        _bump_ledger_failure("session_factory_missing")
         return await coro
 
     idempotency_key = f"{job_kind}:api:{uuid.uuid4().hex[:12]}"
@@ -70,6 +98,7 @@ async def _record_trigger_run(request: Request, *, job_kind: str, coro: Awaitabl
         except Exception:
             await session.rollback()
             _log.exception("failed to claim pipeline_run for %s", job_kind)
+            _bump_ledger_failure("claim")
 
     try:
         result = await coro
@@ -77,25 +106,40 @@ async def _record_trigger_run(request: Request, *, job_kind: str, coro: Awaitabl
         if record_id is not None:
             async with session_factory() as session:
                 try:
-                    await pipeline_runs.mark_failed(session, run_id=record_id, error=str(exc))
+                    # Phase 5G: ensure_terminal works even if the claim
+                    # commit raced or rolled back — closes the same
+                    # race the worker listener had.
+                    await pipeline_runs.ensure_terminal(
+                        session,
+                        job_kind=job_kind,
+                        idempotency_key=idempotency_key,
+                        status="failed",
+                        triggered_by="api",
+                        error=str(exc),
+                    )
                     await session.commit()
                 except Exception:
                     await session.rollback()
                     _log.exception("failed to mark pipeline_run as failed")
+                    _bump_ledger_failure("mark_failed")
         raise
 
     if record_id is not None:
         async with session_factory() as session:
             try:
-                await pipeline_runs.mark_succeeded(
+                await pipeline_runs.ensure_terminal(
                     session,
-                    run_id=record_id,
+                    job_kind=job_kind,
+                    idempotency_key=idempotency_key,
+                    status="succeeded",
+                    triggered_by="api",
                     result=_summarize_trigger_result(result),
                 )
                 await session.commit()
             except Exception:
                 await session.rollback()
                 _log.exception("failed to mark pipeline_run as succeeded")
+                _bump_ledger_failure("mark_succeeded")
 
     return result
 
