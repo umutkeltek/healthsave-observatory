@@ -331,20 +331,20 @@ Mapping:
 
 ### Grafana Dashboards
 
-A curated starter dashboard set is included in `grafana/`, so a fresh `docker compose up -d` should bring Grafana up with the datasource and the supported dashboards already wired.
+A curated starter dashboard set is included in `deploy/grafana/`, so a fresh `docker compose up -d` should bring Grafana up with the datasource and the supported dashboards already wired.
 
 Included files:
-- `grafana/provisioning/datasources/healthsave.yaml`
-- `grafana/provisioning/dashboards/default.yaml`
-- `grafana/dashboards/`
+- `deploy/grafana/provisioning/datasources/healthsave.yaml`
+- `deploy/grafana/provisioning/dashboards/default.yaml`
+- `deploy/grafana/dashboards/`
 
 Supported dashboards loaded automatically:
 
 | Dashboard | File | Depends On | Status | Notes |
 |-----------|------|------------|--------|-------|
-| HealthSave Overview | `grafana/dashboards/healthsave-overview.json` | `heart_rate`, `hrv`, `blood_oxygen`, `daily_activity`, `sleep_sessions`, `workouts` | Supported | Best first dashboard for a fresh install |
-| Activity & Movement | `grafana/dashboards/activity.json` | `daily_activity`, `quantity_samples` | Supported | Gait-related panels only populate if those optional metrics are synced |
-| Workouts | `grafana/dashboards/workouts.json` | `workouts` | Supported | Focused workout view with type, duration, calories, and HR panels |
+| HealthSave Overview | `deploy/grafana/dashboards/healthsave-overview.json` | `heart_rate`, `hrv`, `blood_oxygen`, `daily_activity`, `sleep_sessions`, `workouts` | Supported | Best first dashboard for a fresh install |
+| Activity & Movement | `deploy/grafana/dashboards/activity.json` | `daily_activity`, `quantity_samples` | Supported | Gait-related panels only populate if those optional metrics are synced |
+| Workouts | `deploy/grafana/dashboards/workouts.json` | `workouts` | Supported | Focused workout view with type, duration, calories, and HR panels |
 
 The datasource is auto-provisioned - no manual setup needed.
 
