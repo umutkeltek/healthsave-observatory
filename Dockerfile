@@ -15,6 +15,7 @@ COPY packages/py/analysis/ ./analysis/
 COPY packages/py/compat_v1/ ./compat_v1/
 COPY packages/py/contracts/ ./contracts/
 COPY packages/py/runtime/ ./runtime/
+COPY packages/py/storage/ ./storage/
 COPY scripts/ ./scripts/
 
 USER appuser

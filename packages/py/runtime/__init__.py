@@ -1,13 +1,11 @@
-"""Runtime-state primitives — the data layer for things-that-run.
+"""Runtime-state primitives — for things-that-run.
 
-Currently:
-- ``runtime.runs`` — pipeline_runs ledger (claim/mark/fetch).
+Phase 5A moved the data-access layer out: ``runtime.runs`` is now
+``storage.timescale.runs``. ``runtime`` keeps its name for future
+*runtime behaviour* (state machines, schedulers, agent runtime control
+loops) — the layer between data access and process glue.
 
 Future (per the v2 plan):
-- ``runtime.agents`` — agent run ledger, observations, action proposals.
-- ``runtime.events`` — outbox + projections.
-
-The shape here is data-access, not contract types — those live in
-``packages/py/contracts``. The two are complementary: contracts describe
-what shapes flow over the wire; runtime describes how they get persisted.
+- ``runtime.agents`` — agent runtime control loop (lease, retry, cancel).
+- ``runtime.events`` — outbox dispatcher + stream projections.
 """
