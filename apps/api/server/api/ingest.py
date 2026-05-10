@@ -17,7 +17,7 @@ from ..ingestion.storage import (
     default_storage,
 )
 from .deps import get_session, verify_api_key
-from .metrics import INGEST_BATCHES, INGEST_DURATION, INGEST_ROWS
+from .metrics import INGEST_BATCHES, INGEST_DURATION, INGEST_ROWS, RAW_LOG_ORPHANED
 
 log = logging.getLogger("healthsave")
 
@@ -79,13 +79,30 @@ async def apple_batch(
     await session.commit()
     count = 0
 
-    for device_name, device_samples in sample_groups:
-        device_id = (
-            first_device_id
-            if device_name == first_device_name
-            else await storage.get_or_create_device(session, device_name)
-        )
-        count += await storage.ingest_metric(session, device_id, metric, device_samples, owner_id)
+    # Phase 5G fix: pre-5G the per-device loop ran without exception
+    # handling. A mid-loop raise left raw_ingestion_log.processed=false
+    # forever — the audit raw_log_orphan; no metric, no alert. Now we
+    # bump RAW_LOG_ORPHANED{metric} on failure and re-raise so the
+    # client sees 500. The audit row stays processed=false so a future
+    # replay can re-attempt it.
+    try:
+        for device_name, device_samples in sample_groups:
+            device_id = (
+                first_device_id
+                if device_name == first_device_name
+                else await storage.get_or_create_device(session, device_name)
+            )
+            count += await storage.ingest_metric(
+                session, device_id, metric, device_samples, owner_id
+            )
+    except Exception:
+        try:
+            RAW_LOG_ORPHANED.labels(metric=metric).inc()
+        except Exception:  # pragma: no cover - metrics import optional
+            log.debug("failed to record RAW_LOG_ORPHANED{metric=%s}", metric)
+        await session.rollback()
+        log.exception("ingest loop failed for %s; raw_log_id=%s left orphaned", metric, raw_log_id)
+        raise
 
     if audit and raw_log_id is not None:
         await audit.mark_processed(session, raw_log_id)
