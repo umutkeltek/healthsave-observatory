@@ -47,6 +47,27 @@ from server.ingestion.parsers import (
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+
+def _bump_rejected(metric: str, reason: str) -> None:
+    """Phase 5G: surface silent sample rejections.
+
+    Pre-5G the ``if t is None or v is None: continue`` pattern in
+    every ingest helper threw away malformed samples without any
+    counter or warning log. iOS shipping a date-format change would
+    look like ``records: 0`` to operators — "nothing to insert"
+    when the truth was "every sample failed to parse." Lazy import
+    of the counter so this module stays usable from CLI scripts that
+    don't load the FastAPI app.
+    """
+    try:
+        from server.api.metrics import INGEST_REJECTED
+
+        INGEST_REJECTED.labels(metric=metric, reason=reason).inc()
+    except Exception:  # pragma: no cover - metrics import optional
+        # Failing to bump a counter is never a reason to fail ingest.
+        pass
+
+
 # ──────────────────────────────────────────────────────────────────
 #  Devices + raw-payload audit log
 # ──────────────────────────────────────────────────────────────────
@@ -150,6 +171,8 @@ async def _ingest_dedicated(
             row.update(spec["defaults"])
         if row.get("time") and row.get(value_col) is not None:
             rows.append(row)
+        else:
+            _bump_rejected(metric, "missing_time_or_value")
 
     if not rows:
         return 0
@@ -193,6 +216,7 @@ async def _ingest_generic(
         t = parse_ts(s.get("date"))
         v = to_float(s.get("qty"))
         if t is None or v is None:
+            _bump_rejected(metric, "missing_or_unparseable_date_or_qty")
             continue
         sample_metric = s.get("metric") if isinstance(s.get("metric"), str) else metric
         await session.execute(
@@ -228,6 +252,7 @@ async def _ingest_activity(
     for s in samples:
         d = parse_date(s.get("date"))
         if not d:
+            _bump_rejected("activity_summaries", "missing_or_unparseable_date")
             continue
 
         row = {"date": d, "device_id": device_id, "owner_id": str(owner_id)}
@@ -268,6 +293,7 @@ async def _ingest_daily_quantity(
         d = parse_date(sample.get("date"))
         value = converter(sample.get("qty"))
         if not d or value is None:
+            _bump_rejected(metric, "missing_or_unparseable_date_or_qty")
             continue
 
         await session.execute(
@@ -300,6 +326,7 @@ async def _ingest_workouts(
         start = parse_ts(first_present(s, "start_date", "startDate", "start", "date"))
         end = parse_ts(first_present(s, "end_date", "endDate", "end"))
         if not start or not end:
+            _bump_rejected("workouts", "missing_or_unparseable_start_or_end")
             continue
         duration_ms = first_present(s, "duration_ms")
         if duration_ms is None:
@@ -512,6 +539,7 @@ async def ingest_sleep(
         start = parse_ts(first_present(s, "start_date", "startDate", "date"))
         end = parse_ts(first_present(s, "end_date", "endDate"))
         if not start or not end:
+            _bump_rejected("sleep_analysis", "missing_or_unparseable_start_or_end")
             continue
         await _upsert_sleep_session(
             session,
