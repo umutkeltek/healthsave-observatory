@@ -437,6 +437,7 @@ their original schema, so apply migrations manually when upgrading:
 docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/001_audit_hardening.sql
 docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/002_analysis_tables.sql
 docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/003_multi_user.sql
+docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/004_pipeline_runs.sql
 ```
 
 ### Multi-user / Household
