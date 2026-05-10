@@ -25,6 +25,9 @@ jobs:
       - name: Lint
         run: python -m ruff check .
 
+      - name: Verify v1 contract lock (no drift)
+        run: python -m scripts.generate_v1_lock --check
+
       - name: Test
         run: pytest -q
 
