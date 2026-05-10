@@ -6,6 +6,11 @@ __pycache__/
 .venv/
 *.egg-info/
 
+# Bun / TypeScript
+node_modules/
+dist/
+*.tsbuildinfo
+
 # Internal planning and agent docs - not for the public repo
 docs/
 agents.md

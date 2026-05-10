@@ -1,4 +1,4 @@
-.PHONY: help regen-lock check-lock regen-v2-schemas check-v2-schemas test lint format compose-up compose-down
+.PHONY: help regen-lock check-lock regen-v2-schemas check-v2-schemas regen-ts-client check-ts-client typecheck-ts test lint format compose-up compose-down
 
 help:
 	@echo "Targets:"
@@ -6,6 +6,9 @@ help:
 	@echo "  check-lock         Verify v1 OpenAPI lock matches the live app (no drift)"
 	@echo "  regen-v2-schemas   Regenerate contracts/json-schema/*.json from contracts package (Docker)"
 	@echo "  check-v2-schemas   Verify v2 JSON Schemas match the live contract types"
+	@echo "  regen-ts-client    Regenerate packages/ts/api-client/src/v[12].ts from the v1 lock + v2 bundle"
+	@echo "  check-ts-client    Verify TS client generated files match committed (no drift)"
+	@echo "  typecheck-ts       Run tsc --noEmit on the api-client package"
 	@echo "  test               Run the full pytest suite"
 	@echo "  lint               ruff check + ruff format --check"
 	@echo "  format             ruff format (writes)"
@@ -39,6 +42,15 @@ regen-v2-schemas:
 
 check-v2-schemas:
 	@python3 -m scripts.generate_v2_schemas --check
+
+regen-ts-client:
+	@cd packages/ts/api-client && bun run generate
+
+check-ts-client:
+	@cd packages/ts/api-client && bun run check
+
+typecheck-ts:
+	@cd packages/ts/api-client && bun run typecheck
 
 test:
 	@python3 -m pytest -q

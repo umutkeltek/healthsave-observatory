@@ -31,6 +31,20 @@ jobs:
       - name: Verify v2 JSON schemas (no drift)
         run: python -m scripts.generate_v2_schemas --check
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.9
+
+      - name: Install TS deps
+        run: bun install --frozen-lockfile
+
+      - name: Verify TS client (no drift)
+        run: bun run --cwd packages/ts/api-client check
+
+      - name: Typecheck TS
+        run: bun run --cwd packages/ts/api-client typecheck
+
       - name: Test
         run: pytest -q
 
