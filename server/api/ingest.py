@@ -1,6 +1,7 @@
 """POST /api/apple/batch - receive a metric batch from a HealthSave client."""
 
 import logging
+from time import perf_counter
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import ValidationError
@@ -15,6 +16,7 @@ from ..ingestion.handlers import (
 from ..ingestion.parsers import group_samples_by_device
 from ..models.batch import BatchPayload
 from .deps import get_session, verify_api_key
+from .metrics import INGEST_BATCHES, INGEST_DURATION, INGEST_ROWS
 
 log = logging.getLogger("healthsave")
 
@@ -40,6 +42,7 @@ async def apple_batch(
         ]
     }
     """
+    started_at = perf_counter()
     raw_payload = await request.json()
     try:
         payload = BatchPayload.model_validate(raw_payload)
@@ -56,6 +59,7 @@ async def apple_batch(
         await session.commit()
         await _mark_raw_ingestion_processed(session, raw_log_id)
         await session.commit()
+        _observe_ingest_metrics(metric=metric, rows=0, started_at=started_at)
         return {"status": "empty", "metric": metric, "batch": batch_idx, "records": 0}
 
     sample_groups = group_samples_by_device(samples)
@@ -75,6 +79,7 @@ async def apple_batch(
 
     await _mark_raw_ingestion_processed(session, raw_log_id)
     await session.commit()
+    _observe_ingest_metrics(metric=metric, rows=count, started_at=started_at)
     log.info("Ingested %d records for %s (batch %d/%d)", count, metric, batch_idx + 1, total)
     _schedule_anomaly_check_if_enabled(request, background_tasks, count)
 
@@ -85,6 +90,13 @@ async def apple_batch(
         "total_batches": total,
         "records": count,
     }
+
+
+def _observe_ingest_metrics(*, metric: str, rows: int, started_at: float) -> None:
+    """Record one completed batch after validation and persistence succeed."""
+    INGEST_BATCHES.labels(metric=metric).inc()
+    INGEST_ROWS.labels(metric=metric).inc(rows)
+    INGEST_DURATION.labels(metric=metric).observe(perf_counter() - started_at)
 
 
 def _schedule_anomaly_check_if_enabled(

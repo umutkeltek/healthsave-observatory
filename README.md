@@ -248,10 +248,45 @@ To opt into Ollama manually, copy `docker-compose.override.yml.example` to `dock
 | `/api/insights/anomalies` | GET | Recent anomaly findings, filterable by `since` and `severity` |
 | `/api/insights/trends` | GET | Recent HR / HRV trend findings, filterable by `period=30d` |
 | `/api/insights/trigger` | POST | Run an analysis pass now (if AI enabled) |
+| `/metrics` | GET | Prometheus text exposition (no auth, DB-independent) |
 
 `/api/apple/status` intentionally returns top-level metric objects, not a
 wrapped `{"status":"ok","counts":...}` payload. See [API.md](API.md) for
 the compatibility contract.
+
+### Prometheus Metrics
+
+`/metrics` exposes runtime counters and a histogram in Prometheus text
+exposition format. The endpoint is unauthenticated by design (so scrapers
+do not need `X-API-Key`) and does not touch the database, so it returns
+200 even when Postgres is down — safe to use as a liveness target.
+
+| Metric | Type | Labels | Meaning |
+|--------|------|--------|---------|
+| `hdh_ingest_batches_total` | counter | `metric` | Batches accepted by `/api/apple/batch`, including empty ones |
+| `hdh_ingest_rows_total` | counter | `metric` | Rows persisted per metric (cumulative) |
+| `hdh_ingest_duration_seconds` | histogram | `metric` | End-to-end batch handler latency |
+| `hdh_ai_briefing_runs_total` | counter | `job`, `result` | Daily briefing / anomaly check / trend analysis runs by outcome (`success` / `failure`) |
+
+Prometheus scrape config:
+
+```yaml
+scrape_configs:
+  - job_name: health-data-hub
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['health-data-hub:8000']  # or 'localhost:8000' for host scrape
+```
+
+Sample Grafana panel — rows ingested per second, broken down by metric
+(Time series panel):
+
+```promql
+sum by (metric) (rate(hdh_ingest_rows_total[5m]))
+```
+
+Pair `rate(hdh_ai_briefing_runs_total{result="failure"}[1h])` with an
+alert if you want a heads-up when nightly analysis starts failing.
 
 ### Grafana Dashboards
 

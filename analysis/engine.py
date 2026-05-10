@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, TypeVar
 
 from sqlalchemy import text
 
@@ -28,6 +29,7 @@ from .types import Anomaly, Finding, Insight
 log = logging.getLogger("healthsave.analysis")
 
 _TREND_METRICS = ("heart_rate", "hrv")
+_T = TypeVar("_T")
 
 
 class AnalysisEngine:
@@ -49,6 +51,9 @@ class AnalysisEngine:
         self.trend_analyzer = TrendAnalyzer(session_factory)
 
     async def run_daily_briefing(self) -> int | None:
+        return await self._run_job_with_metrics("daily_briefing", self._run_daily_briefing_impl)
+
+    async def _run_daily_briefing_impl(self) -> int | None:
         """Produce yesterday's narrative morning briefing.
 
         Returns the newly-created ``analysis_runs.id`` on a completed run,
@@ -145,6 +150,9 @@ class AnalysisEngine:
             return run_id
 
     async def run_anomaly_check(self) -> int | None:
+        return await self._run_job_with_metrics("anomaly_check", self._run_anomaly_check_impl)
+
+    async def _run_anomaly_check_impl(self) -> int | None:
         """Lightweight detector run with no LLM narration.
 
         Persists an ``analysis_runs`` row with ``run_type='anomaly_check'``
@@ -189,6 +197,9 @@ class AnalysisEngine:
         )
 
     async def run_trend_analysis(self) -> list[Finding]:
+        return await self._run_job_with_metrics("trend_analysis", self._run_trend_analysis_impl)
+
+    async def _run_trend_analysis_impl(self) -> list[Finding]:
         """Compute trend findings across enabled metrics."""
         async with (
             self.session_factory() as session,
@@ -231,6 +242,19 @@ class AnalysisEngine:
     # ──────────────────────────────────────────────────────────────
     #  Internals
     # ──────────────────────────────────────────────────────────────
+
+    async def _run_job_with_metrics(self, job: str, runner: Callable[[], Awaitable[_T]]) -> _T:
+        # Lazy import: server.api.metrics → server.main → analysis.engine would cycle.
+        from server.api.metrics import AI_BRIEFING_RUNS
+
+        try:
+            result = await runner()
+        except Exception:
+            AI_BRIEFING_RUNS.labels(job=job, result="failure").inc()
+            raise
+
+        AI_BRIEFING_RUNS.labels(job=job, result="success").inc()
+        return result
 
     @asynccontextmanager
     async def _run_context(self, session, run_type: str):

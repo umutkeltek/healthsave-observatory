@@ -23,7 +23,7 @@ from analysis.engine import AnalysisEngine
 from analysis.llm.client import HealthLLMClient
 from analysis.scheduler import AnalysisScheduler
 
-from .api import health_routes, ingest, insights, status
+from .api import health_routes, ingest, insights, metrics, status
 from .db.session import async_session, engine
 
 log = logging.getLogger("healthsave")
@@ -53,5 +53,6 @@ app = FastAPI(title="Health Data Hub", version="1.0.0", lifespan=lifespan)
 
 app.include_router(health_routes.router)
 app.include_router(ingest.router)
+app.include_router(metrics.router)
 app.include_router(status.router)
 app.include_router(insights.router)
