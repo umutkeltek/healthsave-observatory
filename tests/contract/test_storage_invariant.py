@@ -72,13 +72,6 @@ ALLOWLIST: dict[str, str] = {
         "Phase 5E may migrate into storage/timescale/measurements.py with "
         "MeasurementRepository.metric_counts()"
     ),
-    # --- Phase 5E migration targets ---
-    "apps/api/server/ingestion/handlers.py": (
-        "Phase 5E — lift per-metric SQL into storage/timescale/measurements.py"
-    ),
-    "apps/api/server/ingestion/sleep.py": (
-        "Phase 5E — lift sleep ingest SQL into storage/timescale/measurements.py"
-    ),
     # --- Phase 5F migration targets ---
     "packages/py/analysis/engine.py": (
         "Phase 5F — analysis engine SQL into storage/timescale/analysis.py"
