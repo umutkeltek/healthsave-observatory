@@ -9,8 +9,8 @@ RUN adduser --disabled-password --gecos "" appuser
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY server/ ./server/
-COPY analysis/ ./analysis/
+COPY apps/api/server/ ./server/
+COPY packages/py/analysis/ ./analysis/
 
 USER appuser
 EXPOSE 8000

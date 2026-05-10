@@ -72,11 +72,20 @@ garmin = [
 ]
 
 [tool.setuptools.packages.find]
+# v2 layout: server lives under apps/api/, analysis under packages/py/.
+# Multi-root `where` keeps `import server` and `import analysis` working
+# unchanged after `pip install -e .` — see contracts/V1.md.
+where = ["apps/api", "packages/py"]
 include = ["server*", "analysis*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# v2 layout: pytest adds these to sys.path so `import server` and
+# `import analysis` work without requiring `pip install -e .` first.
+# CI still runs `pip install -e .[dev]` for the full install path; this
+# pythonpath is the safety net for fresh checkouts.
+pythonpath = ["apps/api", "packages/py"]
 
 [tool.ruff]
 line-length = 100
