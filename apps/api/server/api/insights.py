@@ -231,9 +231,10 @@ async def insights_trigger(
     """Run an ad-hoc analysis job inline.
 
     ``daily_briefing`` and ``trend_analysis`` run synchronously against
-    ``app.state.analysis_engine``. Future job types (weekly,
-    correlation, etc.) should dispatch via ``request.app.state.scheduler``
-    once their engine methods land.
+    ``app.state.analysis_engine``. Future long-running job types
+    (weekly, correlation, etc.) should dispatch to the ``apps/worker``
+    service via a Postgres NOTIFY queue rather than running inline —
+    the API process no longer carries a scheduler in v2.
     """
     body = body or TriggerRequest()
     if body.type == "daily_briefing":

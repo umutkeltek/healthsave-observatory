@@ -853,7 +853,7 @@
     },
     "/api/insights/trigger": {
       "post": {
-        "description": "Run an ad-hoc analysis job inline.\n\n``daily_briefing`` and ``trend_analysis`` run synchronously against\n``app.state.analysis_engine``. Future job types (weekly,\ncorrelation, etc.) should dispatch via ``request.app.state.scheduler``\nonce their engine methods land.",
+        "description": "Run an ad-hoc analysis job inline.\n\n``daily_briefing`` and ``trend_analysis`` run synchronously against\n``app.state.analysis_engine``. Future long-running job types\n(weekly, correlation, etc.) should dispatch to the ``apps/worker``\nservice via a Postgres NOTIFY queue rather than running inline \u2014\nthe API process no longer carries a scheduler in v2.",
         "operationId": "insights_trigger_api_insights_trigger_post",
         "parameters": [
           {
