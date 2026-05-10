@@ -1,0 +1,441 @@
+{
+  "$defs": {
+    "Annotation": {
+      "additionalProperties": false,
+      "description": "A point or range marker on a chart \u2014 anomaly, intervention, event.",
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        },
+        "kind": {
+          "enum": [
+            "point",
+            "range"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "at",
+        "text"
+      ],
+      "title": "Annotation",
+      "type": "object"
+    },
+    "ChartSpec": {
+      "additionalProperties": false,
+      "description": "Declarative chart spec \u2014 what to render, not how.\n\nThe web app maps this to whichever chart library is current\n(Recharts/ECharts/Tremor); swapping the library is a ``apps/web``\njob, not a contract change.",
+      "properties": {
+        "aggregation": {
+          "default": "raw",
+          "enum": [
+            "raw",
+            "hourly",
+            "daily"
+          ],
+          "title": "Aggregation",
+          "type": "string"
+        },
+        "annotations_enabled": {
+          "default": true,
+          "title": "Annotations Enabled",
+          "type": "boolean"
+        },
+        "chart_kind": {
+          "enum": [
+            "line",
+            "bar",
+            "area",
+            "scatter"
+          ],
+          "title": "Chart Kind",
+          "type": "string"
+        },
+        "metric": {
+          "title": "Metric",
+          "type": "string"
+        },
+        "range_days": {
+          "default": 30,
+          "exclusiveMinimum": 0,
+          "title": "Range Days",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "metric",
+        "chart_kind"
+      ],
+      "title": "ChartSpec",
+      "type": "object"
+    },
+    "Claim": {
+      "additionalProperties": false,
+      "description": "One assertion inside a narrative, with optional evidence + uncertainty.",
+      "properties": {
+        "evidence": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Uncertainty"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "Claim",
+      "type": "object"
+    },
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "description": "A pointer to a piece of evidence backing a claim.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "measurement",
+            "finding",
+            "observation",
+            "external"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "ref": {
+          "title": "Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "ref"
+      ],
+      "title": "EvidenceRef",
+      "type": "object"
+    },
+    "Insight": {
+      "additionalProperties": false,
+      "description": "A structured observation about the user's data.\n\nSeverity matches the existing ``analysis.types.Severity`` literal so\nthe v1 statistical engine output round-trips cleanly into v2 narratives.",
+      "properties": {
+        "claims": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Claim"
+          },
+          "title": "Claims",
+          "type": "array"
+        },
+        "metric": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Metric"
+        },
+        "severity": {
+          "default": "info",
+          "enum": [
+            "info",
+            "watch",
+            "alert"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary"
+      ],
+      "title": "Insight",
+      "type": "object"
+    },
+    "NarrativeArtifact": {
+      "additionalProperties": false,
+      "description": "A streamable narrative \u2014 daily briefing, weekly summary, etc.\n\nThe wire shape is the *persisted* form. Streaming chunks go over\nSSE during render; once complete, the whole artifact is one row\nin this shape. The dashboard's ``BriefingCard`` reads this.",
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "insights": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Insight"
+          },
+          "title": "Insights",
+          "type": "array"
+        },
+        "kind": {
+          "enum": [
+            "daily_briefing",
+            "weekly_summary",
+            "anomaly_explanation",
+            "intervention_proposal"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "narrator_plugin_id": {
+          "title": "Narrator Plugin Id",
+          "type": "string"
+        },
+        "narrator_version": {
+          "title": "Narrator Version",
+          "type": "string"
+        },
+        "owner_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "rendered_at": {
+          "format": "date-time",
+          "title": "Rendered At",
+          "type": "string"
+        },
+        "suggested_actions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SuggestedAction"
+          },
+          "title": "Suggested Actions",
+          "type": "array"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "workspace_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Workspace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "rendered_at",
+        "text",
+        "narrator_plugin_id",
+        "narrator_version"
+      ],
+      "title": "NarrativeArtifact",
+      "type": "object"
+    },
+    "SeriesResponse": {
+      "additionalProperties": false,
+      "description": "Time-series data for a chart, plus annotations.\n\n``points`` is ``(timestamp, value)`` pairs \u2014 typed as a list of\ntwo-element tuples so the TS codegen produces a sensible\n``[string, number][]`` rather than an opaque object.",
+      "properties": {
+        "annotations": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Annotation"
+          },
+          "title": "Annotations",
+          "type": "array"
+        },
+        "metric": {
+          "title": "Metric",
+          "type": "string"
+        },
+        "owner_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "points": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Points",
+          "type": "array"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "workspace_id": {
+          "default": "00000000-0000-0000-0000-000000000001",
+          "format": "uuid",
+          "title": "Workspace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "metric",
+        "unit",
+        "points"
+      ],
+      "title": "SeriesResponse",
+      "type": "object"
+    },
+    "SuggestedAction": {
+      "additionalProperties": false,
+      "description": "A user-visible suggestion. Defaults to requiring approval \u2014\nsuggestions are advisory, not auto-actuated.",
+      "properties": {
+        "rationale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rationale"
+        },
+        "requires_approval": {
+          "default": true,
+          "title": "Requires Approval",
+          "type": "boolean"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "SuggestedAction",
+      "type": "object"
+    },
+    "Uncertainty": {
+      "additionalProperties": false,
+      "description": "How sure the narrator is about a claim.",
+      "properties": {
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "confidence"
+      ],
+      "title": "Uncertainty",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A composed UI card \u2014 chart + briefing inline.\n\nThe load-bearing primitive of the agent-platform UX: chart and\nits narrative ship in one HTTP/SSE response, not two requests.",
+  "properties": {
+    "chart": {
+      "$ref": "#/$defs/ChartSpec"
+    },
+    "narrative": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NarrativeArtifact"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "series": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SeriesResponse"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "chart"
+  ],
+  "title": "NarrativeCard",
+  "type": "object"
+}

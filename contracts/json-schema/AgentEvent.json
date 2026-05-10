@@ -1,0 +1,69 @@
+{
+  "additionalProperties": false,
+  "description": "One event in the agent timeline.\n\nStreamed over Server-Sent Events to ``apps/web``'s agent activity\nfeed; persisted as the audit trail. The dashboard reads this\nshape directly via the generated TS client.",
+  "properties": {
+    "emitted_at": {
+      "format": "date-time",
+      "title": "Emitted At",
+      "type": "string"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "run_started",
+        "run_completed",
+        "run_failed",
+        "observation",
+        "proposal_created",
+        "proposal_approved",
+        "proposal_rejected",
+        "execution_succeeded",
+        "execution_failed",
+        "artifact_created"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "owner_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "payload": {
+      "title": "Payload",
+      "type": "object"
+    },
+    "run_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Run Id"
+    },
+    "workspace_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "emitted_at",
+    "kind",
+    "payload"
+  ],
+  "title": "AgentEvent",
+  "type": "object"
+}

@@ -1,0 +1,49 @@
+{
+  "additionalProperties": false,
+  "description": "A source of health data \u2014 Apple HealthKit, Oura, manual log, etc.",
+  "properties": {
+    "display_name": {
+      "title": "Display Name",
+      "type": "string"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "sensor",
+        "manual",
+        "computed",
+        "external_api"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "owner_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "plugin_id": {
+      "title": "Plugin Id",
+      "type": "string"
+    },
+    "workspace_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "plugin_id",
+    "display_name",
+    "kind"
+  ],
+  "title": "Source",
+  "type": "object"
+}

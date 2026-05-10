@@ -1,0 +1,58 @@
+{
+  "$defs": {
+    "PluginCapability": {
+      "additionalProperties": false,
+      "description": "A capability a plugin declares it needs.\n\nCapabilities use the ``read:<scope>`` / ``write:<scope>`` form\n(e.g. ``read:hrv``, ``write:notifications``) so the policy layer\ncan match on prefix.",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "PluginCapability",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Runtime permissions a plugin requests.",
+  "properties": {
+    "capabilities": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/PluginCapability"
+      },
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "network": {
+      "default": false,
+      "title": "Network",
+      "type": "boolean"
+    },
+    "secrets": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Secrets",
+      "type": "array"
+    }
+  },
+  "title": "PluginPermissions",
+  "type": "object"
+}

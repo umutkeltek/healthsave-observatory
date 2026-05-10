@@ -1,0 +1,38 @@
+{
+  "additionalProperties": false,
+  "description": "Always-attached \"where did this come from\" capsule.\n\n``raw_payload_ref`` is opaque \u2014 typically a row id in\n``raw_ingestion_log`` so a future replay can reach the exact\nbytes. Storage detail intentionally lives on the other side of\nthe storage port.",
+  "properties": {
+    "captured_at": {
+      "format": "date-time",
+      "title": "Captured At",
+      "type": "string"
+    },
+    "raw_payload_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Raw Payload Ref"
+    },
+    "sdk_version": {
+      "title": "Sdk Version",
+      "type": "string"
+    },
+    "source_plugin_id": {
+      "title": "Source Plugin Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_plugin_id",
+    "sdk_version",
+    "captured_at"
+  ],
+  "title": "Provenance",
+  "type": "object"
+}

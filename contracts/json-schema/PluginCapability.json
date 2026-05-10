@@ -1,0 +1,27 @@
+{
+  "additionalProperties": false,
+  "description": "A capability a plugin declares it needs.\n\nCapabilities use the ``read:<scope>`` / ``write:<scope>`` form\n(e.g. ``read:hrv``, ``write:notifications``) so the policy layer\ncan match on prefix.",
+  "properties": {
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "title": "PluginCapability",
+  "type": "object"
+}

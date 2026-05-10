@@ -1,0 +1,67 @@
+{
+  "additionalProperties": false,
+  "description": "An action the agent wants to take. Every state mutation begins here.\n\n``capability`` references the manifest-declared capability the\nagent claims is sufficient to execute this action; the policy\nlayer cross-checks.",
+  "properties": {
+    "action_kind": {
+      "enum": [
+        "notify",
+        "create_experiment",
+        "create_briefing",
+        "request_user_input",
+        "tag_measurement"
+      ],
+      "title": "Action Kind",
+      "type": "string"
+    },
+    "capability": {
+      "title": "Capability",
+      "type": "string"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "owner_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "payload": {
+      "title": "Payload",
+      "type": "object"
+    },
+    "proposed_at": {
+      "format": "date-time",
+      "title": "Proposed At",
+      "type": "string"
+    },
+    "rationale": {
+      "title": "Rationale",
+      "type": "string"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "workspace_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "run_id",
+    "proposed_at",
+    "action_kind",
+    "payload",
+    "rationale",
+    "capability"
+  ],
+  "title": "ActionProposal",
+  "type": "object"
+}

@@ -12,6 +12,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY apps/api/server/ ./server/
 COPY packages/py/analysis/ ./analysis/
 COPY packages/py/compat_v1/ ./compat_v1/
+COPY packages/py/contracts/ ./contracts/
+COPY scripts/ ./scripts/
 
 USER appuser
 EXPOSE 8000

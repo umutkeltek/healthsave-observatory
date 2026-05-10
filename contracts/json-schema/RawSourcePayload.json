@@ -1,0 +1,50 @@
+{
+  "additionalProperties": false,
+  "description": "A payload as the source plugin received it, pre-normalization.\n\nPersisted before parsing so we can replay against new normalization\ncode without re-fetching. ``payload_hash`` is sha256 of the canonical\nJSON form for dedup + idempotency.",
+  "properties": {
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "owner_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "payload": {
+      "title": "Payload",
+      "type": "object"
+    },
+    "payload_hash": {
+      "title": "Payload Hash",
+      "type": "string"
+    },
+    "received_at": {
+      "format": "date-time",
+      "title": "Received At",
+      "type": "string"
+    },
+    "source_id": {
+      "format": "uuid",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "workspace_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "source_id",
+    "received_at",
+    "payload_hash",
+    "payload"
+  ],
+  "title": "RawSourcePayload",
+  "type": "object"
+}
