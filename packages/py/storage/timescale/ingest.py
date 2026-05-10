@@ -18,28 +18,33 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-# NOTE: ``server.ingestion.handlers`` is imported *lazily* inside each
-# method below. Eager import here triggers a circular import:
-#   storage.timescale.ingest → server.ingestion.handlers
-#       → server.__init__ → server.api.ingest → server.ingestion.storage
-#       → (back into storage.timescale.ingest while it's still loading)
-# Phase 5D will lift the SQL out of server.ingestion.handlers into this
-# package, removing the cross-package import entirely.
+# NOTE: ``measurements`` is imported *lazily* inside each method below.
+# Eager import here re-introduces a circular import:
+#   storage.timescale.ingest → storage.timescale.measurements
+#       → server.ingestion.mappers (triggers server.__init__)
+#       → server.api.ingest → server.ingestion.storage (shim)
+#       → storage.timescale.ingest (partially loaded — boom)
+# The cycle disappears once ``server.__init__`` stops re-exporting
+# ``server.api.ingest`` (or once ``mappers``/``parsers``/``owner`` move
+# out of ``server.ingestion``). Until then, lazy import is the cheapest
+# break.
 
 
 class PostgresIngestStorage:
     """TimescaleDB-backed :class:`storage.ports.IngestStorage`.
 
-    Each method delegates to the equivalent function in
-    ``server.ingestion.handlers``. No SQL changes, no behaviour change
-    from the v1 implementation that lived at
-    ``server.ingestion.storage.PostgresIngestStorage``.
+    Each method delegates to the corresponding function in
+    :mod:`storage.timescale.measurements`. Phase 5E lifted the SQL out
+    of ``server.ingestion.handlers`` into measurements; the lazy import
+    here breaks the cycle that the cross-package helper imports
+    (``mappers``/``parsers``/``owner`` still under ``server.ingestion``)
+    would otherwise re-introduce.
     """
 
     async def get_or_create_device(self, session: Any, device_type: str) -> int:
-        from server.ingestion import handlers
+        from . import measurements
 
-        return await handlers._get_or_create_device(session, device_type)
+        return await measurements._get_or_create_device(session, device_type)
 
     async def ingest_metric(
         self,
@@ -49,9 +54,9 @@ class PostgresIngestStorage:
         samples: list[dict],
         owner_id: UUID,
     ) -> int:
-        from server.ingestion import handlers
+        from . import measurements
 
-        return await handlers._ingest_metric(session, device_id, metric, samples, owner_id)
+        return await measurements._ingest_metric(session, device_id, metric, samples, owner_id)
 
 
 class PostgresAuditLog:
@@ -68,14 +73,14 @@ class PostgresAuditLog:
         device_id: int | str | None,
         raw_payload: dict,
     ) -> int | None:
-        from server.ingestion import handlers
+        from . import measurements
 
-        return await handlers._log_raw_ingestion(session, device_id, raw_payload)
+        return await measurements._log_raw_ingestion(session, device_id, raw_payload)
 
     async def mark_processed(self, session: Any, raw_log_id: Any) -> None:
-        from server.ingestion import handlers
+        from . import measurements
 
-        await handlers._mark_raw_ingestion_processed(session, raw_log_id)
+        await measurements._mark_raw_ingestion_processed(session, raw_log_id)
 
 
 # Module-level defaults — production wiring (``server.main``) constructs
