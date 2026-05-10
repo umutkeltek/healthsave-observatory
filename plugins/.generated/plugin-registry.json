@@ -1,0 +1,50 @@
+{
+  "plugins": [
+    {
+      "compatible_with_running_sdk": true,
+      "id": "apple-health-healthsave",
+      "kind": "source",
+      "manifest": {
+        "config_schema": null,
+        "consumes": [],
+        "emits": [
+          "measurement.heart_rate",
+          "measurement.hrv",
+          "measurement.blood_oxygen",
+          "measurement.sleep_analysis",
+          "measurement.workouts",
+          "measurement.activity_summaries",
+          "measurement.daily_step_count",
+          "measurement.daily_active_energy",
+          "measurement.daily_distance",
+          "measurement.daily_flights_climbed",
+          "measurement.quantity_samples"
+        ],
+        "entrypoint": "plugins.sources.apple_health_healthsave:AppleHealthSource",
+        "id": "apple-health-healthsave",
+        "kind": "source",
+        "language": "python",
+        "name": "Apple Health (HealthSave bridge)",
+        "permissions": {
+          "capabilities": [
+            {
+              "description": "Persist the unparsed batch payload before processing for replay.",
+              "name": "write:raw_ingestion_log"
+            },
+            {
+              "description": "Insert into the per-metric Timescale tables.",
+              "name": "write:measurements"
+            }
+          ],
+          "network": false,
+          "secrets": []
+        },
+        "requires": [],
+        "sdk_version": ">=0.1,<0.2",
+        "version": "1.0.0"
+      },
+      "plugin_dir": "/Users/umut/Projects/products/healthsave/datahub/plugins/sources/apple_health_healthsave"
+    }
+  ],
+  "sdk_version": "0.1.0"
+}

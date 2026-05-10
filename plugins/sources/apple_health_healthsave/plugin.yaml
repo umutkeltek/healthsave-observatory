@@ -1,0 +1,27 @@
+id: apple-health-healthsave
+name: Apple Health (HealthSave bridge)
+kind: source
+version: "1.0.0"
+sdk_version: ">=0.1,<0.2"
+language: python
+entrypoint: "plugins.sources.apple_health_healthsave:AppleHealthSource"
+emits:
+  - measurement.heart_rate
+  - measurement.hrv
+  - measurement.blood_oxygen
+  - measurement.sleep_analysis
+  - measurement.workouts
+  - measurement.activity_summaries
+  - measurement.daily_step_count
+  - measurement.daily_active_energy
+  - measurement.daily_distance
+  - measurement.daily_flights_climbed
+  - measurement.quantity_samples
+permissions:
+  network: false
+  secrets: []
+  capabilities:
+    - name: "write:raw_ingestion_log"
+      description: "Persist the unparsed batch payload before processing for replay."
+    - name: "write:measurements"
+      description: "Insert into the per-metric Timescale tables."
