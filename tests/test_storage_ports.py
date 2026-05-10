@@ -390,3 +390,66 @@ def test_module_level_functions_share_default_repository() -> None:
     # And the module exposes the convenience entry points.
     for name in ("claim_run", "mark_succeeded", "mark_failed", "mark_skipped", "fetch_recent"):
         assert hasattr(runs_module, name), f"runs module missing {name}"
+
+
+# ──────────────────────────────────────────────────────────────
+#  Phase 5F: storage.timescale.analysis surface contract
+# ──────────────────────────────────────────────────────────────
+
+
+def test_analysis_module_exposes_expected_async_helpers() -> None:
+    """Phase 5F lifts every analysis SQL function into
+    ``storage.timescale.analysis``. This contract test pins the
+    public function names + their async-ness so a future refactor
+    cannot silently rename one out from under the analysis classes
+    that import them via the lazy ``_sql()`` handle.
+    """
+    import inspect
+
+    from storage.timescale import analysis as analysis_sql
+
+    expected = {
+        # analysis_runs lifecycle
+        "begin_run",
+        "mark_run_skipped",
+        "mark_run_completed",
+        "mark_run_failed",
+        "insert_finding",
+        "insert_insight",
+        "within_cooldown",
+        "fetch_recent_anomaly_findings",
+        # period summaries
+        "hr_summary_from_hourly",
+        "hr_summary_from_raw",
+        "hrv_summary",
+        # anomaly observation fetches
+        "fetch_hr_observations",
+        "fetch_hrv_observations",
+        "fetch_workouts",
+        # trend daily-value fetches
+        "fetch_heart_rate_daily_from_hourly",
+        "fetch_heart_rate_daily_from_raw",
+        "fetch_hrv_daily",
+    }
+
+    actual = {
+        name
+        for name in dir(analysis_sql)
+        if not name.startswith("_") and callable(getattr(analysis_sql, name))
+    }
+    # Filter out anything that came in via stdlib re-exports (datetime,
+    # etc.) — only count names defined in this module.
+    actual_in_module = {
+        name
+        for name in actual
+        if getattr(analysis_sql, name).__module__ == "storage.timescale.analysis"
+    }
+
+    missing = expected - actual_in_module
+    assert not missing, f"storage.timescale.analysis is missing helpers: {sorted(missing)}"
+
+    for name in expected:
+        fn = getattr(analysis_sql, name)
+        assert inspect.iscoroutinefunction(fn), (
+            f"storage.timescale.analysis.{name} must be async — analysis classes await it"
+        )
