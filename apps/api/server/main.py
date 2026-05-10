@@ -39,6 +39,9 @@ async def lifespan(a: FastAPI):
     analysis_engine = AnalysisEngine(async_session, llm_client, analysis_config)
     a.state.analysis_config = analysis_config
     a.state.analysis_engine = analysis_engine
+    # Phase 4D: trigger handler writes pipeline_runs records via this
+    # factory. Tests that don't set it get a no-op (graceful degrade).
+    a.state.session_factory = async_session
     storage, audit_log = resolve_from_env()
     a.state.storage = storage
     a.state.audit_log = audit_log
