@@ -25,6 +25,12 @@ explainable anomalies:
 The detector never raises from SQL errors - the engine wraps its
 call-site in best-effort logic so a missing ``hrv`` row or an empty
 workouts table can't fail the daily briefing.
+
+Phase 5F lifted the SQL out of this module into
+``storage.timescale.analysis``. Statistical machinery and context
+filtering stay here; data access is delegated through the lazy
+``_sql()`` handle (see :func:`analysis.engine._sql` for the cycle
+background).
 """
 
 from __future__ import annotations
@@ -34,12 +40,19 @@ import statistics
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import text
-
 from ..types import Anomaly, Sensitivity, Severity
 from .gates import MINIMUM_DATA_REQUIREMENTS
 
 log = logging.getLogger("healthsave.analysis")
+
+
+def _sql():
+    """Lazy import handle for ``storage.timescale.analysis`` — see
+    :func:`analysis.engine._sql` for the cycle background.
+    """
+    from storage.timescale import analysis as analysis_sql
+
+    return analysis_sql
 
 
 # Sensitivity → z-score floor (below this, nothing is flagged).
@@ -124,7 +137,7 @@ class AnomalyDetector:
             hr = await self._zscore_anomalies(
                 session,
                 metric="heart_rate",
-                fetcher=self._fetch_hr_observations,
+                fetcher=_sql().fetch_hr_observations,
                 window_start=start,
                 window_end=end,
                 baseline_start=baseline_start,
@@ -133,7 +146,7 @@ class AnomalyDetector:
             hrv = await self._zscore_anomalies(
                 session,
                 metric="hrv",
-                fetcher=self._fetch_hrv_observations,
+                fetcher=_sql().fetch_hrv_observations,
                 window_start=start,
                 window_end=end,
                 baseline_start=baseline_start,
@@ -193,70 +206,6 @@ class AnomalyDetector:
         return anomalies
 
     # ──────────────────────────────────────────────────────────────
-    #  Observation fetches
-    # ──────────────────────────────────────────────────────────────
-
-    async def _fetch_hr_observations(
-        self, session, start: datetime, end: datetime
-    ) -> list[tuple[datetime, float]]:
-        """Return ``(bucket, avg_bpm)`` pairs from ``hr_hourly``.
-
-        Falls back to aggregating raw ``heart_rate`` into 1-hour buckets
-        when ``hr_hourly`` is empty (mirrors the aggregator's fallback
-        so the detector stays usable on fresh installs).
-        """
-        result = await session.execute(
-            text(
-                """
-                SELECT bucket, avg_bpm::float AS value
-                FROM hr_hourly
-                WHERE bucket >= :start AND bucket < :end
-                  AND avg_bpm IS NOT NULL
-                ORDER BY bucket ASC
-                """
-            ),
-            {"start": start, "end": end},
-        )
-        rows = self._fetchall(result)
-        if rows:
-            return [(row.bucket, float(row.value)) for row in rows if row.value is not None]
-
-        # Fallback: raw hypertable bucketed into hourly averages.
-        result = await session.execute(
-            text(
-                """
-                SELECT date_trunc('hour', time) AS bucket,
-                       avg(bpm)::float AS value
-                FROM heart_rate
-                WHERE time >= :start AND time < :end
-                GROUP BY bucket
-                ORDER BY bucket ASC
-                """
-            ),
-            {"start": start, "end": end},
-        )
-        rows = self._fetchall(result)
-        return [(row.bucket, float(row.value)) for row in rows if row.value is not None]
-
-    async def _fetch_hrv_observations(
-        self, session, start: datetime, end: datetime
-    ) -> list[tuple[datetime, float]]:
-        """Return ``(time, value_ms)`` pairs from the raw ``hrv`` hypertable."""
-        result = await session.execute(
-            text(
-                """
-                SELECT time, value_ms::float AS value
-                FROM hrv
-                WHERE time >= :start AND time < :end
-                ORDER BY time ASC
-                """
-            ),
-            {"start": start, "end": end},
-        )
-        rows = self._fetchall(result)
-        return [(row.time, float(row.value)) for row in rows if row.value is not None]
-
-    # ──────────────────────────────────────────────────────────────
     #  Context filter
     # ──────────────────────────────────────────────────────────────
 
@@ -273,7 +222,7 @@ class AnomalyDetector:
 
         min_t = min(times) - _POST_WORKOUT_WINDOW
         max_t = max(times)
-        workouts = await self._fetch_workouts(session, min_t, max_t)
+        workouts = await _sql().fetch_workouts(session, min_t, max_t)
 
         kept: list[Anomaly] = []
         for anomaly in anomalies:
@@ -316,28 +265,6 @@ class AnomalyDetector:
             kept.append(anomaly)
         return kept
 
-    async def _fetch_workouts(
-        self, session, start: datetime, end: datetime
-    ) -> list[dict[str, Any]]:
-        """Return ``[{start, end}, ...]`` for workouts overlapping the window."""
-        result = await session.execute(
-            text(
-                """
-                SELECT start_time, end_time
-                FROM workouts
-                WHERE start_time <= :end AND end_time >= :start
-                ORDER BY start_time ASC
-                """
-            ),
-            {"start": start, "end": end},
-        )
-        rows = self._fetchall(result)
-        return [
-            {"start": row.start_time, "end": row.end_time}
-            for row in rows
-            if row.start_time is not None and row.end_time is not None
-        ]
-
     # ──────────────────────────────────────────────────────────────
     #  Internals
     # ──────────────────────────────────────────────────────────────
@@ -370,7 +297,9 @@ class AnomalyDetector:
 
         Real ``sqlalchemy.engine.Result`` supports ``.fetchall()``. Some
         test fakes only expose iteration - so we fall back to ``list(result)``
-        when ``fetchall`` is absent.
+        when ``fetchall`` is absent. Kept here as a public helper for
+        callers that build their own fetchers; the lifted SQL functions
+        in ``storage.timescale.analysis`` use the shared private copy.
         """
         fetchall = getattr(result, "fetchall", None)
         if callable(fetchall):

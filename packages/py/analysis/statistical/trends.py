@@ -1,11 +1,16 @@
-"""Trend analysis - linear regression over daily aggregates."""
+"""Trend analysis - linear regression over daily aggregates.
+
+Phase 5F lifted the SQL out of this module into
+``storage.timescale.analysis``. Statistical machinery (regression,
+sufficiency gates, day coercion) stays here; data access is delegated
+through the lazy ``_sql()`` handle (see :func:`analysis.engine._sql`
+for the cycle background).
+"""
 
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
-
-from sqlalchemy import text
 
 from ..types import Trend
 from .gates import MINIMUM_DATA_REQUIREMENTS
@@ -13,6 +18,15 @@ from .gates import MINIMUM_DATA_REQUIREMENTS
 _SUPPORTED_METRICS = frozenset({"heart_rate", "hrv"})
 _SIGNIFICANCE_P = 0.05
 _HIGH_CONFIDENCE_P = 0.01
+
+
+def _sql():
+    """Lazy import handle for ``storage.timescale.analysis`` — see
+    :func:`analysis.engine._sql` for the cycle background.
+    """
+    from storage.timescale import analysis as analysis_sql
+
+    return analysis_sql
 
 
 class TrendAnalyzer:
@@ -68,78 +82,11 @@ class TrendAnalyzer:
         self, session, metric: str, start: datetime, end: datetime
     ) -> list[Any]:
         if metric == "heart_rate":
-            rows = await self._fetch_heart_rate_daily_from_hourly(session, start, end)
+            rows = await _sql().fetch_heart_rate_daily_from_hourly(session, start, end)
             if rows:
                 return rows
-            return await self._fetch_heart_rate_daily_from_raw(session, start, end)
-        return await self._fetch_hrv_daily(session, start, end)
-
-    async def _fetch_heart_rate_daily_from_hourly(
-        self, session, start: datetime, end: datetime
-    ) -> list[Any]:
-        result = await session.execute(
-            text(
-                """
-                SELECT date_trunc('day', bucket)::date AS day,
-                       avg(avg_bpm)::float AS value,
-                       sum(samples) AS sample_count
-                FROM hr_hourly
-                WHERE bucket >= :start AND bucket < :end
-                  AND avg_bpm IS NOT NULL
-                GROUP BY day
-                ORDER BY day ASC
-                """
-            ),
-            {"start": start, "end": end},
-        )
-        return _fetchall(result)
-
-    async def _fetch_heart_rate_daily_from_raw(
-        self, session, start: datetime, end: datetime
-    ) -> list[Any]:
-        result = await session.execute(
-            text(
-                """
-                SELECT date_trunc('day', time)::date AS day,
-                       avg(bpm)::float AS value,
-                       count(*) AS sample_count
-                FROM heart_rate
-                WHERE time >= :start AND time < :end
-                GROUP BY day
-                ORDER BY day ASC
-                """
-            ),
-            {"start": start, "end": end},
-        )
-        return _fetchall(result)
-
-    async def _fetch_hrv_daily(self, session, start: datetime, end: datetime) -> list[Any]:
-        result = await session.execute(
-            text(
-                """
-                SELECT date_trunc('day', time)::date AS day,
-                       avg(value_ms)::float AS value,
-                       count(*) AS sample_count
-                FROM hrv
-                WHERE time >= :start AND time < :end
-                GROUP BY day
-                ORDER BY day ASC
-                """
-            ),
-            {"start": start, "end": end},
-        )
-        return _fetchall(result)
-
-
-def _fetchall(result) -> list[Any]:
-    fetchall = getattr(result, "fetchall", None)
-    if callable(fetchall):
-        rows = fetchall()
-        return list(rows) if rows is not None else []
-    try:
-        return list(result)
-    except TypeError:
-        return []
+            return await _sql().fetch_heart_rate_daily_from_raw(session, start, end)
+        return await _sql().fetch_hrv_daily(session, start, end)
 
 
 def _has_sufficient_data(rows: list[Any]) -> bool:
