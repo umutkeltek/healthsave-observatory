@@ -23,7 +23,12 @@ LOCK_PATH = REPO_ROOT / "contracts" / "openapi" / "v1.locked.json"
 
 
 def dump_openapi() -> dict:
-    sys.path.insert(0, str(REPO_ROOT))
+    # v2 layout: server lives under apps/api/, analysis under packages/py/.
+    # Add both roots to sys.path so this script works on a fresh checkout
+    # without requiring `pip install -e .` first. CI installs the package
+    # before running the --check step; this is the safety net for local.
+    sys.path.insert(0, str(REPO_ROOT / "apps" / "api"))
+    sys.path.insert(0, str(REPO_ROOT / "packages" / "py"))
     from server.main import app  # noqa: E402
 
     return app.openapi()
