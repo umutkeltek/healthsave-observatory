@@ -6,6 +6,12 @@ installs. HRV has no continuous aggregate, so the raw ``hrv`` table is
 the primary path - Apple Watch only records 5-30 HRV samples per day,
 so aggregating raw rows directly is fine at MVP scale (30 days of data
 is well under 5000 rows).
+
+Phase 5F lifted the SQL out of this module into
+``storage.timescale.analysis``. The ``DataAggregator`` orchestrator
+below stays in the analysis layer; SQL access is delegated through
+the lazy ``_sql()`` handle to avoid the import cycle that bit Phase
+5C/5E (see ``analysis.engine._sql`` for the full trace).
 """
 
 from __future__ import annotations
@@ -13,9 +19,16 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import text
-
 from ..types import PeriodSummary
+
+
+def _sql():
+    """Lazy import handle for ``storage.timescale.analysis`` — see
+    :func:`analysis.engine._sql` for the cycle background.
+    """
+    from storage.timescale import analysis as analysis_sql
+
+    return analysis_sql
 
 
 class DataAggregator:
@@ -41,21 +54,21 @@ class DataAggregator:
 
         async with self.session_factory() as session:
             # ─── Heart rate ─────────────────────────────────────────
-            yesterday_hr = await self._hr_summary(session, start, end)
+            yesterday_hr = await _sql().hr_summary_from_hourly(session, start, end)
             if yesterday_hr["count"] == 0:
-                yesterday_hr = await self._raw_hr_summary(session, start, end)
+                yesterday_hr = await _sql().hr_summary_from_raw(session, start, end)
 
             baseline_hr: dict[str, Any] | None = None
             if yesterday_hr["count"] > 0:
-                baseline_hr = await self._hr_summary(session, baseline_start, start)
+                baseline_hr = await _sql().hr_summary_from_hourly(session, baseline_start, start)
                 if baseline_hr["count"] == 0:
-                    baseline_hr = await self._raw_hr_summary(session, baseline_start, start)
+                    baseline_hr = await _sql().hr_summary_from_raw(session, baseline_start, start)
 
             # ─── HRV ────────────────────────────────────────────────
-            yesterday_hrv = await self._hrv_summary(session, start, end)
+            yesterday_hrv = await _sql().hrv_summary(session, start, end)
             baseline_hrv: dict[str, Any] | None = None
             if yesterday_hrv["count"] > 0:
-                baseline_hrv = await self._hrv_summary(session, baseline_start, start)
+                baseline_hrv = await _sql().hrv_summary(session, baseline_start, start)
 
         metrics: dict[str, dict[str, Any]] = {}
 
@@ -95,83 +108,3 @@ class DataAggregator:
             period_end=end,
             metrics=metrics,
         )
-
-    async def _hr_summary(self, session, start: datetime, end: datetime) -> dict[str, Any]:
-        """Aggregate ``hr_hourly`` over ``[start, end)`` into avg/min/max/count."""
-        result = await session.execute(
-            text(
-                """
-                SELECT avg(avg_bpm)::float AS avg_v,
-                       min(min_bpm) AS min_v,
-                       max(max_bpm) AS max_v,
-                       sum(samples) AS count_v
-                FROM hr_hourly
-                WHERE bucket >= :start AND bucket < :end
-                """
-            ),
-            {"start": start, "end": end},
-        )
-        row = result.fetchone()
-        if row is None:
-            return {"avg": None, "min": None, "max": None, "count": 0}
-        return {
-            "avg": row.avg_v,
-            "min": row.min_v,
-            "max": row.max_v,
-            "count": row.count_v or 0,
-        }
-
-    async def _raw_hr_summary(self, session, start: datetime, end: datetime) -> dict[str, Any]:
-        """Aggregate raw ``heart_rate`` rows when ``hr_hourly`` has not refreshed."""
-        result = await session.execute(
-            text(
-                """
-                SELECT avg(bpm)::float AS avg_v,
-                       min(bpm) AS min_v,
-                       max(bpm) AS max_v,
-                       count(*) AS count_v
-                FROM heart_rate
-                WHERE time >= :start AND time < :end
-                """
-            ),
-            {"start": start, "end": end},
-        )
-        row = result.fetchone()
-        if row is None:
-            return {"avg": None, "min": None, "max": None, "count": 0}
-        return {
-            "avg": row.avg_v,
-            "min": row.min_v,
-            "max": row.max_v,
-            "count": row.count_v or 0,
-        }
-
-    async def _hrv_summary(self, session, start: datetime, end: datetime) -> dict[str, Any]:
-        """Aggregate raw ``hrv`` rows over ``[start, end)`` into avg/min/max/count.
-
-        HRV has no continuous aggregate (D11) because Apple Watch records
-        only 5-30 samples per day - aggregating the raw hypertable
-        directly is fast enough for MVP windows.
-        """
-        result = await session.execute(
-            text(
-                """
-                SELECT avg(value_ms)::float AS avg_v,
-                       min(value_ms) AS min_v,
-                       max(value_ms) AS max_v,
-                       count(*) AS count_v
-                FROM hrv
-                WHERE time >= :start AND time < :end
-                """
-            ),
-            {"start": start, "end": end},
-        )
-        row = result.fetchone()
-        if row is None:
-            return {"avg": None, "min": None, "max": None, "count": 0}
-        return {
-            "avg": row.avg_v,
-            "min": row.min_v,
-            "max": row.max_v,
-            "count": row.count_v or 0,
-        }

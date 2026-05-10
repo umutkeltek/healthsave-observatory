@@ -72,19 +72,13 @@ ALLOWLIST: dict[str, str] = {
         "Phase 5E may migrate into storage/timescale/measurements.py with "
         "MeasurementRepository.metric_counts()"
     ),
-    # --- Phase 5F migration targets ---
-    "packages/py/analysis/engine.py": (
-        "Phase 5F — analysis engine SQL into storage/timescale/analysis.py"
-    ),
-    "packages/py/analysis/statistical/aggregator.py": (
-        "Phase 5F — aggregator SQL into storage/timescale/analysis.py"
-    ),
-    "packages/py/analysis/statistical/anomaly.py": (
-        "Phase 5F — anomaly-detector SQL into storage/timescale/analysis.py"
-    ),
-    "packages/py/analysis/statistical/trends.py": (
-        "Phase 5F — trend-detector SQL into storage/timescale/analysis.py"
-    ),
+    # Phase 5F retired the four `packages/py/analysis/*` entries here:
+    #   engine.py, statistical/aggregator.py, statistical/anomaly.py,
+    #   statistical/trends.py — their SQL now lives in
+    #   `packages/py/storage/timescale/analysis.py`. The originals are
+    #   the analysis orchestrators; they reach the SQL via a lazy
+    #   `_sql()` import. The allowlist is now "stays-only" — every
+    #   remaining entry is long-term-correct outside the storage zone.
 }
 
 
@@ -145,7 +139,13 @@ def test_storage_timescale_baseline() -> None:
     trivially passing. Phase 5A/B/C established four Timescale impls.
     """
     timescale = STORAGE_ZONE / "timescale"
-    expected_modules = {"runs.py", "briefings.py", "ingest.py", "measurements.py"}
+    expected_modules = {
+        "runs.py",
+        "briefings.py",
+        "ingest.py",
+        "measurements.py",
+        "analysis.py",
+    }
     actual = {p.name for p in timescale.iterdir() if p.suffix == ".py"}
     missing = expected_modules - actual
     assert not missing, f"Expected timescale modules missing: {missing}"

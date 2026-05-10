@@ -13,7 +13,7 @@ Each module typically exposes:
   session directly without injecting a repository.
 """
 
-from . import briefings, ingest, measurements, runs
+from . import analysis, briefings, ingest, measurements, runs
 from .briefings import (
     FindingRow,
     NarrativeRow,
@@ -35,6 +35,7 @@ from .runs import (
 
 __all__ = [
     # modules — preferred for module-level convenience calls
+    "analysis",
     "briefings",
     "ingest",
     "measurements",
