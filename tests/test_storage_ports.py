@@ -21,7 +21,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from storage.ports import BriefingRepository, RunRepository
+from storage.ports import (
+    AuditLog,
+    BriefingRepository,
+    IngestStorage,
+    MeasurementRepository,
+    RunRepository,
+)
 from storage.timescale.briefings import (
     FindingRow,
     NarrativeRow,
@@ -315,6 +321,56 @@ async def test_in_memory_briefing_repo_walks_all_three_methods() -> None:
 
     trends_none = await repo.fetch_trends(session=None, period_days="999")
     assert trends_none == []
+
+
+# ──────────────────────────────────────────────────────────────
+#  IngestStorage + AuditLog + MeasurementRepository (Phase 5C)
+# ──────────────────────────────────────────────────────────────
+
+
+def test_postgres_ingest_storage_satisfies_protocol() -> None:
+    from storage.timescale.ingest import (
+        PostgresAuditLog,
+        PostgresIngestStorage,
+        default_audit_log,
+        default_storage,
+    )
+
+    assert isinstance(default_storage, IngestStorage)
+    assert isinstance(PostgresIngestStorage(), IngestStorage)
+    assert isinstance(default_audit_log, AuditLog)
+    assert isinstance(PostgresAuditLog(), AuditLog)
+
+
+def test_v1_shim_re_exports_match_new_location() -> None:
+    """The backwards-compat shim at ``server.ingestion.storage`` must
+    re-export the same Protocol objects + default instances as the new
+    home in ``storage.timescale.ingest``. Existing callers (registry,
+    routes, tests) that import from the v1 path stay correct without
+    churn."""
+    from server.ingestion import storage as shim
+    from storage.ports import AuditLog as PortAuditLog
+    from storage.ports import IngestStorage as PortIngestStorage
+    from storage.timescale.ingest import default_audit_log, default_storage
+
+    assert shim.IngestStorage is PortIngestStorage
+    assert shim.AuditLog is PortAuditLog
+    assert shim.default_storage is default_storage
+    assert shim.default_audit_log is default_audit_log
+
+
+def test_measurement_repository_skeleton_satisfies_protocol() -> None:
+    """Phase 5C ships an empty ``MeasurementRepository`` Protocol so
+    consumers can begin depending on the type. Phase 5D fills in real
+    methods. Today an empty class implements it because the Protocol
+    has zero required methods."""
+    from storage.timescale.measurements import (
+        TimescaleMeasurementRepository,
+        default_repository,
+    )
+
+    assert isinstance(default_repository, MeasurementRepository)
+    assert isinstance(TimescaleMeasurementRepository(), MeasurementRepository)
 
 
 # ──────────────────────────────────────────────────────────────

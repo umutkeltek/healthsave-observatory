@@ -13,12 +13,19 @@ Each module typically exposes:
   session directly without injecting a repository.
 """
 
-from . import briefings, runs
+from . import briefings, ingest, measurements, runs
 from .briefings import (
     FindingRow,
     NarrativeRow,
     TimescaleBriefingRepository,
 )
+from .ingest import (
+    PostgresAuditLog,
+    PostgresIngestStorage,
+    default_audit_log,
+    default_storage,
+)
+from .measurements import TimescaleMeasurementRepository
 from .runs import (
     PipelineRun,
     PipelineStatus,
@@ -29,14 +36,23 @@ from .runs import (
 __all__ = [
     # modules — preferred for module-level convenience calls
     "briefings",
+    "ingest",
+    "measurements",
     "runs",
-    # runs — public types
+    # runs
     "PipelineRun",
     "PipelineStatus",
     "TimescaleRunRepository",
     "TriggeredBy",
-    # briefings — public types
+    # briefings
     "FindingRow",
     "NarrativeRow",
     "TimescaleBriefingRepository",
+    # ingest (relocated from server/ingestion/storage.py)
+    "PostgresAuditLog",
+    "PostgresIngestStorage",
+    "default_audit_log",
+    "default_storage",
+    # measurements (Phase 5C skeleton)
+    "TimescaleMeasurementRepository",
 ]

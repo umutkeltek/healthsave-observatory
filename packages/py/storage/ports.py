@@ -3,13 +3,20 @@
 Each Protocol is the *shape* an implementation must conform to.
 ``storage.timescale.*`` provides the v1 TimescaleDB implementations.
 
-Phase 5A defines:
-- :class:`RunRepository` — pipeline_runs ledger CRUD.
+Defined ports:
+- :class:`RunRepository` (Phase 5A) — pipeline_runs ledger CRUD.
+- :class:`BriefingRepository` (Phase 5B) — analysis_insights /
+  analysis_findings reads.
+- :class:`IngestStorage` (Phase 5C, relocated) — write side of the
+  ingest pipeline. The shape is unchanged from v1.
+- :class:`AuditLog` (Phase 5C, relocated) — optional raw-payload
+  audit; Postgres-only, InfluxDB-style backends skip.
+- :class:`MeasurementRepository` (Phase 5C, skeleton) — placeholder
+  Protocol that Phase 5D fills in as per-metric SQL migrates out of
+  ``server.ingestion.handlers``.
 
-Phase 5B-D will add:
-- ``MeasurementRepository`` (heart_rate, hrv, sleep_*, workouts, ...).
-- ``TimeSeriesQueryService`` (Grafana-shaped chart queries, anomalies).
-- ``BriefingRepository`` (analysis_runs + analysis_findings + insights).
+Phase 5D and later will add:
+- ``TimeSeriesQueryService`` — Grafana-shaped chart queries.
 - ``AgentRunRepository`` (Phase 7).
 - ``ExperimentRepository`` (n-of-1 runner, Phase 9+).
 
@@ -30,6 +37,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from datetime import datetime
+    from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -133,3 +141,60 @@ class BriefingRepository(Protocol):
         period_days: str | None = None,
         limit: int = 200,
     ) -> list[FindingRow]: ...
+
+
+@runtime_checkable
+class IngestStorage(Protocol):
+    """Minimum surface every ingest backend must implement.
+
+    Backend-agnostic by design — ``session`` is ``Any`` so a backend
+    can use a SQLAlchemy ``AsyncSession``, an httpx client, or nothing
+    at all. TimescaleDB returns ``int`` device ids; InfluxDB-style
+    backends can return the device_type string (identity flows through
+    tags). Both shapes satisfy ``int | str``.
+    """
+
+    async def get_or_create_device(self, session: Any, device_type: str) -> int | str: ...
+
+    async def ingest_metric(
+        self,
+        session: Any,
+        device_id: int | str,
+        metric: str,
+        samples: list[dict],
+        owner_id: UUID,
+    ) -> int: ...
+
+
+@runtime_checkable
+class AuditLog(Protocol):
+    """Optional: persist + mark raw ingest payloads.
+
+    Postgres-shaped concern — auto-incrementing id, UPDATE on a
+    ``processed`` column. Append-only backends like InfluxDB don't
+    need to implement it; the route falls back to skipping audit
+    calls when ``app.state.audit_log`` is ``None``.
+    """
+
+    async def log_raw(
+        self,
+        session: Any,
+        device_id: int | str | None,
+        raw_payload: dict,
+    ) -> Any: ...
+
+    async def mark_processed(self, session: Any, raw_log_id: Any) -> None: ...
+
+
+@runtime_checkable
+class MeasurementRepository(Protocol):
+    """Per-metric measurement storage. Skeleton for Phase 5D.
+
+    Today this Protocol intentionally requires zero methods — the
+    handler-level SQL hasn't been lifted yet. The empty Protocol
+    provides the binding type so consumers can begin to depend on
+    ``storage.ports.MeasurementRepository`` and tests can build fake
+    in-memory implementations against the same name. Phase 5D adds
+    real methods (``insert_heart_rate``, ``insert_workout``,
+    ``fetch_series``, etc.) as their SQL migrates here.
+    """
