@@ -389,7 +389,29 @@ their original schema, so apply migrations manually when upgrading:
 ```bash
 docker compose exec -T db psql -U healthsave -d healthsave < migrations/001_audit_hardening.sql
 docker compose exec -T db psql -U healthsave -d healthsave < migrations/002_analysis_tables.sql
+docker compose exec -T db psql -U healthsave -d healthsave < migrations/003_multi_user.sql
 ```
+
+### Multi-user / Household
+
+Every metric table carries an `owner_id` UUID. Single-user installs need
+to do nothing — when the `X-User-Id` header is absent, ingest writes
+under the sentinel UUID `00000000-0000-0000-0000-000000000001` and the
+schema-level default backfills any pre-migration rows to the same value.
+
+To split a household across multiple residents:
+
+1. Pick a UUID per person (any v4 UUID works — `python -c "import uuid; print(uuid.uuid4())"`).
+2. Configure each HealthSave client / import script to send that UUID as the
+   `X-User-Id` header on every `POST /api/apple/batch` call.
+3. Filter Grafana panels by `owner_id` (add a dashboard variable bound to the
+   `SELECT DISTINCT owner_id FROM heart_rate` query, then drop `WHERE owner_id = '$owner'`
+   into each panel query).
+
+Existing single-user installs keep working untouched if step 2 is skipped.
+The unique indexes on every metric table include `owner_id`, so two
+residents can have a sample at the same `(time, device_id)` without
+collisions, and re-syncing from one client remains idempotent.
 
 ### Development
 

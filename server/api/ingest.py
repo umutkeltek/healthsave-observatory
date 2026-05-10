@@ -13,6 +13,7 @@ from ..ingestion.handlers import (
     _log_raw_ingestion,
     _mark_raw_ingestion_processed,
 )
+from ..ingestion.owner import OWNER_HEADER, resolve_owner_id
 from ..ingestion.parsers import group_samples_by_device
 from ..models.batch import BatchPayload
 from .deps import get_session, verify_api_key
@@ -49,6 +50,11 @@ async def apple_batch(
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
+    try:
+        owner_id = resolve_owner_id(request.headers.get(OWNER_HEADER))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"invalid {OWNER_HEADER}: {exc}") from exc
+
     metric = payload.metric.strip() or "unknown"
     batch_idx = payload.batch_index
     total = payload.total_batches
@@ -75,7 +81,7 @@ async def apple_batch(
             if device_name == first_device_name
             else await _get_or_create_device(session, device_name)
         )
-        count += await _ingest_metric(session, device_id, metric, device_samples)
+        count += await _ingest_metric(session, device_id, metric, device_samples, owner_id)
 
     await _mark_raw_ingestion_processed(session, raw_log_id)
     await session.commit()

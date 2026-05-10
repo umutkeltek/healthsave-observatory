@@ -8,12 +8,16 @@ writer based on the metric name, falling back to the catch-all
 so that the existing private dispatch table keeps working unchanged.
 """
 
+from __future__ import annotations
+
 from json import dumps
+from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .mappers import ACTIVITY_FIELDS, DAILY_ACTIVITY_QUANTITY_FIELDS, DEDICATED_TABLES
+from .owner import DEFAULT_OWNER_ID
 from .parsers import first_present, parse_date, parse_ts, to_float, to_int
 from .sleep import ingest_sleep
 
@@ -67,29 +71,38 @@ async def _mark_raw_ingestion_processed(session: AsyncSession, raw_log_id: int |
 
 
 async def _ingest_metric(
-    session: AsyncSession, device_id: int, metric: str, samples: list[dict]
+    session: AsyncSession,
+    device_id: int,
+    metric: str,
+    samples: list[dict],
+    owner_id: UUID = DEFAULT_OWNER_ID,
 ) -> int:
     if metric == "activity_summaries":
-        return await _ingest_activity(session, device_id, samples)
+        return await _ingest_activity(session, device_id, samples, owner_id=owner_id)
     if metric in DAILY_ACTIVITY_QUANTITY_FIELDS:
-        return await _ingest_daily_quantity(session, device_id, metric, samples)
+        return await _ingest_daily_quantity(session, device_id, metric, samples, owner_id=owner_id)
     if metric == "sleep_analysis":
-        return await _ingest_sleep(session, device_id, samples)
+        return await _ingest_sleep(session, device_id, samples, owner_id=owner_id)
     if metric == "workouts":
-        return await _ingest_workouts(session, device_id, samples)
+        return await _ingest_workouts(session, device_id, samples, owner_id=owner_id)
     if metric in DEDICATED_TABLES:
-        return await _ingest_dedicated(session, device_id, metric, samples)
-    return await _ingest_generic(session, device_id, metric, samples)
+        return await _ingest_dedicated(session, device_id, metric, samples, owner_id=owner_id)
+    return await _ingest_generic(session, device_id, metric, samples, owner_id=owner_id)
 
 
 async def _ingest_dedicated(
-    session: AsyncSession, device_id: int, metric: str, samples: list
+    session: AsyncSession,
+    device_id: int,
+    metric: str,
+    samples: list,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
 ) -> int:
     spec = DEDICATED_TABLES[metric]
     rows = []
     value_col = list(spec["columns"].values())[1]
     for s in samples:
-        row = {"device_id": device_id}
+        row = {"device_id": device_id, "owner_id": str(owner_id)}
         for src_key, dst_col in spec["columns"].items():
             val = s.get(src_key)
             if dst_col == "time":
@@ -105,22 +118,23 @@ async def _ingest_dedicated(
     if not rows:
         return 0
 
-    # Dedup within batch
+    # Dedup within batch (conflict_cols already include owner_id via the schema)
+    conflict_cols = list(spec["conflict"]) + ["owner_id"]
     seen = {}
     for row in rows:
-        key = tuple(row.get(c) for c in spec["conflict"])
+        key = tuple(row.get(c) for c in conflict_cols)
         seen[key] = row
     rows = list(seen.values())
 
-    conflict_cols = ", ".join(spec["conflict"])
+    conflict_sql = ", ".join(conflict_cols)
     col_names = ", ".join(rows[0].keys())
     placeholders = ", ".join(f":{k}" for k in rows[0])
-    update_set = ", ".join(f"{c} = EXCLUDED.{c}" for c in rows[0] if c not in spec["conflict"])
+    update_set = ", ".join(f"{c} = EXCLUDED.{c}" for c in rows[0] if c not in conflict_cols)
 
     sql = f"""
         INSERT INTO {spec["table"]} ({col_names})
         VALUES ({placeholders})
-        ON CONFLICT ({conflict_cols}) DO UPDATE SET {update_set}
+        ON CONFLICT ({conflict_sql}) DO UPDATE SET {update_set}
     """
 
     for row in rows:
@@ -129,7 +143,14 @@ async def _ingest_dedicated(
     return len(rows)
 
 
-async def _ingest_generic(session: AsyncSession, device_id: int, metric: str, samples: list) -> int:
+async def _ingest_generic(
+    session: AsyncSession,
+    device_id: int,
+    metric: str,
+    samples: list,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+) -> int:
     """Insert into the catch-all quantity_samples table."""
     count = 0
     for s in samples:
@@ -140,9 +161,10 @@ async def _ingest_generic(session: AsyncSession, device_id: int, metric: str, sa
         sample_metric = s.get("metric") if isinstance(s.get("metric"), str) else metric
         await session.execute(
             text("""
-                INSERT INTO quantity_samples (time, device_id, metric_name, value, unit, source_id)
-                VALUES (:time, :device_id, :metric, :value, :unit, :source)
-                ON CONFLICT (time, device_id, metric_name) DO UPDATE
+                INSERT INTO quantity_samples
+                    (time, device_id, metric_name, value, unit, source_id, owner_id)
+                VALUES (:time, :device_id, :metric, :value, :unit, :source, :owner_id)
+                ON CONFLICT (time, device_id, metric_name, owner_id) DO UPDATE
                 SET value = EXCLUDED.value, unit = EXCLUDED.unit
             """),
             {
@@ -152,20 +174,27 @@ async def _ingest_generic(session: AsyncSession, device_id: int, metric: str, sa
                 "value": v,
                 "unit": s.get("unit", ""),
                 "source": s.get("source", ""),
+                "owner_id": str(owner_id),
             },
         )
         count += 1
     return count
 
 
-async def _ingest_activity(session: AsyncSession, device_id: int, samples: list) -> int:
+async def _ingest_activity(
+    session: AsyncSession,
+    device_id: int,
+    samples: list,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+) -> int:
     count = 0
     for s in samples:
         d = parse_date(s.get("date"))
         if not d:
             continue
 
-        row = {"date": d, "device_id": device_id}
+        row = {"date": d, "device_id": device_id, "owner_id": str(owner_id)}
         for src_key, dst_col in ACTIVITY_FIELDS.items():
             if src_key in s:
                 row[dst_col] = s[src_key]
@@ -175,13 +204,13 @@ async def _ingest_activity(session: AsyncSession, device_id: int, samples: list)
         updates = ", ".join(
             f"{k} = COALESCE(EXCLUDED.{k}, daily_activity.{k})"
             for k in row
-            if k not in ("date", "device_id")
+            if k not in ("date", "device_id", "owner_id")
         )
 
         await session.execute(
             text(f"""
                 INSERT INTO daily_activity ({cols}) VALUES ({vals})
-                ON CONFLICT (date, device_id) DO UPDATE SET {updates}
+                ON CONFLICT (date, device_id, owner_id) DO UPDATE SET {updates}
             """),
             row,
         )
@@ -190,7 +219,12 @@ async def _ingest_activity(session: AsyncSession, device_id: int, samples: list)
 
 
 async def _ingest_daily_quantity(
-    session: AsyncSession, device_id: int, metric: str, samples: list
+    session: AsyncSession,
+    device_id: int,
+    metric: str,
+    samples: list,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
 ) -> int:
     column, converter = DAILY_ACTIVITY_QUANTITY_FIELDS[metric]
     count = 0
@@ -202,18 +236,29 @@ async def _ingest_daily_quantity(
 
         await session.execute(
             text(f"""
-                INSERT INTO daily_activity (date, device_id, {column})
-                VALUES (:date, :device_id, :{column})
-                ON CONFLICT (date, device_id) DO UPDATE
+                INSERT INTO daily_activity (date, device_id, owner_id, {column})
+                VALUES (:date, :device_id, :owner_id, :{column})
+                ON CONFLICT (date, device_id, owner_id) DO UPDATE
                 SET {column} = EXCLUDED.{column}
             """),
-            {"date": d, "device_id": device_id, column: value},
+            {
+                "date": d,
+                "device_id": device_id,
+                "owner_id": str(owner_id),
+                column: value,
+            },
         )
         count += 1
     return count
 
 
-async def _ingest_workouts(session: AsyncSession, device_id: int, samples: list) -> int:
+async def _ingest_workouts(
+    session: AsyncSession,
+    device_id: int,
+    samples: list,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+) -> int:
     count = 0
     for s in samples:
         start = parse_ts(first_present(s, "start_date", "startDate", "start", "date"))
@@ -229,9 +274,10 @@ async def _ingest_workouts(session: AsyncSession, device_id: int, samples: list)
         await session.execute(
             text("""
                 INSERT INTO workouts (device_id, sport_type, start_time, end_time,
-                    duration_ms, avg_hr, max_hr, calories, distance_m)
-                VALUES (:device_id, :sport, :start, :end, :dur, :avg_hr, :max_hr, :cal, :dist)
-                ON CONFLICT (device_id, start_time) DO UPDATE SET
+                    duration_ms, avg_hr, max_hr, calories, distance_m, owner_id)
+                VALUES (:device_id, :sport, :start, :end, :dur, :avg_hr, :max_hr, :cal, :dist,
+                    :owner_id)
+                ON CONFLICT (device_id, start_time, owner_id) DO UPDATE SET
                     sport_type = EXCLUDED.sport_type,
                     end_time = EXCLUDED.end_time,
                     duration_ms = EXCLUDED.duration_ms,
@@ -250,6 +296,7 @@ async def _ingest_workouts(session: AsyncSession, device_id: int, samples: list)
                 "max_hr": to_float(first_present(s, "max_hr", "maxHeartRate")),
                 "cal": to_float(first_present(s, "calories", "activeEnergy")),
                 "dist": to_float(first_present(s, "distance_m", "distance")),
+                "owner_id": str(owner_id),
             },
         )
         count += 1

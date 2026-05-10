@@ -5,11 +5,15 @@ Owns the two sleep-table writers (``_upsert_sleep_session`` and
 module's ``ingest_sleep`` dispatch path.
 """
 
+from __future__ import annotations
+
 from datetime import timedelta
+from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .owner import DEFAULT_OWNER_ID
 from .parsers import duration_ms_between, first_present, parse_ts, to_float, to_int
 
 
@@ -104,12 +108,14 @@ def sleep_session_rows(device_id: int, samples: list[dict]) -> list[dict]:
 
 
 async def _upsert_sleep_session(session: AsyncSession, row: dict) -> int:
+    row.setdefault("owner_id", str(DEFAULT_OWNER_ID))
     result = await session.execute(
         text("""
             INSERT INTO sleep_sessions (device_id, start_time, end_time, total_duration_ms,
-                deep_ms, rem_ms, light_ms, awake_ms, respiratory_rate)
-            VALUES (:device_id, :start, :end, :total, :deep, :rem, :light, :awake, :rr)
-            ON CONFLICT (device_id, start_time) DO UPDATE SET
+                deep_ms, rem_ms, light_ms, awake_ms, respiratory_rate, owner_id)
+            VALUES (:device_id, :start, :end, :total, :deep, :rem, :light, :awake, :rr,
+                :owner_id)
+            ON CONFLICT (device_id, start_time, owner_id) DO UPDATE SET
                 end_time = EXCLUDED.end_time,
                 total_duration_ms = EXCLUDED.total_duration_ms,
                 deep_ms = EXCLUDED.deep_ms,
@@ -125,7 +131,12 @@ async def _upsert_sleep_session(session: AsyncSession, row: dict) -> int:
 
 
 async def _upsert_sleep_stages(
-    session: AsyncSession, device_id: int, session_id: int | None, segments: list[dict]
+    session: AsyncSession,
+    device_id: int,
+    session_id: int | None,
+    segments: list[dict],
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
 ) -> None:
     for segment in segments:
         duration_ms = duration_ms_between(segment["start"], segment["end"])
@@ -133,9 +144,10 @@ async def _upsert_sleep_stages(
             continue
         await session.execute(
             text("""
-                INSERT INTO sleep_stages (time, device_id, session_id, stage, duration_ms)
-                VALUES (:time, :device_id, :session_id, :stage, :duration_ms)
-                ON CONFLICT (time, device_id, stage) DO UPDATE SET
+                INSERT INTO sleep_stages
+                    (time, device_id, session_id, stage, duration_ms, owner_id)
+                VALUES (:time, :device_id, :session_id, :stage, :duration_ms, :owner_id)
+                ON CONFLICT (time, device_id, stage, owner_id) DO UPDATE SET
                     session_id = EXCLUDED.session_id,
                     duration_ms = EXCLUDED.duration_ms
             """),
@@ -145,18 +157,26 @@ async def _upsert_sleep_stages(
                 "session_id": session_id,
                 "stage": segment["stage"],
                 "duration_ms": duration_ms,
+                "owner_id": str(owner_id),
             },
         )
 
 
-async def ingest_sleep(session: AsyncSession, device_id: int, samples: list) -> int:
+async def ingest_sleep(
+    session: AsyncSession,
+    device_id: int,
+    samples: list,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+) -> int:
     if any("startDate" in sample or "value" in sample for sample in samples):
         rows = sleep_session_rows(device_id, samples)
         count = 0
         for row in rows:
             segments = row.pop("segments", [])
+            row["owner_id"] = str(owner_id)
             session_id = await _upsert_sleep_session(session, row)
-            await _upsert_sleep_stages(session, device_id, session_id, segments)
+            await _upsert_sleep_stages(session, device_id, session_id, segments, owner_id=owner_id)
             count += 1
         return count
 
@@ -178,6 +198,7 @@ async def ingest_sleep(session: AsyncSession, device_id: int, samples: list) -> 
                 "light": to_int(s.get("light_ms") or s.get("core_ms")),
                 "awake": to_int(s.get("awake_ms")),
                 "rr": to_float(s.get("respiratory_rate")),
+                "owner_id": str(owner_id),
             },
         )
         count += 1

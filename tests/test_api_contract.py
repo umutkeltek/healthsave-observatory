@@ -68,8 +68,9 @@ class FailingStatusSession(FakeSession):
 
 
 class FakeRequest:
-    def __init__(self, payload: dict):
+    def __init__(self, payload: dict, headers: dict | None = None):
         self.payload = payload
+        self.headers = headers or {}
 
     async def json(self):
         return self.payload
@@ -612,12 +613,15 @@ def test_api_spec_documents_ecg_as_accepted_but_not_persisted():
 def test_schema_declares_idempotency_constraints_for_retry_safe_sync():
     schema = Path("schema.sql").read_text()
 
+    # Unique indexes are widened with owner_id for multi-user support;
+    # the original (device_id, start/time) prefix is preserved so retries
+    # from a single owner remain idempotent.
     assert "uq_sleep_sessions_device_start" in schema
-    assert "ON sleep_sessions (device_id, start_time)" in schema
+    assert "sleep_sessions (device_id, start_time, owner_id)" in schema
     assert "uq_sleep_stages" in schema
-    assert "ON sleep_stages (time, device_id, stage)" in schema
+    assert "sleep_stages (time, device_id, stage, owner_id)" in schema
     assert "uq_workouts_device_start" in schema
-    assert "ON workouts (device_id, start_time)" in schema
+    assert "workouts (device_id, start_time, owner_id)" in schema
     assert "idx_raw_ingestion_log_ingested_at" in schema
 
 
