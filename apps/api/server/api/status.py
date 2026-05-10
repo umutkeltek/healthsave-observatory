@@ -1,8 +1,21 @@
 """GET /api/apple/status - flat per-table record counts.
 
 The iOS app parses this response with top-level metric keys (no
-``{"status":"ok","counts":...}`` wrapper). Do NOT change the response
-shape without coordinating an iOS app release - see CLAUDE.md.
+``{"status":"ok","counts":...}`` wrapper) and exactly the three
+fields per metric: ``count``, ``oldest``, ``newest``. Do NOT change
+the response shape without coordinating an iOS app release - see
+CLAUDE.md.
+
+Phase 5G observability: a per-metric SQL failure used to be invisible
+to operators — the route silently substituted ``{count: 0, oldest:
+None, newest: None}``, which is indistinguishable from "no data yet".
+That preserves the iOS contract (the response shape stays exactly the
+same), but it also masks schema drift, missing tables, and permission
+errors. The Phase 5G fix is to keep the wire shape unchanged AND
+bump a Prometheus counter (``STATUS_QUERY_FAILURES{metric, exception}``)
+so the operator-side surface fires while the iOS-side surface
+stays stable. Pair with a Grafana alert on
+``rate(hdh_status_query_failures[5m]) > 0``.
 """
 
 import logging
@@ -12,6 +25,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .deps import get_session, verify_api_key
+from .metrics import STATUS_QUERY_FAILURES
 
 log = logging.getLogger("healthsave")
 
@@ -41,6 +55,13 @@ async def apple_status(session: AsyncSession = Depends(get_session)):
                 "newest": str(row[2]) if row and row[2] else None,
             }
         except Exception as exc:
-            log.warning("Status query failed for %s: %s", metric, exc)
+            # iOS contract preserved: keep the silent {count:0} fallback.
+            # Operator-side surface added: bump a counter labelled with
+            # the exception type so Prometheus + Grafana can alert.
+            log.exception("Status query failed for %s", metric)
             status[metric] = {"count": 0, "oldest": None, "newest": None}
+            try:
+                STATUS_QUERY_FAILURES.labels(metric=metric, exception=type(exc).__name__).inc()
+            except Exception:  # pragma: no cover - metrics import optional
+                log.debug("failed to record STATUS_QUERY_FAILURES{metric=%s}", metric)
     return status

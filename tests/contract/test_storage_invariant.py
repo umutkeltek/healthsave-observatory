@@ -72,9 +72,13 @@ ALLOWLIST: dict[str, str] = {
         "stays — readiness probe runs SELECT 1; trivial enough to skip migration"
     ),
     "apps/api/server/api/status.py": (
-        "stays — Apple Health status endpoint reads count(*) per metric table; "
-        "Phase 5E may migrate into storage/timescale/measurements.py with "
-        "MeasurementRepository.metric_counts()"
+        "stays — Apple Health status endpoint reads count(*) per metric table. "
+        "Phase 5G decided NOT to migrate the SQL into storage/timescale/measurements.py: "
+        "the route's silent-fallback semantics ({count:0} on any failure) are part of "
+        "the iOS wire contract — wrapping behind a repository would either change the "
+        "contract or duplicate the same try/except shape behind a layer of indirection. "
+        "STATUS_QUERY_FAILURES{metric, exception} counter (added 5G-3) is the "
+        "operator-side surface."
     ),
     # Phase 5F retired the four `packages/py/analysis/*` entries here:
     #   engine.py, statistical/aggregator.py, statistical/anomaly.py,
