@@ -13,8 +13,11 @@ and weekly remain stubs until their historical lookup methods land.
 from __future__ import annotations
 
 import json
+import logging
+import uuid
+from collections.abc import Awaitable
 from datetime import datetime
-from typing import get_args
+from typing import Any, get_args
 
 from analysis.types import Severity
 from compat_v1.models import (
@@ -36,6 +39,78 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .deps import get_session, verify_api_key
+
+_log = logging.getLogger("healthsave.api.insights")
+
+
+async def _record_trigger_run(request: Request, *, job_kind: str, coro: Awaitable[Any]) -> Any:
+    """Write claim → run → mark for one inline trigger invocation.
+
+    Reads the session factory off ``app.state.session_factory`` (set
+    by the lifespan in ``server.main``). When absent (e.g. unit tests
+    that pass a SimpleNamespace request), the helper degrades to
+    just awaiting the coroutine — the ledger gets nothing, but the
+    trigger still runs. Production always has the factory.
+    """
+    session_factory = getattr(request.app.state, "session_factory", None)
+    if session_factory is None:
+        return await coro
+
+    idempotency_key = f"{job_kind}:api:{uuid.uuid4().hex[:12]}"
+    record_id: int | None = None
+
+    async with session_factory() as session:
+        try:
+            record_id = await pipeline_runs.claim_run(
+                session,
+                job_kind=job_kind,
+                idempotency_key=idempotency_key,
+                triggered_by="api",
+            )
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            _log.exception("failed to claim pipeline_run for %s", job_kind)
+
+    try:
+        result = await coro
+    except Exception as exc:
+        if record_id is not None:
+            async with session_factory() as session:
+                try:
+                    await pipeline_runs.mark_failed(session, run_id=record_id, error=str(exc))
+                    await session.commit()
+                except Exception:
+                    await session.rollback()
+                    _log.exception("failed to mark pipeline_run as failed")
+        raise
+
+    if record_id is not None:
+        async with session_factory() as session:
+            try:
+                await pipeline_runs.mark_succeeded(
+                    session,
+                    run_id=record_id,
+                    result=_summarize_trigger_result(result),
+                )
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                _log.exception("failed to mark pipeline_run as succeeded")
+
+    return result
+
+
+def _summarize_trigger_result(result: Any) -> dict[str, Any] | None:
+    """Project an engine return value into a JSON-serializable summary."""
+    if result is None:
+        return None
+    if isinstance(result, int):
+        return {"engine_run_id": result}
+    if isinstance(result, list):
+        return {"items_count": len(result)}
+    return {"repr": repr(result)[:1000]}
+
 
 _ALLOWED_SEVERITIES = frozenset(get_args(Severity))
 _ANOMALIES_LIMIT = 200
@@ -246,7 +321,12 @@ async def insights_trigger(
             raise HTTPException(status_code=409, detail="daily_briefing is disabled")
         # Engine returns a run_id on completion, None when the run was
         # skipped (no data). Both cases are successful, just distinct.
-        run_id = await request.app.state.analysis_engine.run_daily_briefing()
+        # Phase 4D: also writes a pipeline_runs row (triggered_by='api').
+        run_id = await _record_trigger_run(
+            request,
+            job_kind="daily_briefing",
+            coro=request.app.state.analysis_engine.run_daily_briefing(),
+        )
         return TriggerResponse(
             status="completed" if run_id is not None else "skipped",
             run_type="daily_briefing",
@@ -255,7 +335,11 @@ async def insights_trigger(
     if body.type == "trend_analysis":
         if not request.app.state.analysis_config.analysis.trend_analysis.enabled:
             raise HTTPException(status_code=409, detail="trend_analysis is disabled")
-        findings = await request.app.state.analysis_engine.run_trend_analysis()
+        findings = await _record_trigger_run(
+            request,
+            job_kind="trend_analysis",
+            coro=request.app.state.analysis_engine.run_trend_analysis(),
+        )
         return TriggerResponse(
             status="completed" if findings else "skipped",
             run_type="trend_analysis",
