@@ -41,6 +41,25 @@ services:
       retries: 3
       start_period: 10s
 
+  # Worker — runs the AnalysisScheduler decoupled from the API process.
+  # API uptime is no longer coupled to scheduler bugs/memory/experiments.
+  # Same image as api; different command. Single replica per deployment.
+  worker:
+    build: .
+    command: ["python", "-m", "worker.main"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:-changeme}@db:5432/healthsave
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+    volumes:
+      - ${ANALYSIS_CONFIG_FILE:-./config.yaml.example}:/app/config.yaml:ro
+
   grafana:
     image: ${GRAFANA_IMAGE:-grafana/grafana-oss:11.2.0}
     restart: unless-stopped
