@@ -17,10 +17,11 @@ CREATE TABLE heart_rate (
     device_id   INT REFERENCES devices(id),
     source_id   TEXT,
     bpm         SMALLINT NOT NULL,
-    context     TEXT
+    context     TEXT,
+    owner_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001'
 );
 SELECT create_hypertable('heart_rate', 'time');
-CREATE UNIQUE INDEX uq_heart_rate ON heart_rate (time, device_id);
+CREATE UNIQUE INDEX uq_heart_rate ON heart_rate (time, device_id, owner_id);
 
 -- ─── HRV ─────────────────────────────────────────────────────────────
 CREATE TABLE hrv (
@@ -29,30 +30,33 @@ CREATE TABLE hrv (
     source_id   TEXT,
     value_ms    FLOAT NOT NULL,
     algorithm   TEXT NOT NULL DEFAULT 'sdnn',
-    context     TEXT
+    context     TEXT,
+    owner_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001'
 );
 SELECT create_hypertable('hrv', 'time');
-CREATE UNIQUE INDEX uq_hrv ON hrv (time, device_id);
+CREATE UNIQUE INDEX uq_hrv ON hrv (time, device_id, owner_id);
 
 -- ─── Blood Oxygen ────────────────────────────────────────────────────
 CREATE TABLE blood_oxygen (
     time        TIMESTAMPTZ NOT NULL,
     device_id   INT REFERENCES devices(id),
     spo2_pct    FLOAT NOT NULL,
-    context     TEXT
+    context     TEXT,
+    owner_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001'
 );
 SELECT create_hypertable('blood_oxygen', 'time');
-CREATE UNIQUE INDEX uq_blood_oxygen ON blood_oxygen (time, device_id);
+CREATE UNIQUE INDEX uq_blood_oxygen ON blood_oxygen (time, device_id, owner_id);
 
 -- ─── Body Temperature ────────────────────────────────────────────────
 CREATE TABLE body_temperature (
     time            TIMESTAMPTZ NOT NULL,
     device_id       INT REFERENCES devices(id),
     temp_celsius    FLOAT NOT NULL,
-    measurement_type TEXT
+    measurement_type TEXT,
+    owner_id        UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001'
 );
 SELECT create_hypertable('body_temperature', 'time');
-CREATE UNIQUE INDEX uq_body_temperature ON body_temperature (time, device_id);
+CREATE UNIQUE INDEX uq_body_temperature ON body_temperature (time, device_id, owner_id);
 
 -- ─── Daily Activity ──────────────────────────────────────────────────
 CREATE TABLE daily_activity (
@@ -67,7 +71,8 @@ CREATE TABLE daily_activity (
     stand_hours     INT,
     avg_hr          FLOAT,
     max_hr          FLOAT,
-    PRIMARY KEY (date, device_id)
+    owner_id        UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    PRIMARY KEY (date, device_id, owner_id)
 );
 
 -- ─── Sleep Sessions ──────────────────────────────────────────────────
@@ -81,9 +86,11 @@ CREATE TABLE sleep_sessions (
     light_ms            BIGINT,
     deep_ms             BIGINT,
     rem_ms              BIGINT,
-    respiratory_rate    FLOAT
+    respiratory_rate    FLOAT,
+    owner_id            UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001'
 );
-CREATE UNIQUE INDEX uq_sleep_sessions_device_start ON sleep_sessions (device_id, start_time);
+CREATE UNIQUE INDEX uq_sleep_sessions_device_start
+    ON sleep_sessions (device_id, start_time, owner_id);
 
 -- ─── Sleep Stages ────────────────────────────────────────────────────
 CREATE TABLE sleep_stages (
@@ -91,10 +98,11 @@ CREATE TABLE sleep_stages (
     device_id   INT REFERENCES devices(id),
     session_id  BIGINT REFERENCES sleep_sessions(id),
     stage       TEXT NOT NULL,
-    duration_ms BIGINT
+    duration_ms BIGINT,
+    owner_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001'
 );
 SELECT create_hypertable('sleep_stages', 'time');
-CREATE UNIQUE INDEX uq_sleep_stages ON sleep_stages (time, device_id, stage);
+CREATE UNIQUE INDEX uq_sleep_stages ON sleep_stages (time, device_id, stage, owner_id);
 
 -- ─── Workouts ────────────────────────────────────────────────────────
 CREATE TABLE workouts (
@@ -107,9 +115,11 @@ CREATE TABLE workouts (
     avg_hr          FLOAT,
     max_hr          FLOAT,
     calories        FLOAT,
-    distance_m      FLOAT
+    distance_m      FLOAT,
+    owner_id        UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001'
 );
-CREATE UNIQUE INDEX uq_workouts_device_start ON workouts (device_id, start_time);
+CREATE UNIQUE INDEX uq_workouts_device_start
+    ON workouts (device_id, start_time, owner_id);
 
 -- ─── Recovery / Readiness ────────────────────────────────────────────
 CREATE TABLE recovery (
@@ -119,20 +129,22 @@ CREATE TABLE recovery (
     resting_hr  FLOAT,
     hrv_ms      FLOAT,
     spo2_pct    FLOAT,
-    skin_temp_c FLOAT
+    skin_temp_c FLOAT,
+    owner_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001'
 );
 SELECT create_hypertable('recovery', 'time');
-CREATE UNIQUE INDEX uq_recovery ON recovery (time, device_id);
+CREATE UNIQUE INDEX uq_recovery ON recovery (time, device_id, owner_id);
 
 -- ─── Stress Readings ─────────────────────────────────────────────────
 CREATE TABLE stress (
     time        TIMESTAMPTZ NOT NULL,
     device_id   INT REFERENCES devices(id),
     score       FLOAT NOT NULL,
-    scale_type  TEXT
+    scale_type  TEXT,
+    owner_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001'
 );
 SELECT create_hypertable('stress', 'time');
-CREATE UNIQUE INDEX uq_stress ON stress (time, device_id);
+CREATE UNIQUE INDEX uq_stress ON stress (time, device_id, owner_id);
 
 -- ─── Raw Ingestion Log ───────────────────────────────────────────────
 CREATE TABLE raw_ingestion_log (
@@ -154,7 +166,8 @@ CREATE TABLE quantity_samples (
     value       DOUBLE PRECISION NOT NULL,
     unit        TEXT,
     source_id   TEXT,
-    PRIMARY KEY (time, device_id, metric_name)
+    owner_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    PRIMARY KEY (time, device_id, metric_name, owner_id)
 );
 SELECT create_hypertable('quantity_samples', 'time', if_not_exists => TRUE);
 CREATE INDEX idx_quantity_samples_metric ON quantity_samples (metric_name, time DESC);
