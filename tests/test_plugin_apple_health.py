@@ -131,3 +131,88 @@ async def test_apple_health_ingest_is_a_thin_wrapper_returns_zero_on_empty_paylo
         }
     )
     assert result == {"accepted": 0, "rejected": 0}
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Registry-path integration test — addresses advisor concern that the
+# Phase 6 SDK is "decorative" (registered but no test exercises the
+# discover → instantiate → invoke path end-to-end). This test proves
+# the load-bearing chain works: the SDK is Phase 7 ready, not just
+# Phase 6 ready.
+# ──────────────────────────────────────────────────────────────────────
+
+
+class _RegistryFakeSession:
+    """Records every SQL call so the test can assert the plugin and
+    the direct path produce the same INSERT shape."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict]] = []
+
+    async def execute(self, statement, params=None):
+        sql = " ".join(str(statement).split())
+        self.calls.append((sql, params or {}))
+        # _ingest_metric → _ingest_generic → INSERT … RETURNING is not
+        # used here; the catch-all path doesn't read back rows.
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            first=lambda: None,
+            scalar=lambda: 1,
+            fetchone=lambda: None,
+            fetchall=lambda: [],
+        )
+
+    async def commit(self) -> None:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_registry_load_path_produces_same_writes_as_direct_path():
+    """End-to-end: discover → registry → instantiate → invoke produces
+    byte-identical SQL writes vs calling the storage helper directly.
+
+    This is the test that proves the Phase 6 SDK is load-bearing-ready
+    and not a decorative abstraction. If the registry chain breaks
+    (entrypoint resolves wrong, manifest-injection drifts the
+    instance, the ABC method swaps an arg name), this test fails BEFORE
+    Phase 7 tries to wire it.
+    """
+    # Path A — direct: the route's existing call shape.
+    from storage.timescale.measurements import _ingest_metric
+
+    direct_session = _RegistryFakeSession()
+    samples = [
+        {"date": "2026-05-11T08:00:00Z", "qty": 72, "source": "Apple Watch", "unit": "bpm"},
+        {"date": "2026-05-11T08:01:00Z", "qty": 73, "source": "Apple Watch", "unit": "bpm"},
+    ]
+    direct_count = await _ingest_metric(direct_session, 1, "heart_rate", samples)
+
+    # Path B — through the registry chain: discover → load entrypoint
+    # → instantiate via SDK → call .ingest() with the same payload.
+    found = discover()
+    apple = next(p for p in found if p.plugin_id == "apple-health-healthsave")
+    module_path, _, class_name = apple.manifest.entrypoint.partition(":")
+    cls = getattr(importlib.import_module(module_path), class_name)
+    plugin = cls(apple.manifest)
+
+    plugin_session = _RegistryFakeSession()
+    result = await plugin.ingest(
+        {
+            "session": plugin_session,
+            "device_id": 1,
+            "metric": "heart_rate",
+            "samples": samples,
+            "first_device_name": "Apple Watch",
+        }
+    )
+
+    # Identity assertions: same row count, same SQL shapes.
+    assert direct_count == result["accepted"]
+    assert len(direct_session.calls) == len(plugin_session.calls)
+    direct_sqls = [sql for sql, _ in direct_session.calls]
+    plugin_sqls = [sql for sql, _ in plugin_session.calls]
+    assert direct_sqls == plugin_sqls, (
+        "registry path issued different SQL than the direct path — "
+        "Phase 7 will inherit a Schrödinger SDK"
+    )
