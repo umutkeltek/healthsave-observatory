@@ -72,11 +72,12 @@ garmin = [
 ]
 
 [tool.setuptools.packages.find]
-# v2 layout: server lives under apps/api/, analysis under packages/py/.
-# Multi-root `where` keeps `import server` and `import analysis` working
-# unchanged after `pip install -e .` — see contracts/V1.md.
+# v2 layout: server lives under apps/api/, analysis + compat_v1 under
+# packages/py/. Multi-root `where` keeps `import server`, `import
+# analysis`, and `import compat_v1` working unchanged after `pip
+# install -e .` — see contracts/V1.md.
 where = ["apps/api", "packages/py"]
-include = ["server*", "analysis*"]
+include = ["server*", "analysis*", "compat_v1*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -16,13 +16,8 @@ import json
 from datetime import datetime
 from typing import get_args
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from analysis.types import Severity
-
-from ..models.insights import (
+from compat_v1.models import (
     AnomaliesListResponse,
     AnomalyResponse,
     DailyBriefingResponse,
@@ -33,6 +28,10 @@ from ..models.insights import (
     TriggerResponse,
     WeeklySummaryResponse,
 )
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from .deps import get_session, verify_api_key
 
 _ALLOWED_SEVERITIES = frozenset(get_args(Severity))

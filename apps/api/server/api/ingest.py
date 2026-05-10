@@ -3,6 +3,7 @@
 import logging
 from time import perf_counter
 
+from compat_v1.models import BatchPayload
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +16,6 @@ from ..ingestion.storage import (
     default_audit_log,
     default_storage,
 )
-from ..models.batch import BatchPayload
 from .deps import get_session, verify_api_key
 from .metrics import INGEST_BATCHES, INGEST_DURATION, INGEST_ROWS
 

@@ -66,7 +66,7 @@ def _batch_payload_field_names() -> set[str]:
     is the actual source of truth. Pinning the model fields directly is
     more honest than pinning the OpenAPI declaration.
     """
-    from server.models.batch import BatchPayload
+    from compat_v1.models import BatchPayload
 
     return set(BatchPayload.model_fields.keys())
 
