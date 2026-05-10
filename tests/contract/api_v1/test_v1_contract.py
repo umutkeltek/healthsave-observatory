@@ -22,29 +22,10 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT))
 
+from compat_v1 import V1_ROUTES_FROZEN  # noqa: E402
 from server.main import app  # noqa: E402
 
 LOCK_PATH = REPO_ROOT / "contracts" / "openapi" / "v1.locked.json"
-
-# v1 routes the HealthSave iOS app and other v1 clients depend on. Any
-# removal is a contract break; any addition to this set must also land
-# in the OpenAPI lock.
-V1_ROUTES_FROZEN: frozenset[str] = frozenset(
-    {
-        "GET /health",
-        "GET /api/health",
-        "GET /ready",
-        "POST /api/apple/batch",
-        "GET /api/apple/status",
-        "GET /metrics",
-        "GET /api/insights/latest",
-        "GET /api/insights/daily",
-        "GET /api/insights/weekly",
-        "GET /api/insights/anomalies",
-        "GET /api/insights/trends",
-        "POST /api/insights/trigger",
-    }
-)
 
 # FastAPI built-ins that aren't part of the v1 contract.
 _FASTAPI_BUILTINS: frozenset[str] = frozenset(
