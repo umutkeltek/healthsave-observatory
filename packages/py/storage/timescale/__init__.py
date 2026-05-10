@@ -11,9 +11,18 @@ Each module typically exposes:
 - Module-level convenience functions delegating to the default
   instance, for backwards compatibility with v1.x callers that pass a
   session directly without injecting a repository.
+
+Eager-import policy: only modules that have NO cross-package imports
+are eager-loaded here. ``measurements`` reaches into
+``server.ingestion`` helpers (mappers/parsers/owner) and ``analysis``
+loads on demand from analysis-package call sites that we cannot
+afford to pre-load before ``server`` exists. Both stay submodule-only
+(``from storage.timescale.{measurements,analysis} import ...``) until
+the helpers move out of ``server.ingestion`` or the ``handlers`` shim
+retires (handoff #2 / #4).
 """
 
-from . import analysis, briefings, ingest, measurements, runs
+from . import briefings, ingest, runs
 from .briefings import (
     FindingRow,
     NarrativeRow,
@@ -25,7 +34,6 @@ from .ingest import (
     default_audit_log,
     default_storage,
 )
-from .measurements import TimescaleMeasurementRepository
 from .runs import (
     PipelineRun,
     PipelineStatus,
@@ -35,10 +43,8 @@ from .runs import (
 
 __all__ = [
     # modules — preferred for module-level convenience calls
-    "analysis",
     "briefings",
     "ingest",
-    "measurements",
     "runs",
     # runs
     "PipelineRun",
@@ -54,6 +60,8 @@ __all__ = [
     "PostgresIngestStorage",
     "default_audit_log",
     "default_storage",
-    # measurements (Phase 5C skeleton)
-    "TimescaleMeasurementRepository",
+    # `measurements` and `analysis` are submodule-only (see policy
+    # note above): import them as
+    #   from storage.timescale.measurements import ...
+    #   from storage.timescale.analysis import ...
 ]
