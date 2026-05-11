@@ -117,13 +117,20 @@ def test_apple_health_plugin_permissions_are_minimal():
 
 @pytest.mark.asyncio
 async def test_apple_health_ingest_is_a_thin_wrapper_returns_zero_on_empty_payload():
-    """Empty payload → no rows committed, no rejected."""
+    """Empty payload → no rows committed, no rejected.
+
+    Phase 6.1: the plugin requires a ``storage`` Protocol instance in
+    the payload. The empty branch short-circuits before touching storage,
+    so we pass a sentinel that would explode if invoked — this proves
+    the empty path is dispatch-free.
+    """
     from plugins.sources.apple_health_healthsave import AppleHealthSource
 
     manifest = load_manifest(PLUGIN_DIR / "plugin.yaml")
     plugin = AppleHealthSource(manifest)
     result = await plugin.ingest(
         {
+            "storage": object(),  # not invoked when samples is empty
             "session": object(),  # not invoked when samples is empty
             "device_id": 1,
             "metric": "heart_rate",
@@ -139,6 +146,15 @@ async def test_apple_health_ingest_is_a_thin_wrapper_returns_zero_on_empty_paylo
 # discover → instantiate → invoke path end-to-end). This test proves
 # the load-bearing chain works: the SDK is Phase 7 ready, not just
 # Phase 6 ready.
+#
+# Phase 6.1: the plugin is now Protocol-aware — writes go through an
+# injected ``IngestStorage`` instance, not via direct
+# ``storage.timescale.measurements`` calls. The test injects a recording
+# storage on Path B and compares its SQL trace against Path A's direct
+# ``_ingest_metric`` trace. Because the production ``PostgresIngestStorage``
+# is a thin pass-through wrapper over ``measurements._ingest_metric`` /
+# ``_get_or_create_device`` (Phase 5C contract), the two traces must
+# stay byte-identical — that is the load-bearing claim Phase 7 needs.
 # ──────────────────────────────────────────────────────────────────────
 
 
@@ -167,6 +183,25 @@ class _RegistryFakeSession:
         pass
 
 
+class _RegistryRecordingStorage:
+    """``IngestStorage`` Protocol impl that delegates to the real
+    ``storage.timescale.measurements`` helpers (the path the production
+    ``PostgresIngestStorage`` takes). Lets the registry-path test prove
+    that plugin → Protocol → measurements still issues byte-identical
+    SQL vs the direct path.
+    """
+
+    async def get_or_create_device(self, session, device_type):
+        from storage.timescale.measurements import _get_or_create_device
+
+        return await _get_or_create_device(session, device_type)
+
+    async def ingest_metric(self, session, device_id, metric, samples, owner_id):
+        from storage.timescale.measurements import _ingest_metric
+
+        return await _ingest_metric(session, device_id, metric, samples, owner_id)
+
+
 @pytest.mark.asyncio
 async def test_registry_load_path_produces_same_writes_as_direct_path():
     """End-to-end: discover → registry → instantiate → invoke produces
@@ -177,8 +212,13 @@ async def test_registry_load_path_produces_same_writes_as_direct_path():
     (entrypoint resolves wrong, manifest-injection drifts the
     instance, the ABC method swaps an arg name), this test fails BEFORE
     Phase 7 tries to wire it.
+
+    Phase 6.1: the plugin requires an ``IngestStorage`` in its payload.
+    We inject ``_RegistryRecordingStorage`` which delegates to the same
+    ``_ingest_metric`` helper Path A calls directly — proving the
+    Protocol seam is the only difference and it is shape-preserving.
     """
-    # Path A — direct: the route's existing call shape.
+    # Path A — direct: the route's pre-Phase-6.1 call shape.
     from storage.timescale.measurements import _ingest_metric
 
     direct_session = _RegistryFakeSession()
@@ -188,8 +228,9 @@ async def test_registry_load_path_produces_same_writes_as_direct_path():
     ]
     direct_count = await _ingest_metric(direct_session, 1, "heart_rate", samples)
 
-    # Path B — through the registry chain: discover → load entrypoint
-    # → instantiate via SDK → call .ingest() with the same payload.
+    # Path B — through the registry chain + Phase 6.1 Protocol seam:
+    # discover → load entrypoint → instantiate via SDK → call .ingest()
+    # with an IngestStorage instance that delegates to the same helper.
     found = discover()
     apple = next(p for p in found if p.plugin_id == "apple-health-healthsave")
     module_path, _, class_name = apple.manifest.entrypoint.partition(":")
@@ -199,6 +240,7 @@ async def test_registry_load_path_produces_same_writes_as_direct_path():
     plugin_session = _RegistryFakeSession()
     result = await plugin.ingest(
         {
+            "storage": _RegistryRecordingStorage(),
             "session": plugin_session,
             "device_id": 1,
             "metric": "heart_rate",

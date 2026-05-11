@@ -1,7 +1,19 @@
-"""POST /api/apple/batch - receive a metric batch from a HealthSave client."""
+"""POST /api/apple/batch - receive a metric batch from a HealthSave client.
+
+Phase 6.1: the per-device write loop delegates to the Apple Health
+plugin via the Phase 6 plugin loader (``plugin_sdk.discover()`` →
+``apple-health-healthsave`` → ``plugin.ingest(...)``). The plugin is
+Protocol-aware: the route injects ``app.state.storage``
+(``IngestStorage``) into the plugin payload so the Phase 5C backend-
+swap seam keeps dispatching writes. The route still owns: payload
+validation, owner-id resolution, raw audit log, the empty-batch
+branch, the ``RAW_LOG_ORPHANED`` error boundary, the response shape,
+and the post-ingest anomaly trigger.
+"""
 
 import logging
 from time import perf_counter
+from typing import TYPE_CHECKING
 
 from compat_v1.models import BatchPayload
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -19,9 +31,75 @@ from ..ingestion.storage import (
 from .deps import get_session, verify_api_key
 from .metrics import INGEST_BATCHES, INGEST_DURATION, INGEST_ROWS, RAW_LOG_ORPHANED
 
+if TYPE_CHECKING:
+    from plugin_sdk import Source
+
 log = logging.getLogger("healthsave")
 
 router = APIRouter()
+
+# Phase 6.1: lazy module-level cache for the Apple Health plugin instance.
+# Resolved on first request via ``_load_apple_health_plugin()`` and reused
+# thereafter — discover/import are slow, idempotent, and not appropriate
+# for the hot path. Lazy-at-first-request (NOT at module import) keeps the
+# server.__init__ import cycle untouched: the plugin transitively imports
+# from server.ingestion.parsers, which is fine at request time but would
+# re-enter server.__init__ if it ran during route module load.
+_apple_health_plugin: "Source | None" = None
+
+
+def _load_apple_health_plugin() -> "Source":
+    """Discover, resolve, and instantiate the Apple Health plugin.
+
+    Walks ``plugins/`` via :func:`plugin_sdk.discover`, finds the
+    ``apple-health-healthsave`` entry, imports its entrypoint module,
+    constructs the class with the manifest, and caches the instance
+    at the module level. Subsequent calls return the cached instance.
+
+    Raises ``RuntimeError`` if the plugin is missing or its entrypoint
+    fails to resolve — fail-loud is the right default; a silent fallback
+    to direct storage calls would re-create the Schrödinger-SDK problem
+    the audit flagged. An operator alerted to this exception fixes the
+    plugin layout; a silent fallback would mask the regression.
+    """
+    global _apple_health_plugin
+    if _apple_health_plugin is not None:
+        return _apple_health_plugin
+
+    import importlib
+
+    from plugin_sdk import discover
+
+    found = discover()
+    match = next(
+        (p for p in found if p.plugin_id == "apple-health-healthsave"),
+        None,
+    )
+    if match is None:
+        raise RuntimeError(
+            "apple-health-healthsave plugin not found via plugin_sdk.discover(); "
+            "expected at plugins/sources/apple_health_healthsave/"
+        )
+
+    module_path, _, class_name = match.manifest.entrypoint.partition(":")
+    module = importlib.import_module(module_path)
+    cls = getattr(module, class_name)
+    _apple_health_plugin = cls(match.manifest)
+    log.info(
+        "Apple Health plugin loaded via plugin_sdk: %s",
+        match.manifest.entrypoint,
+    )
+    return _apple_health_plugin
+
+
+def _resolve_apple_health_plugin(request: Request) -> "Source":
+    """Read the configured plugin off ``app.state``, falling back to the
+    module-level cache for unit tests that hit the route without a full
+    FastAPI app + lifespan. Same pattern as ``_resolve_storage``.
+    """
+    state = getattr(getattr(request, "app", None), "state", None)
+    plugin = getattr(state, "apple_health_plugin", None)
+    return plugin if plugin is not None else _load_apple_health_plugin()
 
 
 @router.post("/api/apple/batch", dependencies=[Depends(verify_api_key)])
@@ -77,24 +155,28 @@ async def apple_batch(
     first_device_id = await storage.get_or_create_device(session, first_device_name)
     raw_log_id = await audit.log_raw(session, first_device_id, raw_payload) if audit else None
     await session.commit()
-    count = 0
 
-    # Phase 5G fix: pre-5G the per-device loop ran without exception
-    # handling. A mid-loop raise left raw_ingestion_log.processed=false
-    # forever — the audit raw_log_orphan; no metric, no alert. Now we
-    # bump RAW_LOG_ORPHANED{metric} on failure and re-raise so the
-    # client sees 500. The audit row stays processed=false so a future
-    # replay can re-attempt it.
+    plugin = _resolve_apple_health_plugin(request)
+
+    # Phase 5G error boundary preserved: pre-5G the per-device loop ran
+    # without exception handling; a mid-loop raise left
+    # raw_ingestion_log.processed=false forever (raw_log_orphan; no
+    # metric, no alert). Phase 6.1 wraps the plugin call in the same
+    # try/except so the loader inherits the same observability
+    # guarantee — operators alert on RAW_LOG_ORPHANED{metric}.
     try:
-        for device_name, device_samples in sample_groups:
-            device_id = (
-                first_device_id
-                if device_name == first_device_name
-                else await storage.get_or_create_device(session, device_name)
-            )
-            count += await storage.ingest_metric(
-                session, device_id, metric, device_samples, owner_id
-            )
+        result = await plugin.ingest(
+            {
+                "storage": storage,
+                "session": session,
+                "device_id": first_device_id,
+                "first_device_name": first_device_name,
+                "metric": metric,
+                "samples": samples,
+                "owner_id": owner_id,
+            }
+        )
+        count = result["accepted"]
     except Exception:
         try:
             RAW_LOG_ORPHANED.labels(metric=metric).inc()
