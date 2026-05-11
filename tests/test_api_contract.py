@@ -673,6 +673,87 @@ def test_readme_documents_existing_install_migration_flow():
     assert "docker compose exec -T db psql" in readme
 
 
+def test_phase_7a_agent_runtime_tables_declared_in_schema_and_migration():
+    """Phase 7-A: 006_agent_runtime.sql adds the AgentRun ledger tables
+    (agent_runs, action_proposals, action_decisions, action_executions,
+    agent_events, agent_artifacts). Fresh installs must include all six
+    inline in db/schema.sql with owner_id + workspace_id on each;
+    existing installs apply the migration which uses identical column
+    shapes. This test pins both halves.
+    """
+    schema = Path("db/schema.sql").read_text()
+    migration = Path("db/migrations/006_agent_runtime.sql").read_text()
+
+    expected_tables = (
+        "agent_runs",
+        "action_proposals",
+        "action_decisions",
+        "action_executions",
+        "agent_events",
+        "agent_artifacts",
+    )
+
+    for table in expected_tables:
+        # Fresh-install schema declares the table inline.
+        marker = f"CREATE TABLE {table} ("
+        assert marker in schema, f"db/schema.sql missing {table}"
+
+        # Fresh-install table block carries both ownership columns.
+        start = schema.index(marker)
+        # Use the next `);` as the table-block terminator. Index defs
+        # follow outside the block — they aren't required to mention
+        # ownership.
+        end = schema.index(");", start)
+        block = schema[start:end]
+        assert "owner_id" in block, f"{table} missing owner_id in fresh schema"
+        assert "workspace_id" in block, f"{table} missing workspace_id in fresh schema"
+
+        # Migration creates the same table additively.
+        migration_marker = f"CREATE TABLE IF NOT EXISTS {table} ("
+        assert migration_marker in migration, (
+            f"006_agent_runtime.sql missing {table} (additive CREATE)"
+        )
+
+    # The migration enables pgcrypto so gen_random_uuid() works on
+    # existing installs that did not have the extension.
+    assert "CREATE EXTENSION IF NOT EXISTS pgcrypto" in migration
+
+    # Phase 7-D anomaly-watcher dedup hook: partial unique index on
+    # idempotency_key (NULL allowed; uniqueness enforced when set).
+    assert "uq_action_proposals_idempotency_key" in migration
+    assert "WHERE idempotency_key IS NOT NULL" in migration
+
+    # Per-owner read indexes the dashboard + Phase 7-E routes will use.
+    assert "idx_agent_runs_owner_started" in migration
+    assert "idx_action_proposals_owner_proposed" in migration
+    assert "idx_agent_events_owner_emitted" in migration
+
+    # The updated_at trigger lives on agent_runs (matches the pipeline_runs
+    # pattern). Other agent tables are append-only — no trigger needed.
+    assert "agent_runs_set_updated_at" in migration
+    assert "agent_runs_updated_at" in migration
+
+
+def test_phase_7a_agent_event_kinds_match_pydantic_contract():
+    """The CHECK constraint on agent_events.kind must enumerate every
+    AgentEvent kind from packages/py/contracts/agents.py. A new event
+    kind added to the Pydantic Literal without a migration would be
+    rejected at the DB layer — this test catches the drift before
+    runtime does.
+    """
+    from contracts.agents import AgentEvent
+
+    # Pydantic Literal types expose their values via the model's field.
+    kinds_in_contract = set(AgentEvent.model_fields["kind"].annotation.__args__)
+    migration = Path("db/migrations/006_agent_runtime.sql").read_text()
+
+    for kind in kinds_in_contract:
+        assert f"'{kind}'" in migration, (
+            f"006_agent_runtime.sql CHECK constraint missing kind={kind!r}; "
+            "Pydantic AgentEvent declares it but the DB will reject inserts."
+        )
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Phase 5G: lifespan-state assertion guards a future regression that
 # silently drops a required app.state attribute.

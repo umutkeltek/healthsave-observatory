@@ -318,3 +318,159 @@ CREATE TRIGGER pipeline_runs_updated_at
     BEFORE UPDATE ON pipeline_runs
     FOR EACH ROW
     EXECUTE FUNCTION pipeline_runs_set_updated_at();
+
+-- ─── Phase 7-A: AgentRun ledger ──────────────────────────────────────
+-- See db/migrations/006_agent_runtime.sql for the upgrade path on
+-- existing installs. Mirrors packages/py/contracts/agents.py. All
+-- tables carry owner_id + workspace_id from day one (parent ISA
+-- mandate). UUID PKs via pgcrypto (idempotent extension).
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE agent_runs (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    plugin_id       TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'running'
+        CHECK (status IN ('running', 'completed', 'failed', 'cancelled')),
+    started_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ended_at        TIMESTAMPTZ,
+    trigger_kind    TEXT NOT NULL
+        CHECK (trigger_kind IN ('cron', 'ingest_event', 'metric_threshold', 'manual')),
+    trigger_metadata JSONB NOT NULL DEFAULT '{}',
+    owner_id        UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    workspace_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_agent_runs_owner_started
+    ON agent_runs (owner_id, started_at DESC);
+CREATE INDEX idx_agent_runs_plugin_started
+    ON agent_runs (plugin_id, started_at DESC);
+CREATE INDEX idx_agent_runs_status_started
+    ON agent_runs (status, started_at DESC);
+
+CREATE TABLE action_proposals (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    run_id          UUID NOT NULL REFERENCES agent_runs(id) ON DELETE CASCADE,
+    proposed_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    action_kind     TEXT NOT NULL
+        CHECK (action_kind IN (
+            'notify',
+            'create_experiment',
+            'create_briefing',
+            'request_user_input',
+            'tag_measurement'
+        )),
+    payload         JSONB NOT NULL DEFAULT '{}',
+    rationale       TEXT NOT NULL,
+    capability      TEXT NOT NULL,
+    idempotency_key TEXT,
+    owner_id        UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    workspace_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX uq_action_proposals_idempotency_key
+    ON action_proposals (idempotency_key)
+    WHERE idempotency_key IS NOT NULL;
+CREATE INDEX idx_action_proposals_owner_proposed
+    ON action_proposals (owner_id, proposed_at DESC);
+CREATE INDEX idx_action_proposals_run
+    ON action_proposals (run_id, proposed_at DESC);
+
+CREATE TABLE action_decisions (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    proposal_id     UUID NOT NULL REFERENCES action_proposals(id) ON DELETE CASCADE,
+    decided_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    decision        TEXT NOT NULL
+        CHECK (decision IN ('approved', 'rejected', 'deferred')),
+    decided_by      TEXT NOT NULL
+        CHECK (decided_by IN ('user', 'policy', 'auto')),
+    rationale       TEXT,
+    owner_id        UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    workspace_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_action_decisions_owner_decided
+    ON action_decisions (owner_id, decided_at DESC);
+CREATE INDEX idx_action_decisions_proposal
+    ON action_decisions (proposal_id);
+
+CREATE TABLE action_executions (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    proposal_id     UUID NOT NULL REFERENCES action_proposals(id) ON DELETE CASCADE,
+    decision_id     UUID NOT NULL REFERENCES action_decisions(id) ON DELETE CASCADE,
+    executed_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    status          TEXT NOT NULL
+        CHECK (status IN ('succeeded', 'failed', 'skipped')),
+    result          JSONB NOT NULL DEFAULT '{}',
+    error           TEXT,
+    owner_id        UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    workspace_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_action_executions_owner_executed
+    ON action_executions (owner_id, executed_at DESC);
+CREATE INDEX idx_action_executions_proposal
+    ON action_executions (proposal_id);
+
+CREATE TABLE agent_events (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    run_id          UUID REFERENCES agent_runs(id) ON DELETE CASCADE,
+    emitted_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    kind            TEXT NOT NULL
+        CHECK (kind IN (
+            'run_started',
+            'run_completed',
+            'run_failed',
+            'observation',
+            'proposal_created',
+            'proposal_approved',
+            'proposal_rejected',
+            'execution_succeeded',
+            'execution_failed',
+            'artifact_created'
+        )),
+    payload         JSONB NOT NULL DEFAULT '{}',
+    owner_id        UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    workspace_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_agent_events_owner_emitted
+    ON agent_events (owner_id, emitted_at DESC);
+CREATE INDEX idx_agent_events_run_emitted
+    ON agent_events (run_id, emitted_at DESC);
+CREATE INDEX idx_agent_events_kind_emitted
+    ON agent_events (kind, emitted_at DESC);
+
+CREATE TABLE agent_artifacts (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    run_id          UUID NOT NULL REFERENCES agent_runs(id) ON DELETE CASCADE,
+    kind            TEXT NOT NULL
+        CHECK (kind IN (
+            'narrative',
+            'chart_spec',
+            'experiment_plan',
+            'intervention_proposal'
+        )),
+    payload         JSONB NOT NULL DEFAULT '{}',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    owner_id        UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    workspace_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001'
+);
+CREATE INDEX idx_agent_artifacts_owner_created
+    ON agent_artifacts (owner_id, created_at DESC);
+CREATE INDEX idx_agent_artifacts_run_kind
+    ON agent_artifacts (run_id, kind);
+
+CREATE OR REPLACE FUNCTION agent_runs_set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER agent_runs_updated_at
+    BEFORE UPDATE ON agent_runs
+    FOR EACH ROW
+    EXECUTE FUNCTION agent_runs_set_updated_at();
