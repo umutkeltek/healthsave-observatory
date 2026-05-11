@@ -60,6 +60,26 @@ services:
     volumes:
       - ${ANALYSIS_CONFIG_FILE:-./config.yaml.example}:/app/config.yaml:ro
 
+  # Agents (Phase 7-C) — runs the autonomous agent supervisor.
+  # Loads `agents.enabled[]` from config.yaml and ticks each plugin at
+  # its configured interval. Empty allowlist by default — opt-in only.
+  # No port exposed; counters increment in-process. Same image as api/worker.
+  agents:
+    build: .
+    command: ["python", "-m", "agents.main"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:-changeme}@db:5432/healthsave
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+    volumes:
+      - ${ANALYSIS_CONFIG_FILE:-./config.yaml.example}:/app/config.yaml:ro
+
   grafana:
     image: ${GRAFANA_IMAGE:-grafana/grafana-oss:11.2.0}
     restart: unless-stopped
