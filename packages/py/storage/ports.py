@@ -41,6 +41,17 @@ if TYPE_CHECKING:
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from .timescale.agents import (
+        ActionKind,
+        ArtifactKind,
+        DecidedBy,
+        Decision,
+        EventKind,
+        ExecutionStatus,
+        ProposalRow,
+        RunStatus,
+        TriggerKind,
+    )
     from .timescale.briefings import FindingRow, NarrativeRow
     from .timescale.runs import PipelineRun, TriggeredBy
 
@@ -198,3 +209,113 @@ class MeasurementRepository(Protocol):
     real methods (``insert_heart_rate``, ``insert_workout``,
     ``fetch_series``, etc.) as their SQL migrates here.
     """
+
+
+@runtime_checkable
+class AgentRepository(Protocol):
+    """AgentRun ledger CRUD — six Phase 7-A tables behind one Protocol.
+
+    Phase 7-C's supervisor and Phase 7-E's API routes depend on this
+    Protocol; the TimescaleDB impl is :class:`storage.timescale.agents.TimescaleAgentRepository`.
+    Tests build in-memory fakes against the same shape.
+
+    Idempotency contract on :meth:`propose_action`: when
+    ``idempotency_key`` is provided and a row with the same key
+    already exists, the method returns ``None`` (the caller treats
+    this as 'already proposed, do not re-emit downstream events').
+    When ``idempotency_key`` is ``None``, the row always lands.
+
+    Transaction discipline: every method takes ``AsyncSession`` and
+    NEVER calls ``commit()`` — the caller composes multiple writes
+    into one transaction (e.g. ``start_run`` + ``record_event``
+    'run_started') and commits once.
+    """
+
+    async def start_run(
+        self,
+        session: AsyncSession,
+        *,
+        plugin_id: str,
+        trigger_kind: TriggerKind,
+        trigger_metadata: dict[str, Any] | None = None,
+        owner_id: UUID = ...,
+        workspace_id: UUID = ...,
+    ) -> UUID: ...
+
+    async def mark_run_terminal(
+        self,
+        session: AsyncSession,
+        *,
+        run_id: UUID,
+        status: RunStatus,
+    ) -> None: ...
+
+    async def propose_action(
+        self,
+        session: AsyncSession,
+        *,
+        run_id: UUID,
+        action_kind: ActionKind,
+        payload: dict[str, Any],
+        rationale: str,
+        capability: str,
+        idempotency_key: str | None = None,
+        owner_id: UUID = ...,
+        workspace_id: UUID = ...,
+    ) -> UUID | None: ...
+
+    async def decide_action(
+        self,
+        session: AsyncSession,
+        *,
+        proposal_id: UUID,
+        decision: Decision,
+        decided_by: DecidedBy,
+        rationale: str | None = None,
+        owner_id: UUID = ...,
+        workspace_id: UUID = ...,
+    ) -> UUID: ...
+
+    async def execute_action(
+        self,
+        session: AsyncSession,
+        *,
+        proposal_id: UUID,
+        decision_id: UUID,
+        status: ExecutionStatus,
+        result: dict[str, Any] | None = None,
+        error: str | None = None,
+        owner_id: UUID = ...,
+        workspace_id: UUID = ...,
+    ) -> UUID: ...
+
+    async def record_event(
+        self,
+        session: AsyncSession,
+        *,
+        run_id: UUID | None,
+        kind: EventKind,
+        payload: dict[str, Any] | None = None,
+        owner_id: UUID = ...,
+        workspace_id: UUID = ...,
+    ) -> UUID: ...
+
+    async def record_artifact(
+        self,
+        session: AsyncSession,
+        *,
+        run_id: UUID,
+        kind: ArtifactKind,
+        payload: dict[str, Any],
+        owner_id: UUID = ...,
+        workspace_id: UUID = ...,
+    ) -> UUID: ...
+
+    async def fetch_recent_proposals(
+        self,
+        session: AsyncSession,
+        *,
+        owner_id: UUID = ...,
+        limit: int = 50,
+        undecided_only: bool = False,
+    ) -> list[ProposalRow]: ...
