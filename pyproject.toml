@@ -72,13 +72,14 @@ garmin = [
 ]
 
 [tool.setuptools.packages.find]
-# v2 layout: server under apps/api/, worker under apps/worker/, and
-# analysis + compat_v1 + contracts + runtime + storage under
-# packages/py/. Multi-root `where` keeps `import server`,
-# `import analysis`, `import compat_v1`, `import contracts`,
-# `import runtime`, `import storage`, and `import worker` working
-# after `pip install -e .` — see contracts/V1.md.
-where = ["apps/api", "apps/worker", "packages/py"]
+# v2 layout: server under apps/api/, worker under apps/worker/, agents
+# under apps/agents/, and analysis + compat_v1 + contracts + runtime +
+# storage + plugin_sdk under packages/py/. Multi-root `where` keeps
+# `import server`, `import analysis`, `import compat_v1`,
+# `import contracts`, `import runtime`, `import storage`, `import
+# worker`, `import agents`, and `import plugin_sdk` working after
+# `pip install -e .` — see contracts/V1.md.
+where = ["apps/api", "apps/worker", "apps/agents", "packages/py"]
 include = [
     "server*",
     "analysis*",
@@ -87,6 +88,7 @@ include = [
     "runtime*",
     "storage*",
     "worker*",
+    "agents*",
     "plugin_sdk*",
 ]
 
@@ -98,7 +100,7 @@ testpaths = ["tests"]
 # `import worker` work without requiring `pip install -e .` first.
 # CI still runs `pip install -e .[dev]` for the full install path;
 # this pythonpath is the safety net for fresh checkouts.
-pythonpath = ["apps/api", "apps/worker", "packages/py"]
+pythonpath = ["apps/api", "apps/worker", "apps/agents", "packages/py"]
 
 [tool.ruff]
 line-length = 100

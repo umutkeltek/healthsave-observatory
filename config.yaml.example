@@ -62,3 +62,24 @@ notifications:
     broker: "localhost"
     port: 1883
     topic_prefix: "health/insights"
+
+# Agents — Phase 7-C autonomous-agent supervisor (apps/agents).
+#
+# Empty `enabled:` by default — no agent runs without explicit opt-in.
+# This protects the local-first deploy from surprise autonomy. The
+# `defaults:` block applies to every enabled agent; `plugins:` overrides
+# specific ids (use the manifest `id`, not the folder slug).
+#
+# Enabling an unknown plugin id is a fail-loud startup error: silent
+# skip would let a typo masquerade as a working agent.
+agents:
+  enabled: []                         # opt-in allowlist of manifest ids
+  defaults:
+    tick_interval_seconds: 60         # one tick per minute by default
+    timeout_seconds: 5                # per-call deadline (observe/propose/persist)
+    restart_lookback_seconds: 3600    # on restart, replay up to 1h of observations
+  plugins:
+    # Example (Phase 7-D will ship this plugin):
+    # hdh.agents.anomaly_watcher:
+    #   tick_interval_seconds: 60
+    {}
