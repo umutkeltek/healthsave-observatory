@@ -55,6 +55,16 @@ from .registry import (
     materialize_manifest,
     write_registry,
 )
+from .runtime import (
+    AgentHealthError,
+    AgentLifecycleError,
+    AgentObserveError,
+    AgentProposeError,
+    AgentRuntimeError,
+    AgentTimeoutError,
+    error_boundary,
+    with_deadline,
+)
 
 __all__ = [
     # versioning
@@ -81,6 +91,15 @@ __all__ = [
     "materialize_manifest",
     # loader (Phase 7-pre)
     "load_plugin",
+    # runtime contracts (Phase 7-pre)
+    "AgentRuntimeError",
+    "AgentLifecycleError",
+    "AgentHealthError",
+    "AgentObserveError",
+    "AgentProposeError",
+    "AgentTimeoutError",
+    "error_boundary",
+    "with_deadline",
     # errors
     "PluginError",
     "PluginManifestError",
