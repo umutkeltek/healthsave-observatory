@@ -355,6 +355,83 @@ async def test_source_default_setup_and_shutdown_are_no_ops():
 
 
 # ──────────────────────────────────────────────────────────────────────
+# Phase 7-pre-min: Agent lifecycle (start / stop / health)
+# ──────────────────────────────────────────────────────────────────────
+
+
+def _agent_manifest():
+    return PluginManifest.model_validate(_good_manifest_dict(kind="agent", entrypoint="x:Y"))
+
+
+class _MinimalAgent(Agent):
+    """The minimum an Agent must implement: observe + propose. Lifecycle
+    methods inherit defaults — the Phase 7-pre contract under test.
+    """
+
+    async def observe(self, event):
+        return None
+
+    async def propose(self):
+        return []
+
+
+@pytest.mark.asyncio
+async def test_agent_default_start_is_async_noop():
+    agent = _MinimalAgent(_agent_manifest())
+    result = await agent.start()
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_agent_default_stop_is_async_noop():
+    agent = _MinimalAgent(_agent_manifest())
+    result = await agent.stop()
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_agent_default_health_returns_ok_status():
+    agent = _MinimalAgent(_agent_manifest())
+    result = await agent.health()
+    assert result == {"status": "ok"}
+
+
+@pytest.mark.asyncio
+async def test_agent_subclass_can_override_health_without_touching_lifecycle():
+    """A subclass overrides health() to surface degraded state without
+    having to implement start/stop — this is the load-bearing
+    ergonomics claim of the default lifecycle.
+    """
+
+    class _DegradedAgent(_MinimalAgent):
+        async def health(self):
+            return {"status": "degraded", "reason": "queue full", "queue_depth": 42}
+
+    agent = _DegradedAgent(_agent_manifest())
+    assert await agent.health() == {
+        "status": "degraded",
+        "reason": "queue full",
+        "queue_depth": 42,
+    }
+    # Defaults still work for start/stop.
+    assert await agent.start() is None
+    assert await agent.stop() is None
+
+
+@pytest.mark.asyncio
+async def test_agent_lifecycle_methods_are_coroutine_functions():
+    """The supervisor will `await agent.start()` etc. — pin the type
+    so a sync override would fail this contract before failing the
+    supervisor.
+    """
+    import inspect
+
+    assert inspect.iscoroutinefunction(Agent.start)
+    assert inspect.iscoroutinefunction(Agent.stop)
+    assert inspect.iscoroutinefunction(Agent.health)
+
+
+# ──────────────────────────────────────────────────────────────────────
 # Sanity: DiscoveredPlugin shape
 # ──────────────────────────────────────────────────────────────────────
 

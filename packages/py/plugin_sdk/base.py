@@ -118,8 +118,63 @@ class Agent(Plugin):
 
     The base lives in Phase 6 so plugin authors can start writing
     Agents now and the registry can list them; the runtime that
-    actually runs them lands in Phase 7.
+    actually runs them lands in Phase 7-C.
+
+    Lifecycle (Phase 7-pre-min):
+
+      1. ``start()``        — once before the supervisor begins driving
+         the agent. Open external connections, prime caches.
+      2. ``observe(event)`` — per data-plane event (new measurement,
+         finding, user action). Pure side-effect.
+      3. ``propose()``      — returns zero or more
+         ``ActionProposal``-shaped dicts. The runtime materializes each
+         into :class:`contracts.agents.ActionProposal`; malformed
+         dicts surface as validation errors, not silent drops.
+      4. ``health()``       — runtime polls on a schedule to report
+         degraded state.
+      5. ``stop()``         — once on graceful shutdown. MUST be
+         idempotent — the runtime calls it on clean exit AND
+         exception paths.
+
+    Sources have setup/ingest/shutdown; Narrators are stateless. Agents
+    are persistent stateful processes — hence the richer lifecycle.
     """
+
+    async def start(self) -> None:
+        """Optional lifecycle hook: called once before the supervisor
+        begins driving the agent. Default no-op.
+
+        Implementations open external connections, prime caches, or
+        register callbacks here. The supervisor catches exceptions and
+        re-raises them as :class:`AgentLifecycleError`
+        (``plugin_sdk.runtime``); a raise here prevents the agent from
+        being scheduled.
+        """
+
+    async def stop(self) -> None:
+        """Optional lifecycle hook: called once during graceful
+        shutdown. Default no-op.
+
+        Implementations close connections, flush state, unregister
+        callbacks here. MUST be idempotent — the supervisor calls
+        ``stop()`` on both clean exit AND exception paths so any
+        cleanup that has already happened must short-circuit.
+        """
+
+    async def health(self) -> dict[str, Any]:
+        """Report runtime health state. Default returns
+        ``{"status": "ok"}``.
+
+        Implementations override to surface degraded modes — e.g.
+        ``{"status": "degraded", "reason": "queue full",
+        "queue_depth": 42}``. The supervisor polls this on a schedule
+        and exposes the result via the dashboard. A raise inside this
+        method is caught by the supervisor and re-raised as
+        :class:`AgentHealthError` (``plugin_sdk.runtime``); the
+        supervisor records the failure but does not treat a single
+        unhealthy probe as cause to stop the agent.
+        """
+        return {"status": "ok"}
 
     @abstractmethod
     async def observe(self, event: dict[str, Any]) -> None:
