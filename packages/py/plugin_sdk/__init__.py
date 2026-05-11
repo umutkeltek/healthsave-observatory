@@ -41,6 +41,7 @@ from .errors import (
     PluginNotFoundError,
     PluginSdkVersionMismatch,
 )
+from .loader import load_plugin
 from .manifest import (
     PluginCapability,
     PluginManifest,
@@ -78,6 +79,8 @@ __all__ = [
     "write_registry",
     "load_registry",
     "materialize_manifest",
+    # loader (Phase 7-pre)
+    "load_plugin",
     # errors
     "PluginError",
     "PluginManifestError",

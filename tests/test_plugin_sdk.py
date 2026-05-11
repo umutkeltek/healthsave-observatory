@@ -35,8 +35,10 @@ from plugin_sdk import (  # noqa: E402
     Narrator,
     Plugin,
     PluginCapability,
+    PluginEntrypointError,
     PluginManifest,
     PluginManifestError,
+    PluginNotFoundError,
     PluginPermissions,
     PluginSdkVersionMismatch,
     Source,
@@ -45,6 +47,7 @@ from plugin_sdk import (  # noqa: E402
     discover,
     is_sdk_compatible,
     load_manifest,
+    load_plugin,
     load_registry,
     materialize_manifest,
     write_registry,
@@ -83,6 +86,7 @@ def test_public_surface_exposes_documented_names():
         "write_registry",
         "load_registry",
         "materialize_manifest",
+        "load_plugin",
     ]
     import plugin_sdk
 
@@ -448,3 +452,126 @@ def test_discovered_plugin_is_a_frozen_dataclass(tmp_path: Path):
     # frozen=True dataclass raises FrozenInstanceError on assignment.
     with pytest.raises(FrozenInstanceError):
         p.kind = "narrator"
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Phase 7-pre-min F2: load_plugin — discover + version-check + import
+# ──────────────────────────────────────────────────────────────────────
+
+
+def test_load_plugin_returns_an_instance_of_the_expected_base_class():
+    """End-to-end via the real plugins/ tree: load apple-health-healthsave
+    and verify the returned instance is a Source subclass with the right
+    manifest attached.
+    """
+    from plugins.sources.apple_health_healthsave import AppleHealthSource
+
+    plugin = load_plugin("apple-health-healthsave", kind="source")
+    assert isinstance(plugin, AppleHealthSource)
+    assert isinstance(plugin, Source)
+    assert plugin.manifest.id == "apple-health-healthsave"
+
+
+def test_load_plugin_raises_not_found_when_id_or_kind_does_not_match(tmp_path: Path):
+    """A bogus id, or the right id under the wrong kind, both raise
+    PluginNotFoundError. The kind filter matters: a 'source' id under
+    discover() would not match a 'narrator' load_plugin() call.
+    """
+    plugins = tmp_path / "plugins"
+    _write_plugin(plugins / "sources" / "alpha", _good_manifest_dict(id="alpha", kind="source"))
+
+    with pytest.raises(PluginNotFoundError):
+        load_plugin("nonexistent", kind="source", plugins_dir=plugins)
+    with pytest.raises(PluginNotFoundError):
+        load_plugin("alpha", kind="narrator", plugins_dir=plugins)
+
+
+def test_load_plugin_raises_sdk_version_mismatch_before_import(tmp_path: Path):
+    """A plugin that targets an incompatible SDK must fail at LOAD TIME,
+    not later when its entrypoint module gets imported. Phase 7-pre's
+    load-bearing claim — the loader enforces ``sdk_version`` BEFORE any
+    plugin-side import side effects can run.
+
+    Uses a manifest that points at a non-existent module; if the loader
+    tried to import first and version-check second, this test would
+    raise PluginEntrypointError instead of PluginSdkVersionMismatch.
+    """
+    plugins = tmp_path / "plugins"
+    _write_plugin(
+        plugins / "sources" / "future_source",
+        _good_manifest_dict(
+            id="future_source",
+            kind="source",
+            sdk_version=">=99.0",  # never satisfied
+            entrypoint="this.module.does.not.exist:NoSuchClass",
+        ),
+    )
+
+    with pytest.raises(PluginSdkVersionMismatch) as exc:
+        load_plugin("future_source", kind="source", plugins_dir=plugins)
+    assert exc.value.plugin_id == "future_source"
+    assert exc.value.declared == ">=99.0"
+
+
+def test_load_plugin_raises_entrypoint_error_when_import_fails(tmp_path: Path):
+    """Compatible SDK + unreachable module → PluginEntrypointError, NOT
+    a raw ImportError. The loader wraps the import failure with the
+    plugin_id + entrypoint for grep-able operator output.
+    """
+    plugins = tmp_path / "plugins"
+    _write_plugin(
+        plugins / "sources" / "broken_source",
+        _good_manifest_dict(
+            id="broken_source",
+            kind="source",
+            entrypoint="this.module.does.not.exist:NoSuchClass",
+        ),
+    )
+
+    with pytest.raises(PluginEntrypointError) as exc:
+        load_plugin("broken_source", kind="source", plugins_dir=plugins)
+    assert exc.value.plugin_id == "broken_source"
+
+
+def test_load_plugin_raises_entrypoint_error_when_class_does_not_subclass_kind_base(
+    tmp_path: Path,
+):
+    """The manifest says ``kind: source`` but the entrypoint resolves
+    to a plain ``object`` (not a Source subclass) → PluginEntrypointError.
+    Catches the case where a plugin author refactored their class
+    hierarchy and forgot to update the manifest kind.
+    """
+    plugins = tmp_path / "plugins"
+    _write_plugin(
+        plugins / "sources" / "mismatched_kind",
+        _good_manifest_dict(
+            id="mismatched_kind",
+            kind="source",
+            # Point at a real, importable object that is NOT a Source.
+            entrypoint="json:JSONDecoder",
+        ),
+    )
+
+    with pytest.raises(PluginEntrypointError) as exc:
+        load_plugin("mismatched_kind", kind="source", plugins_dir=plugins)
+    assert "not a subclass of Source" in str(exc.value)
+
+
+def test_load_plugin_raises_entrypoint_error_on_malformed_entrypoint(tmp_path: Path):
+    """``entrypoint: "module_only_no_class"`` is malformed — the loader
+    must reject it with a clear message instead of silently importing
+    the module and probing for an attribute with the empty string.
+    """
+    plugins = tmp_path / "plugins"
+    _write_plugin(
+        plugins / "sources" / "bad_entrypoint",
+        _good_manifest_dict(
+            id="bad_entrypoint",
+            kind="source",
+            entrypoint="module_only_no_class",  # no ':ClassName'
+        ),
+    )
+
+    with pytest.raises(PluginEntrypointError) as exc:
+        load_plugin("bad_entrypoint", kind="source", plugins_dir=plugins)
+    assert "module.path:ClassName" in str(exc.value)
