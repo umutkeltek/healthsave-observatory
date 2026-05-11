@@ -49,45 +49,35 @@ _apple_health_plugin: "Source | None" = None
 
 
 def _load_apple_health_plugin() -> "Source":
-    """Discover, resolve, and instantiate the Apple Health plugin.
+    """Resolve and instantiate the Apple Health plugin via the SDK loader.
 
-    Walks ``plugins/`` via :func:`plugin_sdk.discover`, finds the
-    ``apple-health-healthsave`` entry, imports its entrypoint module,
-    constructs the class with the manifest, and caches the instance
-    at the module level. Subsequent calls return the cached instance.
+    Delegates to :func:`plugin_sdk.load_plugin` (Phase 7-pre-min) which
+    runs ``discover()`` + ``assert_sdk_compatible`` + entrypoint import
+    + base-class subclass check as one fail-loud chain. Caches the
+    instance at the module level so subsequent calls are O(1).
 
-    Raises ``RuntimeError`` if the plugin is missing or its entrypoint
-    fails to resolve — fail-loud is the right default; a silent fallback
-    to direct storage calls would re-create the Schrödinger-SDK problem
-    the audit flagged. An operator alerted to this exception fixes the
-    plugin layout; a silent fallback would mask the regression.
+    Surfaces:
+
+      * :class:`PluginNotFoundError` — broken plugins/ layout.
+      * :class:`PluginSdkVersionMismatch` — plugin targets an
+        incompatible SDK. Phase 7-pre enforces this AT LOAD TIME, not
+        later inside the runtime.
+      * :class:`PluginEntrypointError` — import/attribute/subclass
+        check failed.
+
+    All three subclass :class:`PluginError` so a single
+    ``except PluginError`` catches every load-side failure mode.
     """
     global _apple_health_plugin
     if _apple_health_plugin is not None:
         return _apple_health_plugin
 
-    import importlib
+    from plugin_sdk import load_plugin
 
-    from plugin_sdk import discover
-
-    found = discover()
-    match = next(
-        (p for p in found if p.plugin_id == "apple-health-healthsave"),
-        None,
-    )
-    if match is None:
-        raise RuntimeError(
-            "apple-health-healthsave plugin not found via plugin_sdk.discover(); "
-            "expected at plugins/sources/apple_health_healthsave/"
-        )
-
-    module_path, _, class_name = match.manifest.entrypoint.partition(":")
-    module = importlib.import_module(module_path)
-    cls = getattr(module, class_name)
-    _apple_health_plugin = cls(match.manifest)
+    _apple_health_plugin = load_plugin("apple-health-healthsave", kind="source")
     log.info(
         "Apple Health plugin loaded via plugin_sdk: %s",
-        match.manifest.entrypoint,
+        _apple_health_plugin.manifest.entrypoint,
     )
     return _apple_health_plugin
 
