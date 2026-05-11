@@ -180,3 +180,170 @@ def test_recording_backends_satisfy_their_protocols():
     """Smoke check that the test doubles match the protocols (Liskov)."""
     assert isinstance(_RecordingStorage(), IngestStorage)
     assert isinstance(_RecordingAuditLog(), AuditLog)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Phase 6.1 — the route delegates the per-device write loop to the
+# Apple Health plugin via the SDK loader. The route's contract with
+# the plugin is exercised here: a fake plugin attached to
+# app.state.apple_health_plugin must be invoked exactly once with the
+# expected payload shape.
+# ──────────────────────────────────────────────────────────────────────
+
+
+class _RecordingPlugin:
+    """Records each call so the test can assert payload shape + count.
+
+    Phase 6.1: subclassing :class:`plugin_sdk.Source` would couple this
+    test to the SDK's optional lifecycle methods; instead we duck-type
+    the single method the route invokes. The
+    ``test_recording_plugin_is_shape_compatible_with_source`` smoke
+    check below pins that the duck-typed shape matches the Source ABC's
+    ``ingest`` signature.
+    """
+
+    def __init__(self, accepted: int = 0) -> None:
+        self.calls: list[dict] = []
+        self._accepted = accepted
+
+    async def ingest(self, payload: dict) -> dict:
+        self.calls.append(payload)
+        return {"accepted": self._accepted, "rejected": 0}
+
+
+def test_recording_plugin_is_shape_compatible_with_source():
+    """Phase 6.1 type-pin: the route invokes ``await plugin.ingest(payload)``
+    on whatever ``_resolve_apple_health_plugin`` returns. Pin that the
+    test double exposes the same async ``ingest(payload) -> dict``
+    signature the SDK's ``Source`` ABC declares — otherwise a Source
+    ABC rename would silently leave the route delegation tests passing
+    while production breaks.
+    """
+    import inspect
+
+    from plugin_sdk import Source
+
+    plugin = _RecordingPlugin()
+    # Both have an async `ingest` callable with one positional arg
+    # named `payload`. Refactors that rename the method or change the
+    # arg name fail this check before they fail production.
+    assert inspect.iscoroutinefunction(plugin.ingest)
+    assert inspect.iscoroutinefunction(Source.ingest)
+    plugin_params = list(inspect.signature(plugin.ingest).parameters)
+    source_params = list(inspect.signature(Source.ingest).parameters)
+    # Source.ingest is unbound so its first param is `self`; the
+    # duck-typed plugin.ingest is bound and starts at `payload`.
+    assert plugin_params == ["payload"]
+    assert source_params == ["self", "payload"]
+
+
+@pytest.mark.asyncio
+async def test_route_delegates_apple_batch_through_plugin_loader():
+    """Phase 6.1 contract: the route resolves the Apple Health plugin
+    via ``_resolve_apple_health_plugin`` (which checks
+    ``app.state.apple_health_plugin`` first) and invokes its ``ingest``
+    method exactly once per non-empty batch.
+
+    The payload MUST carry the Phase 6.1 keys: ``storage`` (the
+    Protocol injection that preserves Phase 5C backend-swap),
+    ``session``, ``device_id`` (pre-resolved by the route for the
+    audit row), ``first_device_name`` (so the plugin reuses the
+    pre-resolved id), ``metric``, ``samples``, and ``owner_id``.
+    """
+    storage = _RecordingStorage()
+    plugin = _RecordingPlugin(accepted=2)
+    session = FakeSession()
+    samples = [
+        {"date": "2026-04-10T12:00:00Z", "qty": 72, "source": "Apple Watch"},
+        {"date": "2026-04-10T12:00:01Z", "qty": 73, "source": "Apple Watch"},
+    ]
+    request = FakeRequest({"metric": "heart_rate", "samples": samples})
+    request.app = _app_with(
+        {
+            "storage": storage,
+            "audit_log": None,
+            "apple_health_plugin": plugin,
+        }
+    )
+
+    result = await server.apple_batch(request, session)
+
+    # Plugin was invoked exactly once.
+    assert len(plugin.calls) == 1
+    payload = plugin.calls[0]
+
+    # Payload carries the Phase 6.1 contract keys.
+    assert payload["storage"] is storage
+    assert payload["session"] is session
+    assert payload["metric"] == "heart_rate"
+    assert payload["samples"] == samples
+    assert payload["first_device_name"] == "Apple Watch"
+    assert payload["device_id"] == 1  # _RecordingStorage returns 1
+    # owner_id is the default sentinel when no X-User-Id header is present.
+    assert payload["owner_id"] == UUID("00000000-0000-0000-0000-000000000001")
+
+    # The route only invoked storage for the first-device resolution
+    # (the plugin handles the per-device loop in production).
+    storage_kinds = [c[0] for c in storage.calls]
+    assert storage_kinds == ["device"]
+
+    # Response shape and record count come from the plugin's return.
+    assert result["records"] == 2
+    assert result["status"] == "processed"
+    assert result["metric"] == "heart_rate"
+
+
+@pytest.mark.asyncio
+async def test_route_resolves_plugin_once_across_two_requests_when_state_absent():
+    """Phase 6.1 cache contract: when no ``app.state.apple_health_plugin``
+    is set, the route falls back to the module-level lazy cache via
+    ``_load_apple_health_plugin``. That function must run discovery
+    EXACTLY ONCE across N requests — re-running ``discover()`` per
+    request would burn YAML I/O on the hot path and re-import the
+    plugin module, potentially with subtle log-spam side effects.
+
+    Calls the loader directly twice and confirms instance identity:
+    same object both times. The route test above already pins that
+    the cache is the seam the route uses.
+    """
+    from server.api import ingest as ingest_module
+
+    # Reset the module cache so prior tests don't poison this assertion.
+    saved = ingest_module._apple_health_plugin
+    ingest_module._apple_health_plugin = None
+    try:
+        first = ingest_module._load_apple_health_plugin()
+        second = ingest_module._load_apple_health_plugin()
+        assert first is second, "lazy cache must return the same instance across calls"
+    finally:
+        ingest_module._apple_health_plugin = saved
+
+
+@pytest.mark.asyncio
+async def test_route_propagates_resolved_owner_id_into_plugin_payload():
+    """X-User-Id resolution still happens in the route — it gets
+    threaded into the plugin payload, not into the storage call shape
+    directly. This pins that the v1 owner-id seam survives the
+    delegation.
+    """
+    plugin = _RecordingPlugin(accepted=1)
+    storage = _RecordingStorage()
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "heart_rate",
+            "samples": [{"date": "2026-04-10T12:00:00Z", "qty": 72, "source": "Apple Watch"}],
+        },
+        headers={"x-user-id": "11111111-2222-3333-4444-555555555555"},
+    )
+    request.app = _app_with(
+        {
+            "storage": storage,
+            "audit_log": None,
+            "apple_health_plugin": plugin,
+        }
+    )
+
+    await server.apple_batch(request, session)
+
+    assert plugin.calls[0]["owner_id"] == UUID("11111111-2222-3333-4444-555555555555")

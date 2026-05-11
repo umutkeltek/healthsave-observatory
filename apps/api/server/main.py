@@ -32,6 +32,7 @@ from analysis.llm.client import HealthLLMClient
 from fastapi import FastAPI
 
 from .api import health_routes, ingest, insights, metrics, status
+from .api.ingest import _load_apple_health_plugin
 from .db.session import async_session, engine
 from .ingestion.registry import resolve_from_env
 
@@ -44,6 +45,7 @@ _REQUIRED_STATE_ATTRS: tuple[str, ...] = (
     "session_factory",
     "storage",
     "audit_log",
+    "apple_health_plugin",
 )
 
 
@@ -83,6 +85,17 @@ async def lifespan(a: FastAPI):
     a.state.storage = storage
     a.state.audit_log = audit_log
     log.info("storage backend resolved: %s", type(storage).__name__)
+    # Phase 6.1: prime the Apple Health plugin at startup so a broken
+    # plugins/ layout fails LOUD at boot rather than degrading the
+    # first user request to a 500. The route's _resolve_apple_health_plugin
+    # reads off app.state first; an explicit attribute beats falling
+    # through to the lazy module-level cache, and the assertion below
+    # catches any future regression that drops this line.
+    a.state.apple_health_plugin = _load_apple_health_plugin()
+    log.info(
+        "Apple Health plugin primed at lifespan: %s",
+        type(a.state.apple_health_plugin).__name__,
+    )
     _assert_lifespan_state(a)
     try:
         yield
