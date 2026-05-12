@@ -1,0 +1,19 @@
+id: hdh.agents.anomaly_watcher
+name: Anomaly Watcher
+kind: agent
+version: "0.1.0"
+sdk_version: ">=0.1,<0.2"
+language: python
+entrypoint: "plugins.agents.anomaly_watcher:AnomalyWatcherAgent"
+consumes:
+  - finding.anomaly
+emits:
+  - proposal.notify
+permissions:
+  network: false
+  secrets: []
+  capabilities:
+    - name: "read:analysis_findings"
+      description: "Read anomaly findings to detect alert-worthy events."
+    - name: "propose:notify"
+      description: "Propose user-facing notifications. The decision belongs to the operator (or a future auto-approval policy); the agent does not deliver notifications itself."

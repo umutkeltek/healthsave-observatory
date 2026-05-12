@@ -25,6 +25,12 @@ from .supervisor import (
     Supervisor,
 )
 
+# Note: ``UnknownObservationFeedError`` lives in :mod:`agents.main` and
+# is NOT re-exported here — pulling :mod:`agents.main` into every
+# ``import agents`` would drag :mod:`server.db.session` (the engine
+# bootstrap) into test paths that don't need it. Import it directly
+# from :mod:`agents.main` if you need it.
+
 __all__ = [
     "AgentsConfig",
     "AgentsDefaults",
