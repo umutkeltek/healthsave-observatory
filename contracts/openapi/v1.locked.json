@@ -161,6 +161,79 @@
         "title": "DailyBriefingResponse",
         "type": "object"
       },
+      "DecideRequest": {
+        "additionalProperties": false,
+        "description": "Operator's decision on one proposal.\n\n``rationale`` is optional but encouraged \u2014 Phase 7-E's audit trail\nis the same ledger that Phase 7-A laid down; an unexplained\nrejection is a near-future regret. The UI should default-prompt.",
+        "properties": {
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected",
+              "deferred"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "title": "DecideRequest",
+        "type": "object"
+      },
+      "DecideResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "decided_by": {
+            "enum": [
+              "user",
+              "policy",
+              "auto"
+            ],
+            "title": "Decided By",
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected",
+              "deferred"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "decision_id": {
+            "format": "uuid",
+            "title": "Decision Id",
+            "type": "string"
+          },
+          "proposal_id": {
+            "format": "uuid",
+            "title": "Proposal Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposal_id",
+          "decision_id",
+          "decision",
+          "decided_by"
+        ],
+        "title": "DecideResponse",
+        "type": "object"
+      },
       "FindingResponse": {
         "properties": {
           "created_at": {
@@ -278,6 +351,99 @@
           }
         },
         "title": "InsightsLatestResponse",
+        "type": "object"
+      },
+      "ProposalView": {
+        "additionalProperties": false,
+        "description": "One proposal as it appears on the wire.\n\nSingle-user-mode drops ``owner_id`` + ``workspace_id`` \u2014 they're\nsentinel UUIDs on every row and add noise. Phase 9+ multi-tenant\nwork re-surfaces them. ``decided`` is a convenience flag so\ndashboards can render decision status without joining client-side.",
+        "properties": {
+          "action_kind": {
+            "enum": [
+              "notify",
+              "create_experiment",
+              "create_briefing",
+              "request_user_input",
+              "tag_measurement"
+            ],
+            "title": "Action Kind",
+            "type": "string"
+          },
+          "capability": {
+            "title": "Capability",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key"
+          },
+          "payload": {
+            "title": "Payload",
+            "type": "object"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "rationale": {
+            "title": "Rationale",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "proposed_at",
+          "action_kind",
+          "payload",
+          "rationale",
+          "capability"
+        ],
+        "title": "ProposalView",
+        "type": "object"
+      },
+      "ProposalsListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "proposals": {
+            "items": {
+              "$ref": "#/components/schemas/ProposalView"
+            },
+            "title": "Proposals",
+            "type": "array"
+          },
+          "undecided_only": {
+            "title": "Undecided Only",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "proposals",
+          "undecided_only",
+          "count"
+        ],
+        "title": "ProposalsListResponse",
         "type": "object"
       },
       "RunSummaryResponse": {
@@ -1106,6 +1272,138 @@
           }
         },
         "summary": "Insights Weekly"
+      }
+    },
+    "/api/v2/agents/proposals": {
+      "get": {
+        "description": "List recent proposals.\n\nReads through :func:`storage.timescale.agents.fetch_recent_proposals`\n\u2014 the Phase 7-B repository owns the SQL (default newest-first via\nthe supplied ORDER BY). Per the Phase 5 storage-zone rule, the\nroute never composes its own query against ``action_proposals``.",
+        "operationId": "list_proposals_api_v2_agents_proposals_get",
+        "parameters": [
+          {
+            "description": "When true, only return proposals without a matching action_decisions row. The dashboard's review queue uses this; full audit views set false.",
+            "in": "query",
+            "name": "undecided_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "When true, only return proposals without a matching action_decisions row. The dashboard's review queue uses this; full audit views set false.",
+              "title": "Undecided Only",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalsListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Proposals",
+        "tags": [
+          "v2-agents"
+        ]
+      }
+    },
+    "/api/v2/agents/proposals/{proposal_id}/decide": {
+      "post": {
+        "description": "Record the operator's decision on one proposal.\n\nWrites a single row into ``action_decisions`` via\n:func:`storage.timescale.agents.decide_action`. The decision is\nappend-only \u2014 re-deciding (e.g. flipping a rejection to an\napproval) writes a new row, and downstream readers take the\nnewest. The supervisor / executor path that picks up an approved\nproposal is Phase 7-F territory; Phase 7-E only persists the\ndecision.\n\nErrors:\n\n  * ``404`` \u2014 no proposal with that id. We intentionally don't\n    leak whether the id is malformed-but-syntactically-valid vs.\n    truly absent; both surface as 404.",
+        "operationId": "decide_proposal_api_v2_agents_proposals__proposal_id__decide_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecideResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decide Proposal",
+        "tags": [
+          "v2-agents"
+        ]
       }
     },
     "/health": {

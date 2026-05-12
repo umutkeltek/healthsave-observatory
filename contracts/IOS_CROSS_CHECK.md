@@ -160,6 +160,23 @@ Any change to the iOS networking layer that touches an endpoint URL,
 a header name, a request payload field, or a response shape requires
 a coordinated re-run of this cross-check and a regen of the v1 lock.
 
+## 2026-05-12 OpenAPI lock regen: v2 agent proposals
+
+The OpenAPI lock was regenerated after the Phase 7-E server work added
+operator-review endpoints under `/api/v2/agents/proposals` and
+`/api/v2/agents/proposals/{proposal_id}/decide`.
+
+**iOS coordination verdict:** no iOS app release required. The HealthSave
+iOS app still calls only the three endpoints listed above:
+
+- `POST /api/apple/batch`
+- `GET /api/apple/status`
+- `GET /api/health`
+
+The regenerated lock adds v2-only schemas/routes to the global FastAPI
+OpenAPI snapshot, but does not change the request/response shapes or
+auth semantics of the iOS-narrow v1 surface.
+
 ## healthsave.app
 
 The marketing site at <https://healthsave.app> is the public landing
