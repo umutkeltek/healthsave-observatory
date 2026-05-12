@@ -63,6 +63,23 @@ notifications:
     port: 1883
     topic_prefix: "health/insights"
 
+# Optional Home Assistant MQTT bridge. This is separate from Grafana:
+# Grafana reads TimescaleDB; Home Assistant gets retained MQTT entities.
+# Prefer environment variables in Docker (`HA_MQTT_*`) for deployment.
+home_assistant:
+  mqtt:
+    enabled: false
+    broker: "localhost"
+    port: 1883
+    discovery_prefix: "homeassistant"
+    # Preserves HA's current aggregate contract:
+    # state topic `healthtrack/sensor/state`, discovery under
+    # `homeassistant/sensor/healthtrack/<metric>/config`.
+    state_topic_prefix: "healthtrack"
+    device_identifier: "healthtrack_owl"
+    device_name: "HealthTrack"
+    publish_interval_seconds: 60
+
 # Agents — Phase 7-C autonomous-agent supervisor (apps/agents).
 #
 # Empty `enabled:` by default — no agent runs without explicit opt-in.

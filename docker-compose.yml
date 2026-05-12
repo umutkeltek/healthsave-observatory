@@ -80,6 +80,30 @@ services:
     volumes:
       - ${ANALYSIS_CONFIG_FILE:-./config.yaml.example}:/app/config.yaml:ro
 
+  # Home Assistant MQTT bridge — optional, independent of Grafana.
+  # Publishes retained MQTT discovery + state topics (`healthtrack_*`) so
+  # Home Assistant dashboards/automations do not need direct DB access.
+  homeassistant-mqtt:
+    build: .
+    command: ["python", "-m", "homeassistant_mqtt.main"]
+    restart: unless-stopped
+    profiles: ["home-assistant"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:-changeme}@db:5432/healthsave
+      HA_MQTT_ENABLED: ${HA_MQTT_ENABLED:-false}
+      HA_MQTT_BROKER: ${HA_MQTT_BROKER:-mqtt}
+      HA_MQTT_PORT: ${HA_MQTT_PORT:-1883}
+      HA_MQTT_USERNAME: ${HA_MQTT_USERNAME:-}
+      HA_MQTT_PASSWORD: ${HA_MQTT_PASSWORD:-}
+      HA_MQTT_DISCOVERY_PREFIX: ${HA_MQTT_DISCOVERY_PREFIX:-homeassistant}
+      HA_MQTT_STATE_TOPIC_PREFIX: ${HA_MQTT_STATE_TOPIC_PREFIX:-healthtrack}
+      HA_MQTT_DEVICE_IDENTIFIER: ${HA_MQTT_DEVICE_IDENTIFIER:-healthtrack_owl}
+      HA_MQTT_DEVICE_NAME: ${HA_MQTT_DEVICE_NAME:-HealthTrack}
+      HA_MQTT_PUBLISH_INTERVAL_SECONDS: ${HA_MQTT_PUBLISH_INTERVAL_SECONDS:-60}
+
   grafana:
     image: ${GRAFANA_IMAGE:-grafana/grafana-oss:11.2.0}
     restart: unless-stopped
