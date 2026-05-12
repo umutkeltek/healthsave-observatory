@@ -348,19 +348,46 @@ Supported dashboards loaded automatically:
 
 The datasource is auto-provisioned - no manual setup needed.
 
-### Home Assistant Examples
+### Home Assistant Integration
 
-Example Home Assistant config is included in `integrations/home-assistant/` for people who want to query TimescaleDB directly and turn selected metrics into entities and automations.
+There are two supported Home Assistant paths:
 
-Included files:
+1. **MQTT bridge (recommended):** Health Data Hub reads TimescaleDB and publishes retained Home Assistant MQTT discovery + state topics. This keeps Home Assistant out of the database and works even when Grafana is deployed separately.
+2. **Direct SQL package (legacy/example):** Home Assistant queries TimescaleDB directly using `integrations/home-assistant/healthsave-package.yaml`.
+
+The MQTT bridge preserves the current aggregate Home Assistant contract:
+
+- Retained aggregate state topic: `healthtrack/sensor/state`
+- Discovery topics: `homeassistant/sensor/healthtrack/<metric>/config`
+
+It publishes these entities by default:
+
+- `sensor.healthtrack_heart_rate`
+- `sensor.healthtrack_hrv_7d_avg`
+- `sensor.healthtrack_steps_today`
+- `sensor.healthtrack_last_sleep_hours`
+- `sensor.health_source_model`
+- `sensor.room_health_state`
+
+Enable it with Docker Compose:
+
+```bash
+HA_MQTT_ENABLED=true \
+HA_MQTT_BROKER=<your-mqtt-host> \
+HA_MQTT_USERNAME=<optional-user> \
+HA_MQTT_PASSWORD=<optional-password> \
+docker compose --profile home-assistant up -d homeassistant-mqtt
+```
+
+Useful defaults:
+
+- Discovery prefix: `homeassistant`
+- State prefix: `healthtrack`
+- Publish interval: `60` seconds
+
+Direct SQL example files remain available for setups that prefer DB polling:
 - `integrations/home-assistant/healthsave-package.yaml`
 - `integrations/home-assistant/secrets.example.yaml`
-
-Recommended flow:
-1. Add a read-only PostgreSQL user for Home Assistant if possible
-2. Point `healthsave_db_url` at your TimescaleDB instance
-3. Copy `healthsave-package.yaml` into your Home Assistant packages directory
-4. Restart Home Assistant and adjust the example thresholds and entity IDs for your setup
 
 ### Community Backends
 

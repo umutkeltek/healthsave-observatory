@@ -56,6 +56,7 @@ dependencies = [
     "litellm>=1.40.0",
     "apscheduler>=3.10.0",
     "prometheus-client>=0.21.0",
+    "paho-mqtt>=2.1.0",
     "pyyaml>=6.0",
     "scipy>=1.14.0",
 ]
@@ -86,6 +87,7 @@ include = [
     "compat_v1*",
     "contracts*",
     "runtime*",
+    "homeassistant_mqtt*",
     "storage*",
     "worker*",
     "agents*",
@@ -96,7 +98,8 @@ include = [
 asyncio_mode = "auto"
 testpaths = ["tests"]
 # v2 layout: pytest adds these to sys.path so `import server`,
-# `import analysis`, `import contracts`, `import compat_v1`, and
+# `import analysis`, `import contracts`, `import compat_v1`,
+# `import homeassistant_mqtt`, and
 # `import worker` work without requiring `pip install -e .` first.
 # CI still runs `pip install -e .[dev]` for the full install path;
 # this pythonpath is the safety net for fresh checkouts.
