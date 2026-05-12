@@ -18,9 +18,9 @@ parameter to keep the discovery deterministic.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable
 from dataclasses import dataclass
-import os
 from pathlib import Path
 
 import yaml
