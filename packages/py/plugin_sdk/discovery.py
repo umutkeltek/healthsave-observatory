@@ -34,6 +34,8 @@ _KIND_TO_SINGULAR: dict[str, str] = {
     "narrators": "narrator",
     "agents": "agent",
 }
+
+
 def _default_plugins_dir() -> Path:
     """Resolve the default plugin root in both repo and Docker layouts.
 
