@@ -10,14 +10,21 @@ from server.db.session import async_session, engine
 
 from storage.timescale.homeassistant import TimescaleHealthSnapshotRepository
 
-from .bridge import build_availability_message, build_discovery_messages, build_state_messages, default_sensor_specs
+from .bridge import (
+    build_availability_message,
+    build_discovery_messages,
+    build_state_messages,
+    default_sensor_specs,
+)
 from .client import PahoMQTTPublisher
 from .config import load_config_from_env
 
 log = logging.getLogger("healthsave.homeassistant_mqtt")
 
 
-async def publish_once(repository: TimescaleHealthSnapshotRepository, publisher: PahoMQTTPublisher) -> None:
+async def publish_once(
+    repository: TimescaleHealthSnapshotRepository, publisher: PahoMQTTPublisher
+) -> None:
     """Fetch one DB snapshot and publish retained HA state messages."""
 
     specs = default_sensor_specs()

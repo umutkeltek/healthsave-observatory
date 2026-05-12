@@ -30,7 +30,9 @@ class PahoMQTTPublisher:
         if self._client is None:
             raise RuntimeError("MQTT publisher is not connected")
         for topic, payload, retain in messages:
-            body = payload if isinstance(payload, str) else json.dumps(payload, separators=(",", ":"))
+            body = (
+                payload if isinstance(payload, str) else json.dumps(payload, separators=(",", ":"))
+            )
             info = self._client.publish(topic, body, qos=0, retain=retain)
             info.wait_for_publish()
 
