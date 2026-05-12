@@ -240,6 +240,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/agents/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Proposals
+         * @description List recent proposals.
+         *
+         *     Reads through :func:`storage.timescale.agents.fetch_recent_proposals`
+         *     — the Phase 7-B repository owns the SQL (default newest-first via
+         *     the supplied ORDER BY). Per the Phase 5 storage-zone rule, the
+         *     route never composes its own query against ``action_proposals``.
+         */
+        get: operations["list_proposals_api_v2_agents_proposals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/agents/proposals/{proposal_id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Proposal
+         * @description Record the operator's decision on one proposal.
+         *
+         *     Writes a single row into ``action_decisions`` via
+         *     :func:`storage.timescale.agents.decide_action`. The decision is
+         *     append-only — re-deciding (e.g. flipping a rejection to an
+         *     approval) writes a new row, and downstream readers take the
+         *     newest. The supervisor / executor path that picks up an approved
+         *     proposal is Phase 7-F territory; Phase 7-E only persists the
+         *     decision.
+         *
+         *     Errors:
+         *
+         *       * ``404`` — no proposal with that id. We intentionally don't
+         *         leak whether the id is malformed-but-syntactically-valid vs.
+         *         truly absent; both surface as 404.
+         */
+        post: operations["decide_proposal_api_v2_agents_proposals__proposal_id__decide_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -335,6 +394,46 @@ export interface components {
             /** Narrative */
             narrative?: string | null;
         };
+        /**
+         * DecideRequest
+         * @description Operator's decision on one proposal.
+         *
+         *     ``rationale`` is optional but encouraged — Phase 7-E's audit trail
+         *     is the same ledger that Phase 7-A laid down; an unexplained
+         *     rejection is a near-future regret. The UI should default-prompt.
+         */
+        DecideRequest: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "approved" | "rejected" | "deferred";
+            /** Rationale */
+            rationale?: string | null;
+        };
+        /** DecideResponse */
+        DecideResponse: {
+            /**
+             * Decided By
+             * @enum {string}
+             */
+            decided_by: "user" | "policy" | "auto";
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "approved" | "rejected" | "deferred";
+            /**
+             * Decision Id
+             * Format: uuid
+             */
+            decision_id: string;
+            /**
+             * Proposal Id
+             * Format: uuid
+             */
+            proposal_id: string;
+        };
         /** FindingResponse */
         FindingResponse: {
             /** Created At */
@@ -361,6 +460,54 @@ export interface components {
             /** Recent Findings */
             recent_findings?: components["schemas"]["FindingResponse"][];
             weekly_summary?: components["schemas"]["WeeklySummaryResponse"] | null;
+        };
+        /**
+         * ProposalView
+         * @description One proposal as it appears on the wire.
+         *
+         *     Single-user-mode drops ``owner_id`` + ``workspace_id`` — they're
+         *     sentinel UUIDs on every row and add noise. Phase 9+ multi-tenant
+         *     work re-surfaces them. ``decided`` is a convenience flag so
+         *     dashboards can render decision status without joining client-side.
+         */
+        ProposalView: {
+            /**
+             * Action Kind
+             * @enum {string}
+             */
+            action_kind: "notify" | "create_experiment" | "create_briefing" | "request_user_input" | "tag_measurement";
+            /** Capability */
+            capability: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Idempotency Key */
+            idempotency_key?: string | null;
+            /** Payload */
+            payload: Record<string, never>;
+            /**
+             * Proposed At
+             * Format: date-time
+             */
+            proposed_at: string;
+            /** Rationale */
+            rationale: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+        };
+        /** ProposalsListResponse */
+        ProposalsListResponse: {
+            /** Count */
+            count: number;
+            /** Proposals */
+            proposals: components["schemas"]["ProposalView"][];
+            /** Undecided Only */
+            undecided_only: boolean;
         };
         /**
          * RunSummaryResponse
@@ -782,6 +929,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WeeklySummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_proposals_api_v2_agents_proposals_get: {
+        parameters: {
+            query?: {
+                /** @description When true, only return proposals without a matching action_decisions row. The dashboard's review queue uses this; full audit views set false. */
+                undecided_only?: boolean;
+                limit?: number;
+            };
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalsListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_proposal_api_v2_agents_proposals__proposal_id__decide_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecideResponse"];
                 };
             };
             /** @description Validation Error */
