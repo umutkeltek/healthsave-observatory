@@ -38,6 +38,17 @@ _FASTAPI_BUILTINS: frozenset[str] = frozenset(
 )
 
 
+# v2 namespace — Phase 7-E onward. Routes under ``/api/v2/`` are
+# *intentionally* outside the v1 frozen inventory; the v2 plane is
+# additive and is not subject to the v1 contract lock. Filter them
+# out of the "unexpected" check below, but DO keep them visible in
+# OpenAPI / `_live_routes` so a future v2-specific contract test can
+# pick them up.
+def _is_v2_route(route_str: str) -> bool:
+    _method, _, path = route_str.partition(" ")
+    return path.startswith("/api/v2/")
+
+
 def _live_routes() -> frozenset[str]:
     out = set()
     for route in app.routes:
@@ -64,9 +75,15 @@ def test_v1_routes_present() -> None:
 
 
 def test_no_unexpected_v1_routes() -> None:
-    """New top-level routes must extend V1_ROUTES_FROZEN deliberately."""
+    """New top-level routes must extend V1_ROUTES_FROZEN deliberately.
+
+    ``/api/v2/*`` routes are excluded — the v2 namespace is its own
+    contract surface, not part of v1. Routes under any *other* new
+    prefix that aren't in the frozen inventory still fail this test.
+    """
     live = _live_routes()
-    unexpected = live - V1_ROUTES_FROZEN - _FASTAPI_BUILTINS
+    v1_eligible = frozenset(r for r in live if not _is_v2_route(r))
+    unexpected = v1_eligible - V1_ROUTES_FROZEN - _FASTAPI_BUILTINS
     assert not unexpected, (
         f"New routes detected outside the v1 frozen inventory: {sorted(unexpected)}. "
         "Add them to V1_ROUTES_FROZEN and regenerate the lock if intended."
