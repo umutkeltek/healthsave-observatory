@@ -20,6 +20,7 @@ import asyncio
 import logging
 import os
 import signal
+from collections.abc import Callable
 from pathlib import Path
 
 from server.db.session import async_session, engine
@@ -35,26 +36,48 @@ from .supervisor import (
 log = logging.getLogger("agents.main")
 
 
-def _default_observation_feed_factory(plugin_id: str) -> ObservationFeed:
-    """Stub feed factory for Phase 7-C.
+class UnknownObservationFeedError(RuntimeError):
+    """No feed factory is registered for the requested plugin id.
 
-    Phase 7-D supplies a real factory that maps plugin ids to feed
-    instances (e.g. ``hdh.agents.anomaly_watcher`` →
-    ``AnalysisFindingsAnomalyFeed``). For now, raising here is the
-    fail-loud signal: an operator enabled a real agent before the
-    feed plumbing exists, and they need Phase 7-D before the
-    supervisor can drive that plugin.
+    Phase 7-D ships the anomaly-watcher feed; new agent plugins
+    register here as they're added. Fail-loud — silent skip would let
+    an operator believe an enabled agent is running when its
+    observation feed is missing.
     """
-    raise NotImplementedError(
-        f"observation feed for plugin {plugin_id!r} is not configured yet; "
-        "Phase 7-D wires concrete feeds (e.g. AnalysisFindingsAnomalyFeed)."
-    )
+
+
+def _build_default_feed_factory(session_factory) -> Callable[[str], ObservationFeed]:
+    """Return a feed factory closed over the production session factory.
+
+    Phase 7-D wires exactly one plugin: ``hdh.agents.anomaly_watcher``.
+    New agent plugins extend this mapping as they ship — each plugin
+    owns its feed module, the mapping just routes plugin id → feed
+    instance.
+    """
+    # Local import — keeps plugin code off the import path for tests
+    # that build their own factories.
+    from plugins.agents.anomaly_watcher.feed import AnalysisFindingsAnomalyFeed
+
+    feeds: dict[str, ObservationFeed] = {
+        "hdh.agents.anomaly_watcher": AnalysisFindingsAnomalyFeed(session_factory=session_factory),
+    }
+
+    def factory(plugin_id: str) -> ObservationFeed:
+        feed = feeds.get(plugin_id)
+        if feed is None:
+            raise UnknownObservationFeedError(
+                f"no observation feed registered for plugin {plugin_id!r}; "
+                "register one in agents.main._build_default_feed_factory()."
+            )
+        return feed
+
+    return factory
 
 
 async def run(
     *,
     config_path: Path | None = None,
-    observation_feed_factory=_default_observation_feed_factory,
+    observation_feed_factory: Callable[[str], ObservationFeed] | None = None,
 ) -> None:
     """Build supervisor + wait for SIGTERM. Shared between CLI and tests."""
     config_path = config_path or Path(os.getenv("ANALYSIS_CONFIG", "/app/config.yaml"))
@@ -69,6 +92,9 @@ async def run(
         "agents service starting; enabled=%s",
         [s.plugin_id for s in resolved],
     )
+
+    if observation_feed_factory is None:
+        observation_feed_factory = _build_default_feed_factory(async_session)
 
     enabled: list[EnabledAgent] = []
     if resolved:
