@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-import pytest
-
-from homeassistant_mqtt.snapshot import HealthSnapshot, latest_non_null, derive_room_health_state
+from homeassistant_mqtt.snapshot import HealthSnapshot, derive_room_health_state, latest_non_null
 
 
 def test_latest_non_null_uses_first_non_null_row_value() -> None:

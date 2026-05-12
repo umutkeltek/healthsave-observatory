@@ -4,15 +4,14 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from homeassistant_mqtt.snapshot import (
     HealthSnapshot,
     derive_room_health_state,
     int_or_none,
     round_float,
 )
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class TimescaleHealthSnapshotRepository:

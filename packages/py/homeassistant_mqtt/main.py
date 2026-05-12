@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
+from contextlib import suppress
 
 from server.db.session import async_session, engine
-
 from storage.timescale.homeassistant import TimescaleHealthSnapshotRepository
 
 from .bridge import (
@@ -64,13 +64,11 @@ async def run() -> None:
                 await publish_once(repository, publisher)
             except Exception:
                 log.exception("Home Assistant MQTT bridge publish failed")
-            try:
+            with suppress(TimeoutError):
                 await asyncio.wait_for(
                     stop_event.wait(),
                     timeout=bridge_config.mqtt.publish_interval_seconds,
                 )
-            except TimeoutError:
-                pass
     finally:
         publisher.close()
         await engine.dispose()
