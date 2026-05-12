@@ -68,6 +68,12 @@ ALLOWLIST: dict[str, str] = {
     "apps/api/server/api/insights.py": (
         "stays — AsyncSession typing for Depends(); repository calls only"
     ),
+    "apps/api/server/api/v2_agents.py": (
+        "stays — Phase 7-E route. AsyncSession typing for Depends() + "
+        "sqlalchemy.exc.IntegrityError catch to map FK violations on a "
+        "missing proposal_id to a 404. All actual SQL stays in "
+        "storage.timescale.agents (the Phase 7-B repository)."
+    ),
     "apps/api/server/api/health_routes.py": (
         "stays — readiness probe runs SELECT 1; trivial enough to skip migration"
     ),
