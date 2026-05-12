@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+import os
 from pathlib import Path
 
 import yaml
@@ -33,7 +34,29 @@ _KIND_TO_SINGULAR: dict[str, str] = {
     "narrators": "narrator",
     "agents": "agent",
 }
-_DEFAULT_PLUGINS_DIR = Path(__file__).resolve().parents[3] / "plugins"
+def _default_plugins_dir() -> Path:
+    """Resolve the default plugin root in both repo and Docker layouts.
+
+    In the source tree this module lives at
+    ``packages/py/plugin_sdk/discovery.py`` and the plugin root is
+    ``<repo>/plugins``. In the Docker image the module is copied to
+    ``/app/plugin_sdk/discovery.py`` and the plugin root is ``/app/plugins``.
+    ``parents[3]`` was correct only for the source tree and crashes in the
+    flattened image layout, so resolve defensively.
+    """
+    env_path = os.getenv("HDH_PLUGINS_DIR")
+    if env_path:
+        return Path(env_path)
+
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        candidate = parent / "plugins"
+        if candidate.exists():
+            return candidate
+    return Path("/app/plugins")
+
+
+_DEFAULT_PLUGINS_DIR = _default_plugins_dir()
 
 
 @dataclass(frozen=True, slots=True)
