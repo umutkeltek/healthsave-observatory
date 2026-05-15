@@ -179,12 +179,21 @@ async def apple_batch(
             }
         )
         count = result["accepted"]
-    except Exception:
+    except Exception as exc:
         try:
             RAW_LOG_ORPHANED.labels(metric=metric).inc()
         except Exception:  # pragma: no cover - metrics import optional
             log.debug("failed to record RAW_LOG_ORPHANED{metric=%s}", metric)
         await session.rollback()
+        await _record_failed_sync_receipt(
+            session,
+            request=request,
+            metric=metric,
+            batch_index=batch_idx,
+            total_batches=total,
+            raw_log_id=raw_log_id,
+            error_message=str(exc),
+        )
         log.exception("ingest loop failed for %s; raw_log_id=%s left orphaned", metric, raw_log_id)
         raise
 
@@ -262,6 +271,37 @@ def _header_int(headers: Any, name: str, fallback: int) -> int:
         return int(value)
     except ValueError:
         return fallback
+
+
+async def _record_failed_sync_receipt(
+    session: AsyncSession,
+    *,
+    request: Request,
+    metric: str,
+    batch_index: int,
+    total_batches: int,
+    raw_log_id: int | None,
+    error_message: str,
+) -> None:
+    """Persist a failed receipt without changing the legacy failing response."""
+
+    try:
+        await _record_sync_receipt(
+            session,
+            request=request,
+            metric=metric,
+            batch_index=batch_index,
+            total_batches=total_batches,
+            status="failed",
+            records_accepted=0,
+            records_skipped=0,
+            raw_log_id=raw_log_id,
+            error_message=error_message[:1000],
+        )
+        await session.commit()
+    except Exception:  # pragma: no cover - best-effort observability path
+        await session.rollback()
+        log.exception("failed to record HealthSave failed sync receipt for %s", metric)
 
 
 async def _record_sync_receipt(
