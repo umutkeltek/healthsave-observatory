@@ -172,3 +172,68 @@ async def sync_coverage(session: AsyncSession) -> dict[str, Any]:
         },
         "metrics": rows,
     }
+
+
+async def sync_anomalies(session: AsyncSession, lookback_minutes: int = 15) -> dict[str, Any]:
+    """Detect overlapping HealthSave sync runs from server-side receipts.
+
+    A released client can accidentally start manual/background syncs together.
+    The v1 ingest contract still accepts those batches, so this additive v2
+    operator check flags the pattern before humans have to infer it from a noisy
+    progress UI or raw logs.
+    """
+
+    result = await session.execute(
+        text(
+            """
+            SELECT
+                metric,
+                count(DISTINCT sync_run_id) AS sync_runs,
+                count(*) AS batches_seen,
+                coalesce(sum(records_accepted), 0) AS records_accepted,
+                min(received_at) AS first_seen_at,
+                max(received_at) AS latest_seen_at
+            FROM healthsave_sync_receipts
+            WHERE sync_run_id IS NOT NULL
+              AND received_at > now() - (:lookback_minutes * interval '1 minute')
+            GROUP BY metric
+            HAVING count(DISTINCT sync_run_id) > 1
+            ORDER BY sync_runs DESC, batches_seen DESC, metric
+            """
+        ),
+        {"lookback_minutes": lookback_minutes},
+    )
+    rows = [dict(row) for row in result.mappings().all()]
+    anomalies = [
+        {
+            "type": "overlapping_sync_runs",
+            "severity": "critical" if row["sync_runs"] >= 3 else "warning",
+            "metric": row["metric"],
+            "sync_runs": row["sync_runs"],
+            "batches_seen": row["batches_seen"],
+            "records_accepted": row["records_accepted"],
+            "first_seen_at": row["first_seen_at"],
+            "latest_seen_at": row["latest_seen_at"],
+            "message": (
+                f"Detected {row['sync_runs']} overlapping sync runs for "
+                f"{row['metric']} in the last {lookback_minutes} minutes."
+            ),
+            "recommended_action": (
+                "Force quit HealthSave, wait 1–2 minutes for queued uploads to drain, "
+                "then run only one manual sync. Install a build with the sync-run guard "
+                "before retrying full history sync."
+            ),
+        }
+        for row in rows
+    ]
+    return {
+        "status": "warning" if anomalies else "ok",
+        "lookback_minutes": lookback_minutes,
+        "summary": {
+            "overlapping_metrics": len(anomalies),
+            "max_concurrent_sync_runs": max(
+                (anomaly["sync_runs"] for anomaly in anomalies), default=0
+            ),
+        },
+        "anomalies": anomalies,
+    }

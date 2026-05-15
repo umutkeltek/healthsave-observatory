@@ -15,8 +15,9 @@ from analysis.config import AnalysisConfig  # noqa: E402
 
 
 class FakeResult:
-    def __init__(self, row=None, scalar_value=1):
+    def __init__(self, row=None, rows=None, scalar_value=1):
         self.row = row
+        self.rows = rows if rows is not None else ([] if row is None else [row])
         self.scalar_value = scalar_value
 
     def fetchone(self):
@@ -24,6 +25,12 @@ class FakeResult:
 
     def first(self):
         return self.row
+
+    def all(self):
+        return self.rows
+
+    def mappings(self):
+        return self
 
     def scalar(self):
         return self.scalar_value
@@ -354,9 +361,62 @@ async def test_setup_diagnostics_identifies_datahub_without_grafana_dependency()
     assert result["service"] == "health-data-hub"
     assert result["kind"] == "HealthSave Data Hub API"
     assert result["health_endpoint"] == "/api/health"
-    assert result["ingest_endpoint"] == "/api/apple/batch"
+    assert result["latest_sync_endpoint"] == "/api/v2/sync/runs/latest"
+    assert result["anomalies_endpoint"] == "/api/v2/sync/anomalies"
     assert result["grafana_required"] is False
     assert "Grafana" in result["wrong_port_hint"]
+
+
+class OverlappingSyncRunsSession(FakeSession):
+    async def execute(self, statement, params=None):
+        sql = " ".join(str(statement).split())
+        self.calls.append((sql, params or {}))
+        if "count(DISTINCT sync_run_id)" in sql and "healthsave_sync_receipts" in sql:
+            return FakeResult(
+                rows=[
+                    {
+                        "metric": "heart_rate",
+                        "sync_runs": 9,
+                        "batches_seen": 348,
+                        "records_accepted": 682478,
+                        "first_seen_at": "2026-05-15T16:44:53Z",
+                        "latest_seen_at": "2026-05-15T16:51:34Z",
+                    }
+                ]
+            )
+        return await super().execute(statement, params)
+
+
+@pytest.mark.asyncio
+async def test_sync_anomalies_detects_overlapping_metric_runs_before_users_guess():
+    from storage.timescale import sync_receipts
+
+    session = OverlappingSyncRunsSession()
+
+    result = await sync_receipts.sync_anomalies(session)
+
+    assert result["status"] == "warning"
+    assert result["summary"]["overlapping_metrics"] == 1
+    assert result["summary"]["max_concurrent_sync_runs"] == 9
+    anomaly = result["anomalies"][0]
+    assert anomaly["type"] == "overlapping_sync_runs"
+    assert anomaly["severity"] == "critical"
+    assert anomaly["metric"] == "heart_rate"
+    assert anomaly["sync_runs"] == 9
+    assert "Force quit" in anomaly["recommended_action"]
+
+
+@pytest.mark.asyncio
+async def test_sync_anomalies_returns_ok_when_no_overlaps_are_seen():
+    from storage.timescale import sync_receipts
+
+    session = FakeSession()
+
+    result = await sync_receipts.sync_anomalies(session)
+
+    assert result["status"] == "ok"
+    assert result["summary"]["overlapping_metrics"] == 0
+    assert result["anomalies"] == []
 
 
 @pytest.mark.asyncio
