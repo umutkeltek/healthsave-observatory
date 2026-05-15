@@ -37,6 +37,7 @@ async def setup_diagnostics() -> dict:
         "ingest_endpoint": "/api/apple/batch",
         "latest_sync_endpoint": "/api/v2/sync/runs/latest",
         "coverage_endpoint": "/api/v2/sync/coverage",
+        "anomalies_endpoint": "/api/v2/sync/anomalies",
         "grafana_required": False,
         "wrong_port_hint": (
             "If you see Grafana auth JSON or Homepage HTML 404, the app is pointed "
@@ -57,3 +58,10 @@ async def sync_coverage(session: Any = Depends(get_session)) -> dict:
     """Return metric-level receipt coverage from the Data Hub side."""
 
     return await sync_receipts.sync_coverage(session)
+
+
+@router.get("/api/v2/sync/anomalies", dependencies=[Depends(verify_api_key)])
+async def sync_anomalies(session: Any = Depends(get_session)) -> dict:
+    """Detect suspicious sync behavior visible from server receipts."""
+
+    return await sync_receipts.sync_anomalies(session)

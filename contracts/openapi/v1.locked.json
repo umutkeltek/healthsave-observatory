@@ -1426,6 +1426,48 @@
         "summary": "Setup Diagnostics"
       }
     },
+    "/api/v2/sync/anomalies": {
+      "get": {
+        "description": "Detect suspicious sync behavior visible from server receipts.",
+        "operationId": "sync_anomalies_api_v2_sync_anomalies_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Sync Anomalies Api V2 Sync Anomalies Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync Anomalies"
+      }
+    },
     "/api/v2/sync/coverage": {
       "get": {
         "description": "Return metric-level receipt coverage from the Data Hub side.",
