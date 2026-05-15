@@ -289,6 +289,76 @@ async def test_batch_uses_sample_source_for_device_identity_and_logs_raw_payload
     assert json.loads(raw_log["raw_payload"])["metric"] == "heart_rate"
 
 
+def test_schema_declares_sync_receipts_for_end_to_end_healthsave_proof():
+    schema = Path("db/schema.sql").read_text()
+    migration = Path("db/migrations/007_healthsave_sync_receipts.sql").read_text()
+
+    for text_blob in (schema, migration):
+        assert "healthsave_sync_receipts" in text_blob
+        assert "sync_run_id" in text_blob
+        assert "batch_id" in text_blob
+        assert "payload_hash" in text_blob
+        assert "records_accepted" in text_blob
+        assert "idx_healthsave_sync_receipts_run" in text_blob
+
+
+@pytest.mark.asyncio
+async def test_batch_records_healthsave_sync_receipt_headers():
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "heart_rate",
+            "batch_index": 2,
+            "total_batches": 3,
+            "samples": [
+                {
+                    "date": "2026-04-10T12:00:00+00:00",
+                    "qty": 72,
+                    "source": "Apple Watch Ultra",
+                }
+            ],
+        },
+        headers={
+            "X-HealthSave-Sync-Run-ID": "run-abc",
+            "X-HealthSave-Batch-ID": "batch-002",
+            "X-HealthSave-Payload-Hash": "sha256:payload",
+            "X-HealthSave-Metric": "heart_rate",
+            "X-HealthSave-Batch-Index": "2",
+            "X-HealthSave-Total-Batches": "3",
+        },
+    )
+
+    result = await server.apple_batch(request, session)
+
+    receipt = session.insert_params_for("healthsave_sync_receipts")
+    assert result["records"] == 1
+    assert receipt is not None
+    assert receipt["sync_run_id"] == "run-abc"
+    assert receipt["batch_id"] == "batch-002"
+    assert receipt["payload_hash"] == "sha256:payload"
+    assert receipt["metric"] == "heart_rate"
+    assert receipt["batch_index"] == 2
+    assert receipt["total_batches"] == 3
+    assert receipt["status"] == "processed"
+    assert receipt["records_accepted"] == 1
+    receipt_sql = [sql for sql, _ in session.calls if "INSERT INTO healthsave_sync_receipts" in sql]
+    assert any("ON CONFLICT (batch_id)" in sql for sql in receipt_sql)
+
+
+@pytest.mark.asyncio
+async def test_setup_diagnostics_identifies_datahub_without_grafana_dependency():
+    from server.api.sync import setup_diagnostics
+
+    result = await setup_diagnostics()
+
+    assert result["service"] == "health-data-hub"
+    assert result["kind"] == "HealthSave Data Hub API"
+    assert result["health_endpoint"] == "/api/health"
+    assert result["ingest_endpoint"] == "/api/apple/batch"
+    assert result["grafana_required"] is False
+    assert "Grafana" in result["wrong_port_hint"]
+
+
 @pytest.mark.asyncio
 async def test_sleep_stage_batches_upsert_sessions_and_write_stage_rows():
     session = FakeSession()
@@ -670,6 +740,7 @@ def test_readme_documents_existing_install_migration_flow():
 
     assert "db/migrations/001_audit_hardening.sql" in readme
     assert "db/migrations/002_analysis_tables.sql" in readme
+    assert "db/migrations/007_healthsave_sync_receipts.sql" in readme
     assert "docker compose exec -T db psql" in readme
 
 

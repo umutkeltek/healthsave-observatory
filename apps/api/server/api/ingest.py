@@ -13,12 +13,13 @@ and the post-ingest anomaly trigger.
 
 import logging
 from time import perf_counter
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from compat_v1.models import BatchPayload
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
+from storage.timescale.sync_receipts import record_sync_receipt
 
 from ..ingestion.owner import OWNER_HEADER, resolve_owner_id
 from ..ingestion.parsers import group_samples_by_device
@@ -133,6 +134,17 @@ async def apple_batch(
 
     if not samples:
         raw_log_id = await audit.log_raw(session, None, raw_payload) if audit else None
+        await _record_sync_receipt(
+            session,
+            request=request,
+            metric=metric,
+            batch_index=batch_idx,
+            total_batches=total,
+            status="empty",
+            records_accepted=0,
+            records_skipped=0,
+            raw_log_id=raw_log_id,
+        )
         await session.commit()
         if audit and raw_log_id is not None:
             await audit.mark_processed(session, raw_log_id)
@@ -178,6 +190,17 @@ async def apple_batch(
 
     if audit and raw_log_id is not None:
         await audit.mark_processed(session, raw_log_id)
+    await _record_sync_receipt(
+        session,
+        request=request,
+        metric=metric,
+        batch_index=batch_idx,
+        total_batches=total,
+        status="processed",
+        records_accepted=count,
+        records_skipped=max(len(samples) - count, 0),
+        raw_log_id=raw_log_id,
+    )
     await session.commit()
     _observe_ingest_metrics(metric=metric, rows=count, started_at=started_at)
     log.info("Ingested %d records for %s (batch %d/%d)", count, metric, batch_idx + 1, total)
@@ -216,6 +239,66 @@ def _resolve_audit_log(request: Request) -> AuditLog | None:
     if hasattr(state, "audit_log"):
         return state.audit_log
     return default_audit_log
+
+
+def _header(headers: Any, name: str) -> str | None:
+    """Read a request header from real Starlette Headers or test dicts."""
+
+    value = headers.get(name)
+    if value is not None:
+        return str(value).strip() or None
+    lower_name = name.lower()
+    value = headers.get(lower_name)
+    if value is not None:
+        return str(value).strip() or None
+    return None
+
+
+def _header_int(headers: Any, name: str, fallback: int) -> int:
+    value = _header(headers, name)
+    if value is None:
+        return fallback
+    try:
+        return int(value)
+    except ValueError:
+        return fallback
+
+
+async def _record_sync_receipt(
+    session: AsyncSession,
+    *,
+    request: Request,
+    metric: str,
+    batch_index: int,
+    total_batches: int,
+    status: str,
+    records_accepted: int,
+    records_skipped: int,
+    raw_log_id: int | None,
+    error_message: str | None = None,
+) -> None:
+    """Persist the HealthSave sync headers that released iOS already sends."""
+
+    headers = request.headers
+    sync_run_id = _header(headers, "X-HealthSave-Sync-Run-ID")
+    batch_id = _header(headers, "X-HealthSave-Batch-ID")
+    payload_hash = _header(headers, "X-HealthSave-Payload-Hash")
+    header_metric = _header(headers, "X-HealthSave-Metric")
+
+    await record_sync_receipt(
+        session,
+        sync_run_id=sync_run_id,
+        batch_id=batch_id,
+        payload_hash=payload_hash,
+        metric=header_metric or metric,
+        batch_index=_header_int(headers, "X-HealthSave-Batch-Index", batch_index),
+        total_batches=_header_int(headers, "X-HealthSave-Total-Batches", total_batches),
+        status=status,
+        records_accepted=records_accepted,
+        records_skipped=records_skipped,
+        raw_log_id=raw_log_id,
+        error_message=error_message,
+    )
 
 
 def _observe_ingest_metrics(*, metric: str, rows: int, started_at: float) -> None:

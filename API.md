@@ -396,6 +396,61 @@ Correct response shape:
 Do not wrap this endpoint as `{"status":"ok","counts":{...}}`; that shape is
 not compatible with the current iOS status UI.
 
+## Sync Receipts and Setup Diagnostics
+
+These v2 operator endpoints are additive. They do not change the released v1
+HealthSave ingest/status contract, but they make setup and end-to-end proof much
+clearer.
+
+### `GET /api/v2/setup/diagnostics`
+
+Unauthenticated, no health data. Use this to confirm that a base URL points at
+Data Hub API rather than Grafana or Homepage.
+
+Example response:
+
+```json
+{
+  "service": "health-data-hub",
+  "kind": "HealthSave Data Hub API",
+  "status": "ok",
+  "auth_required": true,
+  "health_endpoint": "/api/health",
+  "status_endpoint": "/api/apple/status",
+  "ingest_endpoint": "/api/apple/batch",
+  "latest_sync_endpoint": "/api/v2/sync/runs/latest",
+  "coverage_endpoint": "/api/v2/sync/coverage",
+  "grafana_required": false,
+  "wrong_port_hint": "If you see Grafana auth JSON or Homepage HTML 404, the app is pointed at the wrong port. Use the Data Hub API base URL, not Grafana/Homepage."
+}
+```
+
+### HealthSave sync receipt headers
+
+The released iOS app already sends these optional headers on batch sync:
+
+- `X-HealthSave-Sync-Run-ID`
+- `X-HealthSave-Batch-ID`
+- `X-HealthSave-Payload-Hash`
+- `X-HealthSave-Metric`
+- `X-HealthSave-Batch-Index`
+- `X-HealthSave-Total-Batches`
+
+Data Hub records them in `healthsave_sync_receipts` so operators can prove that a
+sync reached the API, see which batches were processed, and separate API ingest
+truth from Grafana dashboard visibility.
+
+### `GET /api/v2/sync/runs/latest`
+
+Protected by `x-api-key` when `API_KEY` is set. Returns the latest observed
+HealthSave sync run with batch counts, accepted/skipped record counts, and metric
+names.
+
+### `GET /api/v2/sync/coverage`
+
+Protected by `x-api-key` when `API_KEY` is set. Returns metric-level receipt
+coverage: batches seen/processed/empty/failed and records accepted/skipped.
+
 ## Insights
 
 These endpoints are server-side analysis surfaces. They do not change the
