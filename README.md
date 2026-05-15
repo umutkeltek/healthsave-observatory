@@ -469,6 +469,7 @@ docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/003_m
 docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/004_pipeline_runs.sql
 docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/005_analysis_owner.sql
 docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/006_agent_runtime.sql
+docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/007_healthsave_sync_receipts.sql
 ```
 
 ### Multi-user / Household

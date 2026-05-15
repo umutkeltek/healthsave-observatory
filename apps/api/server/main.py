@@ -31,7 +31,7 @@ from analysis.engine import AnalysisEngine
 from analysis.llm.client import HealthLLMClient
 from fastapi import FastAPI
 
-from .api import health_routes, ingest, insights, metrics, status, v2_agents
+from .api import health_routes, ingest, insights, metrics, status, sync, v2_agents
 from .api.ingest import _load_apple_health_plugin
 from .db.session import async_session, engine
 from .ingestion.registry import resolve_from_env
@@ -109,5 +109,6 @@ app.include_router(health_routes.router)
 app.include_router(ingest.router)
 app.include_router(metrics.router)
 app.include_router(status.router)
+app.include_router(sync.router)
 app.include_router(insights.router)
 app.include_router(v2_agents.router)

@@ -1406,6 +1406,110 @@
         ]
       }
     },
+    "/api/v2/setup/diagnostics": {
+      "get": {
+        "description": "Return a no-secret setup fingerprint for humans and clients.\n\nThis is intentionally unauthenticated: it exposes no health data and helps\nusers distinguish the Data Hub API from nearby Grafana/Homepage ports before\nthey troubleshoot keys or sync.",
+        "operationId": "setup_diagnostics_api_v2_setup_diagnostics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Setup Diagnostics Api V2 Setup Diagnostics Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Setup Diagnostics"
+      }
+    },
+    "/api/v2/sync/coverage": {
+      "get": {
+        "description": "Return metric-level receipt coverage from the Data Hub side.",
+        "operationId": "sync_coverage_api_v2_sync_coverage_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Sync Coverage Api V2 Sync Coverage Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync Coverage"
+      }
+    },
+    "/api/v2/sync/runs/latest": {
+      "get": {
+        "description": "Summarize the most recently observed HealthSave sync run.",
+        "operationId": "latest_sync_run_api_v2_sync_runs_latest_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Latest Sync Run Api V2 Sync Runs Latest Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Latest Sync Run"
+      }
+    },
     "/health": {
       "get": {
         "operationId": "health_check_health_get",
