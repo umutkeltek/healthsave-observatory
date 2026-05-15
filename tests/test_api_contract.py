@@ -40,6 +40,7 @@ class FakeSession:
     def __init__(self):
         self.calls: list[tuple[str, dict]] = []
         self.committed = False
+        self.rolled_back = False
 
     async def execute(self, statement, params=None):
         sql = " ".join(str(statement).split())
@@ -52,6 +53,9 @@ class FakeSession:
 
     async def commit(self):
         self.committed = True
+
+    async def rollback(self):
+        self.rolled_back = True
 
     def insert_params_for(self, table_name: str) -> dict | None:
         needle = f"INSERT INTO {table_name}"
@@ -94,6 +98,11 @@ class FakeBackgroundTasks:
 class FakeAnalysisEngine:
     async def run_anomaly_check(self):
         return 1
+
+
+class FailingAppleHealthPlugin:
+    async def ingest(self, payload):
+        raise RuntimeError("forced ingest failure")
 
 
 @pytest.mark.asyncio
@@ -350,6 +359,60 @@ async def test_batch_records_healthsave_sync_receipt_headers():
     assert receipt["records_accepted"] == 1
     receipt_sql = [sql for sql, _ in session.calls if "INSERT INTO healthsave_sync_receipts" in sql]
     assert any("ON CONFLICT (batch_id)" in sql for sql in receipt_sql)
+
+
+@pytest.mark.asyncio
+async def test_batch_records_failed_sync_receipt_when_ingest_raises():
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "heart_rate",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [
+                {
+                    "date": "2026-04-10T12:00:00+00:00",
+                    "qty": 72,
+                    "source": "Apple Watch Ultra",
+                }
+            ],
+        },
+        headers={
+            "X-HealthSave-Sync-Run-ID": "run-failed",
+            "X-HealthSave-Batch-ID": "batch-failed-001",
+            "X-HealthSave-Payload-Hash": "sha256:failed-payload",
+            "X-HealthSave-Metric": "heart_rate",
+            "X-HealthSave-Batch-Index": "0",
+            "X-HealthSave-Total-Batches": "1",
+        },
+    )
+    request.app = type(
+        "App",
+        (),
+        {
+            "state": type(
+                "State",
+                (),
+                {"apple_health_plugin": FailingAppleHealthPlugin()},
+            )()
+        },
+    )()
+
+    with pytest.raises(RuntimeError, match="forced ingest failure"):
+        await server.apple_batch(request, session)
+
+    receipt = session.insert_params_for("healthsave_sync_receipts")
+    assert session.rolled_back is True
+    assert receipt is not None
+    assert receipt["sync_run_id"] == "run-failed"
+    assert receipt["batch_id"] == "batch-failed-001"
+    assert receipt["payload_hash"] == "sha256:failed-payload"
+    assert receipt["metric"] == "heart_rate"
+    assert receipt["batch_index"] == 0
+    assert receipt["total_batches"] == 1
+    assert receipt["status"] == "failed"
+    assert receipt["records_accepted"] == 0
+    assert "forced ingest failure" in receipt["error_message"]
 
 
 @pytest.mark.asyncio
