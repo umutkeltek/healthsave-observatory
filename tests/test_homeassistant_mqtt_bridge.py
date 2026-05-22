@@ -7,10 +7,13 @@ from homeassistant_mqtt.bridge import (
     SensorSpec,
     build_availability_message,
     build_discovery_messages,
+    build_source_discovery_messages,
+    build_source_state_message,
     build_state_messages,
     default_sensor_specs,
+    source_state_topic,
 )
-from homeassistant_mqtt.snapshot import HealthSnapshot
+from homeassistant_mqtt.snapshot import HealthSnapshot, SourceHealthSnapshot
 
 
 def test_default_sensor_specs_use_healthsave_brand() -> None:
@@ -109,6 +112,133 @@ def test_availability_message_is_retained_online_state() -> None:
     config = HomeAssistantMQTTConfig()  # defaults
 
     assert build_availability_message(config) == ("healthsave/status", "online", True)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Source-aware sub-devices (P5-d)
+# ──────────────────────────────────────────────────────────────────────
+
+
+def _source_snapshot(**overrides) -> SourceHealthSnapshot:
+    defaults = {
+        "collected_at": datetime(2026, 5, 22, 9, 0, tzinfo=UTC),
+        "source_id": "Apple Watch",
+        "heart_rate": 72,
+        "hrv_latest_ms": 64.3,
+        "steps_today": 8421,
+        "last_sleep_hours": 7.5,
+    }
+    defaults.update(overrides)
+    return SourceHealthSnapshot(**defaults)
+
+
+def test_source_state_topic_is_per_slug() -> None:
+    config = HomeAssistantMQTTConfig()  # state_topic_prefix=healthsave
+    assert source_state_topic(config, "apple_watch") == "healthsave/source/apple_watch/state"
+
+
+def test_source_discovery_messages_emit_one_per_populated_metric() -> None:
+    """A snapshot with all four metrics filled in produces 4 discovery
+    messages — one per metric — each with the same parent via_device
+    and the same per-source state_topic.
+    """
+    config = HomeAssistantMQTTConfig()
+    snapshot = _source_snapshot()
+
+    messages = build_source_discovery_messages(config, snapshot)
+
+    assert len(messages) == 4
+    topics = [m[0] for m in messages]
+    assert "homeassistant/sensor/healthsave_apple_watch/heart_rate/config" in topics
+    assert "homeassistant/sensor/healthsave_apple_watch/hrv_latest_ms/config" in topics
+    assert "homeassistant/sensor/healthsave_apple_watch/steps_today/config" in topics
+    assert "homeassistant/sensor/healthsave_apple_watch/last_sleep_hours/config" in topics
+
+    # All point at the same per-source state topic.
+    for _topic, payload, _retained in messages:
+        assert payload["state_topic"] == "healthsave/source/apple_watch/state"
+
+    # Every metric is nested under the parent via via_device.
+    for _topic, payload, _retained in messages:
+        assert payload["device"]["via_device"] == "healthsave"
+        assert payload["device"]["identifiers"] == ["healthsave_apple_watch"]
+        assert payload["device"]["name"] == "Apple Watch"
+
+
+def test_source_discovery_skips_metrics_with_none_values() -> None:
+    """A source that's only reporting heart_rate (e.g. an iPhone) gets
+    one discovery message — not 4 — so HA never sees ghost entities
+    for metrics the source has no data for.
+    """
+    config = HomeAssistantMQTTConfig()
+    snapshot = _source_snapshot(
+        source_id="iPhone",
+        hrv_latest_ms=None,
+        steps_today=None,
+        last_sleep_hours=None,
+    )
+
+    messages = build_source_discovery_messages(config, snapshot)
+    assert len(messages) == 1
+    topic, payload, _ = messages[0]
+    assert topic == "homeassistant/sensor/healthsave_iphone/heart_rate/config"
+    assert payload["unique_id"] == "healthsave_iphone_heart_rate"
+    assert payload["unit_of_measurement"] == "bpm"
+
+
+def test_source_state_message_carries_only_non_none_fields() -> None:
+    """The per-source state JSON includes observed_at + every non-None
+    metric. value_template lookups in discovery (value_json.<attr>)
+    must match the keys we emit here.
+    """
+    config = HomeAssistantMQTTConfig()
+    snapshot = _source_snapshot(steps_today=None, last_sleep_hours=None)
+
+    topic, payload, retained = build_source_state_message(config, snapshot)
+    assert topic == "healthsave/source/apple_watch/state"
+    assert retained is True
+    assert payload == {
+        "observed_at": "2026-05-22T09:00:00+00:00",
+        "heart_rate": 72,
+        "hrv_latest_ms": 64.3,
+    }
+
+
+def test_source_discovery_uses_observed_source_id_as_display_name() -> None:
+    """``source_id`` carries the human-friendly label
+    ('Apple Watch', "Umut's iPhone", 'Whoop'); the slug is what flows
+    through topics. The HA device 'name' uses the raw source_id so
+    users see the brand-correct label in the UI.
+    """
+    config = HomeAssistantMQTTConfig()
+    snapshot = _source_snapshot(
+        source_id="Whoop", hrv_latest_ms=None, steps_today=None, last_sleep_hours=None
+    )
+
+    messages = build_source_discovery_messages(config, snapshot)
+    assert len(messages) == 1
+    _topic, payload, _ = messages[0]
+    assert payload["device"]["name"] == "Whoop"
+    # And the slug derived topic + identifier.
+    assert payload["state_topic"] == "healthsave/source/whoop/state"
+    assert payload["device"]["identifiers"] == ["healthsave_whoop"]
+
+
+def test_source_discovery_falls_back_to_unknown_label_for_empty_source_id() -> None:
+    """A NULL/empty source_id collapses to slug='unknown' (per
+    source_slug semantics). The HA display name falls back to a
+    sensible 'Unknown source' so the device list is not empty-string.
+    """
+    config = HomeAssistantMQTTConfig()
+    snapshot = _source_snapshot(
+        source_id="", heart_rate=70, hrv_latest_ms=None, steps_today=None, last_sleep_hours=None
+    )
+
+    messages = build_source_discovery_messages(config, snapshot)
+    assert len(messages) == 1
+    _topic, payload, _ = messages[0]
+    assert payload["device"]["name"] == "Unknown source"
+    assert payload["device"]["identifiers"] == ["healthsave_unknown"]
 
 
 def test_legacy_healthtrack_brand_remains_reachable_via_env_overrides() -> None:

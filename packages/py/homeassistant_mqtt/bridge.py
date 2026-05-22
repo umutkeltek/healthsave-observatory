@@ -1,11 +1,30 @@
-"""Home Assistant MQTT discovery + state message builders."""
+"""Home Assistant MQTT discovery + state message builders.
+
+Two device layers ship side-by-side:
+
+  * **Aggregate parent device** (``device_identifier`` from config, default
+    ``"healthsave"``). Emits the legacy 6-sensor enum so existing HA
+    dashboards keep working. Topics: ``<prefix>/sensor/state`` for
+    state, ``<prefix>/status`` for availability, discovery under
+    ``homeassistant/sensor/<prefix>/<metric>/config``.
+
+  * **Per-source sub-devices** (one per distinct ``source_id`` seen in
+    the recent data window). Identifier ``<device_identifier>_<slug>``,
+    linked to the parent via Home Assistant's ``via_device`` so they
+    show up nested under the parent in the HA device tree. Topics:
+    ``<prefix>/source/<slug>/state`` for state, discovery under
+    ``homeassistant/sensor/<prefix>_<slug>/<metric>/config``.
+
+The two layers share the same availability topic so HA marks every
+sub-device offline together if the bridge goes down.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
 
-from .snapshot import HealthSnapshot
+from .snapshot import HealthSnapshot, SourceHealthSnapshot
 
 
 @dataclass(frozen=True)
@@ -183,3 +202,121 @@ def build_state_messages(
 
 def build_availability_message(config: HomeAssistantMQTTConfig) -> MQTTMessage:
     return (availability_topic(config), "online", True)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Source-aware sub-devices (P5-d)
+#
+# Each distinct ``source_id`` we have recent data for becomes its own
+# Home Assistant device under the parent. The metrics are derived from
+# :class:`SourceHealthSnapshot` fields — extending that dataclass is
+# the only thing needed to surface a new per-source metric.
+# ──────────────────────────────────────────────────────────────────────
+
+
+SOURCE_METRIC_SPECS: tuple[tuple[str, str, str | None, str | None, str], ...] = (
+    # (snapshot_attr, name_suffix, unit, state_class, icon)
+    ("heart_rate", "Heart Rate", "bpm", "measurement", "mdi:heart-pulse"),
+    ("hrv_latest_ms", "HRV", "ms", "measurement", "mdi:heart"),
+    ("steps_today", "Steps Today", None, "total", "mdi:walk"),
+    ("last_sleep_hours", "Last Sleep Hours", "h", "measurement", "mdi:sleep"),
+)
+
+
+def _source_device_identifier(config: HomeAssistantMQTTConfig, slug: str) -> str:
+    """The HA device identifier for a per-source sub-device.
+
+    ``<parent_identifier>_<slug>`` — e.g. ``healthsave_apple_watch``.
+    """
+    return f"{config.device_identifier}_{slug}"
+
+
+def source_state_topic(config: HomeAssistantMQTTConfig, slug: str) -> str:
+    """Per-source retained-state topic — one JSON payload covers all
+    metrics for one source.
+    """
+    return f"{config.state_topic_prefix.rstrip('/')}/source/{slug}/state"
+
+
+def _source_device_payload(
+    config: HomeAssistantMQTTConfig, source_id: str, slug: str
+) -> dict[str, Any]:
+    """HA device descriptor for one source sub-device.
+
+    ``via_device`` points at the parent identifier so HA nests the sub-
+    device under it in the device tree. The display ``name`` uses the
+    raw ``source_id`` (e.g. ``"Apple Watch"``) so it reads cleanly in
+    the HA UI even though the slug is what flows through topics.
+    """
+    return {
+        "identifiers": [_source_device_identifier(config, slug)],
+        "manufacturer": "HealthSave",
+        "model": "HealthSave per-source view",
+        "name": source_id or "Unknown source",
+        "via_device": config.device_identifier,
+    }
+
+
+def build_source_discovery_messages(
+    config: HomeAssistantMQTTConfig,
+    snapshot: SourceHealthSnapshot,
+) -> list[MQTTMessage]:
+    """One retained discovery payload per metric for one source.
+
+    Only metrics with a non-None value on ``snapshot`` get a discovery
+    message — HA never sees an entity for a metric the source has no
+    data for. When fresh data lands later the next publish cycle
+    publishes the discovery + state together (retained, so the order
+    is incidental from HA's POV).
+    """
+    slug = snapshot.slug
+    device = _source_device_payload(config, snapshot.source_id, slug)
+    state_topic_value = source_state_topic(config, slug)
+    messages: list[MQTTMessage] = []
+
+    for attr, name_suffix, unit, state_class, icon in SOURCE_METRIC_SPECS:
+        if getattr(snapshot, attr) is None:
+            continue
+        unique_id = f"{_source_device_identifier(config, slug)}_{attr}"
+        payload: dict[str, Any] = {
+            "availability_topic": availability_topic(config),
+            "device": device,
+            "enabled_by_default": True,
+            "name": f"{device['name']} {name_suffix}",
+            "object_id": unique_id,
+            "state_topic": state_topic_value,
+            "unique_id": unique_id,
+            "value_template": f"{{{{ value_json.{attr} }}}}",
+        }
+        if unit:
+            payload["unit_of_measurement"] = unit
+        if state_class:
+            payload["state_class"] = state_class
+        if icon:
+            payload["icon"] = icon
+
+        topic = (
+            f"{config.discovery_prefix.rstrip('/')}/sensor/"
+            f"{_topic_part(config.state_topic_prefix)}_{slug}/{attr}/config"
+        )
+        messages.append((topic, payload, True))
+
+    return messages
+
+
+def build_source_state_message(
+    config: HomeAssistantMQTTConfig,
+    snapshot: SourceHealthSnapshot,
+) -> MQTTMessage:
+    """Single retained JSON payload carrying every non-None metric for
+    the source. Mirrors the aggregate ``build_state_messages`` shape —
+    one topic per source, value_json keys match the SourceHealthSnapshot
+    field names referenced in discovery's ``value_template``.
+    """
+    payload: dict[str, Any] = {"observed_at": snapshot.collected_at.isoformat()}
+    for attr, *_ in SOURCE_METRIC_SPECS:
+        value = getattr(snapshot, attr)
+        if value is None:
+            continue
+        payload[attr] = value
+    return (source_state_topic(config, snapshot.slug), payload, True)
