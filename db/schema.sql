@@ -72,8 +72,12 @@ CREATE TABLE daily_activity (
     avg_hr          FLOAT,
     max_hr          FLOAT,
     owner_id        UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    source_id       TEXT,
     PRIMARY KEY (date, device_id, owner_id)
 );
+CREATE INDEX idx_daily_activity_source_date
+    ON daily_activity (source_id, date DESC)
+    WHERE source_id IS NOT NULL;
 
 -- ─── Sleep Sessions ──────────────────────────────────────────────────
 CREATE TABLE sleep_sessions (
@@ -87,10 +91,14 @@ CREATE TABLE sleep_sessions (
     deep_ms             BIGINT,
     rem_ms              BIGINT,
     respiratory_rate    FLOAT,
-    owner_id            UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001'
+    owner_id            UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    source_id           TEXT
 );
 CREATE UNIQUE INDEX uq_sleep_sessions_device_start
     ON sleep_sessions (device_id, start_time, owner_id);
+CREATE INDEX idx_sleep_sessions_source_start
+    ON sleep_sessions (source_id, start_time DESC)
+    WHERE source_id IS NOT NULL;
 
 -- ─── Sleep Stages ────────────────────────────────────────────────────
 CREATE TABLE sleep_stages (
