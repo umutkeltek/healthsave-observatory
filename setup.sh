@@ -296,7 +296,7 @@ ANALYSIS_CONFIG_FILE=./config.yaml
 # Optional source plugins. Leave blank unless you are enabling Whoop
 # or Amazfit/Zepp polling. HDH_TOKEN_ENC_KEY is required before
 # storing third-party tokens; generate it inside the app environment with:
-#   python -c "from auth import generate_key; print(generate_key())"
+#   docker compose run --rm --no-deps --build api python -c "from auth import generate_key; print(generate_key())"
 HDH_TOKEN_ENC_KEY=
 WHOOP_CLIENT_ID=
 WHOOP_CLIENT_SECRET=

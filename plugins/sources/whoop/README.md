@@ -24,7 +24,7 @@ Poll-based `Source` plugin that ingests recovery, sleep, workout, and cycle data
    WHOOP_CLIENT_ID=fc25041a-...
    WHOOP_CLIENT_SECRET=...
    WHOOP_REDIRECT_URI=https://your-host/api/v2/whoop/callback
-   HDH_TOKEN_ENC_KEY=<run `python -c "from auth import generate_key; print(generate_key())"`>
+   HDH_TOKEN_ENC_KEY=<run `docker compose run --rm --no-deps --build api python -c "from auth import generate_key; print(generate_key())"`>
    ```
 
 3. Run migration 008 so the `oauth_tokens` + `oauth_token_events` tables exist.
@@ -36,7 +36,7 @@ Poll-based `Source` plugin that ingests recovery, sleep, workout, and cycle data
 4. Run the one-time authorize CLI to bind a Whoop account:
 
    ```bash
-   python scripts/whoop_authorize.py
+   docker compose run --rm --build api python scripts/whoop_authorize.py
    ```
 
    It prints the Whoop authorize URL, opens a browser, waits for you to paste the `code` query parameter from the redirect URL, exchanges it for a token, and persists the (encrypted) pair plus an `authorized` audit event. Re-running the script overwrites the stored token row — useful if the refresh chain breaks.
