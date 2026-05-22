@@ -94,3 +94,32 @@ write_env_file "db-pass" "grafana-pass" "api-key"
         "AMAZFIT_POLL_CRON=",
     ):
         assert key in body
+
+
+def test_setup_env_file_includes_home_assistant_mqtt_keys(tmp_path):
+    env_path = tmp_path / ".env"
+    script = f"""
+set -euo pipefail
+export HEALTHSAVE_SETUP_TEST=1
+source "{ROOT / "setup.sh"}"
+ENV_FILE="{env_path}"
+write_env_file "db-pass" "grafana-pass" "api-key"
+"""
+
+    subprocess.run(["bash", "-c", script], check=True)
+
+    body = env_path.read_text()
+    for key in (
+        "HA_MQTT_ENABLED=false",
+        "HA_MQTT_BROKER=mqtt",
+        "HA_MQTT_PORT=1883",
+        "HA_MQTT_USERNAME=",
+        "HA_MQTT_PASSWORD=",
+        "HA_MQTT_DISCOVERY_PREFIX=homeassistant",
+        "HA_MQTT_STATE_TOPIC_PREFIX=healthsave",
+        "HA_MQTT_DEVICE_IDENTIFIER=healthsave",
+        "HA_MQTT_DEVICE_NAME=HealthSave",
+        "HA_MQTT_PUBLISH_INTERVAL_SECONDS=60",
+        "MOSQUITTO_PORT=1883",
+    ):
+        assert key in body
