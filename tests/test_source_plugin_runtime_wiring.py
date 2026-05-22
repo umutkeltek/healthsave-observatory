@@ -27,6 +27,15 @@ def test_docker_image_copies_auth_package_for_source_plugins():
     assert "COPY packages/py/auth/ ./auth/" in dockerfile
 
 
+def test_docker_image_copies_agents_service_package():
+    dockerfile = (ROOT / "Dockerfile").read_text()
+    compose = (ROOT / "docker-compose.yml").read_text()
+
+    assert "COPY apps/agents/agents/ ./agents/" in dockerfile
+    assert "ModuleNotFoundError" not in compose
+    assert "does not yet COPY apps/agents/agents" not in compose
+
+
 def test_api_and_worker_receive_source_plugin_environment():
     services = _compose()["services"]
     required = {
