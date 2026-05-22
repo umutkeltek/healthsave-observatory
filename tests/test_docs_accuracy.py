@@ -37,6 +37,20 @@ def test_source_plugin_readmes_match_worker_and_ingest_state():
     assert "H-ingest ships" in amazfit
 
 
+def test_source_plugin_runtime_docs_match_amazfit_ingest_state():
+    docs = [
+        ROOT / ".env.example",
+        ROOT / "apps" / "worker" / "worker" / "sources.py",
+        ROOT / "plugins" / "sources" / "amazfit" / "__init__.py",
+    ]
+    combined = "\n".join(path.read_text() for path in docs)
+
+    assert "Amazfit/Zepp next" not in combined
+    assert "Amazfit next" not in combined
+    assert "AmazfitSource shell raises NotImplementedError" not in combined
+    assert "until the H-ingest commit lands" not in combined
+
+
 def test_source_plugin_docs_use_docker_safe_operator_commands():
     docs = [
         ROOT / ".env.example",
