@@ -106,6 +106,35 @@ services:
     volumes:
       - ${ANALYSIS_CONFIG_FILE:-./config.yaml.example}:/app/config.yaml:ro
 
+  # Bundled MQTT broker — opt-in via the `mosquitto` profile so users
+  # who already run their own broker (or a homelab Mosquitto) are not
+  # forced into a duplicate one. Default posture is single-user LAN:
+  # anonymous allowed, persistence enabled, logs to stdout. See
+  # deploy/mosquitto/mosquitto.conf for the conf; override that file
+  # via a compose override to harden auth for non-LAN deployments.
+  #
+  # Service name is `mqtt` so the HA bridge's default
+  # HA_MQTT_BROKER=mqtt resolves through the docker DNS without env
+  # overrides. Host port 1883 is published so an external Home
+  # Assistant on the same LAN can connect by host IP.
+  mqtt:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    profiles: ["mosquitto"]
+    volumes:
+      - ./deploy/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mqtt_data:/mosquitto/data
+      - mqtt_log:/mosquitto/log
+    ports:
+      - "${MOSQUITTO_PORT:-1883}:1883"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "mosquitto_sub -h localhost -t '$$SYS/broker/uptime' -C 1 -W 3 || exit 1"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
   # Home Assistant MQTT bridge — optional, independent of Grafana.
   # Publishes retained MQTT discovery + state topics (`healthtrack_*`) so
   # Home Assistant dashboards/automations do not need direct DB access.
@@ -150,3 +179,5 @@ services:
 volumes:
   db_data:
   grafana_data:
+  mqtt_data:
+  mqtt_log:
