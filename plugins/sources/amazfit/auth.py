@@ -79,9 +79,9 @@ class AmazfitClientConfig:
     def base_url(self) -> str:
         """Region-keyed base URL for the Zepp data API.
 
-        Unknown regions fall back to the US host rather than raising,
-        matching the historical personal_stack behaviour and giving
-        operators a single throat-to-choke when a region is mistyped.
+        Unknown regions fall back to the US host rather than raising, giving
+        operators a single obvious endpoint to inspect when a region is
+        mistyped.
         """
         return REGION_BASE_URLS.get(self.region, REGION_BASE_URLS["us"])
 

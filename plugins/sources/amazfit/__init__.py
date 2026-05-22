@@ -68,9 +68,9 @@ DEFAULT_LOOKBACK = timedelta(days=1)
 # Region-keyed base URLs for the Zepp data API. Updated 2026-05-22 from
 # api-mifit-us2.huami.com (deprecated) to api-mifit-us3.zepp.com after
 # the H-revise probe confirmed the .zepp.com us3 host as the live one.
-# eu / cn hosts are best-guess based on personal_stack's 2024 region
-# pattern; should be re-verified against live creds in those regions
-# before relying on them.
+# eu / cn hosts follow the same observed regional host pattern and should
+# be re-verified against live credentials in those regions before relying
+# on them.
 REGION_BASE_URLS: dict[str, str] = {
     "us": "https://api-mifit-us3.zepp.com",
     "eu": "https://api-mifit-de.zepp.com",
