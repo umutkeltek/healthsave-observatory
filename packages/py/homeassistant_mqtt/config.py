@@ -40,9 +40,9 @@ def load_config_from_env() -> HomeAssistantMQTTBridgeConfig:
         username=os.getenv("HA_MQTT_USERNAME", ""),
         password=os.getenv("HA_MQTT_PASSWORD", ""),
         discovery_prefix=os.getenv("HA_MQTT_DISCOVERY_PREFIX", "homeassistant"),
-        state_topic_prefix=os.getenv("HA_MQTT_STATE_TOPIC_PREFIX", "healthtrack"),
-        device_identifier=os.getenv("HA_MQTT_DEVICE_IDENTIFIER", "healthtrack_owl"),
-        device_name=os.getenv("HA_MQTT_DEVICE_NAME", "HealthTrack"),
+        state_topic_prefix=os.getenv("HA_MQTT_STATE_TOPIC_PREFIX", "healthsave"),
+        device_identifier=os.getenv("HA_MQTT_DEVICE_IDENTIFIER", "healthsave"),
+        device_name=os.getenv("HA_MQTT_DEVICE_NAME", "HealthSave"),
         publish_interval_seconds=_env_int("HA_MQTT_PUBLISH_INTERVAL_SECONDS", 60),
     )
     return HomeAssistantMQTTBridgeConfig(

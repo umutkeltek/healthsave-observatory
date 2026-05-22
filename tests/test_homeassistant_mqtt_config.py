@@ -4,15 +4,27 @@ from homeassistant_mqtt.config import load_config_from_env
 
 
 def test_load_config_from_env_keeps_bridge_disabled_by_default(monkeypatch) -> None:
-    monkeypatch.delenv("HA_MQTT_ENABLED", raising=False)
+    """Defaults rebranded in P5-b: prefix/identifier/name all start
+    with ``healthsave`` so a fresh datahub deploy ships a coherent
+    HA-side brand. Legacy ``healthtrack`` shape stays available via
+    explicit env overrides (tested in
+    ``test_load_config_from_env_reads_broker_and_discovery_values``).
+    """
+    for var in (
+        "HA_MQTT_ENABLED",
+        "HA_MQTT_STATE_TOPIC_PREFIX",
+        "HA_MQTT_DEVICE_IDENTIFIER",
+        "HA_MQTT_DEVICE_NAME",
+    ):
+        monkeypatch.delenv(var, raising=False)
 
     loaded = load_config_from_env()
 
     assert loaded.enabled is False
     assert loaded.mqtt.broker == "localhost"
-    assert loaded.mqtt.state_topic_prefix == "healthtrack"
-    assert loaded.mqtt.device_identifier == "healthtrack_owl"
-    assert loaded.mqtt.device_name == "HealthTrack"
+    assert loaded.mqtt.state_topic_prefix == "healthsave"
+    assert loaded.mqtt.device_identifier == "healthsave"
+    assert loaded.mqtt.device_name == "HealthSave"
 
 
 def test_load_config_from_env_reads_broker_and_discovery_values(monkeypatch) -> None:
