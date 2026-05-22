@@ -42,6 +42,15 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
       LLM_API_KEY: ${LLM_API_KEY:-}
+      HDH_TOKEN_ENC_KEY: ${HDH_TOKEN_ENC_KEY:-}
+      WHOOP_CLIENT_ID: ${WHOOP_CLIENT_ID:-}
+      WHOOP_CLIENT_SECRET: ${WHOOP_CLIENT_SECRET:-}
+      WHOOP_REDIRECT_URI: ${WHOOP_REDIRECT_URI:-}
+      WHOOP_POLL_CRON: ${WHOOP_POLL_CRON:-}
+      AMAZFIT_APP_TOKEN: ${AMAZFIT_APP_TOKEN:-}
+      AMAZFIT_USER_ID: ${AMAZFIT_USER_ID:-}
+      AMAZFIT_REGION: ${AMAZFIT_REGION:-us}
+      AMAZFIT_POLL_CRON: ${AMAZFIT_POLL_CRON:-}
     volumes:
       - ${ANALYSIS_CONFIG_FILE:-./config.yaml.example}:/app/config.yaml:ro
     ports:
@@ -71,6 +80,15 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
       LLM_API_KEY: ${LLM_API_KEY:-}
+      HDH_TOKEN_ENC_KEY: ${HDH_TOKEN_ENC_KEY:-}
+      WHOOP_CLIENT_ID: ${WHOOP_CLIENT_ID:-}
+      WHOOP_CLIENT_SECRET: ${WHOOP_CLIENT_SECRET:-}
+      WHOOP_REDIRECT_URI: ${WHOOP_REDIRECT_URI:-}
+      WHOOP_POLL_CRON: ${WHOOP_POLL_CRON:-}
+      AMAZFIT_APP_TOKEN: ${AMAZFIT_APP_TOKEN:-}
+      AMAZFIT_USER_ID: ${AMAZFIT_USER_ID:-}
+      AMAZFIT_REGION: ${AMAZFIT_REGION:-us}
+      AMAZFIT_POLL_CRON: ${AMAZFIT_POLL_CRON:-}
     volumes:
       - ${ANALYSIS_CONFIG_FILE:-./config.yaml.example}:/app/config.yaml:ro
 

@@ -28,18 +28,25 @@ The interactive ``main()`` is not unit-tested — it's just I/O glue.
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import contextlib
 import os
 import secrets
 import sys
 import webbrowser
+from pathlib import Path
 from typing import Any, Protocol
 from uuid import UUID
 
-from auth import DEFAULT_OWNER_ID, OAuthToken
+ROOT = Path(__file__).resolve().parents[1]
+for _path in (ROOT, ROOT / "packages" / "py"):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
-from plugins.sources.whoop.oauth import (
+from auth import DEFAULT_OWNER_ID, OAuthToken  # noqa: E402
+
+from plugins.sources.whoop.oauth import (  # noqa: E402
     WhoopClientConfig,
     build_authorization_url,
     exchange_code_for_token,
@@ -142,7 +149,15 @@ async def _interactive_main(owner_id: UUID = DEFAULT_OWNER_ID) -> int:  # pragma
     return 0
 
 
-def main() -> None:  # pragma: no cover
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Authorize a Whoop account and store its OAuth token in the datahub.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:  # pragma: no cover
+    parse_args(argv)
     sys.exit(asyncio.run(_interactive_main()))
 
 

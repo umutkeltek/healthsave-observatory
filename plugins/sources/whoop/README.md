@@ -4,7 +4,7 @@ Poll-based `Source` plugin that ingests recovery, sleep, workout, and cycle data
 
 ## Status
 
-**P2 (2026-05).** Manifest, OAuth helpers, token storage, paginated fetchers, normalizers, end-to-end `WhoopSource.ingest`, and the authorize CLI all ship. The worker scheduler registration (so the poll runs automatically every N minutes) is the remaining piece in the next slice.
+**P2 (2026-05).** Manifest, OAuth helpers, token storage, paginated fetchers, normalizers, end-to-end `WhoopSource.ingest`, the authorize CLI, and env-gated worker polling all ship.
 
 ## What it emits
 
@@ -40,6 +40,8 @@ Poll-based `Source` plugin that ingests recovery, sleep, workout, and cycle data
    ```
 
    It prints the Whoop authorize URL, opens a browser, waits for you to paste the `code` query parameter from the redirect URL, exchanges it for a token, and persists the (encrypted) pair plus an `authorized` audit event. Re-running the script overwrites the stored token row — useful if the refresh chain breaks.
+
+5. Set `WHOOP_POLL_CRON` in `.env` (for example `*/30 * * * *`) and restart the worker. Leave it blank to keep Whoop polling disabled.
 
 ## Architecture
 

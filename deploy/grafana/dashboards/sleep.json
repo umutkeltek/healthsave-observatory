@@ -877,7 +877,7 @@
             "type": "postgres",
             "uid": "healthsave-pg"
           },
-          "rawSql": "SELECT d.device_type AS metric, avg(ss.sleep_efficiency_pct) AS value FROM sleep_sessions ss JOIN devices d ON d.id = ss.device_id WHERE $__timeFilter(ss.start_time) AND ss.device_id IN ($device) AND ss.sleep_efficiency_pct IS NOT NULL GROUP BY d.device_type",
+          "rawSql": "SELECT metric, avg(value) AS value FROM (SELECT d.device_type AS metric, CASE WHEN (ss.total_duration_ms + COALESCE(ss.awake_ms, 0)) > 0 THEN ss.total_duration_ms::float / (ss.total_duration_ms + COALESCE(ss.awake_ms, 0)) * 100.0 END AS value FROM sleep_sessions ss JOIN devices d ON d.id = ss.device_id WHERE $__timeFilter(ss.start_time) AND ss.device_id IN ($device) UNION ALL SELECT COALESCE(qs.source_id, d.device_type, 'Unknown') AS metric, qs.value FROM quantity_samples qs JOIN devices d ON d.id = qs.device_id WHERE qs.metric_name = 'sleep_efficiency_percentage' AND $__timeFilter(qs.time) AND qs.device_id IN ($device)) x WHERE value IS NOT NULL GROUP BY metric",
           "format": "table",
           "refId": "A"
         }

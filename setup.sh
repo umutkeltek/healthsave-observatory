@@ -292,6 +292,20 @@ OLLAMA_MODEL=llama3.1:8b
 # setup.sh creates config.yaml and keeps Compose pointed at it.
 # Manual docker compose users can keep .env.example's config.yaml.example.
 ANALYSIS_CONFIG_FILE=./config.yaml
+
+# Optional source plugins. Leave blank unless you are enabling Whoop
+# or Amazfit/Zepp polling. HDH_TOKEN_ENC_KEY is required before
+# storing third-party tokens; generate it inside the app environment with:
+#   python -c "from auth import generate_key; print(generate_key())"
+HDH_TOKEN_ENC_KEY=
+WHOOP_CLIENT_ID=
+WHOOP_CLIENT_SECRET=
+WHOOP_REDIRECT_URI=
+WHOOP_POLL_CRON=
+AMAZFIT_APP_TOKEN=
+AMAZFIT_USER_ID=
+AMAZFIT_REGION=us
+AMAZFIT_POLL_CRON=
 EOF
     chmod 600 "$ENV_FILE" 2>/dev/null || true
 }

@@ -346,6 +346,9 @@ Supported dashboards loaded automatically:
 |-----------|------|------------|--------|-------|
 | HealthSave Overview | `deploy/grafana/dashboards/healthsave-overview.json` | `heart_rate`, `hrv`, `blood_oxygen`, `daily_activity`, `sleep_sessions`, `workouts` | Supported | Best first dashboard for a fresh install |
 | Activity & Movement | `deploy/grafana/dashboards/activity.json` | `daily_activity`, `quantity_samples` | Supported | Gait-related panels only populate if those optional metrics are synced |
+| Heart | `deploy/grafana/dashboards/heart.json` | `heart_rate`, `hrv`, `quantity_samples` | Supported | Source-aware heart-rate, HRV, SpO2, and respiratory panels |
+| Sleep | `deploy/grafana/dashboards/sleep.json` | `sleep_sessions`, `sleep_stages`, `quantity_samples` | Supported | Apple sleep sessions plus provider aggregate sleep metrics |
+| Insights | `deploy/grafana/dashboards/insights.json` | `heart_rate`, `hrv`, `recovery`, `quantity_samples`, `sleep_sessions`, `workouts` | Supported | Cross-source comparison and recovery/sleep/strain views |
 | Workouts | `deploy/grafana/dashboards/workouts.json` | `workouts` | Supported | Focused workout view with type, duration, calories, and HR panels |
 
 The datasource is auto-provisioned - no manual setup needed.
