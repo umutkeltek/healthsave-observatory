@@ -357,19 +357,39 @@ There are two supported Home Assistant paths:
 1. **MQTT bridge (recommended):** Health Data Hub reads TimescaleDB and publishes retained Home Assistant MQTT discovery + state topics. This keeps Home Assistant out of the database and works even when Grafana is deployed separately.
 2. **Direct SQL package (legacy/example):** Home Assistant queries TimescaleDB directly using `integrations/home-assistant/healthsave-package.yaml`.
 
-The MQTT bridge preserves the current aggregate Home Assistant contract:
+The bridge publishes in two layers each cycle:
 
-- Retained aggregate state topic: `healthtrack/sensor/state`
-- Discovery topics: `homeassistant/sensor/healthtrack/<metric>/config`
+**Aggregate parent device** (one device, one state topic, the legacy shape):
 
-It publishes these entities by default:
+- Retained state topic: `healthsave/sensor/state`
+- Discovery topics: `homeassistant/sensor/healthsave/<metric>/config`
+- Availability: `healthsave/status`
 
-- `sensor.healthtrack_heart_rate`
-- `sensor.healthtrack_hrv_7d_avg`
-- `sensor.healthtrack_steps_today`
-- `sensor.healthtrack_last_sleep_hours`
-- `sensor.health_source_model`
-- `sensor.room_health_state`
+Six entities on the parent device by default:
+
+- `sensor.healthsave_heart_rate`
+- `sensor.healthsave_hrv_7d_avg`
+- `sensor.healthsave_steps_today`
+- `sensor.healthsave_last_sleep_hours`
+- `sensor.healthsave_source_model`
+- `sensor.healthsave_room_health_state`
+
+**Per-source sub-devices** (one device per distinct `source_id` seen in recent data — Apple Watch, Whoop, iPhone, etc.):
+
+- Retained state topic: `healthsave/source/<slug>/state` (one JSON payload per source)
+- Discovery topics: `homeassistant/sensor/healthsave_<slug>/<metric>/config`
+- Linked to the parent via Home Assistant's `via_device` so HA nests sub-devices under the parent.
+- Metrics carried per sub-device: `heart_rate`, `hrv_latest_ms`, `steps_today`, `last_sleep_hours`. Only metrics with a recent non-null value get a discovery message, so HA never sees ghost entities.
+
+Example: a household running both an Apple Watch and a Whoop sees:
+- `sensor.healthsave_apple_watch_heart_rate`, `_hrv_latest_ms`, `_steps_today`, `_last_sleep_hours`
+- `sensor.healthsave_whoop_heart_rate`, `_hrv_latest_ms`, `_last_sleep_hours` (no `_steps_today` if Whoop hasn't logged any).
+
+Source attribution comes from `source_id` on the ingestion tables (added to `daily_activity` and `sleep_sessions` in migration 009; native to `heart_rate` / `hrv` since v1). Rows with NULL `source_id` collapse to a single `sensor.healthsave_unknown_*` sub-device so legacy data never fragments into empty entities.
+
+Both layers share `healthsave/status` so HA marks every sub-device offline together if the bridge stops.
+
+**Legacy `healthtrack_*` brand still reachable.** The defaults flipped from `healthtrack_*` to `healthsave_*` in P5-b; the `HA_MQTT_STATE_TOPIC_PREFIX`, `HA_MQTT_DEVICE_IDENTIFIER`, and `HA_MQTT_DEVICE_NAME` env vars still let users on the pre-existing HA setup pin the old shape.
 
 Enable it with Docker Compose. Two patterns:
 
@@ -403,7 +423,8 @@ right seam.
 Useful defaults:
 
 - Discovery prefix: `homeassistant`
-- State prefix: `healthtrack`
+- State prefix: `healthsave`
+- Device identifier: `healthsave`
 - Publish interval: `60` seconds
 
 Direct SQL example files remain available for setups that prefer DB polling:
