@@ -1,0 +1,43 @@
+{
+  "auth_py_parsed_token": {
+    "access_token_len": null,
+    "expires_at": null,
+    "had_token": false,
+    "metadata_keys": null
+  },
+  "captured_at": "2026-05-22T19:28:11.680614+00:00",
+  "data_probes": {
+    "skipped": "login failed; no app_token to probe with"
+  },
+  "login_error_from_auth_py": "login HTTP 400: {\"error_code\":\"0100\"}",
+  "regions_known": {
+    "cn": "https://api-mifit.huami.com",
+    "eu": "https://api-mifit-de.huami.com",
+    "us": "https://api-mifit-us2.huami.com"
+  },
+  "step1_login": {
+    "body_shape": {
+      "error_code": "<str:4>"
+    },
+    "request": {
+      "form_keys": [
+        "client_id",
+        "password",
+        "account_name",
+        "redirect_uri",
+        "token"
+      ],
+      "method": "POST",
+      "url": "https://account.huami.com/v2/client/login"
+    },
+    "response": {
+      "body_bytes": 21,
+      "content_type": "application/json",
+      "status": 400
+    }
+  },
+  "step2_token_exchange": {
+    "reason": "no login_token from step 1",
+    "skipped": true
+  }
+}

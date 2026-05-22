@@ -1,0 +1,37 @@
+{
+  "endpoint": "spo2_events",
+  "shape": {
+    "base": "https://api-mifit-us3.zepp.com",
+    "body_shape": {
+      "items": {
+        "<array>": "shape of first element only",
+        "first": {
+          "eventType": "<str:12>",
+          "extra": "<str:339>",
+          "subType": "<str:5>",
+          "timestamp": 1779322231000,
+          "timezone": "<str:15>",
+          "userId": "<str:10>"
+        },
+        "len": 143
+      }
+    },
+    "description": "SpO2 events (newer Amazfit models)",
+    "params_keys": [
+      "eventType",
+      "from",
+      "limit",
+      "r",
+      "reverse",
+      "subType",
+      "to",
+      "userId"
+    ],
+    "response": {
+      "body_bytes": 72768,
+      "content_type": "application/json",
+      "status": 200
+    },
+    "url_template": "https://api-mifit-us3.zepp.com/users/3311629755/events"
+  }
+}

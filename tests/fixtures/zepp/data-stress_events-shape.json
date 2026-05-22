@@ -1,0 +1,47 @@
+{
+  "endpoint": "stress_events",
+  "shape": {
+    "base": "https://api-mifit-us3.zepp.com",
+    "body_shape": {
+      "items": {
+        "<array>": "shape of first element only",
+        "first": {
+          "avgStress": "<str:2>",
+          "data": "<str:4859>",
+          "deviceId": "<str:16>",
+          "deviceMac": "<str:12>",
+          "deviceSn": "<str:14>",
+          "deviceSource": "<str:8>",
+          "deviceType": "<str:1>",
+          "eventType": "<str:14>",
+          "highProportion": "<str:1>",
+          "maxStress": "<str:2>",
+          "mediumProportion": "<str:1>",
+          "minStress": "<str:1>",
+          "normalProportion": "<str:2>",
+          "relaxProportion": "<str:2>",
+          "subType": "<str:14>",
+          "timestamp": 1779397200001,
+          "userId": "<str:10>"
+        },
+        "len": 1
+      }
+    },
+    "description": "All-day stress readings",
+    "params_keys": [
+      "eventType",
+      "from",
+      "limit",
+      "r",
+      "reverse",
+      "to",
+      "userId"
+    ],
+    "response": {
+      "body_bytes": 5827,
+      "content_type": "application/json",
+      "status": 200
+    },
+    "url_template": "https://api-mifit-us3.zepp.com/users/3311629755/events"
+  }
+}

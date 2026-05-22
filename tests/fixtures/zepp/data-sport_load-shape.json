@@ -1,0 +1,37 @@
+{
+  "endpoint": "sport_load",
+  "shape": {
+    "base": "https://api-mifit-us3.zepp.com",
+    "body_shape": {
+      "items": {
+        "<array>": "shape of first element only",
+        "first": {
+          "currnetDayTrainLoad": 0,
+          "dayId": "<str:10>",
+          "device_source": 10289411,
+          "generatedTime": 1779408000,
+          "updateTime": 1779397200000,
+          "wtlSum": 0,
+          "wtlSumOptimalMax": 182,
+          "wtlSumOptimalMin": 54,
+          "wtlSumOverreaching": 219
+        },
+        "len": 2
+      }
+    },
+    "description": "Daily training load / activity",
+    "params_keys": [
+      "endDay",
+      "isReverse",
+      "limit",
+      "r",
+      "startDay"
+    ],
+    "response": {
+      "body_bytes": 425,
+      "content_type": "application/json",
+      "status": 200
+    },
+    "url_template": "https://api-mifit-us3.zepp.com/v2/watch/users/3311629755/WatchSportStatistics/SPORT_LOAD"
+  }
+}
