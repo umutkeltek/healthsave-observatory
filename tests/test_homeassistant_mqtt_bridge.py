@@ -258,6 +258,20 @@ def test_legacy_healthtrack_brand_remains_reachable_via_env_overrides() -> None:
 
     assert specs[0].entity_id == "sensor.healthtrack_heart_rate"
     assert specs[0].name == "HealthTrack Heart Rate"
+    assert {spec.key for spec in specs}.issuperset(
+        {
+            "heart_rate",
+            "hrv",
+            "steps",
+            "active_calories",
+            "blood_oxygen",
+            "recovery_score",
+            "sleep_duration",
+            "sleep_efficiency",
+            "resting_heart_rate",
+            "strain",
+        }
+    )
 
     messages = build_discovery_messages(config, [specs[0]])
     topic, payload, _ = messages[0]
@@ -265,3 +279,43 @@ def test_legacy_healthtrack_brand_remains_reachable_via_env_overrides() -> None:
     assert payload["availability_topic"] == "healthtrack/status"
     assert payload["state_topic"] == "healthtrack/sensor/state"
     assert payload["device"]["identifiers"] == ["healthtrack_owl"]
+
+
+def test_legacy_healthtrack_state_payload_includes_old_dashboard_keys() -> None:
+    config = HomeAssistantMQTTConfig(
+        state_topic_prefix="healthtrack",
+        device_identifier="healthtrack_owl",
+        device_name="HealthTrack",
+    )
+    snapshot = HealthSnapshot(
+        collected_at=datetime(2025, 1, 1, tzinfo=UTC),
+        heart_rate=70,
+        hrv_7d_avg=41.2,
+        steps_today=1234,
+        last_sleep_hours=7.5,
+        source_model="Apple Watch",
+        room_health_state="normal",
+        hrv=42.0,
+        steps=1234,
+        active_calories=456,
+        blood_oxygen=98.4,
+        recovery_score=88,
+        sleep_duration=7.5,
+        sleep_efficiency=91.2,
+        resting_heart_rate=58,
+        strain=9.7,
+    )
+
+    _topic, payload, _retain = build_state_messages(
+        config, sensor_specs_for_config(config), snapshot
+    )[0]
+
+    assert payload["hrv"] == 42.0
+    assert payload["steps"] == 1234
+    assert payload["active_calories"] == 456
+    assert payload["blood_oxygen"] == 98.4
+    assert payload["recovery_score"] == 88
+    assert payload["sleep_duration"] == 7.5
+    assert payload["sleep_efficiency"] == 91.2
+    assert payload["resting_heart_rate"] == 58
+    assert payload["strain"] == 9.7
