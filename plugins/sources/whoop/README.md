@@ -4,7 +4,7 @@ Poll-based `Source` plugin that ingests recovery, sleep, workout, and cycle data
 
 ## Status
 
-**P1 scaffold (2026-05).** Manifest, OAuth helpers, and token storage scaffolding ship in this directory. The data-fetch loop (`fetch.py`) and the worker job registration land in P2.
+**P2 (2026-05).** Manifest, OAuth helpers, token storage, paginated fetchers, normalizers, end-to-end `WhoopSource.ingest`, and the authorize CLI all ship. The worker scheduler registration (so the poll runs automatically every N minutes) is the remaining piece in the next slice.
 
 ## What it emits
 
@@ -33,7 +33,13 @@ Poll-based `Source` plugin that ingests recovery, sleep, workout, and cycle data
    docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/008_oauth_tokens.sql
    ```
 
-4. P2 will add a CLI / admin endpoint that walks the authorization-code grant. Until then, the plugin's discovery and manifest can be exercised by tests but the runtime ingest stays disabled.
+4. Run the one-time authorize CLI to bind a Whoop account:
+
+   ```bash
+   python scripts/whoop_authorize.py
+   ```
+
+   It prints the Whoop authorize URL, opens a browser, waits for you to paste the `code` query parameter from the redirect URL, exchanges it for a token, and persists the (encrypted) pair plus an `authorized` audit event. Re-running the script overwrites the stored token row — useful if the refresh chain breaks.
 
 ## Architecture
 
