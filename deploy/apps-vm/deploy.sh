@@ -8,7 +8,13 @@ DEPLOY_REF="${DEPLOY_REF:-HEAD}"
 API_PORT="${API_PORT:-18080}"
 GRAFANA_PORT="${GRAFANA_PORT:-3300}"
 DB_PORT="${DB_PORT:-15432}"
+DB_PUBLISH_PORT="${HEALTH_DATA_HUB_DB_PUBLISH_PORT:-$DB_PORT}"
 PROJECT_NAME="${PROJECT_NAME:-health-data-hub}"
+DATABASE_MODE="${HEALTH_DATA_HUB_DATABASE_MODE:-compose}"
+EXTERNAL_DB_HOST="${HEALTH_DATA_HUB_DB_HOST:-postgres.example.internal}"
+EXTERNAL_DB_PORT="${HEALTH_DATA_HUB_DB_PORT:-5432}"
+EXTERNAL_DB_NAME="${HEALTH_DATA_HUB_DB_NAME:-healthsave}"
+EXTERNAL_DB_USER="${HEALTH_DATA_HUB_DB_USER:-healthsave}"
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -23,6 +29,14 @@ Example:
 EOF
   exit 1
 fi
+
+case "$DATABASE_MODE" in
+  compose|external) ;;
+  *)
+    echo "HEALTH_DATA_HUB_DATABASE_MODE must be 'compose' or 'external'" >&2
+    exit 1
+    ;;
+esac
 
 cd "$PROJECT_DIR"
 
@@ -74,20 +88,48 @@ LLM_API_KEY=
 HA_MQTT_ENABLED=false
 HEALTH_DATA_HUB_API_PORT=$API_PORT
 HEALTH_DATA_HUB_GRAFANA_PORT=$GRAFANA_PORT
-HEALTH_DATA_HUB_DB_PORT=$DB_PORT
+HEALTH_DATA_HUB_DB_PUBLISH_PORT=$DB_PUBLISH_PORT
+HEALTH_DATA_HUB_DB_PORT=$EXTERNAL_DB_PORT
+HEALTH_DATA_HUB_DATABASE_MODE=$DATABASE_MODE
+HEALTH_DATA_HUB_DB_HOST=$EXTERNAL_DB_HOST
+HEALTH_DATA_HUB_DB_NAME=$EXTERNAL_DB_NAME
+HEALTH_DATA_HUB_DB_USER=$EXTERNAL_DB_USER
 EOF
   chmod 600 \"$REMOTE_ENV_DIR/.env\"
+fi
+set_env_key() {
+  key=\"\$1\"
+  value=\"\$2\"
+  if grep -q \"^\${key}=\" \"$REMOTE_ENV_DIR/.env\"; then
+    sed -i \"s|^\${key}=.*|\${key}=\${value}|\" \"$REMOTE_ENV_DIR/.env\"
+  else
+    printf \"%s=%s\\n\" \"\$key\" \"\$value\" >> \"$REMOTE_ENV_DIR/.env\"
+  fi
+}
+set_env_key HEALTH_DATA_HUB_API_PORT \"$API_PORT\"
+set_env_key HEALTH_DATA_HUB_GRAFANA_PORT \"$GRAFANA_PORT\"
+set_env_key HEALTH_DATA_HUB_DB_PUBLISH_PORT \"$DB_PUBLISH_PORT\"
+set_env_key HEALTH_DATA_HUB_DATABASE_MODE \"$DATABASE_MODE\"
+if [ \"$DATABASE_MODE\" = \"external\" ]; then
+  set_env_key HEALTH_DATA_HUB_DB_HOST \"$EXTERNAL_DB_HOST\"
+  set_env_key HEALTH_DATA_HUB_DB_PORT \"$EXTERNAL_DB_PORT\"
+  set_env_key HEALTH_DATA_HUB_DB_NAME \"$EXTERNAL_DB_NAME\"
+  set_env_key HEALTH_DATA_HUB_DB_USER \"$EXTERNAL_DB_USER\"
 fi
 find \"$REMOTE_DIR\" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 cp -a \"$REMOTE_TMP\"/. \"$REMOTE_DIR\"/
 rm -rf \"$REMOTE_TMP\"
 cd \"$REMOTE_DIR\"
 ln -sf \"$REMOTE_ENV_DIR/.env\" .env
-cat > docker-compose.apps-vm.override.yml <<EOF
+if [ \"$DATABASE_MODE\" = \"external\" ]; then
+  cp deploy/apps-vm/docker-compose.central-db.override.yml docker-compose.apps-vm.override.yml
+  COMPOSE_TARGETS=\"migrate api worker grafana\"
+else
+  cat > docker-compose.apps-vm.override.yml <<EOF
 services:
   db:
     ports: !override
-      - \"127.0.0.1:\${HEALTH_DATA_HUB_DB_PORT:-$DB_PORT}:5432\"
+      - \"127.0.0.1:\${HEALTH_DATA_HUB_DB_PUBLISH_PORT:-$DB_PUBLISH_PORT}:5432\"
   api:
     ports: !override
       - \"\${HEALTH_DATA_HUB_API_PORT:-$API_PORT}:8000\"
@@ -95,11 +137,13 @@ services:
     ports: !override
       - \"\${HEALTH_DATA_HUB_GRAFANA_PORT:-$GRAFANA_PORT}:3000\"
 EOF
+  COMPOSE_TARGETS=\"db migrate api worker grafana\"
+fi
 docker compose --env-file \"$REMOTE_ENV_DIR/.env\" \
   -f docker-compose.yml \
   -f docker-compose.apps-vm.override.yml \
   -p "$PROJECT_NAME" \
-  up -d --build db api grafana
+  up -d --build \$COMPOSE_TARGETS
 cat > \"$REMOTE_ENV_DIR/current-release.env\" <<EOF
 APP=health-data-hub
 DEPLOY_REF=$DEPLOY_REF
@@ -110,6 +154,8 @@ REMOTE_DIR=$REMOTE_DIR
 API_PORT=$API_PORT
 GRAFANA_PORT=$GRAFANA_PORT
 DB_PORT=$DB_PORT
+DB_PUBLISH_PORT=$DB_PUBLISH_PORT
+DATABASE_MODE=$DATABASE_MODE
 EOF
 '"
 

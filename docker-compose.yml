@@ -183,6 +183,7 @@ services:
         condition: service_healthy
     environment:
       DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      HDH_GRAFANA_DATASOURCE_URL: ${HDH_GRAFANA_DATASOURCE_URL:-db:5432}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-changeme}
     volumes:
       - grafana_data:/var/lib/grafana

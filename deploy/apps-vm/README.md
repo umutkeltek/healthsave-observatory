@@ -20,6 +20,23 @@ Deploy from a clean repository:
 REMOTE_HOST=your-vm.example ./deploy/apps-vm/deploy.sh
 ```
 
+Use an existing external Postgres/TimescaleDB host instead of the bundled
+Compose database:
+
+```bash
+REMOTE_HOST=your-vm.example \
+HEALTH_DATA_HUB_DATABASE_MODE=external \
+HEALTH_DATA_HUB_DB_HOST=postgres.example.internal \
+HEALTH_DATA_HUB_DB_PORT=5432 \
+HEALTH_DATA_HUB_DB_NAME=healthsave \
+HEALTH_DATA_HUB_DB_USER=healthsave \
+./deploy/apps-vm/deploy.sh
+```
+
+External mode still reads `DB_PASSWORD` from the remote env file, runs the
+migration service, starts API + worker + Grafana, and leaves the bundled `db`
+service stopped.
+
 Verify:
 
 ```bash
@@ -34,6 +51,9 @@ Important boundaries:
 
 - Do not point this script at an existing production app directory. It replaces the
   contents of `REMOTE_DIR` after archiving the chosen git commit.
+- If `HEALTH_DATA_HUB_DATABASE_MODE=external`, confirm the external database is
+  backed up before deployment. The script applies forward migrations to that
+  database.
 - Do not enable `homeassistant-mqtt` against an existing Home Assistant broker until
   you review topic prefixes; otherwise it may publish overlapping retained
   discovery/state topics.

@@ -1,0 +1,47 @@
+# Apps VM central-DB override.
+#
+# Use this when Postgres/TimescaleDB already runs outside this compose
+# project. It keeps the default docker-compose.yml self-contained for
+# ordinary installs, while letting operators point API, worker,
+# migrations, Grafana, and the optional Home Assistant bridge at the
+# same external database.
+
+x-external-database-url: &external-database-url
+  DATABASE_URL: postgresql+asyncpg://${HEALTH_DATA_HUB_DB_USER:-healthsave}:${DB_PASSWORD:-changeme}@${HEALTH_DATA_HUB_DB_HOST:-postgres.example.internal}:${HEALTH_DATA_HUB_DB_PORT:-5432}/${HEALTH_DATA_HUB_DB_NAME:-healthsave}
+
+services:
+  migrate:
+    depends_on: !override []
+    environment:
+      <<: *external-database-url
+
+  api:
+    depends_on: !override
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *external-database-url
+    ports: !override
+      - "${HEALTH_DATA_HUB_API_PORT:-18080}:8000"
+
+  worker:
+    depends_on: !override
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *external-database-url
+
+  homeassistant-mqtt:
+    depends_on: !override
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *external-database-url
+
+  grafana:
+    depends_on: !override []
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      HDH_GRAFANA_DATASOURCE_URL: ${HEALTH_DATA_HUB_DB_HOST:-postgres.example.internal}:${HEALTH_DATA_HUB_DB_PORT:-5432}
+    ports: !override
+      - "${HEALTH_DATA_HUB_GRAFANA_PORT:-3300}:3000"

@@ -3,7 +3,7 @@ datasources:
   - name: HealthSave
     uid: healthsave-pg
     type: postgres
-    url: db:5432
+    url: ${HDH_GRAFANA_DATASOURCE_URL}
     user: healthsave
     secureJsonData:
       password: ${DB_PASSWORD}
