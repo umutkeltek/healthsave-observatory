@@ -64,10 +64,20 @@ services:
   # Loads `agents.enabled[]` from config.yaml and ticks each plugin at
   # its configured interval. Empty allowlist by default — opt-in only.
   # No port exposed; counters increment in-process. Same image as api/worker.
+  #
+  # Profile-gated (`agents`): not started by default because (a) Phase 7-C is
+  # still landing — the Dockerfile does not yet COPY apps/agents/agents/ into
+  # /app/, so `python -m agents.main` raises ModuleNotFoundError on boot, and
+  # (b) the supervisor is LLM-bound and apps-vm intentionally runs with
+  # LLM_PROVIDER=disabled (no GPU). The intended home is a GPU host (fedora-pc
+  # + Ollama) reached over LAN. Re-enable explicitly with
+  # `docker compose --profile agents up -d agents` once both blockers are
+  # cleared.
   agents:
     build: .
     command: ["python", "-m", "agents.main"]
     restart: unless-stopped
+    profiles: ["agents"]
     depends_on:
       db:
         condition: service_healthy
