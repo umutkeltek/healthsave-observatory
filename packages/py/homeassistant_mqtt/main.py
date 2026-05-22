@@ -16,7 +16,7 @@ from .bridge import (
     build_source_discovery_messages,
     build_source_state_message,
     build_state_messages,
-    default_sensor_specs,
+    sensor_specs_for_config,
 )
 from .client import PahoMQTTPublisher
 from .config import load_config_from_env
@@ -37,7 +37,7 @@ async def publish_once(
     event — retained means HA only re-processes when payload changes.
     """
 
-    specs = default_sensor_specs()
+    specs = sensor_specs_for_config(publisher.config)
     async with async_session() as session:
         snapshot = await repository.fetch_snapshot(session)
         source_snapshots = await repository.fetch_snapshots_by_source(session)
@@ -60,7 +60,7 @@ async def run() -> None:
     repository = TimescaleHealthSnapshotRepository()
     publisher = PahoMQTTPublisher(bridge_config.mqtt)
     publisher.connect()
-    specs = default_sensor_specs()
+    specs = sensor_specs_for_config(bridge_config.mqtt)
     publisher.publish_many([build_availability_message(bridge_config.mqtt)])
     publisher.publish_many(build_discovery_messages(bridge_config.mqtt, specs))
     log.info(
