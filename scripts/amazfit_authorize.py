@@ -44,9 +44,14 @@ from pathlib import Path
 from typing import Any, Protocol
 from uuid import UUID
 
-from auth import DEFAULT_OWNER_ID, OAuthToken
+ROOT = Path(__file__).resolve().parents[1]
+for _path in (ROOT, ROOT / "packages" / "py"):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
-from plugins.sources.amazfit.auth import (
+from auth import DEFAULT_OWNER_ID, OAuthToken  # noqa: E402
+
+from plugins.sources.amazfit.auth import (  # noqa: E402
     AmazfitAuthError,
     token_from_app_token_string,
     token_from_huami_token_output,

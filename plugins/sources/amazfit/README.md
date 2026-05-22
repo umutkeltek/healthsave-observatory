@@ -13,7 +13,7 @@ If long-term stability matters more than rich data, consider [Gadgetbridge](http
 ## Status
 
 - **H-revise (2026-05).** auth.py rewritten: no `login()`, no plaintext password handling. Token-import helpers (`token_from_app_token_string`, `token_from_huami_token_output`, `token_from_env`) materialize an `OAuthToken` from an externally-acquired `app_token` + `user_id` + region.
-- `AmazfitSource.ingest` still raises `NotImplementedError` until the `H-ingest` commit lands the fetch + normalize + write loop.
+- `H-ingest ships` the fetch + normalize + write loop through `AmazfitSource.ingest`.
 - `H-fetch` ships paginated fetchers against `api-mifit-us3.zepp.com`. `H-normalize` ships normalizers. `H-cli` ships the authorize CLI. `H-worker` wires the worker poll job.
 
 ## What it emits

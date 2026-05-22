@@ -256,7 +256,7 @@
       "targets": [
         {
           "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-          "rawSql": "SELECT date_trunc('day', ss.start_time) AS time, d.device_type AS metric,\n  sum(ss.total_duration_ms) / 3600000.0 AS value\nFROM sleep_sessions ss JOIN devices d ON d.id = ss.device_id\nWHERE $__timeFilter(ss.start_time) AND ss.device_id IN ($device) AND ss.is_nap = false\nGROUP BY 1, d.device_type ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', ss.start_time) AS time, d.device_type AS metric,\n  sum(ss.total_duration_ms) / 3600000.0 AS value\nFROM sleep_sessions ss JOIN devices d ON d.id = ss.device_id\nWHERE $__timeFilter(ss.start_time) AND ss.device_id IN ($device)\nGROUP BY 1, d.device_type ORDER BY 1",
           "format": "table",
           "refId": "A"
         }
@@ -291,7 +291,7 @@
       "targets": [
         {
           "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-          "rawSql": "SELECT d.device_type AS metric, avg(ss.sleep_efficiency_pct) AS value\nFROM sleep_sessions ss JOIN devices d ON d.id = ss.device_id\nWHERE $__timeFilter(ss.start_time) AND ss.device_id IN ($device) AND ss.sleep_efficiency_pct IS NOT NULL\nGROUP BY d.device_type",
+          "rawSql": "SELECT metric, avg(value) AS value\nFROM (\n  SELECT d.device_type AS metric,\n    CASE WHEN (ss.total_duration_ms + COALESCE(ss.awake_ms, 0)) > 0\n      THEN ss.total_duration_ms::float / (ss.total_duration_ms + COALESCE(ss.awake_ms, 0)) * 100.0\n    END AS value\n  FROM sleep_sessions ss JOIN devices d ON d.id = ss.device_id\n  WHERE $__timeFilter(ss.start_time) AND ss.device_id IN ($device)\n  UNION ALL\n  SELECT COALESCE(qs.source_id, d.device_type, 'Unknown') AS metric, qs.value\n  FROM quantity_samples qs JOIN devices d ON d.id = qs.device_id\n  WHERE qs.metric_name = 'sleep_efficiency_percentage' AND $__timeFilter(qs.time) AND qs.device_id IN ($device)\n) x\nWHERE value IS NOT NULL\nGROUP BY metric",
           "format": "table",
           "refId": "A"
         }
@@ -332,7 +332,7 @@
       "targets": [
         {
           "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-          "rawSql": "SELECT d.device_type AS metric, avg(ss.sleep_performance_pct) AS value\nFROM sleep_sessions ss JOIN devices d ON d.id = ss.device_id\nWHERE $__timeFilter(ss.start_time) AND ss.device_id IN ($device) AND ss.sleep_performance_pct IS NOT NULL\nGROUP BY d.device_type",
+          "rawSql": "SELECT metric, avg(value) AS value\nFROM (\n  SELECT d.device_type AS metric,\n    LEAST((ss.total_duration_ms / 3600000.0) / 8.0 * 100.0, 100.0) AS value\n  FROM sleep_sessions ss JOIN devices d ON d.id = ss.device_id\n  WHERE $__timeFilter(ss.start_time) AND ss.device_id IN ($device) AND ss.total_duration_ms IS NOT NULL\n  UNION ALL\n  SELECT COALESCE(qs.source_id, d.device_type, 'Unknown') AS metric,\n    LEAST(qs.value / 8.0 * 100.0, 100.0) AS value\n  FROM quantity_samples qs JOIN devices d ON d.id = qs.device_id\n  WHERE qs.metric_name = 'sleep_duration_hours' AND $__timeFilter(qs.time) AND qs.device_id IN ($device)\n) x\nWHERE value IS NOT NULL\nGROUP BY metric",
           "format": "table",
           "refId": "A"
         }
@@ -413,7 +413,7 @@
     },
     {
       "id": 10,
-      "title": "Resting HR: Whoop Recovery vs Apple Watch",
+      "title": "Resting HR: Recovery vs HealthSave HR",
       "type": "timeseries",
       "gridPos": {"h": 8, "w": 24, "x": 0, "y": 31},
       "datasource": {"type": "postgres", "uid": "healthsave-pg"},
@@ -426,7 +426,7 @@
         },
         {
           "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-          "rawSql": "SELECT time_bucket('1 day', time) AS time, avg(value) AS \"Apple Watch HR\"\nFROM heart_rate WHERE $__timeFilter(time) AND device_id IN ($device) AND source_id = 'Umut''s Apple Watch'\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT time_bucket('1 day', time) AS time, avg(bpm) AS \"HealthSave HR\"\nFROM heart_rate WHERE $__timeFilter(time) AND device_id IN ($device)\nGROUP BY 1 ORDER BY 1",
           "format": "table",
           "refId": "B"
         }
@@ -529,7 +529,7 @@
       "targets": [
         {
           "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-          "rawSql": "SELECT date AS time, strain AS \"Strain\" FROM daily_activity\nWHERE $__timeFilter(date) AND device_id IN ($device) AND strain IS NOT NULL ORDER BY 1",
+          "rawSql": "SELECT time_bucket('1 day', time) AS time, avg(value) AS \"Strain\" FROM quantity_samples\nWHERE metric_name = 'strain' AND $__timeFilter(time) AND device_id IN ($device) GROUP BY 1 ORDER BY 1",
           "format": "table",
           "refId": "A"
         }
@@ -592,7 +592,7 @@
         },
         {
           "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-          "rawSql": "SELECT date_trunc('day', ss.start_time) AS time,\n  sum(ss.total_duration_ms) / 3600000.0 AS \"Sleep Hours\"\nFROM sleep_sessions ss\nWHERE $__timeFilter(ss.start_time) AND ss.device_id IN ($device) AND ss.is_nap = false\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', ss.start_time) AS time,\n  sum(ss.total_duration_ms) / 3600000.0 AS \"Sleep Hours\"\nFROM sleep_sessions ss\nWHERE $__timeFilter(ss.start_time) AND ss.device_id IN ($device)\nGROUP BY 1 ORDER BY 1",
           "format": "table",
           "refId": "B"
         }

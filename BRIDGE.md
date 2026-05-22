@@ -55,7 +55,7 @@ Things people actually trip on. Worth reading before `./setup.sh`.
 ## What's in the box
 
 - Long-term storage for 120+ HealthKit metrics in TimescaleDB hypertables
-- Three auto-provisioned Grafana dashboards (Overview, Activity, Workouts)
+- Six auto-provisioned Grafana dashboards: HealthSave Overview, Activity & Movement, Heart, Sleep, Insights, and Workouts
 - An optional two-brain AI briefing: a deterministic statistical engine flags interesting signals, a local LLM turns them into a short morning narrative
 - A working Home Assistant example package in `integrations/home-assistant/` (SQL sensors + automations)
 - A Garmin Connect importer in `scripts/import_garmin.py` for ZIP/FIT/TCX/JSON
