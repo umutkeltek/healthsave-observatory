@@ -207,7 +207,7 @@ def test_source_state_message_carries_only_non_none_fields() -> None:
 
 def test_source_discovery_uses_observed_source_id_as_display_name() -> None:
     """``source_id`` carries the human-friendly label
-    ('Apple Watch', "Umut's iPhone", 'Whoop'); the slug is what flows
+    ('Apple Watch', "Alex's iPhone", 'Whoop'); the slug is what flows
     through topics. The HA device 'name' uses the raw source_id so
     users see the brand-correct label in the UI.
     """
@@ -251,7 +251,7 @@ def test_legacy_healthtrack_brand_remains_reachable_via_env_overrides() -> None:
     """
     config = HomeAssistantMQTTConfig(
         state_topic_prefix="healthtrack",
-        device_identifier="healthtrack_owl",
+        device_identifier="healthtrack",
         device_name="HealthTrack",
     )
     specs = sensor_specs_for_config(config)
@@ -278,13 +278,13 @@ def test_legacy_healthtrack_brand_remains_reachable_via_env_overrides() -> None:
     assert topic == "homeassistant/sensor/healthtrack/heart_rate/config"
     assert payload["availability_topic"] == "healthtrack/status"
     assert payload["state_topic"] == "healthtrack/sensor/state"
-    assert payload["device"]["identifiers"] == ["healthtrack_owl"]
+    assert payload["device"]["identifiers"] == ["healthtrack"]
 
 
 def test_legacy_healthtrack_state_payload_includes_old_dashboard_keys() -> None:
     config = HomeAssistantMQTTConfig(
         state_topic_prefix="healthtrack",
-        device_identifier="healthtrack_owl",
+        device_identifier="healthtrack",
         device_name="HealthTrack",
     )
     snapshot = HealthSnapshot(

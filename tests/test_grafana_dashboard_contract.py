@@ -36,7 +36,7 @@ def test_dashboards_do_not_query_legacy_personal_stack_columns():
         "sleep_performance_pct",
         "ss.is_nap",
         "daily_activity\nWHERE $__timeFilter(date) AND device_id IN ($device) AND strain",
-        "Umut''s Apple Watch",
+        "Owner''s Apple Watch",
     )
 
     offenders = [

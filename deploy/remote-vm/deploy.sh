@@ -25,7 +25,7 @@ if [ -z "$REMOTE_HOST" ]; then
 REMOTE_HOST is required.
 
 Example:
-  REMOTE_HOST=your-vm.example ./deploy/apps-vm/deploy.sh
+  REMOTE_HOST=your-vm.example ./deploy/remote-vm/deploy.sh
 EOF
   exit 1
 fi
@@ -53,7 +53,7 @@ commit or stash changes first, then rerun:
   git status
   git add -A
   git commit -m "..."
-  ./deploy/apps-vm/deploy.sh
+  ./deploy/remote-vm/deploy.sh
 EOF
   exit 1
 fi
@@ -122,10 +122,10 @@ rm -rf \"$REMOTE_TMP\"
 cd \"$REMOTE_DIR\"
 ln -sf \"$REMOTE_ENV_DIR/.env\" .env
 if [ \"$DATABASE_MODE\" = \"external\" ]; then
-  cp deploy/apps-vm/docker-compose.central-db.override.yml docker-compose.apps-vm.override.yml
+  cp deploy/remote-vm/docker-compose.external-db.override.yml docker-compose.remote-vm.override.yml
   COMPOSE_TARGETS=\"migrate api worker grafana\"
 else
-  cat > docker-compose.apps-vm.override.yml <<EOF
+  cat > docker-compose.remote-vm.override.yml <<EOF
 services:
   db:
     ports: !override
@@ -141,7 +141,7 @@ EOF
 fi
 docker compose --env-file \"$REMOTE_ENV_DIR/.env\" \
   -f docker-compose.yml \
-  -f docker-compose.apps-vm.override.yml \
+  -f docker-compose.remote-vm.override.yml \
   -p "$PROJECT_NAME" \
   up -d --build \$COMPOSE_TARGETS
 cat > \"$REMOTE_ENV_DIR/current-release.env\" <<EOF

@@ -4,7 +4,7 @@ Zepp (formerly Huami / Mi Fit) has **no official public API** and the
 plaintext-password ``v2/client/login`` flow this plugin was originally
 designed against (P6-a, commit ``a3525d8``) was demonstrated dead on
 2026-05-22 — the live probe surfaced HTTP 400 + ``error_code 0100``,
-and the legacy ``apps-vm-scheduler-1`` Amazfit poll had been silently
+and a legacy private-stack Amazfit poll had been silently
 500-ing hourly for at least 13h against the same flow.
 
 The community-converged replacement is to NOT run a password login

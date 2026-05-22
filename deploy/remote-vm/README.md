@@ -17,7 +17,7 @@ Defaults:
 Deploy from a clean repository:
 
 ```bash
-REMOTE_HOST=your-vm.example ./deploy/apps-vm/deploy.sh
+REMOTE_HOST=your-vm.example ./deploy/remote-vm/deploy.sh
 ```
 
 Use an existing external Postgres/TimescaleDB host instead of the bundled
@@ -30,7 +30,7 @@ HEALTH_DATA_HUB_DB_HOST=postgres.example.internal \
 HEALTH_DATA_HUB_DB_PORT=5432 \
 HEALTH_DATA_HUB_DB_NAME=healthsave \
 HEALTH_DATA_HUB_DB_USER=healthsave \
-./deploy/apps-vm/deploy.sh
+./deploy/remote-vm/deploy.sh
 ```
 
 External mode still reads `DB_PASSWORD` from the remote env file, runs the

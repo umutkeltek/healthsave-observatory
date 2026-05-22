@@ -42,7 +42,7 @@ from storage.timescale.homeassistant import (  # noqa: E402
     "raw,expected",
     [
         ("Apple Watch", "apple_watch"),
-        ("Umut's iPhone", "umut_s_iphone"),
+        ("Alex's iPhone", "alex_s_iphone"),
         ("Whoop", "whoop"),
         ("HealthSave  (cycle avg)", "healthsave_cycle_avg"),
         ("APPLE WATCH", "apple_watch"),

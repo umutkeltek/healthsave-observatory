@@ -87,8 +87,8 @@ def test_config_example_uses_healthsave_home_assistant_defaults():
 
 
 def test_remote_vm_deploy_docs_do_not_target_private_personal_stack():
-    deploy_script = (ROOT / "deploy" / "apps-vm" / "deploy.sh").read_text()
-    deploy_readme = (ROOT / "deploy" / "apps-vm" / "README.md").read_text()
+    deploy_script = (ROOT / "deploy" / "remote-vm" / "deploy.sh").read_text()
+    deploy_readme = (ROOT / "deploy" / "remote-vm" / "README.md").read_text()
     combined = deploy_script + "\n" + deploy_readme
 
     for private_marker in (
@@ -102,6 +102,8 @@ def test_remote_vm_deploy_docs_do_not_target_private_personal_stack():
 
     assert 'REMOTE_HOST="${REMOTE_HOST:-}"' in deploy_script
     assert "REMOTE_HOST=your-vm.example" in deploy_readme
+    assert "apps-vm" not in deploy_script
+    assert "apps-vm" not in deploy_readme
 
 
 def test_runtime_docs_use_product_neutral_examples():
