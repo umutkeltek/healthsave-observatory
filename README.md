@@ -371,7 +371,9 @@ It publishes these entities by default:
 - `sensor.health_source_model`
 - `sensor.room_health_state`
 
-Enable it with Docker Compose:
+Enable it with Docker Compose. Two patterns:
+
+**(a) Bring your own broker.** Point the bridge at an MQTT server you already run:
 
 ```bash
 HA_MQTT_ENABLED=true \
@@ -380,6 +382,23 @@ HA_MQTT_USERNAME=<optional-user> \
 HA_MQTT_PASSWORD=<optional-password> \
 docker compose --profile home-assistant up -d homeassistant-mqtt
 ```
+
+**(b) Use the bundled broker.** Add the `mosquitto` profile and the
+stack runs an `eclipse-mosquitto:2` container alongside the bridge.
+The bridge's default `HA_MQTT_BROKER=mqtt` resolves through docker DNS,
+and host port `1883` is published so a Home Assistant install on the
+same LAN can also connect by host IP. Persistence is on a docker
+volume so retained messages survive restarts.
+
+```bash
+docker compose --profile mosquitto --profile home-assistant up -d
+```
+
+The bundled broker defaults to anonymous-on-LAN. To require auth,
+overlay a `docker-compose.override.yml` that flips
+`allow_anonymous false` and mounts a password file — the conf at
+`deploy/mosquitto/mosquitto.conf` is read-only so the override is the
+right seam.
 
 Useful defaults:
 
