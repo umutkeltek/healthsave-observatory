@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REMOTE_HOST="${REMOTE_HOST:-apps.internal}"
+REMOTE_HOST="${REMOTE_HOST:-}"
 REMOTE_DIR="${REMOTE_DIR:-/srv/stacks/health-data-hub}"
 REMOTE_ENV_DIR="${REMOTE_ENV_DIR:-/srv/localappdata/health-data-hub}"
 DEPLOY_REF="${DEPLOY_REF:-HEAD}"
@@ -13,6 +13,16 @@ SSH_OPTS=(-o StrictHostKeyChecking=accept-new)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+if [ -z "$REMOTE_HOST" ]; then
+  cat >&2 <<'EOF'
+REMOTE_HOST is required.
+
+Example:
+  REMOTE_HOST=your-vm.example ./deploy/apps-vm/deploy.sh
+EOF
+  exit 1
+fi
 
 cd "$PROJECT_DIR"
 
