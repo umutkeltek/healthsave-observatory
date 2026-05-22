@@ -1,7 +1,7 @@
 id: amazfit-zepp
 name: Amazfit / Zepp
 kind: source
-version: "0.1.0"
+version: "0.2.0"
 sdk_version: ">=0.1,<0.2"
 language: python
 entrypoint: "plugins.sources.amazfit:AmazfitSource"
@@ -14,16 +14,18 @@ emits:
 permissions:
   network: true
   secrets:
-    - AMAZFIT_EMAIL
-    - AMAZFIT_PASSWORD
+    - AMAZFIT_APP_TOKEN
+    - AMAZFIT_USER_ID
     - AMAZFIT_REGION
     - HDH_TOKEN_ENC_KEY
   capabilities:
     - name: "write:oauth_tokens"
-      description: "Persist the Zepp/huami app_token (and re-login when it expires)."
+      description: "Persist the operator-imported Zepp app_token (re-imported on expiry)."
     - name: "write:measurements"
       description: "Insert heart rate, SpO2, sleep, stress, and daily activity rows into the per-metric Timescale tables."
-    - name: "network:account.huami.com"
-      description: "Outbound HTTPS for the huami-token login + token-exchange flow."
-    - name: "network:api-mifit-us2.huami.com"
-      description: "Outbound HTTPS for the Zepp data API (region-dependent host)."
+    - name: "network:api-mifit-us3.zepp.com"
+      description: "Outbound HTTPS for the US-region Zepp data API."
+    - name: "network:api-mifit-de.zepp.com"
+      description: "Outbound HTTPS for the EU-region Zepp data API."
+    - name: "network:api-mifit.zepp.com"
+      description: "Outbound HTTPS for the CN-region Zepp data API."
