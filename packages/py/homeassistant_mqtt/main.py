@@ -13,6 +13,7 @@ from storage.timescale.homeassistant import TimescaleHealthSnapshotRepository
 from .bridge import (
     build_availability_message,
     build_discovery_messages,
+    build_legacy_availability_messages,
     build_source_discovery_messages,
     build_source_state_message,
     build_state_messages,
@@ -61,7 +62,10 @@ async def run() -> None:
     publisher = PahoMQTTPublisher(bridge_config.mqtt)
     publisher.connect()
     specs = sensor_specs_for_config(bridge_config.mqtt)
-    publisher.publish_many([build_availability_message(bridge_config.mqtt)])
+    publisher.publish_many(
+        [build_availability_message(bridge_config.mqtt)]
+        + build_legacy_availability_messages(bridge_config.mqtt)
+    )
     publisher.publish_many(build_discovery_messages(bridge_config.mqtt, specs))
     log.info(
         "Home Assistant MQTT bridge publishing %s sensors to broker=%s port=%s prefix=%s",

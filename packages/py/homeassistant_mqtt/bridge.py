@@ -89,10 +89,13 @@ def sensor_specs_for_config(config: HomeAssistantMQTTConfig) -> list[SensorSpec]
     entities until their dashboards are migrated.
     """
 
-    return _sensor_specs(
+    specs = _sensor_specs(
         entity_prefix=_topic_part(config.state_topic_prefix),
         display_name=config.device_name,
     )
+    if _topic_part(config.state_topic_prefix) == "healthtrack":
+        specs.extend(_legacy_healthtrack_specs(config.device_name))
+    return specs
 
 
 def _sensor_specs(entity_prefix: str, display_name: str) -> list[SensorSpec]:
@@ -141,6 +144,83 @@ def _sensor_specs(entity_prefix: str, display_name: str) -> list[SensorSpec]:
             entity_id=f"sensor.{prefix}_room_health_state",
             name=f"{name} Room State",
             icon="mdi:home-heart",
+        ),
+    ]
+
+
+def _legacy_healthtrack_specs(display_name: str) -> list[SensorSpec]:
+    name = display_name.strip() or "HealthTrack"
+    return [
+        SensorSpec(
+            key="hrv",
+            entity_id="sensor.healthtrack_hrv",
+            name=f"{name} HRV",
+            unit="ms",
+            state_class="measurement",
+            icon="mdi:heart-flash",
+        ),
+        SensorSpec(
+            key="steps",
+            entity_id="sensor.healthtrack_steps",
+            name=f"{name} Steps",
+            unit="steps",
+            state_class="total",
+            icon="mdi:shoe-print",
+        ),
+        SensorSpec(
+            key="active_calories",
+            entity_id="sensor.healthtrack_active_calories",
+            name=f"{name} Active Calories",
+            unit="kcal",
+            state_class="total",
+            icon="mdi:fire",
+        ),
+        SensorSpec(
+            key="blood_oxygen",
+            entity_id="sensor.healthtrack_blood_oxygen",
+            name=f"{name} Blood Oxygen",
+            unit="%",
+            state_class="measurement",
+            icon="mdi:water-percent",
+        ),
+        SensorSpec(
+            key="recovery_score",
+            entity_id="sensor.healthtrack_recovery_score",
+            name=f"{name} Recovery Score",
+            unit="%",
+            state_class="measurement",
+            icon="mdi:medal",
+        ),
+        SensorSpec(
+            key="sleep_duration",
+            entity_id="sensor.healthtrack_sleep_duration",
+            name=f"{name} Sleep Duration",
+            unit="h",
+            state_class="measurement",
+            icon="mdi:sleep",
+        ),
+        SensorSpec(
+            key="sleep_efficiency",
+            entity_id="sensor.healthtrack_sleep_efficiency",
+            name=f"{name} Sleep Efficiency",
+            unit="%",
+            state_class="measurement",
+            icon="mdi:sleep",
+        ),
+        SensorSpec(
+            key="resting_heart_rate",
+            entity_id="sensor.healthtrack_resting_heart_rate",
+            name=f"{name} Resting Heart Rate",
+            unit="bpm",
+            state_class="measurement",
+            icon="mdi:heart-pulse",
+        ),
+        SensorSpec(
+            key="strain",
+            entity_id="sensor.healthtrack_strain",
+            name=f"{name} Strain",
+            state_class="measurement",
+            icon="mdi:arm-flex",
         ),
     ]
 
@@ -222,6 +302,12 @@ def build_state_messages(
 
 def build_availability_message(config: HomeAssistantMQTTConfig) -> MQTTMessage:
     return (availability_topic(config), "online", True)
+
+
+def build_legacy_availability_messages(config: HomeAssistantMQTTConfig) -> list[MQTTMessage]:
+    if _topic_part(config.state_topic_prefix) != "healthtrack":
+        return []
+    return [(f"{config.state_topic_prefix.rstrip('/')}/availability", "online", True)]
 
 
 # ──────────────────────────────────────────────────────────────────────

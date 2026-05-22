@@ -35,6 +35,15 @@ class HealthSnapshot:
     last_sleep_hours: float | None
     source_model: str
     room_health_state: str | None
+    hrv: float | None = None
+    steps: int | None = None
+    active_calories: int | None = None
+    blood_oxygen: float | None = None
+    recovery_score: int | None = None
+    sleep_duration: float | None = None
+    sleep_efficiency: float | None = None
+    resting_heart_rate: int | None = None
+    strain: float | None = None
 
 
 @dataclass(frozen=True)

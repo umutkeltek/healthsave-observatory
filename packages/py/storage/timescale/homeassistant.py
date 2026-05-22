@@ -28,7 +28,21 @@ class TimescaleHealthSnapshotRepository:
                         """
                         SELECT bpm
                         FROM heart_rate
-                        WHERE time > now() - interval '24 hours'
+                        ORDER BY time DESC
+                        LIMIT 1
+                        """
+                    )
+                )
+            ).scalar_one_or_none()
+        )
+        resting_heart_rate = int_or_none(
+            (
+                await session.execute(
+                    text(
+                        """
+                        SELECT bpm
+                        FROM heart_rate
+                        WHERE context = 'resting'
                         ORDER BY time DESC
                         LIMIT 1
                         """
@@ -50,6 +64,21 @@ class TimescaleHealthSnapshotRepository:
             ).scalar_one_or_none(),
             1,
         )
+        hrv = round_float(
+            (
+                await session.execute(
+                    text(
+                        """
+                        SELECT value_ms
+                        FROM hrv
+                        ORDER BY time DESC
+                        LIMIT 1
+                        """
+                    )
+                )
+            ).scalar_one_or_none(),
+            1,
+        )
         steps_today = int_or_none(
             (
                 await session.execute(
@@ -58,6 +87,21 @@ class TimescaleHealthSnapshotRepository:
                         SELECT steps
                         FROM daily_activity
                         WHERE date = current_date
+                        ORDER BY date DESC
+                        LIMIT 1
+                        """
+                    )
+                )
+            ).scalar_one_or_none()
+        )
+        active_calories = int_or_none(
+            (
+                await session.execute(
+                    text(
+                        """
+                        SELECT active_calories
+                        FROM daily_activity
+                        WHERE active_calories IS NOT NULL
                         ORDER BY date DESC
                         LIMIT 1
                         """
@@ -80,6 +124,70 @@ class TimescaleHealthSnapshotRepository:
             ).scalar_one_or_none(),
             2,
         )
+        sleep_efficiency = round_float(
+            (
+                await session.execute(
+                    text(
+                        """
+                        SELECT CASE
+                          WHEN (total_duration_ms + COALESCE(awake_ms, 0)) > 0
+                          THEN total_duration_ms::float
+                            / (total_duration_ms + COALESCE(awake_ms, 0)) * 100.0
+                        END
+                        FROM sleep_sessions
+                        ORDER BY start_time DESC
+                        LIMIT 1
+                        """
+                    )
+                )
+            ).scalar_one_or_none(),
+            1,
+        )
+        blood_oxygen = round_float(
+            (
+                await session.execute(
+                    text(
+                        """
+                        SELECT spo2_pct
+                        FROM blood_oxygen
+                        ORDER BY time DESC
+                        LIMIT 1
+                        """
+                    )
+                )
+            ).scalar_one_or_none(),
+            1,
+        )
+        recovery_score = int_or_none(
+            (
+                await session.execute(
+                    text(
+                        """
+                        SELECT score
+                        FROM recovery
+                        ORDER BY time DESC
+                        LIMIT 1
+                        """
+                    )
+                )
+            ).scalar_one_or_none()
+        )
+        strain = round_float(
+            (
+                await session.execute(
+                    text(
+                        """
+                        SELECT value
+                        FROM quantity_samples
+                        WHERE metric_name = 'strain'
+                        ORDER BY time DESC
+                        LIMIT 1
+                        """
+                    )
+                )
+            ).scalar_one_or_none(),
+            1,
+        )
         source_model = (
             await session.execute(
                 text(
@@ -101,6 +209,15 @@ class TimescaleHealthSnapshotRepository:
             last_sleep_hours=last_sleep_hours,
             source_model=str(source_model),
             room_health_state=None,
+            hrv=hrv,
+            steps=steps_today,
+            active_calories=active_calories,
+            blood_oxygen=blood_oxygen,
+            recovery_score=recovery_score,
+            sleep_duration=last_sleep_hours,
+            sleep_efficiency=sleep_efficiency,
+            resting_heart_rate=resting_heart_rate,
+            strain=strain,
         )
         return HealthSnapshot(
             collected_at=snapshot.collected_at,
@@ -110,6 +227,15 @@ class TimescaleHealthSnapshotRepository:
             last_sleep_hours=snapshot.last_sleep_hours,
             source_model=snapshot.source_model,
             room_health_state=derive_room_health_state(snapshot),
+            hrv=snapshot.hrv,
+            steps=snapshot.steps,
+            active_calories=snapshot.active_calories,
+            blood_oxygen=snapshot.blood_oxygen,
+            recovery_score=snapshot.recovery_score,
+            sleep_duration=snapshot.sleep_duration,
+            sleep_efficiency=snapshot.sleep_efficiency,
+            resting_heart_rate=snapshot.resting_heart_rate,
+            strain=snapshot.strain,
         )
 
     async def fetch_snapshots_by_source(self, session: AsyncSession) -> list[SourceHealthSnapshot]:
