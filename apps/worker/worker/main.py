@@ -25,6 +25,7 @@ from analysis.scheduler import AnalysisScheduler
 from server.db.session import async_session, engine
 
 from .listener import listener_event_mask, make_listener
+from .sources import register_whoop_poll
 
 log = logging.getLogger("healthsave.worker")
 
@@ -52,6 +53,24 @@ async def run() -> None:
         )
         log.info("pipeline_runs ledger listener attached (leased_by=%s)", leased_by)
 
+    # Source-plugin polls (Phase 7-pre). Env-gated: set WHOOP_POLL_CRON
+    # to a crontab expression to enable the Whoop poll on this worker.
+    # If analysis jobs are all disabled, scheduler.scheduler is None —
+    # spin up a standalone AsyncIOScheduler so the source polls still
+    # run. Stored on the AnalysisScheduler wrapper so shutdown reaches it.
+    source_scheduler = None
+    whoop_cron = os.environ.get("WHOOP_POLL_CRON")
+    if whoop_cron:
+        if scheduler.scheduler is not None:
+            register_whoop_poll(scheduler.scheduler, async_session, cron=whoop_cron)
+        else:
+            from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+            source_scheduler = AsyncIOScheduler()
+            register_whoop_poll(source_scheduler, async_session, cron=whoop_cron)
+            source_scheduler.start()
+            log.info("source-only AsyncIOScheduler started (analysis jobs all disabled)")
+
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -62,6 +81,8 @@ async def run() -> None:
     finally:
         log.info("worker stopping")
         scheduler.shutdown()
+        if source_scheduler is not None:
+            source_scheduler.shutdown(wait=False)
         await engine.dispose()
 
 
