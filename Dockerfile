@@ -14,11 +14,13 @@ COPY apps/worker/worker/ ./worker/
 COPY packages/py/analysis/ ./analysis/
 COPY packages/py/compat_v1/ ./compat_v1/
 COPY packages/py/contracts/ ./contracts/
+COPY packages/py/db/ ./db/
 COPY packages/py/plugin_sdk/ ./plugin_sdk/
 COPY packages/py/homeassistant_mqtt/ ./homeassistant_mqtt/
 COPY packages/py/runtime/ ./runtime/
 COPY packages/py/storage/ ./storage/
 COPY plugins/ ./plugins/
+COPY db/migrations/ ./db/migrations/
 COPY scripts/ ./scripts/
 
 USER appuser

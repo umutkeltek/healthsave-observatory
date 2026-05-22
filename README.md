@@ -460,17 +460,24 @@ minimal audit trail and a useful starting point if you ever need replay tooling.
 ### Updating Existing Installs
 
 Fresh installs load `db/schema.sql` automatically. Existing Docker volumes keep
-their original schema, so apply migrations manually when upgrading:
+their original schema, so the Compose stack runs the migration service before
+the API, worker, agents, or Home Assistant bridge start:
 
 ```bash
-docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/001_audit_hardening.sql
-docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/002_analysis_tables.sql
-docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/003_multi_user.sql
-docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/004_pipeline_runs.sql
-docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/005_analysis_owner.sql
-docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/006_agent_runtime.sql
-docker compose exec -T db psql -U healthsave -d healthsave < db/migrations/007_healthsave_sync_receipts.sql
+docker compose up -d --build
 ```
+
+To run the same migration pass explicitly:
+
+```bash
+docker compose run --rm migrate
+```
+
+The runner records applied files in `schema_migrations`, so re-runs are safe.
+Migration files still live in `db/migrations/` for review and manual recovery.
+The current set starts at `db/migrations/001_audit_hardening.sql` and includes
+later additive upgrades such as `db/migrations/002_analysis_tables.sql` and
+`db/migrations/008_oauth_tokens.sql`; files apply in filename order.
 
 ### Multi-user / Household
 

@@ -17,12 +17,24 @@ services:
       timeout: 5s
       retries: 5
 
+  migrate:
+    build: .
+    command: ["python", "-m", "scripts.migrate"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:-changeme}@db:5432/healthsave
+
   api:
     build: .
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:-changeme}@db:5432/healthsave
       API_KEY: ${API_KEY:-}
@@ -51,6 +63,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:-changeme}@db:5432/healthsave
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
@@ -81,6 +95,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:-changeme}@db:5432/healthsave
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
@@ -101,6 +117,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:-changeme}@db:5432/healthsave
       HA_MQTT_ENABLED: ${HA_MQTT_ENABLED:-false}

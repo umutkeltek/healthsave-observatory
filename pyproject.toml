@@ -89,6 +89,7 @@ include = [
     "auth*",
     "compat_v1*",
     "contracts*",
+    "db*",
     "runtime*",
     "homeassistant_mqtt*",
     "storage*",
