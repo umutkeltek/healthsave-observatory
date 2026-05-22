@@ -13,6 +13,8 @@ from storage.timescale.homeassistant import TimescaleHealthSnapshotRepository
 from .bridge import (
     build_availability_message,
     build_discovery_messages,
+    build_source_discovery_messages,
+    build_source_state_message,
     build_state_messages,
     default_sensor_specs,
 )
@@ -25,12 +27,28 @@ log = logging.getLogger("healthsave.homeassistant_mqtt")
 async def publish_once(
     repository: TimescaleHealthSnapshotRepository, publisher: PahoMQTTPublisher
 ) -> None:
-    """Fetch one DB snapshot and publish retained HA state messages."""
+    """Fetch one aggregate + per-source snapshot pass and publish them.
+
+    P5-d: in addition to the aggregate-device state on
+    ``<prefix>/sensor/state``, we now also publish one retained-state
+    payload per active source on ``<prefix>/source/<slug>/state``.
+    Discovery messages for each source go out the same cycle so HA
+    picks up newly-appeared sources without needing a separate startup
+    event — retained means HA only re-processes when payload changes.
+    """
 
     specs = default_sensor_specs()
     async with async_session() as session:
         snapshot = await repository.fetch_snapshot(session)
+        source_snapshots = await repository.fetch_snapshots_by_source(session)
+
+    # Aggregate parent device — unchanged behaviour for backward-compat.
     publisher.publish_many(build_state_messages(publisher.config, specs, snapshot))
+
+    # Per-source sub-devices.
+    for source in source_snapshots:
+        publisher.publish_many(build_source_discovery_messages(publisher.config, source))
+        publisher.publish_many([build_source_state_message(publisher.config, source)])
 
 
 async def run() -> None:
