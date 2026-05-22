@@ -1,7 +1,25 @@
-"""Pure snapshot helpers for the Home Assistant MQTT bridge."""
+"""Pure snapshot helpers for the Home Assistant MQTT bridge.
+
+Two snapshot shapes coexist:
+
+  * :class:`HealthSnapshot` — the legacy aggregate snapshot (one row of
+    latest-across-all-sources values). The current bridge consumes this
+    and publishes one HA device.
+  * :class:`SourceHealthSnapshot` — per-``source_id`` latest values for
+    the metrics that actually carry source attribution (``heart_rate``,
+    ``hrv``). The forthcoming source-aware bridge consumes a list of
+    these and publishes one HA sub-device per source via the
+    ``via_device`` pattern.
+
+``source_slug`` normalizes free-form source labels (``"Apple Watch"``,
+``"Umut's iPhone"``) into MQTT-topic-safe slugs (``"apple_watch"``,
+``"umut_s_iphone"``). The bridge feeds the slug into both the discovery
+topic and the per-source state topic so HA picks up a clean entity id.
+"""
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -17,6 +35,61 @@ class HealthSnapshot:
     last_sleep_hours: float | None
     source_model: str
     room_health_state: str | None
+
+
+@dataclass(frozen=True)
+class SourceHealthSnapshot:
+    """Latest values for one ``source_id`` across source-tagged metrics.
+
+    Only metrics that carry ``source_id`` natively at the schema level
+    are split per source — ``heart_rate`` and ``hrv``. ``steps_today``
+    and ``last_sleep_hours`` come from tables (``daily_activity``,
+    ``sleep_sessions``) keyed on ``device_id`` rather than
+    ``source_id``, so they remain on the aggregate :class:`HealthSnapshot`.
+    The HA-side mapping mirrors this split: per-source sub-devices emit
+    HR + HRV; the parent ``healthsave`` device emits the rest.
+    """
+
+    collected_at: datetime
+    source_id: str
+    heart_rate: int | None
+    hrv_latest_ms: float | None
+
+    @property
+    def slug(self) -> str:
+        """MQTT/HA-topic-safe identifier derived from ``source_id``."""
+
+        return source_slug(self.source_id)
+
+
+_SLUG_NON_ALNUM = re.compile(r"[^a-z0-9]+")
+_SLUG_DEDUP = re.compile(r"_+")
+
+
+def source_slug(source_id: str | None) -> str:
+    """Normalize a free-form source label into a slug safe for MQTT
+    topics + HA entity ids.
+
+      * Lowercase.
+      * Any non-alphanumeric run collapses to a single ``_``.
+      * Leading and trailing ``_`` stripped.
+      * Empty / None / whitespace-only -> ``"unknown"``.
+
+    >>> source_slug("Apple Watch")
+    'apple_watch'
+    >>> source_slug("Umut's iPhone")
+    'umut_s_iphone'
+    >>> source_slug(None)
+    'unknown'
+    """
+    if not source_id:
+        return "unknown"
+    lowered = source_id.lower().strip()
+    if not lowered:
+        return "unknown"
+    cleaned = _SLUG_NON_ALNUM.sub("_", lowered)
+    cleaned = _SLUG_DEDUP.sub("_", cleaned).strip("_")
+    return cleaned or "unknown"
 
 
 def latest_non_null(rows: Sequence[Sequence[Any]], default: Any = None) -> Any:
