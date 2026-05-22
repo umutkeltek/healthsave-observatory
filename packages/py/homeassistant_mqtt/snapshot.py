@@ -39,21 +39,25 @@ class HealthSnapshot:
 
 @dataclass(frozen=True)
 class SourceHealthSnapshot:
-    """Latest values for one ``source_id`` across source-tagged metrics.
+    """Latest values for one ``source_id`` across all source-tagged metrics.
 
-    Only metrics that carry ``source_id`` natively at the schema level
-    are split per source — ``heart_rate`` and ``hrv``. ``steps_today``
-    and ``last_sleep_hours`` come from tables (``daily_activity``,
-    ``sleep_sessions``) keyed on ``device_id`` rather than
-    ``source_id``, so they remain on the aggregate :class:`HealthSnapshot`.
-    The HA-side mapping mirrors this split: per-source sub-devices emit
-    HR + HRV; the parent ``healthsave`` device emits the rest.
+    Migration 009 added ``source_id`` to ``daily_activity`` and
+    ``sleep_sessions`` so every primary metric (HR, HRV, steps, sleep)
+    can be queried per source. The HA-side mapping: one sub-device per
+    distinct source slug emits all four metrics.
+
+    A field is ``None`` when the source has no recent row for that
+    metric — common for body-comp scales (steps only), iPhones (HR but
+    no sleep), etc. The bridge skips ``None`` values when building
+    state payloads so HA never receives a stale or zero entity.
     """
 
     collected_at: datetime
     source_id: str
     heart_rate: int | None
     hrv_latest_ms: float | None
+    steps_today: int | None = None
+    last_sleep_hours: float | None = None
 
     @property
     def slug(self) -> str:
