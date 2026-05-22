@@ -97,14 +97,10 @@ services:
   # its configured interval. Empty allowlist by default — opt-in only.
   # No port exposed; counters increment in-process. Same image as api/worker.
   #
-  # Profile-gated (`agents`): not started by default because (a) Phase 7-C is
-  # still landing — the Dockerfile does not yet COPY apps/agents/agents/ into
-  # /app/, so `python -m agents.main` raises ModuleNotFoundError on boot, and
-  # (b) the supervisor is LLM-bound and apps-vm intentionally runs with
-  # LLM_PROVIDER=disabled (no GPU). The intended home is a GPU host (fedora-pc
-  # + Ollama) reached over LAN. Re-enable explicitly with
-  # `docker compose --profile agents up -d agents` once both blockers are
-  # cleared.
+  # Profile-gated (`agents`): not started by default because autonomous agent
+  # loops should be an explicit operator choice. With the default empty
+  # `agents.enabled` allowlist, the service idles; enable concrete agent ids in
+  # config.yaml before running `docker compose --profile agents up -d agents`.
   agents:
     build: .
     command: ["python", "-m", "agents.main"]

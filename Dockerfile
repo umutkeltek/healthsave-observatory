@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY apps/api/server/ ./server/
 COPY apps/worker/worker/ ./worker/
+COPY apps/agents/agents/ ./agents/
 COPY packages/py/analysis/ ./analysis/
 COPY packages/py/auth/ ./auth/
 COPY packages/py/compat_v1/ ./compat_v1/
