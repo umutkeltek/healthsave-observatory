@@ -48,6 +48,23 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+def _sample_source(sample: dict) -> str | None:
+    """Extract the source label from a HealthKit-shaped sample.
+
+    HealthSave iOS / Health Sync / Garmin / Whoop normalizers all use
+    one of ``source`` / ``sourceName`` / ``source_id`` / ``device`` /
+    ``deviceName`` to carry the device-or-app label. Stored as
+    ``source_id`` in the metric tables.
+    """
+    value = first_present(
+        sample, "source", "sourceName", "source_id", "device", "deviceName", "device_id"
+    )
+    if value is None:
+        return None
+    text_value = str(value).strip()
+    return text_value or None
+
+
 def _bump_rejected(metric: str, reason: str) -> None:
     """Phase 5G: surface silent sample rejections.
 
@@ -259,6 +276,9 @@ async def _ingest_activity(
         for src_key, dst_col in ACTIVITY_FIELDS.items():
             if src_key in s:
                 row[dst_col] = s[src_key]
+        source_id = _sample_source(s)
+        if source_id is not None:
+            row["source_id"] = source_id
 
         cols = ", ".join(row.keys())
         vals = ", ".join(f":{k}" for k in row)
@@ -296,17 +316,20 @@ async def _ingest_daily_quantity(
             _bump_rejected(metric, "missing_or_unparseable_date_or_qty")
             continue
 
+        source_id = _sample_source(sample)
         await session.execute(
             text(f"""
-                INSERT INTO daily_activity (date, device_id, owner_id, {column})
-                VALUES (:date, :device_id, :owner_id, :{column})
+                INSERT INTO daily_activity (date, device_id, owner_id, source_id, {column})
+                VALUES (:date, :device_id, :owner_id, :source_id, :{column})
                 ON CONFLICT (date, device_id, owner_id) DO UPDATE
-                SET {column} = EXCLUDED.{column}
+                SET {column} = EXCLUDED.{column},
+                    source_id = COALESCE(EXCLUDED.source_id, daily_activity.source_id)
             """),
             {
                 "date": d,
                 "device_id": device_id,
                 "owner_id": str(owner_id),
+                "source_id": source_id,
                 column: value,
             },
         )
@@ -383,6 +406,7 @@ def sleep_stage_segments(samples: list[dict]) -> list[dict]:
                 "start": start,
                 "end": end,
                 "stage": str(first_present(sample, "value", "stage") or "").strip().lower(),
+                "source": _sample_source(sample),
             }
         )
 
@@ -444,6 +468,13 @@ def sleep_session_rows(device_id: int, samples: list[dict]) -> list[dict]:
         total_duration_ms = session["deep_ms"] + session["rem_ms"] + session["light_ms"]
         if total_duration_ms == 0 and session["awake_ms"] == 0:
             continue
+        # Pick the first non-null source from the session's segments.
+        # In practice all segments share a source (single watch logging
+        # one night of sleep); this guards against mixed-source noise.
+        source_id = next(
+            (seg.get("source") for seg in session["segments"] if seg.get("source")),
+            None,
+        )
         rows.append(
             {
                 "device_id": device_id,
@@ -455,6 +486,7 @@ def sleep_session_rows(device_id: int, samples: list[dict]) -> list[dict]:
                 "light": session["light_ms"],
                 "awake": session["awake_ms"],
                 "rr": None,
+                "source_id": source_id,
                 "segments": session["segments"],
             }
         )
@@ -463,12 +495,13 @@ def sleep_session_rows(device_id: int, samples: list[dict]) -> list[dict]:
 
 async def _upsert_sleep_session(session: AsyncSession, row: dict) -> int:
     row.setdefault("owner_id", str(DEFAULT_OWNER_ID))
+    row.setdefault("source_id", None)
     result = await session.execute(
         text("""
             INSERT INTO sleep_sessions (device_id, start_time, end_time, total_duration_ms,
-                deep_ms, rem_ms, light_ms, awake_ms, respiratory_rate, owner_id)
+                deep_ms, rem_ms, light_ms, awake_ms, respiratory_rate, owner_id, source_id)
             VALUES (:device_id, :start, :end, :total, :deep, :rem, :light, :awake, :rr,
-                :owner_id)
+                :owner_id, :source_id)
             ON CONFLICT (device_id, start_time, owner_id) DO UPDATE SET
                 end_time = EXCLUDED.end_time,
                 total_duration_ms = EXCLUDED.total_duration_ms,
@@ -476,7 +509,8 @@ async def _upsert_sleep_session(session: AsyncSession, row: dict) -> int:
                 rem_ms = EXCLUDED.rem_ms,
                 light_ms = EXCLUDED.light_ms,
                 awake_ms = EXCLUDED.awake_ms,
-                respiratory_rate = EXCLUDED.respiratory_rate
+                respiratory_rate = EXCLUDED.respiratory_rate,
+                source_id = COALESCE(EXCLUDED.source_id, sleep_sessions.source_id)
             RETURNING id
         """),
         row,
