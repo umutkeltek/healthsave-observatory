@@ -75,6 +75,7 @@ def test_source_plugin_docs_use_docker_safe_operator_commands():
 
 def test_config_example_uses_healthsave_home_assistant_defaults():
     config_text = (ROOT / "config.yaml.example").read_text()
+    compose_text = (ROOT / "docker-compose.yml").read_text()
     config = yaml.safe_load(config_text)
 
     mqtt = config["home_assistant"]["mqtt"]
@@ -82,6 +83,7 @@ def test_config_example_uses_healthsave_home_assistant_defaults():
     assert mqtt["device_identifier"] == "healthsave"
     assert mqtt["device_name"] == "HealthSave"
     assert "healthtrack_owl" not in config_text
+    assert "healthtrack_*" not in compose_text
 
 
 def test_remote_vm_deploy_docs_do_not_target_private_personal_stack():

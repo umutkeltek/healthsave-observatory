@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[1]
 DASHBOARDS = ROOT / "deploy" / "grafana" / "dashboards"
 
@@ -52,3 +54,10 @@ def test_heart_rate_dashboard_uses_bpm_column_not_legacy_value_column():
     ]
 
     assert offenders == []
+
+
+def test_grafana_service_receives_db_password_for_datasource_provisioning():
+    compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text())
+    grafana_env = compose["services"]["grafana"]["environment"]
+
+    assert grafana_env["DB_PASSWORD"] == "${DB_PASSWORD:-changeme}"
