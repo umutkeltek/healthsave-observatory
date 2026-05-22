@@ -63,10 +63,10 @@ SOURCE_TAG = "Amazfit"
 def _ts_to_dt(value: int | float | str) -> datetime | None:
     """Best-effort milliseconds-or-seconds Unix → UTC datetime.
 
-    Zepp's events tend to be in milliseconds; older personal_stack
-    references used seconds. We disambiguate by magnitude — values
-    above 2_000_000_000_000 (~Year 2033 in ms) are improbable as
-    seconds, so we treat ≥1e12 as ms.
+    Zepp's events tend to be in milliseconds; some historical exports
+    used seconds. We disambiguate by magnitude — values above
+    2_000_000_000_000 (~Year 2033 in ms) are improbable as seconds,
+    so we treat ≥1e12 as ms.
     """
     try:
         n = float(value)
@@ -112,7 +112,7 @@ def normalize_heart_rate(payload: dict[str, Any]) -> list[dict[str, Any]]:
     item is one of:
 
       * ``{"time": <ms>, "value": <bpm>}``  (modern Zepp shape)
-      * ``{"timestamp": <ms>, "bpm": <int>}``  (personal_stack 2024 hedge)
+      * ``{"timestamp": <ms>, "bpm": <int>}``  (legacy Zepp capture hedge)
 
     We accept either and skip items missing both. Items with bpm ``<=0``
     are dropped silently (Zepp emits 0 for "no reading").

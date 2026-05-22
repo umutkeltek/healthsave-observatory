@@ -12,8 +12,8 @@ Two snapshot shapes coexist:
     ``via_device`` pattern.
 
 ``source_slug`` normalizes free-form source labels (``"Apple Watch"``,
-``"Umut's iPhone"``) into MQTT-topic-safe slugs (``"apple_watch"``,
-``"umut_s_iphone"``). The bridge feeds the slug into both the discovery
+``"Alex's iPhone"``) into MQTT-topic-safe slugs (``"apple_watch"``,
+``"alex_s_iphone"``). The bridge feeds the slug into both the discovery
 topic and the per-source state topic so HA picks up a clean entity id.
 """
 
@@ -81,8 +81,8 @@ def source_slug(source_id: str | None) -> str:
 
     >>> source_slug("Apple Watch")
     'apple_watch'
-    >>> source_slug("Umut's iPhone")
-    'umut_s_iphone'
+    >>> source_slug("Alex's iPhone")
+    'alex_s_iphone'
     >>> source_slug(None)
     'unknown'
     """

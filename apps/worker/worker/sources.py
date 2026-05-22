@@ -37,8 +37,8 @@ log = logging.getLogger("healthsave.worker.sources")
 WHOOP_DEFAULT_CRON = "*/30 * * * *"
 
 # Amazfit / Zepp: same cadence as Whoop. Zepp does not publish a rate
-# limit; the legacy personal_stack scheduler ran hourly and we tighten
-# slightly for fresher data. Override via the AMAZFIT_POLL_CRON env var.
+# limit; a 30-minute cadence keeps single-account data fresh without
+# aggressive polling. Override via the AMAZFIT_POLL_CRON env var.
 AMAZFIT_DEFAULT_CRON = "*/30 * * * *"
 
 

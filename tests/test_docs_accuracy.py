@@ -102,6 +102,30 @@ def test_remote_vm_deploy_docs_do_not_target_private_personal_stack():
     assert "REMOTE_HOST=your-vm.example" in deploy_readme
 
 
+def test_runtime_docs_use_product_neutral_examples():
+    docs = [
+        ROOT / "apps" / "worker" / "worker" / "sources.py",
+        ROOT / "plugins" / "sources" / "amazfit" / "__init__.py",
+        ROOT / "plugins" / "sources" / "amazfit" / "normalize.py",
+        ROOT / "plugins" / "sources" / "amazfit" / "auth.py",
+        ROOT / "packages" / "py" / "homeassistant_mqtt" / "bridge.py",
+        ROOT / "packages" / "py" / "homeassistant_mqtt" / "snapshot.py",
+    ]
+    combined = "\n".join(path.read_text() for path in docs)
+
+    assert "personal_stack" not in combined
+    assert "Umut's" not in combined
+
+
+def test_ci_workflow_uses_node24_ready_action_majors():
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+
+    assert "actions/checkout@v6" in workflow
+    assert "actions/setup-python@v6" in workflow
+    assert "actions/checkout@v4" not in workflow
+    assert "actions/setup-python@v5" not in workflow
+
+
 def test_readme_and_bridge_list_shipped_importers():
     readme = (ROOT / "README.md").read_text()
     bridge = (ROOT / "BRIDGE.md").read_text()

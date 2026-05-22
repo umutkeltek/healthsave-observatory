@@ -40,8 +40,8 @@ class HomeAssistantMQTTConfig:
     username: str = ""
     password: str = ""
     discovery_prefix: str = "homeassistant"
-    # Rebranded from 'healthtrack' (the personal_stack-era prefix) to
-    # 'healthsave' on the datahub side. Env vars HA_MQTT_STATE_TOPIC_PREFIX
+    # Rebranded from the legacy 'healthtrack' prefix to 'healthsave' on
+    # the datahub side. Env vars HA_MQTT_STATE_TOPIC_PREFIX
     # / HA_MQTT_DEVICE_IDENTIFIER / HA_MQTT_DEVICE_NAME still override
     # so users on the legacy HA setup can pin the old shape.
     state_topic_prefix: str = "healthsave"
@@ -73,9 +73,8 @@ def default_sensor_specs() -> list[SensorSpec]:
 
     Source-aware sub-devices (per-source HR/HRV/steps/sleep) land in
     the P5-d bridge rewrite. P5-b keeps the wire shape the same and
-    only rebrands the entity_id + display-name strings from the
-    personal_stack-era ``healthtrack_*`` to the datahub-canonical
-    ``healthsave_*``.
+    only rebrands the entity_id + display-name strings from legacy
+    ``healthtrack_*`` to the datahub-canonical ``healthsave_*``.
     """
 
     return [
