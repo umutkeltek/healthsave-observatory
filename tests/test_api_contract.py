@@ -863,8 +863,9 @@ def test_readme_documents_existing_install_migration_flow():
 
     assert "db/migrations/001_audit_hardening.sql" in readme
     assert "db/migrations/002_analysis_tables.sql" in readme
-    assert "db/migrations/007_healthsave_sync_receipts.sql" in readme
-    assert "docker compose exec -T db psql" in readme
+    assert "db/migrations/" in readme
+    assert "docker compose run --rm migrate" in readme
+    assert "schema_migrations" in readme
 
 
 def test_phase_7a_agent_runtime_tables_declared_in_schema_and_migration():
