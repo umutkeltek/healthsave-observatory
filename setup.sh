@@ -306,6 +306,22 @@ AMAZFIT_APP_TOKEN=
 AMAZFIT_USER_ID=
 AMAZFIT_REGION=us
 AMAZFIT_POLL_CRON=
+
+# Optional Home Assistant MQTT bridge. Leave disabled unless you want
+# retained MQTT discovery + state topics for Home Assistant. Use
+# --profile home-assistant, and optionally --profile mosquitto for the
+# bundled broker.
+HA_MQTT_ENABLED=false
+HA_MQTT_BROKER=mqtt
+HA_MQTT_PORT=1883
+HA_MQTT_USERNAME=
+HA_MQTT_PASSWORD=
+HA_MQTT_DISCOVERY_PREFIX=homeassistant
+HA_MQTT_STATE_TOPIC_PREFIX=healthsave
+HA_MQTT_DEVICE_IDENTIFIER=healthsave
+HA_MQTT_DEVICE_NAME=HealthSave
+HA_MQTT_PUBLISH_INTERVAL_SECONDS=60
+MOSQUITTO_PORT=1883
 EOF
     chmod 600 "$ENV_FILE" 2>/dev/null || true
 }
