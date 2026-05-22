@@ -24,8 +24,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "worker"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "py"))
 
 from worker.sources import (  # noqa: E402
+    AMAZFIT_DEFAULT_CRON,
     WHOOP_DEFAULT_CRON,
+    make_amazfit_poll,
     make_whoop_poll,
+    register_amazfit_poll,
     register_whoop_poll,
 )
 
@@ -81,5 +84,48 @@ def test_make_whoop_poll_returns_an_async_callable():
     import inspect
 
     job = make_whoop_poll(session_factory=lambda: None)
+    assert callable(job)
+    assert inspect.iscoroutinefunction(job)
+
+
+# ─── Amazfit ────────────────────────────────────────────────────────────
+
+
+def test_register_amazfit_poll_uses_default_cron_when_not_overridden():
+    scheduler = _RecordingScheduler()
+    register_amazfit_poll(scheduler, session_factory=lambda: None)
+    assert len(scheduler.add_job_calls) == 1
+    call = scheduler.add_job_calls[0]
+    assert call["kwargs"]["id"] == "amazfit_poll"
+    assert call["kwargs"]["max_instances"] == 1
+    assert call["kwargs"]["coalesce"] is True
+    assert call["kwargs"]["replace_existing"] is True
+    from apscheduler.triggers.cron import CronTrigger
+
+    assert isinstance(call["trigger"], CronTrigger)
+
+
+def test_register_amazfit_poll_honors_custom_cron_and_job_id():
+    scheduler = _RecordingScheduler()
+    register_amazfit_poll(
+        scheduler,
+        session_factory=lambda: None,
+        cron="0 */6 * * *",
+        job_id="amazfit_poll_custom",
+    )
+    call = scheduler.add_job_calls[0]
+    assert call["kwargs"]["id"] == "amazfit_poll_custom"
+
+
+def test_amazfit_default_cron_is_a_valid_crontab_expression():
+    from apscheduler.triggers.cron import CronTrigger
+
+    CronTrigger.from_crontab(AMAZFIT_DEFAULT_CRON)
+
+
+def test_make_amazfit_poll_returns_an_async_callable():
+    import inspect
+
+    job = make_amazfit_poll(session_factory=lambda: None)
     assert callable(job)
     assert inspect.iscoroutinefunction(job)
