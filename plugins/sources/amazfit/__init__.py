@@ -28,12 +28,13 @@ Auth flow (H-revise, supersedes P6-a):
      stores per-metric rows. No re-login attempts. Plaintext password
      never enters the long-running services.
 
-Status — H-revise scaffold:
+Status — H-ingest:
 
   * Manifest declares outbound network + secrets + emit list (secrets
     updated: AMAZFIT_APP_TOKEN + AMAZFIT_USER_ID, no more EMAIL/PASSWORD).
-  * AmazfitSource shell raises NotImplementedError on ingest until the
-    H-ingest commit lands the fetch + normalize + write loop.
+  * AmazfitSource.ingest loads the encrypted app_token, fetches paginated
+    Zepp data, normalizes rows, and writes through the shared IngestStorage
+    protocol.
   * :mod:`plugins.sources.amazfit.auth` carries the token-import helpers
     (token_from_app_token_string, token_from_huami_token_output, token_from_env).
   * H-fetch adds the paginated fetchers against ``api-mifit-us3.zepp.com``.

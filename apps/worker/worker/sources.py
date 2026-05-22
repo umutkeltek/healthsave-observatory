@@ -1,8 +1,7 @@
 """Source-plugin poll registration for the worker scheduler.
 
-Source plugins (Whoop, Amazfit next, future) are poll-based: the
-worker invokes their ``ingest()`` on a cron schedule. This module
-exposes:
+Source plugins such as Whoop and Amazfit are poll-based: the worker
+invokes their ``ingest()`` on a cron schedule. This module exposes:
 
   * :func:`make_whoop_poll` — builds the awaitable APScheduler invokes
     each tick. Opens a session, instantiates an httpx client + an
@@ -13,12 +12,14 @@ exposes:
     with ``max_instances=1`` + ``coalesce=True`` (Whoop polls overlap
     safely thanks to dedup unique indexes, but we still avoid
     backed-up duplicates).
+  * :func:`register_amazfit_poll` — adds the Zepp/Amazfit token-based
+    poll job with the same scheduler discipline.
 
 The wiring in :mod:`worker.main` is intentionally env-gated
-(``WHOOP_POLL_CRON``) rather than config.yaml-gated for v1 — the
-analysis config schema does not yet have a sources section. A future
-slice can lift this into the config layer once the source surface
-stabilises.
+(``WHOOP_POLL_CRON`` / ``AMAZFIT_POLL_CRON``) rather than
+config.yaml-gated for v1 — the analysis config schema does not yet
+have a sources section. A future slice can lift this into the config
+layer once the source surface stabilises.
 """
 
 from __future__ import annotations
