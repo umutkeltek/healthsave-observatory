@@ -110,18 +110,31 @@ def test_whoop_plugin_discovered_under_plugins_dir():
 
 
 @pytest.mark.asyncio
-async def test_whoop_ingest_is_not_implemented_in_p1():
-    """The P1 scaffold MUST raise NotImplementedError on ingest.
+async def test_whoop_ingest_returns_zero_when_no_token_stored():
+    """P2 contract: a no-token poll is a clean no-op, not an error.
 
-    This pin prevents an accidental scheduler wire-up before P2 ships
-    the fetch + normalization. When P2 lands this test deletes.
+    The worker calls ingest on a schedule. Before the operator runs the
+    authorize CLI, there is no token. The plugin logs and returns
+    {"accepted": 0, "rejected": 0} so the worker can run forever and
+    just start ingesting once the token lands.
     """
     from plugins.sources.whoop import WhoopSource
 
+    class _NoTokenStore:
+        async def get_token(self, session, *, provider, owner_id):
+            return None
+
     manifest = load_manifest(PLUGIN_DIR / "plugin.yaml")
     plugin = WhoopSource(manifest)
-    with pytest.raises(NotImplementedError):
-        await plugin.ingest({})
+    result = await plugin.ingest(
+        {
+            "storage": object(),
+            "session": object(),
+            "http_client": object(),
+            "token_store": _NoTokenStore(),
+        }
+    )
+    assert result == {"accepted": 0, "rejected": 0}
 
 
 # ──────────────────────────────────────────────────────────────────────
