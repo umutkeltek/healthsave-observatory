@@ -1,0 +1,986 @@
+{
+  "uid": "heart-cardio",
+  "title": "Heart & Cardiovascular",
+  "tags": ["health", "heart", "cardio"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-30d", "to": "now" },
+  "refresh": "5m",
+  "fiscalYearStartMonth": 0,
+  "liveNow": false,
+  "editable": true,
+  "graphTooltip": 1,
+  "style": "dark",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Latest Resting HR",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+          "rawSql": "SELECT bpm FROM heart_rate WHERE context='resting' AND device_id IN ($device) AND source_id IN ($source) ORDER BY time DESC LIMIT 1",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bpm",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "#73BF69", "value": 50 },
+              { "color": "green", "value": 55 },
+              { "color": "yellow", "value": 75 },
+              { "color": "red", "value": 90 }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "wideLayout": true,
+        "colorMode": "background_solid",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "title": "Latest HRV",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+          "rawSql": "SELECT value_ms::int FROM hrv WHERE device_id IN ($device) ORDER BY time DESC LIMIT 1",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 20 },
+              { "color": "yellow", "value": 40 },
+              { "color": "green", "value": 60 },
+              { "color": "super-light-green", "value": 100 }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "wideLayout": true,
+        "colorMode": "background_solid",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "title": "Avg HR (24h)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+          "rawSql": "SELECT avg(bpm)::int FROM heart_rate WHERE time > now() - interval '24 hours' AND device_id IN ($device) AND source_id IN ($source)",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bpm",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null },
+              { "color": "green", "value": 55 },
+              { "color": "yellow", "value": 85 },
+              { "color": "red", "value": 110 }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "wideLayout": true,
+        "colorMode": "background_solid",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Max HR (24h)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+          "rawSql": "SELECT max(bpm) FROM heart_rate WHERE time > now() - interval '24 hours' AND device_id IN ($device) AND source_id IN ($source)",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bpm",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 140 },
+              { "color": "orange", "value": 170 },
+              { "color": "red", "value": 190 }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "wideLayout": true,
+        "colorMode": "background_solid",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "title": "Heart Rate Timeline",
+      "description": "Heart rate over time, colored by context (resting, walking, continuous)",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 4 },
+      "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+          "rawSql": "SELECT time, bpm, context FROM heart_rate WHERE $__timeFilter(time) AND device_id IN ($device) AND source_id IN ($source) ORDER BY time",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bpm",
+          "min": 40,
+          "max": 200,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "gradientMode": "scheme",
+            "pointSize": 3,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisLabel": "BPM",
+            "axisPlacement": "auto",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "transparent", "value": null },
+              { "color": "red", "value": 170 }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "resting" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#73BF69" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "walking" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#FF9830" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "continuous" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#5794F2" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": ["mean", "max", "min"]
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Resting Heart Rate Trend",
+      "description": "Daily average resting heart rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+          "rawSql": "SELECT time_bucket('1 day', time) AS time, avg(bpm)::int AS resting_hr FROM heart_rate WHERE context='resting' AND $__timeFilter(time) AND device_id IN ($device) AND source_id IN ($source) GROUP BY 1 ORDER BY 1",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bpm",
+          "min": 40,
+          "max": 100,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#73BF69"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "pointSize": 5,
+            "showPoints": "always",
+            "spanNulls": true,
+            "axisBorderShow": false,
+            "axisLabel": "Resting BPM",
+            "axisPlacement": "auto",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "area"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "transparent", "value": null },
+              { "color": "rgba(255, 152, 48, 0.1)", "value": 80 }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": ["mean", "lastNotNull"]
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "HRV (SDNN) Trend",
+      "description": "Daily average Heart Rate Variability",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+          "rawSql": "SELECT time_bucket('1 day', time) AS time, avg(value_ms)::int AS hrv_ms FROM hrv WHERE $__timeFilter(time) AND device_id IN ($device) GROUP BY 1 ORDER BY 1",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "min": 0,
+          "max": 200,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#B877D9"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "pointSize": 5,
+            "showPoints": "always",
+            "spanNulls": true,
+            "axisBorderShow": false,
+            "axisLabel": "HRV (ms)",
+            "axisPlacement": "auto",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "area"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "rgba(255, 55, 55, 0.1)", "value": null },
+              { "color": "transparent", "value": 30 }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": ["mean", "lastNotNull"]
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Blood Oxygen (SpO2)",
+      "description": "Hourly average blood oxygen saturation",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 21 },
+      "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+          "rawSql": "SELECT time_bucket('1 hour', time) AS time, avg(spo2_pct)::numeric(4,1) AS spo2 FROM blood_oxygen WHERE $__timeFilter(time) AND device_id IN ($device) GROUP BY 1 ORDER BY 1",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 85,
+          "max": 100,
+          "decimals": 1,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#56A6F0"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "pointSize": 4,
+            "showPoints": "auto",
+            "spanNulls": true,
+            "axisBorderShow": false,
+            "axisLabel": "SpO2 %",
+            "axisPlacement": "auto",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "area"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "rgba(255, 55, 55, 0.15)", "value": null },
+              { "color": "transparent", "value": 95 }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": ["mean", "min"]
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "Respiratory Rate",
+      "description": "Daily average respiratory rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 21 },
+      "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+          "rawSql": "SELECT time_bucket('1 day', time) AS time, avg(value)::numeric(4,1) AS resp_rate FROM quantity_samples WHERE metric_name='respiratory_rate' AND $__timeFilter(time) AND device_id IN ($device) GROUP BY 1 ORDER BY 1",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "breaths/min",
+          "min": 8,
+          "max": 30,
+          "decimals": 1,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#37872D"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "pointSize": 5,
+            "showPoints": "always",
+            "spanNulls": true,
+            "axisBorderShow": false,
+            "axisLabel": "Breaths/min",
+            "axisPlacement": "auto",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "transparent", "value": null },
+              { "color": "orange", "value": 20 },
+              { "color": "red", "value": 25 }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": ["mean", "lastNotNull"]
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "VO2 Max Trend",
+      "description": "Cardiorespiratory fitness indicator",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 29 },
+      "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+          "rawSql": "SELECT time, value AS vo2max FROM quantity_samples WHERE metric_name='vo2_max' AND $__timeFilter(time) AND device_id IN ($device) ORDER BY time",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mL/kg/min",
+          "min": 20,
+          "max": 70,
+          "decimals": 1,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#FF6D00"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "pointSize": 6,
+            "showPoints": "always",
+            "spanNulls": true,
+            "axisBorderShow": false,
+            "axisLabel": "VO2 Max",
+            "axisPlacement": "auto",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "rgba(255, 55, 55, 0.08)", "value": null },
+              { "color": "rgba(255, 152, 48, 0.08)", "value": 30 },
+              { "color": "rgba(115, 191, 105, 0.08)", "value": 40 },
+              { "color": "transparent", "value": 50 }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": ["mean", "lastNotNull"]
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Heart Rate Zones Distribution",
+      "description": "Time spent in each heart rate zone",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 29 },
+      "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+          "rawSql": "SELECT \n  CASE \n    WHEN bpm < 60 THEN 'Rest (<60)'\n    WHEN bpm < 100 THEN 'Normal (60-100)'\n    WHEN bpm < 140 THEN 'Moderate (100-140)'\n    WHEN bpm < 170 THEN 'Hard (140-170)'\n    ELSE 'Max (170+)'\n  END AS zone,\n  count(*) AS samples\nFROM heart_rate WHERE $__timeFilter(time) AND device_id IN ($device) AND source_id IN ($source)\nGROUP BY 1 ORDER BY min(bpm)",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Rest (<60)" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#56A6F0" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Normal (60-100)" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#73BF69" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Moderate (100-140)" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#FADE2A" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Hard (140-170)" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#FF9830" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Max (170+)" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#F2495C" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": [],
+          "fields": "/^samples$/"
+        },
+        "pieType": "donut",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": ["value", "percent"]
+        },
+        "displayLabels": ["percent"]
+      }
+    },
+    {
+      "id": 12,
+      "title": "HR Heatmap by Hour",
+      "description": "Heart rate distribution by time of day",
+      "type": "heatmap",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 37 },
+      "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+          "rawSql": "SELECT time, bpm FROM heart_rate WHERE $__timeFilter(time) AND device_id IN ($device) AND source_id IN ($source) ORDER BY time",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "scheme",
+            "exponent": 0.5,
+            "fill": "dark-orange",
+            "scheme": "Spectral",
+            "reverse": true,
+            "steps": 128
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "calculate": true,
+        "calculation": {
+          "xBuckets": {
+            "mode": "size",
+            "value": "1h"
+          },
+          "yBuckets": {
+            "mode": "size",
+            "value": "5"
+          }
+        },
+        "cellGap": 1,
+        "cellRadius": 2,
+        "color": {
+          "mode": "scheme",
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "scheme": "Spectral",
+          "reverse": true,
+          "steps": 128
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "tooltip": {
+          "mode": "single",
+          "yHistogram": true
+        },
+        "yAxis": {
+          "axisLabel": "BPM",
+          "axisPlacement": "left",
+          "min": 40,
+          "max": 200,
+          "unit": "bpm",
+          "reverse": false
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "showValue": "never",
+        "legend": {
+          "show": true
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "Data Sources",
+      "description": "Heart rate record count by data source",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 45 },
+      "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+          "rawSql": "SELECT source_id AS source, count(*) AS records FROM heart_rate WHERE source_id IS NOT NULL AND $__timeFilter(time) AND device_id IN ($device) AND source_id IN ($source) GROUP BY source_id ORDER BY records DESC",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["sum"], "fields": "/^records$/", "values": false },
+        "pieType": "donut",
+        "legend": { "displayMode": "table", "placement": "right", "values": ["percent", "value"] },
+        "tooltip": { "mode": "single", "sort": "none" },
+        "displayLabels": ["percent"]
+      }
+    },
+    {
+      "id": 14,
+      "title": "Records by Source Over Time",
+      "description": "Heart rate data volume by source per week",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 45 },
+      "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+          "rawSql": "SELECT time_bucket('1 week', time) AS time, source_id AS metric, count(*) AS value FROM heart_rate WHERE source_id IS NOT NULL AND $__timeFilter(time) AND device_id IN ($device) AND source_id IN ($source) GROUP BY 1, source_id ORDER BY 1",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "lineWidth": 1,
+            "stacking": { "mode": "normal", "group": "A" },
+            "barAlignment": 0,
+            "showPoints": "never"
+          }
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 15,
+      "title": "Heart Rate by Source",
+      "description": "Average heart rate per source over time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 53 },
+      "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+          "rawSql": "SELECT time_bucket('1 hour', time) AS time, source_id AS metric, avg(value) AS value FROM heart_rate WHERE $__timeFilter(time) AND device_id IN ($device) AND source_id IN ($source) GROUP BY 1, source_id ORDER BY 1",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bpm",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "pointSize": 4,
+            "showPoints": "auto",
+            "spanNulls": true,
+            "axisBorderShow": false,
+            "axisLabel": "BPM",
+            "axisPlacement": "auto",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": ["mean", "max", "min"]
+        }
+      }
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+        "definition": "SELECT id AS __value, device_type AS __text FROM devices ORDER BY device_type",
+        "includeAll": true,
+        "multi": true,
+        "name": "device",
+        "label": "Device",
+        "query": "SELECT id AS __value, device_type AS __text FROM devices ORDER BY device_type",
+        "refresh": 1,
+        "type": "query"
+      },
+      {
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "postgres", "uid": "healthsave-pg" },
+        "definition": "SELECT DISTINCT source_id AS __value, source_id AS __text FROM heart_rate WHERE source_id IS NOT NULL ORDER BY source_id",
+        "includeAll": true,
+        "multi": true,
+        "name": "source",
+        "label": "Source",
+        "query": "SELECT DISTINCT source_id AS __value, source_id AS __text FROM heart_rate WHERE source_id IS NOT NULL ORDER BY source_id",
+        "refresh": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "links": [],
+  "weekStart": ""
+}

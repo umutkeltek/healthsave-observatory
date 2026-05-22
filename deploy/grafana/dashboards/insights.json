@@ -1,0 +1,709 @@
+{
+  "uid": "insights",
+  "title": "Cross-Device Insights",
+  "description": "Cross-device comparisons and health insights",
+  "tags": ["health", "insights"],
+  "style": "dark",
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "time": {"from": "now-30d", "to": "now"},
+  "refresh": "",
+  "schemaVersion": 39,
+  "version": 1,
+  "links": [],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "current": {"selected": true, "text": "All", "value": "$__all"},
+        "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+        "definition": "SELECT id AS __value, device_type AS __text FROM devices ORDER BY device_type",
+        "includeAll": true,
+        "multi": true,
+        "name": "device",
+        "label": "Device",
+        "query": "SELECT id AS __value, device_type AS __text FROM devices ORDER BY device_type",
+        "refresh": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 18,
+      "title": "Recovery & Readiness",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 1,
+      "title": "Whoop Recovery Score Trend",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 1},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT time AS time, score AS \"Recovery %\" FROM recovery WHERE $__timeFilter(time) AND device_id IN ($device) ORDER BY 1",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "continuous-GrYlRd"},
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "axisCenteredZero": false,
+            "showPoints": "auto",
+            "pointSize": 5
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 2,
+      "title": "HRV Trend (All Devices)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 1},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT time_bucket('1 day', h.time) AS time, d.device_type AS metric, avg(h.value_ms) AS value\nFROM hrv h JOIN devices d ON d.id = h.device_id\nWHERE $__timeFilter(h.time) AND h.device_id IN ($device)\nGROUP BY 1, d.device_type ORDER BY 1",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "axisCenteredZero": false,
+            "showPoints": "auto",
+            "pointSize": 5
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 3,
+      "title": "Avg Recovery Score",
+      "type": "stat",
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 9},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT avg(score) AS \"Recovery %\" FROM recovery WHERE $__timeFilter(time) AND device_id IN ($device)",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 34},
+              {"color": "green", "value": 67}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Avg Resting HR",
+      "type": "stat",
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 9},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT avg(resting_hr) AS \"Resting HR\" FROM recovery WHERE $__timeFilter(time) AND device_id IN ($device) AND resting_hr IS NOT NULL",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bpm",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 60},
+              {"color": "red", "value": 80}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "title": "Avg SpO2",
+      "type": "stat",
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 9},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT avg(spo2_pct) AS \"SpO2 %\" FROM recovery WHERE $__timeFilter(time) AND device_id IN ($device) AND spo2_pct IS NOT NULL",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 92},
+              {"color": "green", "value": 95}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 19,
+      "title": "Sleep Comparison",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 15},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 6,
+      "title": "Sleep Duration: Apple Watch vs Whoop",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT date_trunc('day', ss.start_time) AS time, d.device_type AS metric,\n  sum(ss.total_duration_ms) / 3600000.0 AS value\nFROM sleep_sessions ss JOIN devices d ON d.id = ss.device_id\nWHERE $__timeFilter(ss.start_time) AND ss.device_id IN ($device) AND ss.is_nap = false\nGROUP BY 1, d.device_type ORDER BY 1",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": {"mode": "normal", "group": "A"},
+            "lineWidth": 1,
+            "spanNulls": false,
+            "axisCenteredZero": false,
+            "showPoints": "never",
+            "barAlignment": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 7,
+      "title": "Sleep Efficiency by Device",
+      "type": "bargauge",
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 24},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT d.device_type AS metric, avg(ss.sleep_efficiency_pct) AS value\nFROM sleep_sessions ss JOIN devices d ON d.id = ss.device_id\nWHERE $__timeFilter(ss.start_time) AND ss.device_id IN ($device) AND ss.sleep_efficiency_pct IS NOT NULL\nGROUP BY d.device_type",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 70},
+              {"color": "green", "value": 85}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 8,
+      "title": "Sleep Performance by Device",
+      "type": "bargauge",
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 24},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT d.device_type AS metric, avg(ss.sleep_performance_pct) AS value\nFROM sleep_sessions ss JOIN devices d ON d.id = ss.device_id\nWHERE $__timeFilter(ss.start_time) AND ss.device_id IN ($device) AND ss.sleep_performance_pct IS NOT NULL\nGROUP BY d.device_type",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 70},
+              {"color": "green", "value": 85}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 9,
+      "title": "Avg Respiratory Rate",
+      "type": "stat",
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 24},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT avg(respiratory_rate) AS \"Resp Rate\" FROM sleep_sessions\nWHERE $__timeFilter(start_time) AND device_id IN ($device) AND respiratory_rate IS NOT NULL",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "breaths/min",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 20,
+      "title": "Heart Rate Analysis",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 30},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 10,
+      "title": "Resting HR: Whoop Recovery vs Apple Watch",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 31},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT time AS time, resting_hr AS \"Whoop Resting HR\"\nFROM recovery WHERE $__timeFilter(time) AND device_id IN ($device) AND resting_hr IS NOT NULL ORDER BY 1",
+          "format": "table",
+          "refId": "A"
+        },
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT time_bucket('1 day', time) AS time, avg(value) AS \"Apple Watch HR\"\nFROM heart_rate WHERE $__timeFilter(time) AND device_id IN ($device) AND source_id = 'Umut''s Apple Watch'\nGROUP BY 1 ORDER BY 1",
+          "format": "table",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "axisCenteredZero": false,
+            "showPoints": "auto",
+            "pointSize": 5
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 11,
+      "title": "Heart Rate Sources Distribution",
+      "type": "piechart",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 39},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT source_id AS metric, count(*) AS value FROM heart_rate\nWHERE $__timeFilter(time) AND device_id IN ($device) AND source_id IS NOT NULL\nGROUP BY source_id ORDER BY value DESC",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": true
+        },
+        "pieType": "pie",
+        "tooltip": {"mode": "single"},
+        "legend": {"displayMode": "list", "placement": "right"}
+      }
+    },
+    {
+      "id": 12,
+      "title": "HR by Source Over Time",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 39},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT time_bucket('1 day', time) AS time, source_id AS metric, count(*) AS value\nFROM heart_rate\nWHERE $__timeFilter(time) AND device_id IN ($device) AND source_id IS NOT NULL\nGROUP BY 1, source_id ORDER BY 1",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "stacking": {"mode": "normal", "group": "A"},
+            "lineWidth": 2,
+            "spanNulls": false,
+            "axisCenteredZero": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi"},
+        "legend": {"displayMode": "list", "placement": "bottom"},
+        "stacking": {"mode": "normal"}
+      }
+    },
+    {
+      "id": 21,
+      "title": "Activity & Workout Comparison",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 47},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 13,
+      "title": "Daily Strain (Whoop)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 48},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT date AS time, strain AS \"Strain\" FROM daily_activity\nWHERE $__timeFilter(date) AND device_id IN ($device) AND strain IS NOT NULL ORDER BY 1",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "fixed", "fixedColor": "red"},
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "axisCenteredZero": false,
+            "showPoints": "auto",
+            "pointSize": 5
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 14,
+      "title": "Workout Count by Device & Type",
+      "type": "barchart",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 48},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT d.device_type || ' - ' || w.sport_type AS metric, count(*) AS value\nFROM workouts w JOIN devices d ON d.id = w.device_id\nWHERE $__timeFilter(w.start_time) AND w.device_id IN ($device)\nGROUP BY d.device_type, w.sport_type ORDER BY value DESC LIMIT 15",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single"},
+        "legend": {"displayMode": "list", "placement": "bottom"},
+        "orientation": "horizontal"
+      }
+    },
+    {
+      "id": 15,
+      "title": "Recovery vs Sleep Duration Correlation",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 24, "x": 0, "y": 56},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT r.time AS time, r.score AS \"Recovery Score\"\nFROM recovery r WHERE $__timeFilter(r.time) AND r.device_id IN ($device) ORDER BY 1",
+          "format": "table",
+          "refId": "A"
+        },
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT date_trunc('day', ss.start_time) AS time,\n  sum(ss.total_duration_ms) / 3600000.0 AS \"Sleep Hours\"\nFROM sleep_sessions ss\nWHERE $__timeFilter(ss.start_time) AND ss.device_id IN ($device) AND ss.is_nap = false\nGROUP BY 1 ORDER BY 1",
+          "format": "table",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "axisCenteredZero": false,
+            "showPoints": "auto",
+            "pointSize": 5
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Sleep Hours"},
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "h"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {"mode": "multi"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 22,
+      "title": "Skin Temperature & SpO2",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 62},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 16,
+      "title": "Skin Temperature Trend",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 63},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT time, skin_temp_c AS \"Skin Temp \u00b0C\" FROM recovery\nWHERE $__timeFilter(time) AND device_id IN ($device) AND skin_temp_c IS NOT NULL ORDER BY 1",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "axisCenteredZero": false,
+            "showPoints": "auto",
+            "pointSize": 5
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 17,
+      "title": "SpO2 Trend",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 63},
+      "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "healthsave-pg"},
+          "rawSql": "SELECT time, spo2_pct AS \"SpO2 %\" FROM recovery\nWHERE $__timeFilter(time) AND device_id IN ($device) AND spo2_pct IS NOT NULL ORDER BY 1",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 85,
+          "max": 100,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "axisCenteredZero": false,
+            "showPoints": "auto",
+            "pointSize": 5
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "single"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    }
+  ]
+}
