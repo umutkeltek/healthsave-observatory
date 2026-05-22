@@ -108,14 +108,34 @@ def test_amazfit_plugin_discovered_under_plugins_dir():
 
 
 @pytest.mark.asyncio
-async def test_amazfit_ingest_is_not_implemented_pre_h_ingest():
-    """H-revise pin: ingest raises NotImplementedError until H-ingest lands
-    the real fetch/normalize/write loop. Test deletes at H-ingest.
+async def test_amazfit_ingest_no_op_when_token_store_returns_none():
+    """H-ingest: no stored token = silent no-op (operator hasn't run
+    the authorize CLI yet). Drives the scaffold test that previously
+    pinned NotImplementedError until H-ingest landed.
     """
+
+    class _NoopTokenStore:
+        async def get_token(self, *args, **kwargs):
+            return None
+
+    class _NoopStorage:
+        async def get_or_create_device(self, *a, **k):
+            return 1
+
+        async def ingest_metric(self, *a, **k):
+            return 0
+
     manifest = load_manifest(PLUGIN_DIR / "plugin.yaml")
     plugin = AmazfitSource(manifest)
-    with pytest.raises(NotImplementedError):
-        await plugin.ingest({})
+    result = await plugin.ingest(
+        {
+            "storage": _NoopStorage(),
+            "session": object(),
+            "http_client": object(),
+            "token_store": _NoopTokenStore(),
+        }
+    )
+    assert result == {"accepted": 0, "rejected": 0}
 
 
 def test_region_base_urls_target_current_zepp_host():
