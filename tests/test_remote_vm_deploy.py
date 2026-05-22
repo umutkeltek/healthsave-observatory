@@ -1,6 +1,6 @@
-"""Apps VM deployment contracts.
+"""Remote VM deployment contracts.
 
-The default compose file is intentionally self-contained, but the apps-vm
+The default compose file is intentionally self-contained, but the remote VM
 operator lane must also support an existing central Postgres/TimescaleDB
 database. These tests prevent the deploy path from quietly pointing API,
 worker, migrations, or Grafana back at the bundled ``db`` service.
@@ -15,7 +15,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-CENTRAL_OVERRIDE = ROOT / "deploy" / "apps-vm" / "docker-compose.central-db.override.yml"
+EXTERNAL_DB_OVERRIDE = ROOT / "deploy" / "remote-vm" / "docker-compose.external-db.override.yml"
 
 
 def _central_config() -> dict:
@@ -40,7 +40,7 @@ def _central_config() -> dict:
             "-f",
             "docker-compose.yml",
             "-f",
-            str(CENTRAL_OVERRIDE),
+            str(EXTERNAL_DB_OVERRIDE),
             "--profile",
             "home-assistant",
             "config",
@@ -54,12 +54,12 @@ def _central_config() -> dict:
     return yaml.safe_load(result.stdout)
 
 
-def test_apps_vm_central_db_override_exists():
-    assert CENTRAL_OVERRIDE.is_file()
-    assert "db.internal" not in CENTRAL_OVERRIDE.read_text()
+def test_remote_vm_external_db_override_exists():
+    assert EXTERNAL_DB_OVERRIDE.is_file()
+    assert "db.internal" not in EXTERNAL_DB_OVERRIDE.read_text()
 
 
-def test_apps_vm_central_db_services_use_external_database_url():
+def test_remote_vm_external_db_services_use_external_database_url():
     config = _central_config()
     expected = "postgresql+asyncpg://hubuser:test-pass@pg.internal:6543/hubdb"
 
@@ -68,7 +68,7 @@ def test_apps_vm_central_db_services_use_external_database_url():
         assert service["environment"]["DATABASE_URL"] == expected
 
 
-def test_apps_vm_central_db_override_removes_bundled_db_dependencies():
+def test_remote_vm_external_db_override_removes_bundled_db_dependencies():
     config = _central_config()
     services = config["services"]
 
@@ -79,7 +79,7 @@ def test_apps_vm_central_db_override_removes_bundled_db_dependencies():
     assert set(services["homeassistant-mqtt"]["depends_on"]) == {"migrate"}
 
 
-def test_apps_vm_central_db_override_points_grafana_at_external_db():
+def test_remote_vm_external_db_override_points_grafana_at_external_db():
     config = _central_config()
     grafana = config["services"]["grafana"]
 
@@ -87,7 +87,7 @@ def test_apps_vm_central_db_override_points_grafana_at_external_db():
     assert grafana["environment"]["DB_PASSWORD"] == "test-pass"
 
 
-def test_apps_vm_central_db_override_keeps_apps_vm_ports():
+def test_remote_vm_external_db_override_keeps_remote_ports():
     config = _central_config()
 
     api_ports = config["services"]["api"]["ports"]
@@ -105,18 +105,18 @@ def test_grafana_datasource_url_is_environment_driven():
     assert "url: db:5432" not in body
 
 
-def test_apps_vm_deploy_script_has_explicit_external_database_mode():
-    script = (ROOT / "deploy" / "apps-vm" / "deploy.sh").read_text()
+def test_remote_vm_deploy_script_has_explicit_external_database_mode():
+    script = (ROOT / "deploy" / "remote-vm" / "deploy.sh").read_text()
 
     assert "HEALTH_DATA_HUB_DATABASE_MODE" in script
-    assert "docker-compose.central-db.override.yml" in script
+    assert "docker-compose.external-db.override.yml" in script
     assert "migrate api worker grafana" in script
     assert "db migrate api worker grafana" in script
     assert "HEALTH_DATA_HUB_DB_PUBLISH_PORT" in script
 
 
-def test_apps_vm_readme_documents_external_database_mode():
-    readme = (ROOT / "deploy" / "apps-vm" / "README.md").read_text()
+def test_remote_vm_readme_documents_external_database_mode():
+    readme = (ROOT / "deploy" / "remote-vm" / "README.md").read_text()
 
     assert "HEALTH_DATA_HUB_DATABASE_MODE=external" in readme
     assert "HEALTH_DATA_HUB_DB_HOST=postgres.example.internal" in readme

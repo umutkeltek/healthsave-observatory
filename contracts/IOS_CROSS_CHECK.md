@@ -183,4 +183,4 @@ The marketing site at <https://healthsave.app> is the public landing
 page for the iOS app. It does not host an alternative API surface.
 The iOS app's *backend* is whatever URL the user configures in-app
 (typically a self-hosted `health-data-hub` instance). There is no
-hosted-by-Umut server endpoint in the v1 contract.
+HealthSave-hosted server endpoint in the v1 contract.

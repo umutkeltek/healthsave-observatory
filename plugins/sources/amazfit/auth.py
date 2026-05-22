@@ -4,7 +4,7 @@ The two-step ``v2/client/login`` MD5-password flow this module
 originally shipped (P6-a, commit ``a3525d8``) **no longer works**.
 On 2026-05-22 a verification probe showed step-1 returning ``HTTP
 400 {"error_code":"0100"}`` for valid credentials, and the legacy
-``apps-vm-scheduler-1`` Amazfit poll had been silently 500-ing
+a legacy private-stack Amazfit poll had been silently 500-ing
 hourly for at least 13 consecutive hours against the same flow.
 
 The community-converged replacement (huami-token issue #119,

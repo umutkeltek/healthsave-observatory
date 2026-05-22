@@ -1,4 +1,4 @@
-# Apps VM central-DB override.
+# Remote VM external-database override.
 #
 # Use this when Postgres/TimescaleDB already runs outside this compose
 # project. It keeps the default docker-compose.yml self-contained for
