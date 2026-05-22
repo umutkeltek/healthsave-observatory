@@ -210,8 +210,16 @@ class AmazfitSource(Source):
         extend("heart_rate", band_norm["heart_rate"])  # daily max sample
         extend("blood_oxygen", normalize_spo2_events(spo2_payload))
         extend("stress", normalize_stress_events(stress_payload))
-        extend("daily_activity", band_norm["daily_activity"])
-        extend("sleep_analysis", band_norm["sleep_sessions"])
+        # Daily activity is emitted as per-quantity metric batches —
+        # _ingest_daily_quantity rolls each into the matching
+        # daily_activity column (steps / distance_m / active_calories).
+        extend("step_count", band_norm["step_count"])
+        extend("distance_walking_running", band_norm["distance_walking_running"])
+        extend("active_energy_burned", band_norm["active_energy_burned"])
+        # Sleep is emitted as a single duration quantity sample; v1
+        # punts on stage decomposition until Zepp's ``mode`` codes are
+        # confirmed against a known night.
+        extend("sleep_duration_hours", band_norm["sleep_duration_hours"])
         extend("training_load", normalize_sport_load(sport_payload))
 
         # 6. Write through the IngestStorage protocol per metric.

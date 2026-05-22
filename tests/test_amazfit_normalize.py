@@ -182,33 +182,57 @@ def _band_data_payload(summary_obj: dict) -> dict:
     }
 
 
-def test_normalize_band_data_extracts_daily_activity():
+def test_normalize_band_data_extracts_daily_activity_as_per_quantity_batches():
     payload = _band_data_payload({"stp": {"ttl": 3786, "dis": 2772, "cal": 156, "runCal": 136}})
     out = normalize_band_data(payload)
-    assert len(out["daily_activity"]) == 1
-    row = out["daily_activity"][0]
-    assert row["date"] == "2026-05-21"
-    assert row["steps"] == 3786
-    assert row["distance_m"] == 2772.0
-    assert row["active_calories"] == 156.0
-    assert row["source"] == "Amazfit"
+    # Three separate metric batches so each lands in its own
+    # daily_activity column via _ingest_daily_quantity.
+    assert len(out["step_count"]) == 1
+    assert out["step_count"][0]["qty"] == 3786
+    assert out["step_count"][0]["date"] == "2026-05-21"
+    assert out["step_count"][0]["source"] == "Amazfit"
+
+    assert len(out["distance_walking_running"]) == 1
+    assert out["distance_walking_running"][0]["qty"] == 2772.0
+    assert out["distance_walking_running"][0]["date"] == "2026-05-21"
+
+    assert len(out["active_energy_burned"]) == 1
+    assert out["active_energy_burned"][0]["qty"] == 156.0
+    assert out["active_energy_burned"][0]["date"] == "2026-05-21"
 
 
-def test_normalize_band_data_extracts_sleep_session_from_minute_epochs():
-    # Minute-resolution unix → seconds = minute * 60. Use ~22:00→06:00.
-    st_min = 29657115  # = 1779426900 unix = 2026-05-22T02:35:00Z
-    ed_min = 29657580  # = 1779454800 unix = 2026-05-22T10:20:00Z
+def test_normalize_band_data_emits_only_present_activity_metrics():
+    # Only steps present → only step_count gets a sample.
+    payload = _band_data_payload({"stp": {"ttl": 1000}})
+    out = normalize_band_data(payload)
+    assert len(out["step_count"]) == 1
+    assert out["distance_walking_running"] == []
+    assert out["active_energy_burned"] == []
+
+
+def test_normalize_band_data_emits_sleep_duration_hours_from_minute_epochs():
+    # Minute-resolution unix epochs. Difference = 465 minutes = 7.75 hours.
+    st_min = 29657115
+    ed_min = 29657580
     payload = _band_data_payload(
         {"slp": {"st": st_min, "ed": ed_min, "dp": 120, "lb": 240, "wk": 30}}
     )
     out = normalize_band_data(payload)
-    assert len(out["sleep_sessions"]) == 1
-    s = out["sleep_sessions"][0]
-    assert s["source"] == "Amazfit"
-    assert s["deep_ms"] == 120 * 60 * 1000
-    assert s["light_ms"] == 240 * 60 * 1000
-    assert s["awake_ms"] == 30 * 60 * 1000
-    assert s["total_duration_ms"] == (ed_min - st_min) * 60 * 1000
+    assert len(out["sleep_duration_hours"]) == 1
+    sample = out["sleep_duration_hours"][0]
+    assert sample["qty"] == (ed_min - st_min) / 60.0
+    assert sample["source"] == "Amazfit"
+    assert sample["unit"] == "hours"
+    # Stamped at noon UTC of the date so plots bucket per day.
+    assert sample["date"].startswith("2026-05-21T12:00:00")
+
+
+def test_normalize_band_data_skips_implausible_sleep_durations():
+    # Zero / >24h sleep should be dropped, not emitted.
+    out_zero = normalize_band_data(_band_data_payload({"slp": {"st": 100, "ed": 100}}))
+    assert out_zero["sleep_duration_hours"] == []
+    out_big = normalize_band_data(_band_data_payload({"slp": {"st": 100, "ed": 100 + 60 * 25}}))
+    assert out_big["sleep_duration_hours"] == []
 
 
 def test_normalize_band_data_extracts_max_hr_when_nonzero():
@@ -225,6 +249,15 @@ def test_normalize_band_data_skips_zero_max_hr():
     assert out["heart_rate"] == []
 
 
+_EMPTY_BAND_DATA_OUTPUT = {
+    "step_count": [],
+    "distance_walking_running": [],
+    "active_energy_burned": [],
+    "sleep_duration_hours": [],
+    "heart_rate": [],
+}
+
+
 def test_normalize_band_data_handles_missing_summary():
     payload = {
         "data": [
@@ -232,13 +265,11 @@ def test_normalize_band_data_handles_missing_summary():
             {"date_time": "2026-05-20"},  # no summary at all
         ]
     }
-    out = normalize_band_data(payload)
-    assert out == {"daily_activity": [], "sleep_sessions": [], "heart_rate": []}
+    assert normalize_band_data(payload) == _EMPTY_BAND_DATA_OUTPUT
 
 
 def test_normalize_band_data_empty():
-    out = normalize_band_data({})
-    assert out == {"daily_activity": [], "sleep_sessions": [], "heart_rate": []}
+    assert normalize_band_data({}) == _EMPTY_BAND_DATA_OUTPUT
 
 
 # ─── normalize_sport_load ───────────────────────────────────────────────
