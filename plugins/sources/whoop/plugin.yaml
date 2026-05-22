@@ -1,0 +1,28 @@
+id: whoop-healthsave
+name: Whoop (HealthSave bridge)
+kind: source
+version: "0.1.0"
+sdk_version: ">=0.1,<0.2"
+language: python
+entrypoint: "plugins.sources.whoop:WhoopSource"
+emits:
+  - measurement.heart_rate
+  - measurement.hrv
+  - measurement.sleep_analysis
+  - measurement.workouts
+  - measurement.recovery
+  - measurement.strain
+permissions:
+  network: true
+  secrets:
+    - WHOOP_CLIENT_ID
+    - WHOOP_CLIENT_SECRET
+    - WHOOP_REDIRECT_URI
+    - HDH_TOKEN_ENC_KEY
+  capabilities:
+    - name: "write:oauth_tokens"
+      description: "Persist and refresh the per-owner Whoop OAuth access/refresh token pair."
+    - name: "write:measurements"
+      description: "Insert recovery, sleep, workout, and HRV samples into the per-metric Timescale tables."
+    - name: "network:api.prod.whoop.com"
+      description: "Outbound HTTPS to Whoop's developer API for OAuth + data fetch."
