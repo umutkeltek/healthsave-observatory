@@ -35,6 +35,11 @@ log = logging.getLogger("healthsave.worker.sources")
 # via the WHOOP_POLL_CRON env var.
 WHOOP_DEFAULT_CRON = "*/30 * * * *"
 
+# Amazfit / Zepp: same cadence as Whoop. Zepp does not publish a rate
+# limit; the legacy personal_stack scheduler ran hourly and we tighten
+# slightly for fresher data. Override via the AMAZFIT_POLL_CRON env var.
+AMAZFIT_DEFAULT_CRON = "*/30 * * * *"
+
 
 def _whoop_plugin_yaml() -> Path:
     """Locate the Whoop plugin manifest. The Docker image copies
@@ -104,6 +109,77 @@ def register_whoop_poll(
 
     scheduler.add_job(
         make_whoop_poll(session_factory),
+        CronTrigger.from_crontab(cron),
+        id=job_id,
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    log.info("registered %s cron=%s", job_id, cron)
+    return job_id
+
+
+def _amazfit_plugin_yaml() -> Path:
+    """Locate the Amazfit plugin manifest. Same layout as Whoop."""
+    here = Path(__file__).resolve()
+    repo_root = here.parents[3]
+    return repo_root / "plugins" / "sources" / "amazfit" / "plugin.yaml"
+
+
+def make_amazfit_poll(session_factory: Any) -> Callable[[], Awaitable[None]]:
+    """Return an awaitable APScheduler can invoke on every tick.
+
+    Lifecycle matches make_whoop_poll: open httpx + session, instantiate
+    plugin, run ingest, commit/rollback. AmazfitSource.ingest fails loud
+    on expired token (no refresh primitive), so the worker's
+    pipeline_runs ledger picks up the failure.
+    """
+
+    async def _run() -> None:
+        import httpx
+        from plugin_sdk import load_manifest
+        from server.ingestion.storage import PostgresIngestStorage
+
+        from plugins.sources.amazfit import AmazfitSource
+
+        manifest = load_manifest(_amazfit_plugin_yaml())
+        plugin = AmazfitSource(manifest)
+        storage = PostgresIngestStorage()
+
+        async with (
+            httpx.AsyncClient(timeout=30.0) as http,
+            session_factory() as session,
+        ):
+            try:
+                result = await plugin.ingest(
+                    {
+                        "storage": storage,
+                        "session": session,
+                        "http_client": http,
+                    }
+                )
+                await session.commit()
+                log.info("amazfit poll: %s", result)
+            except Exception:
+                await session.rollback()
+                log.exception("amazfit poll failed")
+                raise
+
+    return _run
+
+
+def register_amazfit_poll(
+    scheduler: Any,
+    session_factory: Any,
+    *,
+    cron: str = AMAZFIT_DEFAULT_CRON,
+    job_id: str = "amazfit_poll",
+) -> str:
+    """Register the Amazfit poll on ``scheduler``. Returns the job id."""
+    from apscheduler.triggers.cron import CronTrigger
+
+    scheduler.add_job(
+        make_amazfit_poll(session_factory),
         CronTrigger.from_crontab(cron),
         id=job_id,
         max_instances=1,

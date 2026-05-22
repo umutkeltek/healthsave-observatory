@@ -25,7 +25,7 @@ from analysis.scheduler import AnalysisScheduler
 from server.db.session import async_session, engine
 
 from .listener import listener_event_mask, make_listener
-from .sources import register_whoop_poll
+from .sources import register_amazfit_poll, register_whoop_poll
 
 log = logging.getLogger("healthsave.worker")
 
@@ -54,20 +54,27 @@ async def run() -> None:
         log.info("pipeline_runs ledger listener attached (leased_by=%s)", leased_by)
 
     # Source-plugin polls (Phase 7-pre). Env-gated: set WHOOP_POLL_CRON
-    # to a crontab expression to enable the Whoop poll on this worker.
-    # If analysis jobs are all disabled, scheduler.scheduler is None —
-    # spin up a standalone AsyncIOScheduler so the source polls still
-    # run. Stored on the AnalysisScheduler wrapper so shutdown reaches it.
+    # or AMAZFIT_POLL_CRON to a crontab expression to enable the
+    # corresponding poll on this worker. If analysis jobs are all
+    # disabled, scheduler.scheduler is None — spin up a standalone
+    # AsyncIOScheduler so the source polls still run. Stored on the
+    # outer scope so shutdown reaches it.
     source_scheduler = None
     whoop_cron = os.environ.get("WHOOP_POLL_CRON")
-    if whoop_cron:
+    amazfit_cron = os.environ.get("AMAZFIT_POLL_CRON")
+    if whoop_cron or amazfit_cron:
         if scheduler.scheduler is not None:
-            register_whoop_poll(scheduler.scheduler, async_session, cron=whoop_cron)
+            target_scheduler = scheduler.scheduler
         else:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
             source_scheduler = AsyncIOScheduler()
-            register_whoop_poll(source_scheduler, async_session, cron=whoop_cron)
+            target_scheduler = source_scheduler
+        if whoop_cron:
+            register_whoop_poll(target_scheduler, async_session, cron=whoop_cron)
+        if amazfit_cron:
+            register_amazfit_poll(target_scheduler, async_session, cron=amazfit_cron)
+        if source_scheduler is not None:
             source_scheduler.start()
             log.info("source-only AsyncIOScheduler started (analysis jobs all disabled)")
 
