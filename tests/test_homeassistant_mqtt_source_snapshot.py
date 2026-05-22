@@ -86,9 +86,18 @@ class _FakeResult:
 class _FakeSession:
     """Returns canned rows based on a substring match in the SQL."""
 
-    def __init__(self, *, hr_rows: list[tuple], hrv_rows: list[tuple]) -> None:
-        self._hr = hr_rows
-        self._hrv = hrv_rows
+    def __init__(
+        self,
+        *,
+        hr_rows: list[tuple] | None = None,
+        hrv_rows: list[tuple] | None = None,
+        steps_rows: list[tuple] | None = None,
+        sleep_rows: list[tuple] | None = None,
+    ) -> None:
+        self._hr = hr_rows or []
+        self._hrv = hrv_rows or []
+        self._steps = steps_rows or []
+        self._sleep = sleep_rows or []
         self.executed_queries: list[str] = []
 
     async def execute(self, statement) -> _FakeResult:
@@ -98,6 +107,10 @@ class _FakeSession:
             return _FakeResult(self._hr)
         if "FROM hrv" in sql:
             return _FakeResult(self._hrv)
+        if "FROM daily_activity" in sql:
+            return _FakeResult(self._steps)
+        if "FROM sleep_sessions" in sql:
+            return _FakeResult(self._sleep)
         raise AssertionError(f"unexpected SQL: {sql}")
 
 
@@ -176,3 +189,93 @@ async def test_fetch_snapshots_by_source_returns_results_sorted_by_slug() -> Non
     snapshots = await repo.fetch_snapshots_by_source(session)
 
     assert [s.slug for s in snapshots] == ["apple_watch", "iphone", "whoop"]
+
+
+# ─── steps + sleep per source (P5-c.3 extensions) ───────────────────
+
+
+@pytest.mark.asyncio
+async def test_fetch_snapshots_by_source_merges_steps_today_per_source() -> None:
+    """daily_activity rows for today + source_id propagate into
+    the per-source snapshot's steps_today field.
+    """
+    session = _FakeSession(
+        hr_rows=[("Apple Watch", 72)],
+        hrv_rows=[],
+        steps_rows=[("Apple Watch", 8421), ("iPhone", 1200)],
+        sleep_rows=[],
+    )
+    repo = TimescaleHealthSnapshotRepository()
+    snapshots = await repo.fetch_snapshots_by_source(session)
+    by_slug = {s.slug: s for s in snapshots}
+
+    assert by_slug["apple_watch"].steps_today == 8421
+    assert by_slug["apple_watch"].heart_rate == 72
+    # A source that only has steps still gets a snapshot.
+    assert by_slug["iphone"].steps_today == 1200
+    assert by_slug["iphone"].heart_rate is None
+
+
+@pytest.mark.asyncio
+async def test_fetch_snapshots_by_source_merges_last_sleep_hours_per_source() -> None:
+    """sleep_sessions per source, total_duration_ms -> hours rounded
+    to 2 dp on the snapshot.
+    """
+    session = _FakeSession(
+        hr_rows=[],
+        hrv_rows=[],
+        steps_rows=[],
+        sleep_rows=[
+            ("Apple Watch", 27_000_000),  # 7.5h
+            ("Whoop", 25_200_000),  # 7.0h
+        ],
+    )
+    repo = TimescaleHealthSnapshotRepository()
+    snapshots = await repo.fetch_snapshots_by_source(session)
+    by_slug = {s.slug: s for s in snapshots}
+
+    assert by_slug["apple_watch"].last_sleep_hours == 7.5
+    assert by_slug["whoop"].last_sleep_hours == 7.0
+
+
+@pytest.mark.asyncio
+async def test_fetch_snapshots_by_source_full_merge_across_all_four_metrics() -> None:
+    """One source with rows in every table -> a fully-populated
+    SourceHealthSnapshot. This is the happy path the rewritten bridge
+    will publish per HA sub-device.
+    """
+    session = _FakeSession(
+        hr_rows=[("Apple Watch", 72)],
+        hrv_rows=[("Apple Watch", 64.3)],
+        steps_rows=[("Apple Watch", 8421)],
+        sleep_rows=[("Apple Watch", 27_000_000)],
+    )
+    repo = TimescaleHealthSnapshotRepository()
+    [snap] = await repo.fetch_snapshots_by_source(session)
+
+    assert snap.slug == "apple_watch"
+    assert snap.heart_rate == 72
+    assert snap.hrv_latest_ms == 64.3
+    assert snap.steps_today == 8421
+    assert snap.last_sleep_hours == 7.5
+
+
+@pytest.mark.asyncio
+async def test_fetch_snapshots_by_source_null_source_buckets_steps_and_sleep_too() -> None:
+    """NULL source on aggregate tables collapses into the same
+    'unknown' bucket as NULL on HR/HRV — proves the migration-009
+    rollout for pre-009 rows stays clean (those rows have NULL
+    source_id by construction).
+    """
+    session = _FakeSession(
+        hr_rows=[],
+        hrv_rows=[],
+        steps_rows=[(None, 5000)],
+        sleep_rows=[(None, 25_200_000)],
+    )
+    repo = TimescaleHealthSnapshotRepository()
+    [snap] = await repo.fetch_snapshots_by_source(session)
+
+    assert snap.slug == "unknown"
+    assert snap.steps_today == 5000
+    assert snap.last_sleep_hours == 7.0

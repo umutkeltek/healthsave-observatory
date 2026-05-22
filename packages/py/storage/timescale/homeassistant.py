@@ -113,13 +113,18 @@ class TimescaleHealthSnapshotRepository:
         )
 
     async def fetch_snapshots_by_source(self, session: AsyncSession) -> list[SourceHealthSnapshot]:
-        """Per-``source_id`` latest values for source-tagged metrics.
+        """Per-``source_id`` latest values across all primary metrics.
 
-        Returns one :class:`SourceHealthSnapshot` for every ``source_id``
-        that has either a recent (<=24h) ``heart_rate`` row or a
-        recent (<=7d) ``hrv`` row. Sources with no recent rows do not
-        appear — the bridge therefore only advertises HA sub-devices
-        for actively-publishing sources, no stale ghost entities.
+        Migration 009 widened ``daily_activity`` and ``sleep_sessions``
+        with ``source_id``; this method now queries all four sources of
+        truth (heart_rate, hrv, daily_activity, sleep_sessions) and
+        merges them per source.
+
+        A snapshot is emitted for every ``source_id`` that has at
+        least one recent row across any of the four metrics. Sources
+        with no recent data do not appear — the bridge therefore only
+        advertises HA sub-devices for actively-publishing sources, no
+        stale ghost entities.
 
         Rows whose ``source_id`` is NULL or empty get bucketed under
         the slug ``"unknown"`` so a single sentinel sub-device collects
@@ -127,8 +132,7 @@ class TimescaleHealthSnapshotRepository:
         """
         collected_at = datetime.now(UTC)
 
-        # Latest heart_rate per source within 24h. DISTINCT ON keeps
-        # the most-recent row per source_id efficiently.
+        # Latest heart_rate per source within 24h.
         hr_rows = (
             await session.execute(
                 text(
@@ -142,9 +146,7 @@ class TimescaleHealthSnapshotRepository:
             )
         ).all()
 
-        # Latest hrv per source within 7d (single most-recent value,
-        # not the 7d average — the per-source view is "what is each
-        # source reporting RIGHT NOW", not historical aggregate).
+        # Latest hrv per source within 7d.
         hrv_rows = (
             await session.execute(
                 text(
@@ -158,9 +160,35 @@ class TimescaleHealthSnapshotRepository:
             )
         ).all()
 
-        # Merge by source_id. None/empty source_id is collapsed under
-        # the same "_unknown_source_" key so the dedup is consistent
-        # across the HR and HRV passes.
+        # Today's steps per source.
+        steps_rows = (
+            await session.execute(
+                text(
+                    """
+                    SELECT source_id, steps
+                    FROM daily_activity
+                    WHERE date = current_date AND steps IS NOT NULL
+                    """
+                )
+            )
+        ).all()
+
+        # Last sleep session per source (latest by start_time).
+        sleep_rows = (
+            await session.execute(
+                text(
+                    """
+                    SELECT DISTINCT ON (source_id) source_id, total_duration_ms
+                    FROM sleep_sessions
+                    WHERE total_duration_ms IS NOT NULL
+                    ORDER BY source_id, start_time DESC
+                    """
+                )
+            )
+        ).all()
+
+        # Merge by source_id. None/empty source_id collapses to one
+        # 'unknown' bucket across all four passes.
         per_source: dict[str, dict[str, object]] = {}
         unknown_key = "_unknown_source_"
 
@@ -174,6 +202,18 @@ class TimescaleHealthSnapshotRepository:
             per_source.setdefault(key, {"source_id": source_id or ""})
             per_source[key]["hrv_latest_ms"] = round_float(value_ms, 1)
 
+        for source_id, steps in steps_rows:
+            key = source_id if source_id else unknown_key
+            per_source.setdefault(key, {"source_id": source_id or ""})
+            per_source[key]["steps_today"] = int_or_none(steps)
+
+        for source_id, duration_ms in sleep_rows:
+            key = source_id if source_id else unknown_key
+            per_source.setdefault(key, {"source_id": source_id or ""})
+            per_source[key]["last_sleep_hours"] = round_float(
+                duration_ms / 3_600_000 if duration_ms is not None else None, 2
+            )
+
         snapshots: list[SourceHealthSnapshot] = []
         for entry in per_source.values():
             snapshots.append(
@@ -182,6 +222,8 @@ class TimescaleHealthSnapshotRepository:
                     source_id=str(entry.get("source_id", "")),
                     heart_rate=entry.get("heart_rate"),  # type: ignore[arg-type]
                     hrv_latest_ms=entry.get("hrv_latest_ms"),  # type: ignore[arg-type]
+                    steps_today=entry.get("steps_today"),  # type: ignore[arg-type]
+                    last_sleep_hours=entry.get("last_sleep_hours"),  # type: ignore[arg-type]
                 )
             )
         # Deterministic order so tests + log lines are stable.
