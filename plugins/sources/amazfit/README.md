@@ -53,10 +53,10 @@ The plaintext password is consumed only by the external CLI; the datahub never s
 
 ```bash
 # from the huami-token output file:
-python scripts/amazfit_authorize.py --from-huami-token-stdout /tmp/zepp-auth.txt --region us
+docker compose run --rm --build api python scripts/amazfit_authorize.py --from-huami-token-stdout /tmp/zepp-auth.txt --region us
 
 # or manually:
-python scripts/amazfit_authorize.py --from-token <T> --user-id <U> --region us
+docker compose run --rm --build api python scripts/amazfit_authorize.py --from-token <T> --user-id <U> --region us
 ```
 
 The authorize CLI persists the token via the `oauth_tokens` table (provider `"amazfit"`, encrypted at rest with `HDH_TOKEN_ENC_KEY`).
