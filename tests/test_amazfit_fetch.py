@@ -80,7 +80,7 @@ class _RecordingHttpClient:
         return self.responses.pop(0)
 
 
-def _token(user_id: str = "3311629755", region: str = "us") -> OAuthToken:
+def _token(user_id: str = "99999999", region: str = "us") -> OAuthToken:
     base_url = {
         "us": "https://api-mifit-us3.zepp.com",
         "eu": "https://api-mifit-de.zepp.com",
@@ -120,7 +120,7 @@ async def test_fetch_user_info_hits_expected_url_and_params():
     assert payload == {"code": 1, "data": {}, "message": "ok"}
     [call] = http.calls
     assert call["url"] == "https://api-mifit-us3.zepp.com/huami.health.getUserInfo.json"
-    assert call["params"]["userid"] == "3311629755"
+    assert call["params"]["userid"] == "99999999"
     _assert_required_headers(call)
 
 
@@ -135,7 +135,7 @@ async def test_fetch_heart_rate_passes_user_id_in_path_and_ms_range():
     payload = await fetch_heart_rate(http, token=_token(), from_time=from_dt, to_time=to_dt)
     assert payload == {"items": []}
     [call] = http.calls
-    assert call["url"] == "https://api-mifit-us3.zepp.com/users/3311629755/heartRate"
+    assert call["url"] == "https://api-mifit-us3.zepp.com/users/99999999/heartRate"
     # Compute expected ms ranges dynamically so the assertion is robust
     # across leap-year arithmetic mistakes and TZ surprises.
     assert call["params"]["startTime"] == int(from_dt.timestamp() * 1000)
@@ -171,7 +171,7 @@ async def test_fetch_band_data_defaults_to_summary():
     assert call["params"]["query_type"] == "summary"
     assert call["params"]["byteLength"] == 8
     assert call["params"]["device_type"] == 0
-    assert call["params"]["userid"] == "3311629755"
+    assert call["params"]["userid"] == "99999999"
 
 
 @pytest.mark.asyncio
@@ -192,10 +192,10 @@ async def test_fetch_spo2_events_uses_correct_event_type_and_subtype():
     to_dt = datetime(2026, 5, 22, 0, 0, tzinfo=UTC)
     await fetch_spo2_events(http, token=_token(), from_time=from_dt, to_time=to_dt)
     [call] = http.calls
-    assert call["url"] == "https://api-mifit-us3.zepp.com/users/3311629755/events"
+    assert call["url"] == "https://api-mifit-us3.zepp.com/users/99999999/events"
     assert call["params"]["eventType"] == "blood_oxygen"
     assert call["params"]["subType"] == "click"
-    assert call["params"]["userId"] == "3311629755"
+    assert call["params"]["userId"] == "99999999"
     assert call["params"]["reverse"] == "false"
     _assert_required_headers(call)
 
@@ -229,7 +229,7 @@ async def test_fetch_sport_load_uses_iso_day_range_and_reverse_flag():
     )
     [call] = http.calls
     assert call["url"] == (
-        "https://api-mifit-us3.zepp.com/v2/watch/users/3311629755/WatchSportStatistics/SPORT_LOAD"
+        "https://api-mifit-us3.zepp.com/v2/watch/users/99999999/WatchSportStatistics/SPORT_LOAD"
     )
     assert call["params"]["startDay"] == "2026-05-20"
     assert call["params"]["endDay"] == "2026-05-22"

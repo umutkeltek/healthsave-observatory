@@ -98,12 +98,12 @@ def test_parse_args_rejects_unknown_region(capsys):
 
 def test_materialize_token_from_token_string_happy_path():
     args = amazfit_authorize.parse_args(
-        ["--from-token", "TOKEN_BLOB", "--user-id", "3311629755", "--region", "us"]
+        ["--from-token", "TOKEN_BLOB", "--user-id", "99999999", "--region", "us"]
     )
     token = amazfit_authorize.materialize_token_from_args(args)
     assert isinstance(token, OAuthToken)
     assert token.access_token == "TOKEN_BLOB"
-    assert token.metadata["user_id"] == "3311629755"
+    assert token.metadata["user_id"] == "99999999"
     assert token.metadata["region"] == "us"
     assert token.metadata["base_url"] == "https://api-mifit-us3.zepp.com"
 
