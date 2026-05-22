@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -55,3 +57,32 @@ def test_source_plugin_docs_use_docker_safe_operator_commands():
     assert "docker compose run --rm --no-deps --build api python -c" in combined
     assert "docker compose run --rm --build api python scripts/whoop_authorize.py" in combined
     assert "docker compose run --rm --build api python scripts/amazfit_authorize.py" in combined
+
+
+def test_config_example_uses_healthsave_home_assistant_defaults():
+    config_text = (ROOT / "config.yaml.example").read_text()
+    config = yaml.safe_load(config_text)
+
+    mqtt = config["home_assistant"]["mqtt"]
+    assert mqtt["state_topic_prefix"] == "healthsave"
+    assert mqtt["device_identifier"] == "healthsave"
+    assert mqtt["device_name"] == "HealthSave"
+    assert "healthtrack_owl" not in config_text
+
+
+def test_remote_vm_deploy_docs_do_not_target_private_personal_stack():
+    deploy_script = (ROOT / "deploy" / "apps-vm" / "deploy.sh").read_text()
+    deploy_readme = (ROOT / "deploy" / "apps-vm" / "README.md").read_text()
+    combined = deploy_script + "\n" + deploy_readme
+
+    for private_marker in (
+        "apps.internal",
+        "HealthTrack",
+        "personal_stack",
+        "/srv/stacks/healthtrack",
+        "/srv/localappdata/healthtrack",
+    ):
+        assert private_marker not in combined
+
+    assert 'REMOTE_HOST="${REMOTE_HOST:-}"' in deploy_script
+    assert "REMOTE_HOST=your-vm.example" in deploy_readme

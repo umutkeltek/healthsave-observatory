@@ -72,12 +72,13 @@ home_assistant:
     broker: "localhost"
     port: 1883
     discovery_prefix: "homeassistant"
-    # Preserves HA's current aggregate contract:
-    # state topic `healthtrack/sensor/state`, discovery under
-    # `homeassistant/sensor/healthtrack/<metric>/config`.
-    state_topic_prefix: "healthtrack"
-    device_identifier: "healthtrack_owl"
-    device_name: "HealthTrack"
+    # Fresh installs use the HealthSave MQTT shape:
+    # state topic `healthsave/sensor/state`, discovery under
+    # `homeassistant/sensor/healthsave/<metric>/config`.
+    # Legacy healthtrack_* users can still pin the old shape with HA_MQTT_* env vars.
+    state_topic_prefix: "healthsave"
+    device_identifier: "healthsave"
+    device_name: "HealthSave"
     publish_interval_seconds: 60
 
 # Agents — Phase 7-C autonomous-agent supervisor (apps/agents).
