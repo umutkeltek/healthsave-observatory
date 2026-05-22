@@ -8,31 +8,31 @@
         "age": 0,
         "alarm_clock": "<str:0>",
         "avatar": "<str:0>",
-        "birthday": "<str:7>",
+        "birthday": "<redacted:str>",
         "calories": 0,
         "config": "<str:1246>",
-        "creat_time": 1765889571,
+        "creat_time": 0,
         "daysportgoal": "<str:0>",
         "defaultFields": {
           "<array>": "empty",
           "len": 0
         },
         "distance": 0,
-        "gender": 1,
-        "height": 179,
-        "last_login_time": 1765889571,
+        "gender": "<redacted:int>",
+        "height": "<redacted:int>",
+        "last_login_time": 0,
         "location": null,
         "manual_audit_avatar": null,
         "manual_audit_nick_name": null,
         "nick_name": "<str:11>",
         "signature": "<str:0>",
         "userIntroduction": null,
-        "weight": 78,
-        "weight_float": 78.0
+        "weight": "<redacted:int>",
+        "weight_float": "<redacted:float>"
       },
       "message": "<str:7>"
     },
-    "description": "getUserInfo \u2014 sanity check that this base + token combination is alive",
+    "description": "getUserInfo — sanity check that this base + token combination is alive (numeric PII redacted post-capture; the redactor preserves numbers by default, but health attributes are PII and must not ride with the fixtures)",
     "params_keys": [
       "r",
       "userid"

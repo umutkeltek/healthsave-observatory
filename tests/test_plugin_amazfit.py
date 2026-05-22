@@ -200,14 +200,14 @@ def test_token_from_app_token_string_happy_path():
 
     token = token_from_app_token_string(
         access_token="EXAMPLE_BLOB_xxxx",
-        user_id="3311629755",
+        user_id="99999999",
         region="us",
     )
     assert token.provider == PROVIDER
     assert token.access_token == "EXAMPLE_BLOB_xxxx"
     assert token.refresh_token is None
     assert token.metadata["region"] == "us"
-    assert token.metadata["user_id"] == "3311629755"
+    assert token.metadata["user_id"] == "99999999"
     assert token.metadata["base_url"] == "https://api-mifit-us3.zepp.com"
     assert token.expires_at is not None
 
@@ -217,11 +217,11 @@ def test_token_from_app_token_string_trims_whitespace():
 
     token = token_from_app_token_string(
         access_token="  EXAMPLE_BLOB  ",
-        user_id="  3311629755  ",
+        user_id="  99999999  ",
         region="  EU ",
     )
     assert token.access_token == "EXAMPLE_BLOB"
-    assert token.metadata["user_id"] == "3311629755"
+    assert token.metadata["user_id"] == "99999999"
     assert token.metadata["region"] == "eu"
 
 
@@ -254,7 +254,7 @@ def test_token_from_app_token_string_unknown_region_falls_back_to_us():
 _FIXTURE_HUAMI_TOKEN_OUTPUT = """\
 2026-05-22 23:10:08.408 | INFO | huami_token.zepp:login:68 - Logging in...
 2026-05-22 23:10:08.408 | DEBUG | huami_token.zepp:tokens:83 - encoded_payload=REDACTED
-2026-05-22 23:10:11.395 | INFO | huami_token.zepp:login:71 - Logged in! User id: 3311629755
+2026-05-22 23:10:11.395 | INFO | huami_token.zepp:login:71 - Logged in! User id: 99999999
 
 No logout!
 app_token=FAKE_APP_TOKEN_FOR_FIXTURE_ONLY
@@ -267,7 +267,7 @@ def test_token_from_huami_token_output_happy_path():
 
     token = token_from_huami_token_output(_FIXTURE_HUAMI_TOKEN_OUTPUT, region="us")
     assert token.access_token == "FAKE_APP_TOKEN_FOR_FIXTURE_ONLY"
-    assert token.metadata["user_id"] == "3311629755"
+    assert token.metadata["user_id"] == "99999999"
     assert token.metadata["region"] == "us"
     assert token.metadata["base_url"] == "https://api-mifit-us3.zepp.com"
 

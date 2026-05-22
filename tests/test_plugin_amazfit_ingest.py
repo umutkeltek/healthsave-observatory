@@ -142,7 +142,7 @@ def _token(*, expired: bool = False) -> OAuthToken:
         metadata={
             "base_url": "https://api-mifit-us3.zepp.com",
             "region": "us",
-            "user_id": "3311629755",
+            "user_id": "99999999",
         },
     )
 
@@ -154,7 +154,7 @@ def _band_data_b64(summary_obj: dict, date_str: str = "2026-05-21") -> dict:
         "message": "success",
         "data": [
             {
-                "uid": "3311629755",
+                "uid": "99999999",
                 "data_type": 0,
                 "date_time": date_str,
                 "summary": encoded,
@@ -172,7 +172,7 @@ def _plugin() -> AmazfitSource:
 def _ok_responses() -> dict[str, _Response]:
     """Canned 200 responses for all 5 fetched endpoints."""
     return {
-        "/users/3311629755/heartRate": _Response(
+        "/users/99999999/heartRate": _Response(
             200, {"items": [{"time": 1779408000000, "value": 72}]}
         ),
         # SpO2 + stress both hit /users/<id>/events — disambiguate via
@@ -283,9 +283,9 @@ async def test_ingest_happy_path_writes_per_metric_with_amazfit_source_tag():
 
     # All 5 fetcher endpoints were hit.
     urls_hit = [c["url"] for c in http.calls]
-    assert any("/users/3311629755/heartRate" in u for u in urls_hit)
+    assert any("/users/99999999/heartRate" in u for u in urls_hit)
     assert any("/v1/data/band_data.json" in u for u in urls_hit)
-    assert any("/users/3311629755/events" in u for u in urls_hit)
+    assert any("/users/99999999/events" in u for u in urls_hit)
     assert any("WatchSportStatistics/SPORT_LOAD" in u for u in urls_hit)
 
     # Device label is "Amazfit"

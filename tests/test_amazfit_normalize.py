@@ -82,7 +82,7 @@ def test_normalize_spo2_events_extracts_spo2_from_extra_json():
                 "subType": "click",
                 "timestamp": 1779322231000,
                 "timezone": "Europe/Istanbul",
-                "userId": "3311629755",
+                "userId": "99999999",
             }
         ]
     }
@@ -133,7 +133,7 @@ def test_normalize_stress_events_extracts_per_minute_values():
                 "data": json.dumps(data),
                 "eventType": "all_day_stress",
                 "timestamp": 1779397200001,
-                "userId": "3311629755",
+                "userId": "99999999",
             }
         ]
     }
@@ -170,7 +170,7 @@ def _band_data_payload(summary_obj: dict) -> dict:
         "message": "success",
         "data": [
             {
-                "uid": "3311629755",
+                "uid": "99999999",
                 "data_type": 0,
                 "date_time": "2026-05-21",
                 "source": 10289411,

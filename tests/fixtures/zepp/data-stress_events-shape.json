@@ -42,6 +42,6 @@
       "content_type": "application/json",
       "status": 200
     },
-    "url_template": "https://api-mifit-us3.zepp.com/users/3311629755/events"
+    "url_template": "https://api-mifit-us3.zepp.com/users/99999999/events"
   }
 }
