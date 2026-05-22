@@ -48,12 +48,14 @@ ENV_APP_TOKEN = "AMAZFIT_APP_TOKEN"
 ENV_USER_ID = "AMAZFIT_USER_ID"
 ENV_REGION = "AMAZFIT_REGION"
 
-# huami-token CLI output stability is best-effort upstream; we hedge
-# the materialized token at 25 days even though our probe surfaced an
-# ``expiration`` claim of ~11 days. Operators should re-extract well
-# before the underlying access token rotates so the poll never trips
-# the fail-loud expiry path.
-DEFAULT_TOKEN_TTL = timedelta(days=25)
+# Live probe (2026-05-22) surfaced an ``expiration`` claim of ~11 days
+# from the huami-token issuance flow. We hedge SHORTER (10 days) so the
+# worker trips the fail-loud expiry path BEFORE Zepp's real expiration
+# kicks in — otherwise the worker would silently 401 for 14+ days
+# against an actually-dead token while still claiming "not expired"
+# locally. The whole point of fail-loud expiry is operator awareness;
+# hedging longer than upstream defeats it.
+DEFAULT_TOKEN_TTL = timedelta(days=10)
 
 
 class AmazfitAuthError(Exception):

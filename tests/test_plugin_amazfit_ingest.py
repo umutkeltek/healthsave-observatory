@@ -318,7 +318,7 @@ async def test_ingest_routes_blood_oxygen_metric_from_spo2_events():
 
 
 @pytest.mark.asyncio
-async def test_ingest_routes_daily_activity_and_sleep_from_band_data():
+async def test_ingest_routes_daily_quantities_and_sleep_from_band_data():
     storage = _RecordingStorage()
     http = _HttpClient(responses=_ok_responses())
     token_store = _TokenStore(token=_token())
@@ -331,9 +331,42 @@ async def test_ingest_routes_daily_activity_and_sleep_from_band_data():
         }
     )
     metrics_written = {c["metric"] for c in storage.ingest_calls}
-    assert "daily_activity" in metrics_written
-    assert "sleep_analysis" in metrics_written
-    assert "heart_rate" in metrics_written  # includes daily-max sample
+    # daily_activity is emitted as per-quantity metric batches so each
+    # lands in its own daily_activity column via _ingest_daily_quantity
+    # (rather than the catch-all generic write that dropped columns).
+    assert "step_count" in metrics_written
+    assert "distance_walking_running" in metrics_written
+    assert "active_energy_burned" in metrics_written
+    # sleep is emitted as a duration quantity sample (v1 punts on
+    # stage decomposition until Zepp's mode codes are confirmed).
+    assert "sleep_duration_hours" in metrics_written
+    # heart_rate batch includes the daily-max sample from band_data.
+    assert "heart_rate" in metrics_written
+
+
+@pytest.mark.asyncio
+async def test_ingest_does_not_emit_deprecated_metric_names():
+    """Anti-regression: H-ingest's first cut emitted ``daily_activity``
+    and ``sleep_analysis`` metric names that routed to wrong handlers
+    (generic catch-all that dropped row columns; _ingest_sleep that
+    expected per-segment HealthKit shape we never produce). These
+    metric names must NOT come back without a corresponding sample
+    shape that the storage router actually accepts.
+    """
+    storage = _RecordingStorage()
+    http = _HttpClient(responses=_ok_responses())
+    token_store = _TokenStore(token=_token())
+    await _plugin().ingest(
+        {
+            "storage": storage,
+            "session": object(),
+            "http_client": http,
+            "token_store": token_store,
+        }
+    )
+    metrics_written = {c["metric"] for c in storage.ingest_calls}
+    assert "daily_activity" not in metrics_written
+    assert "sleep_analysis" not in metrics_written
 
 
 @pytest.mark.asyncio

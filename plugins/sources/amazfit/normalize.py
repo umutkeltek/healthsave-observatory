@@ -15,7 +15,8 @@ Specifically:
     ``data`` string (list of ``{time, value}``).
   * band_data summaries are base64-encoded JSON with ``stp.ttl``
     (steps), ``stp.dis`` (distance m), ``stp.cal`` (calories),
-    ``slp`` (sleep segments), ``hr.maxHr`` (daily max HR).
+    ``slp`` (sleep aggregate; per-stage segments use Zepp-internal
+    ``mode`` codes we do not decode in v1), ``hr.maxHr`` (daily max HR).
   * heart_rate items shape is not directly captured (no data on the
     probed days). We accept the two common community shapes
     (``{time,value}`` and ``{timestamp,bpm}``) and surface unknowns
@@ -24,6 +25,26 @@ Specifically:
 Every emitted sample carries ``source="Amazfit"`` so the source-aware
 HA bridge and per-source dashboards split cleanly from Apple Watch /
 Whoop entries.
+
+Metric-name → storage-router mapping (per
+``packages/py/storage/timescale/measurements.py:_ingest_metric``):
+
+  ``heart_rate`` → DEDICATED_TABLES → ``heart_rate``
+  ``blood_oxygen`` → DEDICATED_TABLES → ``blood_oxygen``
+  ``step_count`` → DAILY_ACTIVITY_QUANTITY_FIELDS → ``daily_activity.steps``
+  ``distance_walking_running`` → DAILY_ACTIVITY_QUANTITY_FIELDS
+       → ``daily_activity.distance_m``
+  ``active_energy_burned`` → DAILY_ACTIVITY_QUANTITY_FIELDS
+       → ``daily_activity.active_calories``
+  ``sleep_duration_hours`` → catch-all → ``quantity_samples``
+  ``stress`` / ``training_load`` → catch-all → ``quantity_samples``
+
+We deliberately do NOT emit ``sleep_analysis`` metric (which routes
+to ``_ingest_sleep`` expecting HealthKit-style per-segment samples).
+Zepp's ``slp.stage`` segments use proprietary ``mode`` codes; mapping
+them to HealthKit stages without ground-truth would be lossy
+fiction. v1 stores only the daily duration as a quantity sample,
+matching Whoop's choice for the same reason (see f6ef6b0).
 """
 
 from __future__ import annotations
@@ -204,7 +225,7 @@ def normalize_stress_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def normalize_band_data(payload: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
-    """Extract daily activity + sleep + max-HR samples from a
+    """Extract per-metric daily quantity samples from a
     ``/v1/data/band_data.json`` summary payload.
 
     The payload is shaped ``{code, message, data: [<day records>]}``.
@@ -218,14 +239,24 @@ def normalize_band_data(payload: dict[str, Any]) -> dict[str, list[dict[str, Any
           ...
         }
 
-    Returns a dict with three keys:
-      * ``daily_activity`` — one row per day with steps + distance + cal
-      * ``sleep_sessions`` — one row per night when slp.st > 0
-      * ``heart_rate`` — one row per day for the maxHr sample, if hr > 0
+    Returns a dict keyed by storage-layer metric name so the caller
+    can ``ingest_metric(metric, samples)`` directly. Each value list
+    is in HealthKit-quantity shape (``{date, qty, source, [unit]}``)
+    so the storage router lands rows in the correct table:
+
+      * ``step_count``               → ``daily_activity.steps``
+      * ``distance_walking_running`` → ``daily_activity.distance_m``
+      * ``active_energy_burned``     → ``daily_activity.active_calories``
+      * ``heart_rate``               → ``heart_rate`` table (daily max)
+      * ``sleep_duration_hours``     → ``quantity_samples`` (catch-all;
+        we punt on stage decomposition until Zepp's ``mode`` codes are
+        confirmed against a known night).
     """
     records = (payload or {}).get("data") or []
-    daily_activity: list[dict[str, Any]] = []
-    sleep_sessions: list[dict[str, Any]] = []
+    step_count: list[dict[str, Any]] = []
+    distance: list[dict[str, Any]] = []
+    active_energy: list[dict[str, Any]] = []
+    sleep_hours: list[dict[str, Any]] = []
     heart_rate: list[dict[str, Any]] = []
 
     for rec in records:
@@ -236,28 +267,32 @@ def normalize_band_data(payload: dict[str, Any]) -> dict[str, list[dict[str, Any
         if not isinstance(summary, dict):
             continue
 
-        # Daily activity from stp.* — steps, distance (m), active cal.
+        # Daily activity from stp.* — emitted as three quantity batches
+        # so each lands in its own daily_activity column via
+        # _ingest_daily_quantity. Each batch carries {date, qty, source}.
         stp = summary.get("stp") or {}
         if isinstance(stp, dict) and date_str:
             steps = stp.get("ttl")
+            if isinstance(steps, (int, float)) and steps >= 0:
+                step_count.append({"date": date_str, "qty": int(steps), "source": SOURCE_TAG})
             dist = stp.get("dis")
+            if isinstance(dist, (int, float)) and dist >= 0:
+                distance.append({"date": date_str, "qty": float(dist), "source": SOURCE_TAG})
             cal = stp.get("cal")
-            if steps is not None or dist is not None or cal is not None:
-                row: dict[str, Any] = {"date": date_str, "source": SOURCE_TAG}
-                if steps is not None:
-                    row["steps"] = int(steps)
-                if dist is not None:
-                    row["distance_m"] = float(dist)
-                if cal is not None:
-                    row["active_calories"] = float(cal)
-                daily_activity.append(row)
+            if isinstance(cal, (int, float)) and cal >= 0:
+                active_energy.append({"date": date_str, "qty": float(cal), "source": SOURCE_TAG})
 
-        # Sleep — slp.st / slp.ed are minute-resolution Unix epochs in
-        # the local timezone offset (slp.tz / outer tz=10800 seconds).
-        # slp.dp = deep minutes, slp.lb = light minutes (community
-        # convention; unverified for newer firmware).
+        # Sleep — Zepp surfaces slp.st / slp.ed as minute-resolution
+        # Unix epochs and slp.{dp,lb,wk} as per-stage minute counts.
+        # slp.stage segments use proprietary ``mode`` codes we do not
+        # decode in v1 (mapping them to HealthKit stages without
+        # ground-truth would be lossy fiction; matches Whoop's f6ef6b0
+        # decision for the same reason). v1 stores only total duration
+        # as a quantity sample so dashboards have nightly hours; richer
+        # stage breakdown is a follow-up once the mode-code mapping is
+        # confirmed against a known night.
         slp = summary.get("slp") or {}
-        if isinstance(slp, dict):
+        if isinstance(slp, dict) and date_str:
             st_min = slp.get("st")
             ed_min = slp.get("ed")
             if (
@@ -266,22 +301,23 @@ def normalize_band_data(payload: dict[str, Any]) -> dict[str, list[dict[str, Any
                 and st_min > 0
                 and ed_min > st_min
             ):
-                # Minute-resolution epoch — multiply by 60 for seconds.
-                start_dt = datetime.fromtimestamp(st_min * 60, tz=UTC)
-                end_dt = datetime.fromtimestamp(ed_min * 60, tz=UTC)
-                session: dict[str, Any] = {
-                    "start": start_dt.isoformat(),
-                    "end": end_dt.isoformat(),
-                    "total_duration_ms": int((end_dt - start_dt).total_seconds() * 1000),
-                    "source": SOURCE_TAG,
-                }
-                if isinstance(slp.get("dp"), int) and slp["dp"] > 0:
-                    session["deep_ms"] = slp["dp"] * 60 * 1000
-                if isinstance(slp.get("lb"), int) and slp["lb"] > 0:
-                    session["light_ms"] = slp["lb"] * 60 * 1000
-                if isinstance(slp.get("wk"), int) and slp["wk"] > 0:
-                    session["awake_ms"] = slp["wk"] * 60 * 1000
-                sleep_sessions.append(session)
+                hours = (ed_min - st_min) / 60.0
+                # Stamp at noon UTC of the date so dashboards plot once
+                # per day rather than at the wake-up timestamp (which
+                # tz-shifts the bucket on a per-night basis).
+                try:
+                    ts = datetime.fromisoformat(f"{date_str}T12:00:00+00:00")
+                except ValueError:
+                    ts = None
+                if ts is not None and 0 < hours < 24:
+                    sleep_hours.append(
+                        {
+                            "date": ts.isoformat(),
+                            "qty": hours,
+                            "source": SOURCE_TAG,
+                            "unit": "hours",
+                        }
+                    )
 
         # Max-HR for the day — emit a single heart_rate row if non-zero.
         hr_block = summary.get("hr") or {}
@@ -307,8 +343,10 @@ def normalize_band_data(payload: dict[str, Any]) -> dict[str, list[dict[str, Any
                     )
 
     return {
-        "daily_activity": daily_activity,
-        "sleep_sessions": sleep_sessions,
+        "step_count": step_count,
+        "distance_walking_running": distance,
+        "active_energy_burned": active_energy,
+        "sleep_duration_hours": sleep_hours,
         "heart_rate": heart_rate,
     }
 
