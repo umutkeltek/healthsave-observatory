@@ -1,0 +1,47 @@
+{
+  "endpoint": "user_info",
+  "shape": {
+    "base": "https://api-mifit-us3.zepp.com",
+    "body_shape": {
+      "code": 1,
+      "data": {
+        "age": 0,
+        "alarm_clock": "<str:0>",
+        "avatar": "<str:0>",
+        "birthday": "<str:7>",
+        "calories": 0,
+        "config": "<str:1246>",
+        "creat_time": 1765889571,
+        "daysportgoal": "<str:0>",
+        "defaultFields": {
+          "<array>": "empty",
+          "len": 0
+        },
+        "distance": 0,
+        "gender": 1,
+        "height": 179,
+        "last_login_time": 1765889571,
+        "location": null,
+        "manual_audit_avatar": null,
+        "manual_audit_nick_name": null,
+        "nick_name": "<str:11>",
+        "signature": "<str:0>",
+        "userIntroduction": null,
+        "weight": 78,
+        "weight_float": 78.0
+      },
+      "message": "<str:7>"
+    },
+    "description": "getUserInfo \u2014 sanity check that this base + token combination is alive",
+    "params_keys": [
+      "r",
+      "userid"
+    ],
+    "response": {
+      "body_bytes": 1893,
+      "content_type": "application/json",
+      "status": 200
+    },
+    "url_template": "https://api-mifit-us3.zepp.com/huami.health.getUserInfo.json"
+  }
+}

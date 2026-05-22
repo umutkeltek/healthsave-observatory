@@ -1,0 +1,26 @@
+{
+  "endpoint": "heart_rate",
+  "shape": {
+    "base": "https://api-mifit-us3.zepp.com",
+    "body_shape": {
+      "items": {
+        "<array>": "empty",
+        "len": 0
+      }
+    },
+    "description": "Heart rate per-minute readings, REST path",
+    "params_keys": [
+      "endTime",
+      "limit",
+      "r",
+      "startTime",
+      "type"
+    ],
+    "response": {
+      "body_bytes": 12,
+      "content_type": "application/json",
+      "status": 200
+    },
+    "url_template": "https://api-mifit-us3.zepp.com/users/3311629755/heartRate"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "endpoint": "band_data",
+  "shape": {
+    "base": "https://api-mifit-us3.zepp.com",
+    "body_shape": {
+      "code": 1,
+      "data": {
+        "<array>": "shape of first element only",
+        "first": {
+          "data_type": 0,
+          "date_time": "<str:10>",
+          "device_id": "<str:14>",
+          "source": 10289411,
+          "summary": "<str:2748>",
+          "uid": "<str:10>",
+          "uuid": "<str:36>"
+        },
+        "len": 1
+      },
+      "message": "<str:7>"
+    },
+    "description": "Band daily data \u2014 steps + sleep summary",
+    "params_keys": [
+      "byteLength",
+      "device_type",
+      "from_date",
+      "query_type",
+      "r",
+      "to_date",
+      "userid"
+    ],
+    "response": {
+      "body_bytes": 2953,
+      "content_type": "application/json",
+      "status": 200
+    },
+    "url_template": "https://api-mifit-us3.zepp.com/v1/data/band_data.json"
+  }
+}
