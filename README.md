@@ -28,7 +28,7 @@ You point your iPhone at it. It stores everything from your Apple Watch (heart r
 - A long-term store for every Apple Health metric your phone collects, queryable with normal SQL
 - A set of ready-made Grafana dashboards (heart, sleep, activity, workouts) that work the moment data starts flowing
 - An optional AI briefing system that turns numbers into plain English ("HRV trended down three days in a row, sleep was light last night, expect a low-energy morning")
-- A clean ingest API anyone can build against - the iOS app is one client, Garmin Connect exports are another via [`scripts/import_garmin.py`](scripts/import_garmin.py)
+- A clean ingest API anyone can build against - the iOS app is one client, Garmin Connect exports and Samsung/Huawei Health Sync CSVs are others via [`scripts/import_garmin.py`](scripts/import_garmin.py) and [`scripts/import_samsung.py`](scripts/import_samsung.py)
 - Drop-in examples for piping selected metrics into Home Assistant for automations
 
 The entire stack runs in Docker on a laptop, a NUC, a Mac mini, a Synology, or a beefy workstation - your choice. Nothing phones home.
@@ -330,6 +330,36 @@ Mapping:
 | FIT/TCX heart-rate records | `heart_rate` | `heart_rate` |
 | Daily step totals (JSON) | `step_count` | `daily_activity.steps` |
 | Sleep stages (JSON) | `sleep_analysis` | `sleep_sessions` + `sleep_stages` |
+
+### Samsung / Huawei Health Sync Imports
+
+Android users can sideload Samsung Health or Huawei Health data exported through
+the Android [Health Sync](https://healthsync.app/) app via
+`scripts/import_samsung.py`. The importer reads Health Sync CSV folders and sends
+the same `/api/apple/batch` payload shape as the iOS app, so deduplication,
+auditing, sync receipts, and dashboards all stay on the normal ingest path.
+
+Supported Health Sync folders:
+
+| Folder | HealthSave metric | Server table |
+|--------|-------------------|--------------|
+| `Health Sync Steps/` | `step_count` | `daily_activity.steps` |
+| `Health Sync Heart rate/` | `heart_rate` | `heart_rate` |
+| `Health Sync Sleep/` | `sleep_analysis` | `sleep_sessions` + `sleep_stages` |
+| `Health Sync Weight/` | `body_mass`, `body_fat_percentage` | `quantity_samples` |
+| `Health Sync Oxygen saturation/` | `oxygen_saturation` | `blood_oxygen` |
+
+Run it:
+
+```bash
+# Sanity-check the export before sending
+python scripts/import_samsung.py /path/to/health-sync-export --dry-run
+
+# Send to a local datahub
+python scripts/import_samsung.py /path/to/health-sync-export \
+  --server http://localhost:8000 \
+  --api-key $HDH_API_KEY
+```
 
 ### Grafana Dashboards
 

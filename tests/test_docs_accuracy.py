@@ -86,3 +86,13 @@ def test_remote_vm_deploy_docs_do_not_target_private_personal_stack():
 
     assert 'REMOTE_HOST="${REMOTE_HOST:-}"' in deploy_script
     assert "REMOTE_HOST=your-vm.example" in deploy_readme
+
+
+def test_readme_and_bridge_list_shipped_importers():
+    readme = (ROOT / "README.md").read_text()
+    bridge = (ROOT / "BRIDGE.md").read_text()
+
+    for text in (readme, bridge):
+        assert "scripts/import_garmin.py" in text
+        assert "scripts/import_samsung.py" in text
+        assert "Health Sync" in text

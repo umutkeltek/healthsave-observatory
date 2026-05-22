@@ -58,7 +58,7 @@ Things people actually trip on. Worth reading before `./setup.sh`.
 - Six auto-provisioned Grafana dashboards: HealthSave Overview, Activity & Movement, Heart, Sleep, Insights, and Workouts
 - An optional two-brain AI briefing: a deterministic statistical engine flags interesting signals, a local LLM turns them into a short morning narrative
 - A working Home Assistant example package in `integrations/home-assistant/` (SQL sensors + automations)
-- A Garmin Connect importer in `scripts/import_garmin.py` for ZIP/FIT/TCX/JSON
+- Garmin Connect and Samsung/Huawei Health Sync importers in `scripts/import_garmin.py` and `scripts/import_samsung.py`
 - A pluggable storage backend interface — implement the `IngestStorage` protocol if you'd rather store in InfluxDB, ClickHouse, DuckDB, or MQTT only. The first community implementation, [health-data-to-mqtt](https://github.com/bietiekay/health-data-to-mqtt), already does this.
 
 ## Links
