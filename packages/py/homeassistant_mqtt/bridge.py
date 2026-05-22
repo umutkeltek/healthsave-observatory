@@ -21,9 +21,13 @@ class HomeAssistantMQTTConfig:
     username: str = ""
     password: str = ""
     discovery_prefix: str = "homeassistant"
-    state_topic_prefix: str = "healthtrack"
-    device_identifier: str = "healthtrack_owl"
-    device_name: str = "HealthTrack"
+    # Rebranded from 'healthtrack' (the personal_stack-era prefix) to
+    # 'healthsave' on the datahub side. Env vars HA_MQTT_STATE_TOPIC_PREFIX
+    # / HA_MQTT_DEVICE_IDENTIFIER / HA_MQTT_DEVICE_NAME still override
+    # so users on the legacy HA setup can pin the old shape.
+    state_topic_prefix: str = "healthsave"
+    device_identifier: str = "healthsave"
+    device_name: str = "HealthSave"
     publish_interval_seconds: int = 60
 
 
@@ -46,50 +50,57 @@ MQTTMessage = tuple[str, dict[str, Any] | str, bool]
 
 
 def default_sensor_specs() -> list[SensorSpec]:
-    """Sensors expected by Umut's Ambient OS / HealthTrack HA dashboard."""
+    """Default aggregate-device sensors the bridge publishes today.
+
+    Source-aware sub-devices (per-source HR/HRV/steps/sleep) land in
+    the P5-d bridge rewrite. P5-b keeps the wire shape the same and
+    only rebrands the entity_id + display-name strings from the
+    personal_stack-era ``healthtrack_*`` to the datahub-canonical
+    ``healthsave_*``.
+    """
 
     return [
         SensorSpec(
             key="heart_rate",
-            entity_id="sensor.healthtrack_heart_rate",
-            name="HealthTrack Heart Rate",
+            entity_id="sensor.healthsave_heart_rate",
+            name="HealthSave Heart Rate",
             unit="bpm",
             state_class="measurement",
             icon="mdi:heart-pulse",
         ),
         SensorSpec(
             key="hrv_7d_avg",
-            entity_id="sensor.healthtrack_hrv_7d_avg",
-            name="HealthTrack HRV 7d Avg",
+            entity_id="sensor.healthsave_hrv_7d_avg",
+            name="HealthSave HRV 7d Avg",
             unit="ms",
             state_class="measurement",
             icon="mdi:heart",
         ),
         SensorSpec(
             key="steps_today",
-            entity_id="sensor.healthtrack_steps_today",
-            name="HealthTrack Steps Today",
+            entity_id="sensor.healthsave_steps_today",
+            name="HealthSave Steps Today",
             state_class="total",
             icon="mdi:walk",
         ),
         SensorSpec(
             key="last_sleep_hours",
-            entity_id="sensor.healthtrack_last_sleep_hours",
-            name="HealthTrack Last Sleep Hours",
+            entity_id="sensor.healthsave_last_sleep_hours",
+            name="HealthSave Last Sleep Hours",
             unit="h",
             state_class="measurement",
             icon="mdi:sleep",
         ),
         SensorSpec(
             key="source_model",
-            entity_id="sensor.health_source_model",
-            name="Health Source Model",
+            entity_id="sensor.healthsave_source_model",
+            name="HealthSave Source Model",
             icon="mdi:database-eye",
         ),
         SensorSpec(
             key="room_health_state",
-            entity_id="sensor.room_health_state",
-            name="Room Health State",
+            entity_id="sensor.healthsave_room_health_state",
+            name="HealthSave Room State",
             icon="mdi:home-heart",
         ),
     ]
@@ -113,7 +124,7 @@ def _device_payload(config: HomeAssistantMQTTConfig) -> dict[str, Any]:
     return {
         "identifiers": [config.device_identifier],
         "manufacturer": "HealthSave",
-        "model": "Health Data Hub MQTT Bridge",
+        "model": "HealthSave Data Hub MQTT Bridge",
         "name": config.device_name,
     }
 
