@@ -150,7 +150,7 @@ services:
       retries: 3
 
   # Home Assistant MQTT bridge — optional, independent of Grafana.
-  # Publishes retained MQTT discovery + state topics (`healthtrack_*`) so
+  # Publishes retained MQTT discovery + state topics (`healthsave_*`) so
   # Home Assistant dashboards/automations do not need direct DB access.
   homeassistant-mqtt:
     build: .
@@ -182,6 +182,7 @@ services:
       db:
         condition: service_healthy
     environment:
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-changeme}
     volumes:
       - grafana_data:/var/lib/grafana
