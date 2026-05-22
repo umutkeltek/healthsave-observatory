@@ -77,48 +77,69 @@ def default_sensor_specs() -> list[SensorSpec]:
     ``healthtrack_*`` to the datahub-canonical ``healthsave_*``.
     """
 
+    return _sensor_specs(entity_prefix="healthsave", display_name="HealthSave")
+
+
+def sensor_specs_for_config(config: HomeAssistantMQTTConfig) -> list[SensorSpec]:
+    """Aggregate-device sensors for the configured Home Assistant shape.
+
+    The MQTT topic prefix, Home Assistant object ids, and display names
+    should move together. That keeps the default HealthSave device clean
+    while still letting legacy deployments publish ``healthtrack_*``
+    entities until their dashboards are migrated.
+    """
+
+    return _sensor_specs(
+        entity_prefix=_topic_part(config.state_topic_prefix),
+        display_name=config.device_name,
+    )
+
+
+def _sensor_specs(entity_prefix: str, display_name: str) -> list[SensorSpec]:
+    prefix = _topic_part(entity_prefix)
+    name = display_name.strip() or "HealthSave"
     return [
         SensorSpec(
             key="heart_rate",
-            entity_id="sensor.healthsave_heart_rate",
-            name="HealthSave Heart Rate",
+            entity_id=f"sensor.{prefix}_heart_rate",
+            name=f"{name} Heart Rate",
             unit="bpm",
             state_class="measurement",
             icon="mdi:heart-pulse",
         ),
         SensorSpec(
             key="hrv_7d_avg",
-            entity_id="sensor.healthsave_hrv_7d_avg",
-            name="HealthSave HRV 7d Avg",
+            entity_id=f"sensor.{prefix}_hrv_7d_avg",
+            name=f"{name} HRV 7d Avg",
             unit="ms",
             state_class="measurement",
             icon="mdi:heart",
         ),
         SensorSpec(
             key="steps_today",
-            entity_id="sensor.healthsave_steps_today",
-            name="HealthSave Steps Today",
+            entity_id=f"sensor.{prefix}_steps_today",
+            name=f"{name} Steps Today",
             state_class="total",
             icon="mdi:walk",
         ),
         SensorSpec(
             key="last_sleep_hours",
-            entity_id="sensor.healthsave_last_sleep_hours",
-            name="HealthSave Last Sleep Hours",
+            entity_id=f"sensor.{prefix}_last_sleep_hours",
+            name=f"{name} Last Sleep Hours",
             unit="h",
             state_class="measurement",
             icon="mdi:sleep",
         ),
         SensorSpec(
             key="source_model",
-            entity_id="sensor.healthsave_source_model",
-            name="HealthSave Source Model",
+            entity_id=f"sensor.{prefix}_source_model",
+            name=f"{name} Source Model",
             icon="mdi:database-eye",
         ),
         SensorSpec(
             key="room_health_state",
-            entity_id="sensor.healthsave_room_health_state",
-            name="HealthSave Room State",
+            entity_id=f"sensor.{prefix}_room_health_state",
+            name=f"{name} Room State",
             icon="mdi:home-heart",
         ),
     ]

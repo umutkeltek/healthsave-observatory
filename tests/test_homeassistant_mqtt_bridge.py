@@ -11,6 +11,7 @@ from homeassistant_mqtt.bridge import (
     build_source_state_message,
     build_state_messages,
     default_sensor_specs,
+    sensor_specs_for_config,
     source_state_topic,
 )
 from homeassistant_mqtt.snapshot import HealthSnapshot, SourceHealthSnapshot
@@ -253,14 +254,12 @@ def test_legacy_healthtrack_brand_remains_reachable_via_env_overrides() -> None:
         device_identifier="healthtrack_owl",
         device_name="HealthTrack",
     )
-    spec = SensorSpec(
-        key="heart_rate",
-        entity_id="sensor.healthtrack_heart_rate",
-        name="HealthTrack Heart Rate",
-        unit="bpm",
-    )
+    specs = sensor_specs_for_config(config)
 
-    messages = build_discovery_messages(config, [spec])
+    assert specs[0].entity_id == "sensor.healthtrack_heart_rate"
+    assert specs[0].name == "HealthTrack Heart Rate"
+
+    messages = build_discovery_messages(config, [specs[0]])
     topic, payload, _ = messages[0]
     assert topic == "homeassistant/sensor/healthtrack/heart_rate/config"
     assert payload["availability_topic"] == "healthtrack/status"
