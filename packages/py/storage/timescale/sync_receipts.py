@@ -140,6 +140,74 @@ async def latest_sync_run(session: AsyncSession) -> dict[str, Any]:
     return summary
 
 
+async def sync_run(session: AsyncSession, sync_run_id: str) -> dict[str, Any]:
+    """Return a receipt-level summary for one HealthSave sync run.
+
+    This is a delivery receipt summary: it proves Data Hub saw and accepted
+    batches for the run. It does not claim manifest-level sample verification.
+    """
+
+    result = await session.execute(
+        text(
+            """
+            SELECT
+                metric,
+                min(received_at) AS started_at,
+                max(coalesce(completed_at, received_at)) AS completed_at,
+                count(*) AS batches_seen,
+                count(*) FILTER (WHERE status = 'processed') AS batches_processed,
+                count(*) FILTER (WHERE status = 'empty') AS batches_empty,
+                count(*) FILTER (WHERE status = 'failed') AS batches_failed,
+                coalesce(sum(records_accepted), 0) AS records_accepted,
+                coalesce(sum(records_skipped), 0) AS records_skipped,
+                NULL AS latest_sample_end_at
+            FROM healthsave_sync_receipts
+            WHERE sync_run_id = :sync_run_id
+            GROUP BY metric
+            ORDER BY metric
+            """
+        ),
+        {"sync_run_id": sync_run_id},
+    )
+    rows = [dict(row) for row in result.mappings().all()]
+    if not rows:
+        return {
+            "status": "empty",
+            "sync_run_id": sync_run_id,
+            "message": "No HealthSave sync receipts recorded for this run.",
+        }
+
+    per_metric = {
+        row["metric"]: {
+            "batches_seen": row["batches_seen"],
+            "batches_processed": row["batches_processed"],
+            "batches_empty": row["batches_empty"],
+            "batches_failed": row["batches_failed"],
+            "accepted": row["records_accepted"],
+            "rejected": row["records_skipped"],
+            "latest_sample_end_at": row["latest_sample_end_at"],
+        }
+        for row in rows
+    }
+    return {
+        "status": "ok",
+        "sync_run_id": sync_run_id,
+        "verification_level": "delivery_receipt",
+        "started_at": min(row["started_at"] for row in rows if row["started_at"] is not None),
+        "completed_at": max(row["completed_at"] for row in rows if row["completed_at"] is not None),
+        "summary": {
+            "metrics_seen": len(rows),
+            "batches_seen": sum(row["batches_seen"] for row in rows),
+            "batches_processed": sum(row["batches_processed"] for row in rows),
+            "batches_empty": sum(row["batches_empty"] for row in rows),
+            "batches_failed": sum(row["batches_failed"] for row in rows),
+            "records_accepted": sum(row["records_accepted"] for row in rows),
+            "records_rejected": sum(row["records_skipped"] for row in rows),
+        },
+        "per_metric": per_metric,
+    }
+
+
 async def sync_coverage(session: AsyncSession) -> dict[str, Any]:
     """Return metric-level receipt coverage from the Data Hub side."""
 

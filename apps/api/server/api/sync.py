@@ -53,6 +53,13 @@ async def latest_sync_run(session: Any = Depends(get_session)) -> dict:
     return await sync_receipts.latest_sync_run(session)
 
 
+@router.get("/api/v2/sync/runs/{sync_run_id}", dependencies=[Depends(verify_api_key)])
+async def sync_run(sync_run_id: str, session: Any = Depends(get_session)) -> dict:
+    """Return the delivery receipt summary for one HealthSave sync run."""
+
+    return await sync_receipts.sync_run(session, sync_run_id)
+
+
 @router.get("/api/v2/sync/coverage", dependencies=[Depends(verify_api_key)])
 async def sync_coverage(session: Any = Depends(get_session)) -> dict:
     """Return metric-level receipt coverage from the Data Hub side."""
