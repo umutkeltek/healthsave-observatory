@@ -119,6 +119,9 @@ write_env_file "db-pass" "grafana-pass" "api-key"
         "HA_MQTT_STATE_TOPIC_PREFIX=healthsave",
         "HA_MQTT_DEVICE_IDENTIFIER=healthsave",
         "HA_MQTT_DEVICE_NAME=HealthSave",
+        "HA_MQTT_LEGACY_STATE_TOPIC_PREFIX=",
+        "HA_MQTT_LEGACY_DEVICE_IDENTIFIER=",
+        "HA_MQTT_LEGACY_DEVICE_NAME=",
         "HA_MQTT_PUBLISH_INTERVAL_SECONDS=60",
         "MOSQUITTO_PORT=1883",
     ):

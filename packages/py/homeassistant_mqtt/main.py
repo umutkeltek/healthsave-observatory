@@ -11,6 +11,7 @@ from server.db.session import async_session, engine
 from storage.timescale.homeassistant import TimescaleHealthSnapshotRepository
 
 from .bridge import (
+    HomeAssistantMQTTConfig,
     build_availability_message,
     build_discovery_messages,
     build_legacy_availability_messages,
@@ -26,7 +27,9 @@ log = logging.getLogger("healthsave.homeassistant_mqtt")
 
 
 async def publish_once(
-    repository: TimescaleHealthSnapshotRepository, publisher: PahoMQTTPublisher
+    repository: TimescaleHealthSnapshotRepository,
+    publisher: PahoMQTTPublisher,
+    publish_configs: tuple[HomeAssistantMQTTConfig, ...] | None = None,
 ) -> None:
     """Fetch one aggregate + per-source snapshot pass and publish them.
 
@@ -38,18 +41,21 @@ async def publish_once(
     event — retained means HA only re-processes when payload changes.
     """
 
-    specs = sensor_specs_for_config(publisher.config)
+    configs = publish_configs or (publisher.config,)
     async with async_session() as session:
         snapshot = await repository.fetch_snapshot(session)
         source_snapshots = await repository.fetch_snapshots_by_source(session)
 
-    # Aggregate parent device — unchanged behaviour for backward-compat.
-    publisher.publish_many(build_state_messages(publisher.config, specs, snapshot))
+    for config in configs:
+        specs = sensor_specs_for_config(config)
 
-    # Per-source sub-devices.
-    for source in source_snapshots:
-        publisher.publish_many(build_source_discovery_messages(publisher.config, source))
-        publisher.publish_many([build_source_state_message(publisher.config, source)])
+        # Aggregate parent device — unchanged behaviour for backward-compat.
+        publisher.publish_many(build_state_messages(config, specs, snapshot))
+
+        # Per-source sub-devices.
+        for source in source_snapshots:
+            publisher.publish_many(build_source_discovery_messages(config, source))
+            publisher.publish_many([build_source_state_message(config, source)])
 
 
 async def run() -> None:
@@ -61,18 +67,18 @@ async def run() -> None:
     repository = TimescaleHealthSnapshotRepository()
     publisher = PahoMQTTPublisher(bridge_config.mqtt)
     publisher.connect()
-    specs = sensor_specs_for_config(bridge_config.mqtt)
-    publisher.publish_many(
-        [build_availability_message(bridge_config.mqtt)]
-        + build_legacy_availability_messages(bridge_config.mqtt)
-    )
-    publisher.publish_many(build_discovery_messages(bridge_config.mqtt, specs))
+    publish_configs = bridge_config.publish_configs
+    for config in publish_configs:
+        specs = sensor_specs_for_config(config)
+        publisher.publish_many(
+            [build_availability_message(config)] + build_legacy_availability_messages(config)
+        )
+        publisher.publish_many(build_discovery_messages(config, specs))
     log.info(
-        "Home Assistant MQTT bridge publishing %s sensors to broker=%s port=%s prefix=%s",
-        len(specs),
+        "Home Assistant MQTT bridge publishing to broker=%s port=%s prefixes=%s",
         bridge_config.mqtt.broker,
         bridge_config.mqtt.port,
-        bridge_config.mqtt.state_topic_prefix,
+        ",".join(config.state_topic_prefix for config in publish_configs),
     )
 
     stop_event = asyncio.Event()
@@ -83,7 +89,7 @@ async def run() -> None:
     try:
         while not stop_event.is_set():
             try:
-                await publish_once(repository, publisher)
+                await publish_once(repository, publisher, publish_configs=publish_configs)
             except Exception:
                 log.exception("Home Assistant MQTT bridge publish failed")
             with suppress(TimeoutError):

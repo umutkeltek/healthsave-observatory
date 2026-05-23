@@ -45,6 +45,15 @@ def test_mqtt_service_name_matches_ha_bridge_default_broker():
     assert ha["HA_MQTT_BROKER"] == "${HA_MQTT_BROKER:-mqtt}"
 
 
+def test_home_assistant_bridge_exposes_legacy_alias_env():
+    services = _compose()["services"]
+    ha = services["homeassistant-mqtt"]["environment"]
+
+    assert ha["HA_MQTT_LEGACY_STATE_TOPIC_PREFIX"] == "${HA_MQTT_LEGACY_STATE_TOPIC_PREFIX:-}"
+    assert ha["HA_MQTT_LEGACY_DEVICE_IDENTIFIER"] == "${HA_MQTT_LEGACY_DEVICE_IDENTIFIER:-}"
+    assert ha["HA_MQTT_LEGACY_DEVICE_NAME"] == "${HA_MQTT_LEGACY_DEVICE_NAME:-}"
+
+
 def test_mqtt_config_file_is_mounted_read_only():
     services = _compose()["services"]
     mounts = services["mqtt"]["volumes"]
