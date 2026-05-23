@@ -67,7 +67,7 @@ def test_discovery_messages_use_home_assistant_mqtt_discovery_shape() -> None:
                 "enabled_by_default": True,
                 "icon": "mdi:heart-pulse",
                 "name": "HealthSave Heart Rate",
-                "object_id": "healthsave_heart_rate",
+                "object_id": "heart_rate",
                 "state_class": "measurement",
                 "state_topic": "healthsave/sensor/state",
                 "unique_id": "healthsave_heart_rate",
@@ -184,6 +184,7 @@ def test_source_discovery_skips_metrics_with_none_values() -> None:
     topic, payload, _ = messages[0]
     assert topic == "homeassistant/sensor/healthsave_iphone/heart_rate/config"
     assert payload["unique_id"] == "healthsave_iphone_heart_rate"
+    assert payload["object_id"] == "heart_rate"
     assert payload["unit_of_measurement"] == "bpm"
 
 
