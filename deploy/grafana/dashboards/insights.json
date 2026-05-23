@@ -59,7 +59,7 @@
       "targets": [
         {
           "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-          "rawSql": "SELECT time AS time, score AS \"Recovery %\" FROM recovery WHERE $__timeFilter(time) AND device_id IN ($device) ORDER BY 1",
+          "rawSql": "SELECT time AS time, value AS \"Recovery %\" FROM quantity_samples WHERE metric_name = 'recovery_score' AND $__timeFilter(time) AND device_id IN ($device) ORDER BY 1",
           "format": "table",
           "refId": "A"
         }
@@ -126,7 +126,7 @@
       "targets": [
         {
           "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-          "rawSql": "SELECT avg(score) AS \"Recovery %\" FROM recovery WHERE $__timeFilter(time) AND device_id IN ($device)",
+          "rawSql": "SELECT avg(value) AS \"Recovery %\" FROM quantity_samples WHERE metric_name = 'recovery_score' AND $__timeFilter(time) AND device_id IN ($device)",
           "format": "table",
           "refId": "A"
         }
@@ -166,7 +166,7 @@
       "targets": [
         {
           "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-          "rawSql": "SELECT avg(resting_hr) AS \"Resting HR\" FROM recovery WHERE $__timeFilter(time) AND device_id IN ($device) AND resting_hr IS NOT NULL",
+          "rawSql": "SELECT avg(value) AS \"Resting HR\" FROM quantity_samples WHERE metric_name = 'resting_heart_rate' AND $__timeFilter(time) AND device_id IN ($device)",
           "format": "table",
           "refId": "A"
         }
@@ -207,7 +207,7 @@
       "targets": [
         {
           "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-          "rawSql": "SELECT avg(spo2_pct) AS \"SpO2 %\" FROM recovery WHERE $__timeFilter(time) AND device_id IN ($device) AND spo2_pct IS NOT NULL",
+          "rawSql": "SELECT avg(spo2_pct) AS \"SpO2 %\" FROM blood_oxygen WHERE $__timeFilter(time) AND device_id IN ($device)",
           "format": "table",
           "refId": "A"
         }
@@ -256,7 +256,7 @@
       "targets": [
         {
           "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-          "rawSql": "SELECT date_trunc('day', ss.start_time) AS time, d.device_type AS metric,\n  sum(ss.total_duration_ms) / 3600000.0 AS value\nFROM sleep_sessions ss JOIN devices d ON d.id = ss.device_id\nWHERE $__timeFilter(ss.start_time) AND ss.device_id IN ($device)\nGROUP BY 1, d.device_type ORDER BY 1",
+          "rawSql": "SELECT time, metric, sum(value) AS value\nFROM (\n  SELECT date_trunc('day', ss.start_time) AS time, d.device_type AS metric,\n    sum(ss.total_duration_ms) / 3600000.0 AS value\n  FROM sleep_sessions ss JOIN devices d ON d.id = ss.device_id\n  WHERE $__timeFilter(ss.start_time) AND ss.device_id IN ($device)\n  GROUP BY 1, d.device_type\n  UNION ALL\n  SELECT date_trunc('day', qs.time) AS time, COALESCE(qs.source_id, d.device_type, 'Unknown') AS metric,\n    avg(qs.value) AS value\n  FROM quantity_samples qs JOIN devices d ON d.id = qs.device_id\n  WHERE qs.metric_name = 'sleep_duration_hours' AND $__timeFilter(qs.time) AND qs.device_id IN ($device)\n  GROUP BY 1, 2\n) x\nGROUP BY time, metric ORDER BY time",
           "format": "table",
           "refId": "A"
         }
@@ -373,7 +373,7 @@
       "targets": [
         {
           "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-          "rawSql": "SELECT avg(respiratory_rate) AS \"Resp Rate\" FROM sleep_sessions\nWHERE $__timeFilter(start_time) AND device_id IN ($device) AND respiratory_rate IS NOT NULL",
+          "rawSql": "SELECT avg(value) AS \"Resp Rate\"\nFROM (\n  SELECT respiratory_rate AS value FROM sleep_sessions\n  WHERE $__timeFilter(start_time) AND device_id IN ($device) AND respiratory_rate IS NOT NULL\n  UNION ALL\n  SELECT value FROM quantity_samples\n  WHERE metric_name = 'sleep_respiratory_rate' AND $__timeFilter(time) AND device_id IN ($device)\n) x",
           "format": "table",
           "refId": "A"
         }
@@ -420,7 +420,7 @@
       "targets": [
         {
           "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-          "rawSql": "SELECT time AS time, resting_hr AS \"Whoop Resting HR\"\nFROM recovery WHERE $__timeFilter(time) AND device_id IN ($device) AND resting_hr IS NOT NULL ORDER BY 1",
+          "rawSql": "SELECT time AS time, value AS \"Whoop Resting HR\"\nFROM quantity_samples WHERE metric_name = 'resting_heart_rate' AND $__timeFilter(time) AND device_id IN ($device) ORDER BY 1",
           "format": "table",
           "refId": "A"
         },
@@ -586,13 +586,13 @@
       "targets": [
         {
           "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-          "rawSql": "SELECT r.time AS time, r.score AS \"Recovery Score\"\nFROM recovery r WHERE $__timeFilter(r.time) AND r.device_id IN ($device) ORDER BY 1",
+          "rawSql": "SELECT time AS time, value AS \"Recovery Score\"\nFROM quantity_samples WHERE metric_name = 'recovery_score' AND $__timeFilter(time) AND device_id IN ($device) ORDER BY 1",
           "format": "table",
           "refId": "A"
         },
         {
           "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-          "rawSql": "SELECT date_trunc('day', ss.start_time) AS time,\n  sum(ss.total_duration_ms) / 3600000.0 AS \"Sleep Hours\"\nFROM sleep_sessions ss\nWHERE $__timeFilter(ss.start_time) AND ss.device_id IN ($device)\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT time, sum(value) AS \"Sleep Hours\"\nFROM (\n  SELECT date_trunc('day', ss.start_time) AS time,\n    sum(ss.total_duration_ms) / 3600000.0 AS value\n  FROM sleep_sessions ss\n  WHERE $__timeFilter(ss.start_time) AND ss.device_id IN ($device)\n  GROUP BY 1\n  UNION ALL\n  SELECT date_trunc('day', qs.time) AS time, avg(qs.value) AS value\n  FROM quantity_samples qs\n  WHERE qs.metric_name = 'sleep_duration_hours' AND $__timeFilter(qs.time) AND qs.device_id IN ($device)\n  GROUP BY 1\n) x\nGROUP BY time ORDER BY time",
           "format": "table",
           "refId": "B"
         }
@@ -646,7 +646,7 @@
       "targets": [
         {
           "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-          "rawSql": "SELECT time, skin_temp_c AS \"Skin Temp \u00b0C\" FROM recovery\nWHERE $__timeFilter(time) AND device_id IN ($device) AND skin_temp_c IS NOT NULL ORDER BY 1",
+          "rawSql": "SELECT time, temp_celsius AS \"Skin Temp \u00b0C\" FROM body_temperature\nWHERE $__timeFilter(time) AND device_id IN ($device) ORDER BY 1",
           "format": "table",
           "refId": "A"
         }
@@ -679,7 +679,7 @@
       "targets": [
         {
           "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-          "rawSql": "SELECT time, spo2_pct AS \"SpO2 %\" FROM recovery\nWHERE $__timeFilter(time) AND device_id IN ($device) AND spo2_pct IS NOT NULL ORDER BY 1",
+          "rawSql": "SELECT time, spo2_pct AS \"SpO2 %\" FROM blood_oxygen\nWHERE $__timeFilter(time) AND device_id IN ($device) ORDER BY 1",
           "format": "table",
           "refId": "A"
         }

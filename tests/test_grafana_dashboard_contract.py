@@ -61,3 +61,29 @@ def test_grafana_service_receives_db_password_for_datasource_provisioning():
     grafana_env = compose["services"]["grafana"]["environment"]
 
     assert grafana_env["DB_PASSWORD"] == "${DB_PASSWORD:-changeme}"
+
+
+def test_whoop_dashboards_use_the_normalized_public_metric_paths():
+    """Whoop plugin output is normalized into quantity_samples plus
+    dedicated HRV / SpO2 / temperature tables, not the legacy-style
+    recovery table used by the private personal stack.
+    """
+    insights_queries = [sql for file_name, sql in _raw_sql() if file_name == "insights.json"]
+
+    assert all(
+        "FROM recovery" not in sql and "JOIN recovery" not in sql for sql in insights_queries
+    )
+
+
+def test_whoop_dashboard_metric_coverage_matches_plugin_output():
+    raw = "\n".join(sql for _, sql in _raw_sql())
+
+    for metric_name in (
+        "recovery_score",
+        "resting_heart_rate",
+        "strain",
+        "sleep_duration_hours",
+        "sleep_efficiency_percentage",
+        "sleep_respiratory_rate",
+    ):
+        assert metric_name in raw

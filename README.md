@@ -214,11 +214,11 @@ The server receives and stores 120+ HealthKit metrics:
 |-------|------|
 | `heart_rate` | Continuous HR from Apple Watch / Whoop |
 | `hrv` | Heart rate variability (SDNN) |
-| `blood_oxygen` | SpO2 readings |
+| `blood_oxygen` | SpO2 readings, with source labels for provider data |
 | `daily_activity` | Steps, distance, calories, exercise minutes |
 | `sleep_sessions` | Sleep duration, stages, respiratory rate |
-| `workouts` | Workout type, duration, HR zones |
-| `quantity_samples` | Catch-all for any other HealthKit metric |
+| `workouts` | Workout type, duration, HR zones, source labels |
+| `quantity_samples` | Catch-all for optional HealthKit metrics and provider aggregates such as Whoop recovery score, resting HR, strain, and sleep aggregates |
 
 ### Manual quick-start (without `setup.sh`)
 
@@ -378,7 +378,7 @@ Supported dashboards loaded automatically:
 | Activity & Movement | `deploy/grafana/dashboards/activity.json` | `daily_activity`, `quantity_samples` | Supported | Gait-related panels only populate if those optional metrics are synced |
 | Heart | `deploy/grafana/dashboards/heart.json` | `heart_rate`, `hrv`, `quantity_samples` | Supported | Source-aware heart-rate, HRV, SpO2, and respiratory panels |
 | Sleep | `deploy/grafana/dashboards/sleep.json` | `sleep_sessions`, `sleep_stages`, `quantity_samples` | Supported | Apple sleep sessions plus provider aggregate sleep metrics |
-| Insights | `deploy/grafana/dashboards/insights.json` | `heart_rate`, `hrv`, `recovery`, `quantity_samples`, `sleep_sessions`, `workouts` | Supported | Cross-source comparison and recovery/sleep/strain views |
+| Insights | `deploy/grafana/dashboards/insights.json` | `heart_rate`, `hrv`, `blood_oxygen`, `body_temperature`, `quantity_samples`, `sleep_sessions`, `workouts` | Supported | Cross-source comparison and Whoop recovery/sleep/strain views through the public schema |
 | Workouts | `deploy/grafana/dashboards/workouts.json` | `workouts` | Supported | Focused workout view with type, duration, calories, and HR panels |
 
 The datasource is auto-provisioned - no manual setup needed.

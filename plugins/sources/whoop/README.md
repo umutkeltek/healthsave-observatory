@@ -8,12 +8,13 @@ Poll-based `Source` plugin that ingests recovery, sleep, workout, and cycle data
 
 ## What it emits
 
-- `measurement.heart_rate` — resting HR, average HR per workout
-- `measurement.hrv` — RMSSD per cycle
-- `measurement.sleep_analysis` — sessions + per-stage durations
-- `measurement.workouts` — duration, HR zones, calories, strain
-- `measurement.recovery` — recovery score, SpO2, skin temp
-- `measurement.strain` — daily strain summary
+- `heart_rate_variability` → `hrv` — RMSSD from recovery
+- `blood_oxygen` → `blood_oxygen` — SpO2 from recovery
+- `body_temperature` → `body_temperature` — skin temperature from recovery
+- `workouts` → `workouts` — duration, average/max HR, calories, distance, source label
+- `strain` → `quantity_samples` — daily strain summary
+- `recovery_score`, `resting_heart_rate` → `quantity_samples` — provider recovery aggregates
+- `sleep_duration_hours`, `sleep_efficiency_percentage`, `sleep_respiratory_rate` → `quantity_samples` — Whoop session aggregates
 
 ## Setup
 
@@ -47,7 +48,7 @@ Poll-based `Source` plugin that ingests recovery, sleep, workout, and cycle data
 
 - OAuth tokens are encrypted at rest with Fernet using `HDH_TOKEN_ENC_KEY`. Plaintext only exists inside the Python process at refresh / fetch time.
 - Refresh tokens are rotated atomically: a successful refresh invalidates Whoop's previous pair, so `put_token` writes the new pair in a single transaction and appends a `refreshed` event.
-- Each normalized row routes through the same `IngestStorage` Protocol used by the Apple Health plugin. Source identity (`source="whoop"`) is the only thing that distinguishes Whoop rows from iOS rows downstream.
+- Each normalized row routes through the same `IngestStorage` Protocol used by the Apple Health plugin. Source identity (`source="Whoop"`) distinguishes Whoop rows from iOS rows downstream, including Grafana filters and Home Assistant entities.
 
 ## Why a plugin and not a route handler
 
