@@ -152,3 +152,55 @@ async def test_publish_once_is_a_noop_for_per_source_when_no_sources_active():
         m[0] for m in publisher.published if m[0].startswith("homeassistant/sensor/healthsave_")
     ]
     assert discovery_topics == []
+
+
+@pytest.mark.asyncio
+async def test_publish_once_emits_primary_and_legacy_alias_shapes():
+    aggregate = HealthSnapshot(
+        collected_at=datetime(2026, 5, 22, 9, 0, tzinfo=UTC),
+        heart_rate=72,
+        hrv_7d_avg=58.0,
+        steps_today=4200,
+        last_sleep_hours=7.25,
+        source_model="Apple Watch via HealthSave",
+        room_health_state="normal",
+        hrv=58.0,
+        steps=4200,
+        sleep_duration=7.25,
+    )
+    per_source = [
+        SourceHealthSnapshot(
+            collected_at=aggregate.collected_at,
+            source_id="Apple Watch",
+            heart_rate=72,
+            hrv_latest_ms=58.0,
+            steps_today=4200,
+            last_sleep_hours=7.25,
+        ),
+    ]
+    repository = _StubRepository(aggregate=aggregate, per_source=per_source)
+    publisher = _RecordingPublisher()
+    legacy = HomeAssistantMQTTConfig(
+        state_topic_prefix="healthtrack",
+        device_identifier="healthtrack",
+        device_name="HealthTrack",
+    )
+
+    with patch("homeassistant_mqtt.main.async_session", _FakeAsyncSessionFactory()):
+        await publish_once(repository, publisher, publish_configs=(publisher.config, legacy))
+
+    topics = [m[0] for m in publisher.published]
+    assert "healthsave/sensor/state" in topics
+    assert "healthsave/source/apple_watch/state" in topics
+    assert "homeassistant/sensor/healthsave_apple_watch/heart_rate/config" in topics
+
+    assert "healthtrack/sensor/state" in topics
+    assert "healthtrack/source/apple_watch/state" in topics
+    assert "homeassistant/sensor/healthtrack_apple_watch/heart_rate/config" in topics
+
+    legacy_state = next(
+        payload for topic, payload, _ in publisher.published if topic == "healthtrack/sensor/state"
+    )
+    assert legacy_state["hrv"] == 58.0
+    assert legacy_state["steps"] == 4200
+    assert legacy_state["sleep_duration"] == 7.25

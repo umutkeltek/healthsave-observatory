@@ -422,7 +422,23 @@ Source attribution comes from `source_id` on the ingestion tables (added to `dai
 
 Both layers share `healthsave/status` so HA marks every sub-device offline together if the bridge stops.
 
-**Legacy `healthtrack_*` brand still reachable.** The defaults flipped from `healthtrack_*` to `healthsave_*` in P5-b; the `HA_MQTT_STATE_TOPIC_PREFIX`, `HA_MQTT_DEVICE_IDENTIFIER`, and `HA_MQTT_DEVICE_NAME` env vars still let users on the pre-existing HA setup pin the old shape.
+**Legacy MQTT namespace migration.** Fresh installs should keep the
+primary `HA_MQTT_STATE_TOPIC_PREFIX`, `HA_MQTT_DEVICE_IDENTIFIER`, and
+`HA_MQTT_DEVICE_NAME` values on `healthsave` / `HealthSave`. If an
+existing Home Assistant install still has dashboards or automations on
+an older namespace, set `HA_MQTT_LEGACY_STATE_TOPIC_PREFIX` plus the
+matching legacy device identifier/name. The bridge then publishes both
+shapes from the same Data Hub service so Home Assistant can be migrated
+one entity at a time.
+
+```bash
+HA_MQTT_STATE_TOPIC_PREFIX=healthsave
+HA_MQTT_DEVICE_IDENTIFIER=healthsave
+HA_MQTT_DEVICE_NAME=HealthSave
+HA_MQTT_LEGACY_STATE_TOPIC_PREFIX=<old-prefix>
+HA_MQTT_LEGACY_DEVICE_IDENTIFIER=<old-device-id>
+HA_MQTT_LEGACY_DEVICE_NAME=<old-display-name>
+```
 
 Enable it with Docker Compose. Two patterns:
 

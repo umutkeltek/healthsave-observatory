@@ -75,7 +75,8 @@ home_assistant:
     # Fresh installs use the HealthSave MQTT shape:
     # state topic `healthsave/sensor/state`, discovery under
     # `homeassistant/sensor/healthsave/<metric>/config`.
-    # Legacy healthtrack_* users can still pin the old shape with HA_MQTT_* env vars.
+    # Legacy users can keep an old namespace alive during migration with
+    # HA_MQTT_LEGACY_* env vars while the primary shape stays HealthSave.
     state_topic_prefix: "healthsave"
     device_identifier: "healthsave"
     device_name: "HealthSave"
