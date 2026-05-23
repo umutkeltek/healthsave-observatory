@@ -348,6 +348,14 @@ async def test_batch_records_healthsave_sync_receipt_headers():
 
     receipt = session.insert_params_for("healthsave_sync_receipts")
     assert result["records"] == 1
+    assert result["verification_level"] == "delivery_receipt"
+    assert result["sync_run_id"] == "run-abc"
+    assert result["batch_id"] == "batch-002"
+    assert result["records_received"] == 1
+    assert result["records_accepted"] == 1
+    assert result["records_rejected"] == 0
+    assert result["per_metric"]["heart_rate"]["received"] == 1
+    assert result["per_metric"]["heart_rate"]["accepted"] == 1
     assert receipt is not None
     assert receipt["sync_run_id"] == "run-abc"
     assert receipt["batch_id"] == "batch-002"
@@ -480,6 +488,64 @@ async def test_sync_anomalies_returns_ok_when_no_overlaps_are_seen():
     assert result["status"] == "ok"
     assert result["summary"]["overlapping_metrics"] == 0
     assert result["anomalies"] == []
+
+
+class SpecificSyncRunSession(FakeSession):
+    async def execute(self, statement, params=None):
+        sql = " ".join(str(statement).split())
+        self.calls.append((sql, params or {}))
+        if (
+            "FROM healthsave_sync_receipts" in sql
+            and "WHERE sync_run_id = :sync_run_id" in sql
+            and "GROUP BY metric" in sql
+        ):
+            assert params == {"sync_run_id": "run-abc"}
+            return FakeResult(
+                rows=[
+                    {
+                        "metric": "heart_rate",
+                        "batches_seen": 2,
+                        "batches_processed": 2,
+                        "batches_empty": 0,
+                        "batches_failed": 0,
+                        "records_accepted": 512,
+                        "records_skipped": 0,
+                        "started_at": "2026-05-23T10:01:00Z",
+                        "completed_at": "2026-05-23T10:02:00Z",
+                        "latest_sample_end_at": None,
+                    },
+                    {
+                        "metric": "steps",
+                        "batches_seen": 1,
+                        "batches_processed": 1,
+                        "batches_empty": 0,
+                        "batches_failed": 0,
+                        "records_accepted": 24,
+                        "records_skipped": 0,
+                        "started_at": "2026-05-23T10:03:00Z",
+                        "completed_at": "2026-05-23T10:03:05Z",
+                        "latest_sample_end_at": None,
+                    },
+                ]
+            )
+        return await super().execute(statement, params)
+
+
+@pytest.mark.asyncio
+async def test_sync_run_summary_reports_delivery_receipt_level_for_one_run():
+    from storage.timescale import sync_receipts
+
+    session = SpecificSyncRunSession()
+
+    result = await sync_receipts.sync_run(session, "run-abc")
+
+    assert result["status"] == "ok"
+    assert result["sync_run_id"] == "run-abc"
+    assert result["verification_level"] == "delivery_receipt"
+    assert result["summary"]["batches_seen"] == 3
+    assert result["summary"]["records_accepted"] == 536
+    assert result["per_metric"]["heart_rate"]["accepted"] == 512
+    assert result["per_metric"]["steps"]["batches_seen"] == 1
 
 
 @pytest.mark.asyncio

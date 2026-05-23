@@ -150,7 +150,16 @@ async def apple_batch(
             await audit.mark_processed(session, raw_log_id)
             await session.commit()
         _observe_ingest_metrics(metric=metric, rows=0, started_at=started_at)
-        return {"status": "empty", "metric": metric, "batch": batch_idx, "records": 0}
+        return _delivery_receipt_response(
+            request=request,
+            status="empty",
+            metric=metric,
+            batch_index=batch_idx,
+            total_batches=total,
+            records_received=0,
+            records_accepted=0,
+            records_rejected=0,
+        )
 
     sample_groups = group_samples_by_device(samples)
     first_device_name, _ = sample_groups[0]
@@ -215,13 +224,16 @@ async def apple_batch(
     log.info("Ingested %d records for %s (batch %d/%d)", count, metric, batch_idx + 1, total)
     _schedule_anomaly_check_if_enabled(request, background_tasks, count)
 
-    return {
-        "status": "processed",
-        "metric": metric,
-        "batch": batch_idx,
-        "total_batches": total,
-        "records": count,
-    }
+    return _delivery_receipt_response(
+        request=request,
+        status="processed",
+        metric=metric,
+        batch_index=batch_idx,
+        total_batches=total,
+        records_received=len(samples),
+        records_accepted=count,
+        records_rejected=max(len(samples) - count, 0),
+    )
 
 
 def _resolve_storage(request: Request) -> IngestStorage:
@@ -271,6 +283,53 @@ def _header_int(headers: Any, name: str, fallback: int) -> int:
         return int(value)
     except ValueError:
         return fallback
+
+
+def _delivery_receipt_response(
+    *,
+    request: Request,
+    status: str,
+    metric: str,
+    batch_index: int,
+    total_batches: int,
+    records_received: int,
+    records_accepted: int,
+    records_rejected: int,
+) -> dict[str, Any]:
+    """Return legacy v1 fields plus an additive delivery receipt.
+
+    The released app still reads the old ``status``/``records`` shape. The
+    extra fields let newer clients separate transport delivery from later
+    aggregate verification without changing the v1 ingest path.
+    """
+
+    headers = request.headers
+    sync_run_id = _header(headers, "X-HealthSave-Sync-Run-ID")
+    batch_id = _header(headers, "X-HealthSave-Batch-ID")
+    receipt_id = batch_id or f"{sync_run_id or 'runless'}:{metric}:{batch_index}"
+    per_metric = {
+        metric: {
+            "received": records_received,
+            "accepted": records_accepted,
+            "rejected": records_rejected,
+        }
+    }
+    return {
+        "status": status,
+        "metric": metric,
+        "batch": batch_index,
+        "total_batches": total_batches,
+        "records": records_accepted,
+        "receipt_id": receipt_id,
+        "sync_run_id": sync_run_id,
+        "batch_id": batch_id,
+        "batch_index": batch_index,
+        "records_received": records_received,
+        "records_accepted": records_accepted,
+        "records_rejected": records_rejected,
+        "verification_level": "delivery_receipt",
+        "per_metric": per_metric,
+    }
 
 
 async def _record_failed_sync_receipt(
