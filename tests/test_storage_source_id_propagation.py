@@ -39,6 +39,8 @@ sys.path.insert(0, str(ROOT))
 from server.ingestion.handlers import (  # noqa: E402
     _ingest_activity,
     _ingest_daily_quantity,
+    _ingest_metric,
+    _ingest_workouts,
 )
 from server.ingestion.sleep import (  # noqa: E402
     _upsert_sleep_session,
@@ -286,3 +288,56 @@ async def test_upsert_sleep_session_writes_null_source_id_when_absent():
     await _upsert_sleep_session(session, row)
     [params] = _params_for(session, sql_substring="INSERT INTO sleep_sessions")
     assert params["source_id"] is None
+
+
+# ──────────────────────────────────────────────────────────────────────
+# dedicated metric tables — Whoop SpO2 / temperature + workouts
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_dedicated_blood_oxygen_writes_source_id_when_sample_has_source():
+    session = _RecordingSession()
+    await _ingest_metric(
+        session,
+        device_id=42,
+        metric="blood_oxygen",
+        samples=[{"date": "2026-05-22T08:00:00Z", "qty": 97.2, "source": "Whoop"}],
+    )
+
+    [params] = _params_for(session, sql_substring="INSERT INTO blood_oxygen")
+    assert params["source_id"] == "Whoop"
+
+
+@pytest.mark.asyncio
+async def test_dedicated_body_temperature_writes_source_id_when_sample_has_source():
+    session = _RecordingSession()
+    await _ingest_metric(
+        session,
+        device_id=42,
+        metric="body_temperature",
+        samples=[{"date": "2026-05-22T08:00:00Z", "qty": 35.2, "source": "Whoop"}],
+    )
+
+    [params] = _params_for(session, sql_substring="INSERT INTO body_temperature")
+    assert params["source_id"] == "Whoop"
+
+
+@pytest.mark.asyncio
+async def test_workout_writer_writes_source_id_when_sample_has_source():
+    session = _RecordingSession()
+    await _ingest_workouts(
+        session,
+        device_id=42,
+        samples=[
+            {
+                "name": "Running",
+                "start": "2026-05-22T18:00:00Z",
+                "end": "2026-05-22T18:45:00Z",
+                "source": "Whoop",
+            }
+        ],
+    )
+
+    [params] = _params_for(session, sql_substring="INSERT INTO workouts")
+    assert params["source_id"] == "Whoop"

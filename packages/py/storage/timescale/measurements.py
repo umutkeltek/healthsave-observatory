@@ -360,9 +360,9 @@ async def _ingest_workouts(
         await session.execute(
             text("""
                 INSERT INTO workouts (device_id, sport_type, start_time, end_time,
-                    duration_ms, avg_hr, max_hr, calories, distance_m, owner_id)
+                    duration_ms, avg_hr, max_hr, calories, distance_m, source_id, owner_id)
                 VALUES (:device_id, :sport, :start, :end, :dur, :avg_hr, :max_hr, :cal, :dist,
-                    :owner_id)
+                    :source_id, :owner_id)
                 ON CONFLICT (device_id, start_time, owner_id) DO UPDATE SET
                     sport_type = EXCLUDED.sport_type,
                     end_time = EXCLUDED.end_time,
@@ -370,7 +370,8 @@ async def _ingest_workouts(
                     avg_hr = EXCLUDED.avg_hr,
                     max_hr = EXCLUDED.max_hr,
                     calories = EXCLUDED.calories,
-                    distance_m = EXCLUDED.distance_m
+                    distance_m = EXCLUDED.distance_m,
+                    source_id = COALESCE(EXCLUDED.source_id, workouts.source_id)
             """),
             {
                 "device_id": device_id,
@@ -382,6 +383,7 @@ async def _ingest_workouts(
                 "max_hr": to_float(first_present(s, "max_hr", "maxHeartRate")),
                 "cal": to_float(first_present(s, "calories", "activeEnergy")),
                 "dist": to_float(first_present(s, "distance_m", "distance")),
+                "source_id": _sample_source(s),
                 "owner_id": str(owner_id),
             },
         )
