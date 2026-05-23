@@ -261,7 +261,7 @@ def build_discovery_messages(
             "availability_topic": availability_topic(config),
             "device": _device_payload(config),
             "enabled_by_default": True,
-            "name": spec.name,
+            "name": _metric_name(config, spec),
             "object_id": _topic_part(spec.key),
             "state_topic": state_topic(config, spec),
             "unique_id": f"{config.device_identifier}_{_topic_part(spec.key)}",
@@ -388,7 +388,7 @@ def build_source_discovery_messages(
             "availability_topic": availability_topic(config),
             "device": device,
             "enabled_by_default": True,
-            "name": f"{device['name']} {name_suffix}",
+            "name": name_suffix,
             "object_id": attr,
             "state_topic": state_topic_value,
             "unique_id": unique_id,
@@ -408,6 +408,14 @@ def build_source_discovery_messages(
         messages.append((topic, payload, True))
 
     return messages
+
+
+def _metric_name(config: HomeAssistantMQTTConfig, spec: SensorSpec) -> str:
+    name = spec.name.strip()
+    prefix = config.device_name.strip()
+    if prefix and name.lower().startswith(f"{prefix.lower()} "):
+        return name[len(prefix) :].strip()
+    return name
 
 
 def build_source_state_message(
