@@ -446,6 +446,33 @@ Protected by `x-api-key` when `API_KEY` is set. Returns the latest observed
 HealthSave sync run with batch counts, accepted/skipped record counts, and metric
 names.
 
+### `GET /api/v2/sync/runs/{sync_run_id}`
+
+Protected by `x-api-key` when `API_KEY` is set. Returns the delivery receipt
+summary for one HealthSave sync run. This endpoint proves Data Hub saw the
+batches HealthSave sent; it is not a full sample-by-sample manifest verifier.
+
+Example response:
+
+```json
+{
+  "status": "ok",
+  "sync_run_id": "run_01HY...",
+  "receipt_id": "run_01HY...",
+  "verification_level": "delivery_receipt",
+  "records_received": 512,
+  "records_accepted": 488,
+  "records_skipped": 24,
+  "records_rejected": 0,
+  "batches_seen": 2,
+  "batches_processed": 2,
+  "batches_failed": 0,
+  "metrics": ["heart_rate", "step_count"],
+  "oldest_received_at": "2026-05-24T07:12:00Z",
+  "newest_receipt_at": "2026-05-24T07:13:22Z"
+}
+```
+
 ### `GET /api/v2/sync/coverage`
 
 Protected by `x-api-key` when `API_KEY` is set. Returns metric-level receipt

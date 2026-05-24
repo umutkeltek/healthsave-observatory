@@ -6,7 +6,7 @@ For the full reference and step-by-step setup, see [README.md](README.md) and [A
 
 ## The pipeline, in one line
 
-> Apple Health on your iPhone  →  **HealthSave iOS 1.4** (HealthKit bridge)  →  `POST /api/apple/batch`  →  **health-data-hub** (this repo: FastAPI + TimescaleDB)  →  **Grafana** dashboards  +  optional **Home Assistant** package  +  optional local **Ollama** AI briefing.
+> Apple Health on your iPhone  →  **HealthSave iOS 1.5** (HealthKit bridge)  →  `POST /api/apple/batch`  →  **health-data-hub** (this repo: FastAPI + TimescaleDB)  →  **Grafana** dashboards  +  optional **Home Assistant** package  +  optional local **Ollama** AI briefing.
 
 ```
 iPhone / Apple Watch        HealthSave iOS          health-data-hub               Grafana
@@ -31,7 +31,7 @@ This is the bit Reddit/HA people ask about first, so it gets its own section.
 | Piece | Where it runs | Required? | Cost |
 |---|---|---|---|
 | Apple Health database | On your iPhone, encrypted | yes | already there |
-| HealthSave iOS 1.4 — Dashboard, Trends, on-device Export (CSV/JSON/PDF) | Your iPhone, on-device | yes if you want the bridge | free download, one-time **Pro** unlock for server sync + Home Assistant + extended history |
+| HealthSave iOS 1.5 — Dashboard, Trends, on-device Export (CSV/JSON/PDF) | Your iPhone, on-device | yes if you want the bridge | free download, one-time **Pro** unlock for server sync + Home Assistant + extended history |
 | **health-data-hub** (this repo) | Your own hardware: laptop, NUC, Mac mini, Synology, NAS, homelab box | **optional** | free, MIT-licensed, runs in Docker |
 | TimescaleDB + Grafana | Inside the same Docker compose stack | bundled with the hub | free |
 | Ollama AI briefing | Same machine, local LLM | optional, opt-in during `./setup.sh` | free, RAM-dependent |

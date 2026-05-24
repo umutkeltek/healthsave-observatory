@@ -82,6 +82,12 @@ class _FakeResult:
     def all(self) -> list[tuple[Any, ...]]:
         return self._rows
 
+    def scalar_one_or_none(self) -> Any:
+        if not self._rows:
+            return None
+        row = self._rows[0]
+        return row[0] if row else None
+
 
 class _FakeSession:
     """Returns canned rows based on a substring match in the SQL."""
@@ -93,16 +99,25 @@ class _FakeSession:
         hrv_rows: list[tuple] | None = None,
         steps_rows: list[tuple] | None = None,
         sleep_rows: list[tuple] | None = None,
+        quantity_values: dict[str, Any] | None = None,
     ) -> None:
         self._hr = hr_rows or []
         self._hrv = hrv_rows or []
         self._steps = steps_rows or []
         self._sleep = sleep_rows or []
+        self._quantity_values = quantity_values or {}
         self.executed_queries: list[str] = []
 
-    async def execute(self, statement) -> _FakeResult:
+    async def execute(self, statement, params: dict[str, Any] | None = None) -> _FakeResult:
         sql = str(statement)
         self.executed_queries.append(sql)
+        if "FROM quantity_samples" in sql:
+            if params and (metric_name := params.get("metric_name")) in self._quantity_values:
+                return _FakeResult([(self._quantity_values[metric_name],)])
+            for metric_name, value in self._quantity_values.items():
+                if f"metric_name = '{metric_name}'" in sql:
+                    return _FakeResult([(value,)])
+            return _FakeResult([])
         if "FROM heart_rate" in sql:
             return _FakeResult(self._hr)
         if "FROM hrv" in sql:
@@ -111,6 +126,12 @@ class _FakeSession:
             return _FakeResult(self._steps)
         if "FROM sleep_sessions" in sql:
             return _FakeResult(self._sleep)
+        if "FROM recovery" in sql:
+            return _FakeResult([])
+        if "FROM blood_oxygen" in sql:
+            return _FakeResult([])
+        if "FROM devices" in sql:
+            return _FakeResult([("HealthSave",)])
         raise AssertionError(f"unexpected SQL: {sql}")
 
 
@@ -279,3 +300,28 @@ async def test_fetch_snapshots_by_source_null_source_buckets_steps_and_sleep_too
     assert snap.slug == "unknown"
     assert snap.steps_today == 5000
     assert snap.last_sleep_hours == 7.0
+
+
+@pytest.mark.asyncio
+async def test_fetch_snapshot_uses_quantity_samples_for_whoop_provider_aggregates() -> None:
+    """Whoop recovery aggregates are normalized to quantity_samples.
+
+    Home Assistant should follow the same public path as Grafana, instead of
+    depending only on the legacy ``recovery`` table shape.
+    """
+    session = _FakeSession(
+        quantity_values={
+            "recovery_score": 82.0,
+            "resting_heart_rate": 57.0,
+            "sleep_efficiency_percentage": 91.4,
+            "strain": 10.6,
+        }
+    )
+    repo = TimescaleHealthSnapshotRepository()
+
+    snapshot = await repo.fetch_snapshot(session)
+
+    assert snapshot.recovery_score == 82
+    assert snapshot.resting_heart_rate == 57
+    assert snapshot.sleep_efficiency == 91.4
+    assert snapshot.strain == 10.6

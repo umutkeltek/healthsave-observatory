@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import csv
 import logging
+import os
 import re
 import sys
 from collections import defaultdict
@@ -355,12 +356,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("data_dir", help="Directory containing the Health Sync subfolders")
     parser.add_argument(
         "--server",
-        default="http://localhost:8000",
+        default=os.environ.get("HDH_SERVER", "http://localhost:8000"),
         help="Base URL of the Health Data Hub API (default: http://localhost:8000)",
     )
     parser.add_argument(
         "--api-key",
-        default=None,
+        default=os.environ.get("HDH_API_KEY"),
         help="HDH API key (X-API-Key). Required when the server has API_KEY set.",
     )
     parser.add_argument(

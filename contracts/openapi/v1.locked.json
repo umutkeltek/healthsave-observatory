@@ -1552,6 +1552,57 @@
         "summary": "Latest Sync Run"
       }
     },
+    "/api/v2/sync/runs/{sync_run_id}": {
+      "get": {
+        "description": "Return the delivery receipt summary for one HealthSave sync run.",
+        "operationId": "sync_run_api_v2_sync_runs__sync_run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sync_run_id",
+            "required": true,
+            "schema": {
+              "title": "Sync Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Sync Run Api V2 Sync Runs  Sync Run Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync Run"
+      }
+    },
     "/health": {
       "get": {
         "operationId": "health_check_health_get",

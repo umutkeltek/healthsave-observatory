@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -71,6 +72,64 @@ def test_source_plugin_docs_use_docker_safe_operator_commands():
     assert "docker compose run --rm --no-deps --build api python -c" in combined
     assert "docker compose run --rm --build api python scripts/whoop_authorize.py" in combined
     assert "docker compose run --rm --build api python scripts/amazfit_authorize.py" in combined
+
+
+def test_public_docs_describe_healthsave_delivery_receipts():
+    docs = [
+        ROOT / "API.md",
+        ROOT / "contracts" / "IOS_CROSS_CHECK.md",
+    ]
+    combined = "\n".join(path.read_text() for path in docs)
+
+    for expected in (
+        "receipt_id",
+        "sync_run_id",
+        "records_received",
+        "records_accepted",
+        "verification_level",
+        "delivery_receipt",
+    ):
+        assert expected in combined
+
+    reserved_phrase = "not yet" + " — reserved for future dedup"
+    assert reserved_phrase not in combined
+    assert "not yet" not in combined.lower()
+
+
+def test_generated_plugin_registry_uses_repo_relative_paths():
+    registry = ROOT / "plugins" / ".generated" / "plugin-registry.json"
+    text = registry.read_text()
+
+    local_home = "/" + "Users" + "/"
+    assert local_home not in text
+    assert "plugin_dir" in text
+    assert "plugins/sources/apple_health_healthsave" in text
+
+
+def test_tracked_public_files_do_not_leak_absolute_local_paths():
+    output = subprocess.check_output(
+        ["git", "ls-files"],
+        cwd=ROOT,
+        text=True,
+    )
+    tracked_files = [
+        ROOT / line
+        for line in output.splitlines()
+        if line and not line.startswith(".git") and not line.startswith("docs/HANDOFF.md")
+    ]
+    offenders: list[str] = []
+    for path in tracked_files:
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text()
+        except UnicodeDecodeError:
+            continue
+        local_home = "/" + "Users" + "/"
+        if local_home in text:
+            offenders.append(str(path.relative_to(ROOT)))
+
+    assert offenders == []
 
 
 def test_config_example_uses_healthsave_home_assistant_defaults():

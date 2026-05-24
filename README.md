@@ -460,6 +460,7 @@ same LAN can also connect by host IP. Persistence is on a docker
 volume so retained messages survive restarts.
 
 ```bash
+HA_MQTT_ENABLED=true \
 docker compose --profile mosquitto --profile home-assistant up -d
 ```
 

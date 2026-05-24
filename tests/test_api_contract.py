@@ -318,6 +318,15 @@ def test_schema_declares_sync_receipts_for_end_to_end_healthsave_proof():
         assert "idx_healthsave_sync_receipts_run" in text_blob
 
 
+def test_public_contract_exposes_specific_sync_run_receipt_route():
+    openapi = json.loads(Path("contracts/openapi/v1.locked.json").read_text())
+    ts_client = Path("packages/ts/api-client/src/v1.ts").read_text()
+
+    assert "/api/v2/sync/runs/{sync_run_id}" in openapi["paths"]
+    assert "/api/v2/sync/runs/{sync_run_id}" in ts_client
+    assert "sync_run_api_v2_sync_runs__sync_run_id__get" in ts_client
+
+
 @pytest.mark.asyncio
 async def test_batch_records_healthsave_sync_receipt_headers():
     session = FakeSession()

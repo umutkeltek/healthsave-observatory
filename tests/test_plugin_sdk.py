@@ -261,6 +261,7 @@ def test_build_registry_is_sorted_and_carries_sdk_version(tmp_path: Path):
     assert ids == ["alpha", "zebra"]
     # Compatibility flag derived for each.
     assert all("compatible_with_running_sdk" in p for p in registry["plugins"])
+    assert registry["plugins"][0]["plugin_dir"] == "plugins/sources/alpha"
 
 
 def test_write_and_load_registry_roundtrip(tmp_path: Path):
@@ -276,6 +277,7 @@ def test_write_and_load_registry_roundtrip(tmp_path: Path):
     assert loaded["sdk_version"] == SDK_VERSION
     assert len(loaded["plugins"]) == 1
     assert loaded["plugins"][0]["id"] == "alpha"
+    assert loaded["plugins"][0]["plugin_dir"] == "plugins/sources/alpha"
 
     # Round-trip into a typed manifest.
     materialized = materialize_manifest(loaded["plugins"][0])

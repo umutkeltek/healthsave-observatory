@@ -10,7 +10,8 @@ and the server's v1 surface, performed at the Phase 0 freeze. Re-run
 the cross-check whenever the iOS networking layer changes.
 
 > **Source of truth.** iOS networking lives in
-> `/Users/umut/Projects/products/healthsave/ios_app/Sources/HealthSync/`.
+> the sibling `../ios_app/Sources/HealthSync/` repository in the HealthSave
+> product workspace.
 > Cross-check with that repo at every contract bump.
 
 ## Endpoints iOS actually calls (3 of 12)
@@ -87,12 +88,12 @@ key name on either side breaks ingest).
 |--------|--------|-------------|
 | `Content-Type: application/json` | `SyncEngine.swift:1034,1097` | yes (FastAPI body parsing) |
 | `x-api-key: <key>` | `SyncEngine.swift:1185` (when `Config.serverAPIKey` set) | yes (`server/api/deps.py:verify_api_key`) |
-| `X-HealthSave-Sync-Run-ID` | `SyncReliability.swift:456` | not yet — reserved for future dedup |
-| `X-HealthSave-Batch-ID` | `SyncReliability.swift:457` | not yet |
-| `X-HealthSave-Payload-Hash` | `SyncReliability.swift:458` | not yet |
-| `X-HealthSave-Metric` | `SyncReliability.swift:459` | not yet |
-| `X-HealthSave-Batch-Index` | `SyncReliability.swift:460` | not yet |
-| `X-HealthSave-Total-Batches` | `SyncReliability.swift:461` | not yet |
+| `X-HealthSave-Sync-Run-ID` | `SyncReliability.swift:456` | yes (`healthsave_sync_receipts.sync_run_id`) |
+| `X-HealthSave-Batch-ID` | `SyncReliability.swift:457` | yes (`healthsave_sync_receipts.batch_id`) |
+| `X-HealthSave-Payload-Hash` | `SyncReliability.swift:458` | yes (`healthsave_sync_receipts.payload_hash`) |
+| `X-HealthSave-Metric` | `SyncReliability.swift:459` | yes (`healthsave_sync_receipts.metric`) |
+| `X-HealthSave-Batch-Index` | `SyncReliability.swift:460` | yes (`healthsave_sync_receipts.batch_index`) |
+| `X-HealthSave-Total-Batches` | `SyncReliability.swift:461` | yes (`healthsave_sync_receipts.total_batches`) |
 
 **iOS does NOT send:**
 
@@ -102,10 +103,12 @@ key name on either side breaks ingest).
   is a v2 concern.
 
 **Verdict:** match. The 6 `X-HealthSave-*` headers are part of the iOS
-wire iOS produces; the server's tolerance of unknown headers means
-they don't currently break anything. They should be considered
-*reserved* — if v2 adds dedup-by-hash logic, these headers are
-already on the wire and become load-bearing without an iOS release.
+wire iOS produces; the server records them as delivery receipts for
+operator proof, support diagnostics, and duplicate-safe retry analysis.
+The batch response includes additive receipt fields such as `receipt_id`,
+`sync_run_id`, `records_received`, `records_accepted`, and
+`verification_level: "delivery_receipt"` while preserving the legacy v1
+`status/inserted/skipped` response fields.
 
 ## `GET /api/apple/status` — response shape
 

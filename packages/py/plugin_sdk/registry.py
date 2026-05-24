@@ -30,6 +30,15 @@ from .discovery import DiscoveredPlugin, discover
 from .manifest import PluginManifest, is_sdk_compatible
 
 
+def _portable_plugin_dir(plugin_dir: Path) -> str:
+    """Return a registry path that can be committed and reused elsewhere."""
+    resolved = plugin_dir.resolve()
+    for parent in resolved.parents:
+        if parent.name == "plugins":
+            return resolved.relative_to(parent.parent).as_posix()
+    return resolved.as_posix()
+
+
 def _entry(p: DiscoveredPlugin) -> dict[str, Any]:
     """One entry in the registry JSON.
 
@@ -41,7 +50,7 @@ def _entry(p: DiscoveredPlugin) -> dict[str, Any]:
     return {
         "kind": p.kind,
         "id": p.plugin_id,
-        "plugin_dir": str(p.plugin_dir),
+        "plugin_dir": _portable_plugin_dir(p.plugin_dir),
         "compatible_with_running_sdk": is_sdk_compatible(p.manifest),
         "manifest": p.manifest.model_dump(mode="json"),
     }
