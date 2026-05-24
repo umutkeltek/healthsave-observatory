@@ -115,6 +115,12 @@ def test_remote_vm_deploy_script_has_explicit_external_database_mode():
     assert "HEALTH_DATA_HUB_DB_PUBLISH_PORT" in script
 
 
+def test_remote_vm_deploy_script_recreates_grafana_after_replacing_remote_tree():
+    script = (ROOT / "deploy" / "remote-vm" / "deploy.sh").read_text()
+
+    assert "up -d --no-deps --force-recreate grafana" in script
+
+
 def test_remote_vm_readme_documents_external_database_mode():
     readme = (ROOT / "deploy" / "remote-vm" / "README.md").read_text()
 

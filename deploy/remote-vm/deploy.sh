@@ -144,6 +144,14 @@ docker compose --env-file \"$REMOTE_ENV_DIR/.env\" \
   -f docker-compose.remote-vm.override.yml \
   -p "$PROJECT_NAME" \
   up -d --build \$COMPOSE_TARGETS
+# The remote tree is atomically replaced above. Recreate Grafana so its bind
+# mounts point at the current provisioning and dashboard directories instead
+# of the deleted previous release tree.
+docker compose --env-file \"$REMOTE_ENV_DIR/.env\" \
+  -f docker-compose.yml \
+  -f docker-compose.remote-vm.override.yml \
+  -p "$PROJECT_NAME" \
+  up -d --no-deps --force-recreate grafana
 cat > \"$REMOTE_ENV_DIR/current-release.env\" <<EOF
 APP=health-data-hub
 DEPLOY_REF=$DEPLOY_REF
