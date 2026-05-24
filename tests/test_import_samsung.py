@@ -223,3 +223,13 @@ def test_post_batches_raises_on_non_200():
 def test_main_dry_run_does_not_post(capsys):
     rc = import_samsung.main([str(FIXTURES), "--dry-run"])
     assert rc == 0
+
+
+def test_arg_parser_uses_health_data_hub_env_defaults(monkeypatch):
+    monkeypatch.setenv("HDH_SERVER", "http://hub.example")
+    monkeypatch.setenv("HDH_API_KEY", "secret")
+
+    args = import_samsung.build_arg_parser().parse_args([str(FIXTURES)])
+
+    assert args.server == "http://hub.example"
+    assert args.api_key == "secret"

@@ -2,6 +2,99 @@
   "plugins": [
     {
       "compatible_with_running_sdk": true,
+      "id": "hdh.agents.anomaly_watcher",
+      "kind": "agent",
+      "manifest": {
+        "config_schema": null,
+        "consumes": [
+          "finding.anomaly"
+        ],
+        "emits": [
+          "proposal.notify"
+        ],
+        "entrypoint": "plugins.agents.anomaly_watcher:AnomalyWatcherAgent",
+        "id": "hdh.agents.anomaly_watcher",
+        "kind": "agent",
+        "language": "python",
+        "name": "Anomaly Watcher",
+        "permissions": {
+          "capabilities": [
+            {
+              "description": "Read anomaly findings to detect alert-worthy events.",
+              "name": "read:analysis_findings"
+            },
+            {
+              "description": "Propose user-facing notifications. The decision belongs to the operator (or a future auto-approval policy); the agent does not deliver notifications itself.",
+              "name": "propose:notify"
+            }
+          ],
+          "network": false,
+          "secrets": []
+        },
+        "requires": [],
+        "sdk_version": ">=0.1,<0.2",
+        "version": "0.1.0"
+      },
+      "plugin_dir": "plugins/agents/anomaly_watcher"
+    },
+    {
+      "compatible_with_running_sdk": true,
+      "id": "amazfit-zepp",
+      "kind": "source",
+      "manifest": {
+        "config_schema": null,
+        "consumes": [],
+        "emits": [
+          "measurement.heart_rate",
+          "measurement.blood_oxygen",
+          "measurement.sleep_analysis",
+          "measurement.stress",
+          "measurement.daily_activity"
+        ],
+        "entrypoint": "plugins.sources.amazfit:AmazfitSource",
+        "id": "amazfit-zepp",
+        "kind": "source",
+        "language": "python",
+        "name": "Amazfit / Zepp",
+        "permissions": {
+          "capabilities": [
+            {
+              "description": "Persist the operator-imported Zepp app_token (re-imported on expiry).",
+              "name": "write:oauth_tokens"
+            },
+            {
+              "description": "Insert heart rate, SpO2, sleep, stress, and daily activity rows into the per-metric Timescale tables.",
+              "name": "write:measurements"
+            },
+            {
+              "description": "Outbound HTTPS for the US-region Zepp data API.",
+              "name": "network:api-mifit-us3.zepp.com"
+            },
+            {
+              "description": "Outbound HTTPS for the EU-region Zepp data API.",
+              "name": "network:api-mifit-de.zepp.com"
+            },
+            {
+              "description": "Outbound HTTPS for the CN-region Zepp data API.",
+              "name": "network:api-mifit.zepp.com"
+            }
+          ],
+          "network": true,
+          "secrets": [
+            "AMAZFIT_APP_TOKEN",
+            "AMAZFIT_USER_ID",
+            "AMAZFIT_REGION",
+            "HDH_TOKEN_ENC_KEY"
+          ]
+        },
+        "requires": [],
+        "sdk_version": ">=0.1,<0.2",
+        "version": "0.2.0"
+      },
+      "plugin_dir": "plugins/sources/amazfit"
+    },
+    {
+      "compatible_with_running_sdk": true,
       "id": "apple-health-healthsave",
       "kind": "source",
       "manifest": {
@@ -43,7 +136,56 @@
         "sdk_version": ">=0.1,<0.2",
         "version": "1.0.0"
       },
-      "plugin_dir": "/Users/umut/Projects/products/healthsave/datahub/plugins/sources/apple_health_healthsave"
+      "plugin_dir": "plugins/sources/apple_health_healthsave"
+    },
+    {
+      "compatible_with_running_sdk": true,
+      "id": "whoop-healthsave",
+      "kind": "source",
+      "manifest": {
+        "config_schema": null,
+        "consumes": [],
+        "emits": [
+          "measurement.heart_rate",
+          "measurement.hrv",
+          "measurement.sleep_analysis",
+          "measurement.workouts",
+          "measurement.recovery",
+          "measurement.strain"
+        ],
+        "entrypoint": "plugins.sources.whoop:WhoopSource",
+        "id": "whoop-healthsave",
+        "kind": "source",
+        "language": "python",
+        "name": "Whoop (HealthSave bridge)",
+        "permissions": {
+          "capabilities": [
+            {
+              "description": "Persist and refresh the per-owner Whoop OAuth access/refresh token pair.",
+              "name": "write:oauth_tokens"
+            },
+            {
+              "description": "Insert recovery, sleep, workout, and HRV samples into the per-metric Timescale tables.",
+              "name": "write:measurements"
+            },
+            {
+              "description": "Outbound HTTPS to Whoop's developer API for OAuth + data fetch.",
+              "name": "network:api.prod.whoop.com"
+            }
+          ],
+          "network": true,
+          "secrets": [
+            "WHOOP_CLIENT_ID",
+            "WHOOP_CLIENT_SECRET",
+            "WHOOP_REDIRECT_URI",
+            "HDH_TOKEN_ENC_KEY"
+          ]
+        },
+        "requires": [],
+        "sdk_version": ">=0.1,<0.2",
+        "version": "0.1.0"
+      },
+      "plugin_dir": "plugins/sources/whoop"
     }
   ],
   "sdk_version": "0.1.0"

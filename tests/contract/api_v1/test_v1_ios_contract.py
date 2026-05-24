@@ -9,7 +9,7 @@ unmistakable.
 
 Cross-check: ``contracts/IOS_CROSS_CHECK.md``.
 Source of truth: HealthSave iOS app at
-    /Users/umut/Projects/products/healthsave/ios_app/Sources/HealthSync/
+    ../ios_app/Sources/HealthSync/ in the HealthSave product workspace.
 """
 
 from __future__ import annotations

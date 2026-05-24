@@ -18,6 +18,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 class TimescaleHealthSnapshotRepository:
     """Read-only TimescaleDB queries for current HA sensor values."""
 
+    async def _latest_quantity_value(self, session: AsyncSession, metric_name: str) -> object:
+        return (
+            await session.execute(
+                text(
+                    """
+                    SELECT value
+                    FROM quantity_samples
+                    WHERE metric_name = :metric_name
+                    ORDER BY time DESC
+                    LIMIT 1
+                    """
+                ),
+                {"metric_name": metric_name},
+            )
+        ).scalar_one_or_none()
+
     async def fetch_snapshot(self, session: AsyncSession) -> HealthSnapshot:
         collected_at = datetime.now(UTC)
 
@@ -35,21 +51,23 @@ class TimescaleHealthSnapshotRepository:
                 )
             ).scalar_one_or_none()
         )
-        resting_heart_rate = int_or_none(
-            (
-                await session.execute(
-                    text(
-                        """
-                        SELECT bpm
-                        FROM heart_rate
-                        WHERE context = 'resting'
-                        ORDER BY time DESC
-                        LIMIT 1
-                        """
-                    )
-                )
-            ).scalar_one_or_none()
+        resting_heart_rate_raw = await session.execute(
+            text(
+                """
+                    SELECT bpm
+                    FROM heart_rate
+                    WHERE context = 'resting'
+                    ORDER BY time DESC
+                    LIMIT 1
+                    """
+            )
         )
+        resting_heart_rate_value = resting_heart_rate_raw.scalar_one_or_none()
+        if resting_heart_rate_value is None:
+            resting_heart_rate_value = await self._latest_quantity_value(
+                session, "resting_heart_rate"
+            )
+        resting_heart_rate = int_or_none(resting_heart_rate_value)
         hrv_7d_avg = round_float(
             (
                 await session.execute(
@@ -124,25 +142,26 @@ class TimescaleHealthSnapshotRepository:
             ).scalar_one_or_none(),
             2,
         )
-        sleep_efficiency = round_float(
-            (
-                await session.execute(
-                    text(
-                        """
-                        SELECT CASE
-                          WHEN (total_duration_ms + COALESCE(awake_ms, 0)) > 0
-                          THEN total_duration_ms::float
-                            / (total_duration_ms + COALESCE(awake_ms, 0)) * 100.0
-                        END
-                        FROM sleep_sessions
-                        ORDER BY start_time DESC
-                        LIMIT 1
-                        """
-                    )
-                )
-            ).scalar_one_or_none(),
-            1,
+        sleep_efficiency_raw = await session.execute(
+            text(
+                """
+                    SELECT CASE
+                      WHEN (total_duration_ms + COALESCE(awake_ms, 0)) > 0
+                      THEN total_duration_ms::float
+                        / (total_duration_ms + COALESCE(awake_ms, 0)) * 100.0
+                    END
+                    FROM sleep_sessions
+                    ORDER BY start_time DESC
+                    LIMIT 1
+                    """
+            )
         )
+        sleep_efficiency_value = sleep_efficiency_raw.scalar_one_or_none()
+        if sleep_efficiency_value is None:
+            sleep_efficiency_value = await self._latest_quantity_value(
+                session, "sleep_efficiency_percentage"
+            )
+        sleep_efficiency = round_float(sleep_efficiency_value, 1)
         blood_oxygen = round_float(
             (
                 await session.execute(
@@ -158,36 +177,21 @@ class TimescaleHealthSnapshotRepository:
             ).scalar_one_or_none(),
             1,
         )
-        recovery_score = int_or_none(
-            (
-                await session.execute(
-                    text(
-                        """
-                        SELECT score
-                        FROM recovery
-                        ORDER BY time DESC
-                        LIMIT 1
-                        """
-                    )
-                )
-            ).scalar_one_or_none()
+        recovery_score_raw = await session.execute(
+            text(
+                """
+                    SELECT score
+                    FROM recovery
+                    ORDER BY time DESC
+                    LIMIT 1
+                    """
+            )
         )
-        strain = round_float(
-            (
-                await session.execute(
-                    text(
-                        """
-                        SELECT value
-                        FROM quantity_samples
-                        WHERE metric_name = 'strain'
-                        ORDER BY time DESC
-                        LIMIT 1
-                        """
-                    )
-                )
-            ).scalar_one_or_none(),
-            1,
-        )
+        recovery_score_value = recovery_score_raw.scalar_one_or_none()
+        if recovery_score_value is None:
+            recovery_score_value = await self._latest_quantity_value(session, "recovery_score")
+        recovery_score = int_or_none(recovery_score_value)
+        strain = round_float(await self._latest_quantity_value(session, "strain"), 1)
         source_model = (
             await session.execute(
                 text(
