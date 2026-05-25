@@ -248,6 +248,8 @@ To opt into Ollama manually, copy `docker-compose.override.yml.example` to `dock
 | `/ready` | GET | API plus database readiness check |
 | `/api/apple/batch` | POST | Receive metric batch from the client bridge |
 | `/api/apple/status` | GET | Return flat per-table status objects |
+| `/api/v2/sync/runs/latest` | GET | Optional latest HealthSave delivery receipt |
+| `/api/v2/sync/coverage` | GET | Optional metric-level receipt coverage |
 | `/api/insights/latest` | GET | Most recent briefing (if AI enabled) |
 | `/api/insights/anomalies` | GET | Recent anomaly findings, filterable by `since` and `severity` |
 | `/api/insights/trends` | GET | Recent HR / HRV trend findings, filterable by `period=30d` |

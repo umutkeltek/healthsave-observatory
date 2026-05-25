@@ -402,6 +402,33 @@ These v2 operator endpoints are additive. They do not change the released v1
 HealthSave ingest/status contract, but they make setup and end-to-end proof much
 clearer.
 
+## Compatibility tiers
+
+HealthSave-compatible servers do **not** need to be Data Hub. The stable minimum
+contract is split into a small core app/setup surface, recommended retry-safe
+behavior, and optional Data Hub proof endpoints.
+
+**Core app/setup contract**
+
+1. `GET /api/health` returns a successful `2xx` liveness response.
+2. `GET /api/apple/status` returns flat metric status objects.
+3. `POST /api/apple/batch` accepts HealthSave metric batches and returns a
+   successful `2xx` response for uploads it accepts.
+
+**Recommended retry-safe behavior**
+
+Servers should make `POST /api/apple/batch` idempotent by batch ID, run ID, or a
+deterministic record key so retries and backfills do not double-count records.
+This is strongly recommended for production destinations, but it is separate
+from the minimal setup probe contract.
+
+**Optional Data Hub extensions**
+
+Data Hub also implements `GET /api/v2/sync/runs/latest` and
+`GET /api/v2/sync/coverage` for richer receipt and coverage diagnostics.
+HealthSave uses those only when present, so third-party servers can start with
+the core contract and add receipt proof later.
+
 ### `GET /api/v2/setup/diagnostics`
 
 Unauthenticated, no health data. Use this to confirm that a base URL points at

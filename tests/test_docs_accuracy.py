@@ -96,6 +96,29 @@ def test_public_docs_describe_healthsave_delivery_receipts():
     assert "not yet" not in combined.lower()
 
 
+def test_api_docs_split_core_contract_from_optional_datahub_receipts():
+    api = (ROOT / "API.md").read_text()
+    compatibility = api.split("## Compatibility tiers", 1)[1].split(
+        "### `GET /api/v2/setup/diagnostics`",
+        1,
+    )[0]
+
+    assert "Core app/setup contract" in compatibility
+    for endpoint in (
+        "`GET /api/health`",
+        "`GET /api/apple/status`",
+        "`POST /api/apple/batch`",
+    ):
+        assert endpoint in compatibility
+    assert "successful `2xx`" in compatibility
+    assert "Recommended retry-safe behavior" in compatibility
+    assert "Optional Data Hub extensions" in compatibility
+    assert "`GET /api/v2/sync/runs/latest`" in compatibility
+    assert "`GET /api/v2/sync/coverage`" in compatibility
+    assert "HealthSave uses those only when present" in compatibility
+    assert "must implement `/api/v2/sync/runs/latest`" not in compatibility
+
+
 def test_generated_plugin_registry_uses_repo_relative_paths():
     registry = ROOT / "plugins" / ".generated" / "plugin-registry.json"
     text = registry.read_text()
