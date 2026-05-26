@@ -456,16 +456,26 @@ Example response:
 
 The released iOS app already sends these optional headers on batch sync:
 
+- `Idempotency-Key`
 - `X-HealthSave-Sync-Run-ID`
 - `X-HealthSave-Batch-ID`
 - `X-HealthSave-Payload-Hash`
 - `X-HealthSave-Metric`
 - `X-HealthSave-Batch-Index`
 - `X-HealthSave-Total-Batches`
+- `X-HealthSave-Sync-Mode`
+- `X-HealthSave-Anchor-Present`
+- `X-HealthSave-Lower-Bound-Reason`
+- `X-HealthSave-Full-Export`
+- `X-HealthSave-Query-Lower-Bound`
+- `X-HealthSave-Sample-Min-Time`
+- `X-HealthSave-Sample-Max-Time`
 
 Data Hub records them in `healthsave_sync_receipts` so operators can prove that a
-sync reached the API, see which batches were processed, and separate API ingest
-truth from Grafana dashboard visibility.
+sync reached the API, see which batches were processed, and separate delivery
+receipt time from sample-window freshness and Grafana dashboard visibility.
+If the same `Idempotency-Key` is reused with a different payload hash, Data Hub
+returns `409 Conflict` and does not ingest the replacement payload.
 
 ### `GET /api/v2/sync/runs/latest`
 
@@ -489,8 +499,16 @@ Example response:
   "verification_level": "delivery_receipt",
   "records_received": 512,
   "records_accepted": 488,
+  "records_inserted_new": null,
+  "records_deduped_existing": null,
+  "storage_result_level": "accepted_only",
   "records_skipped": 24,
   "records_rejected": 0,
+  "sample_window": {
+    "min_sample_time": "2026-05-24T07:10:00Z",
+    "max_sample_time": "2026-05-24T07:13:00Z"
+  },
+  "latest_sample_time": "2026-05-24T07:13:00Z",
   "batches_seen": 2,
   "batches_processed": 2,
   "batches_failed": 0,
@@ -503,7 +521,14 @@ Example response:
 ### `GET /api/v2/sync/coverage`
 
 Protected by `x-api-key` when `API_KEY` is set. Returns metric-level receipt
-coverage: batches seen/processed/empty/failed and records accepted/skipped.
+coverage and destination sample coverage. `newest_receipt_at` proves delivery
+time; `latest_destination_sample_time` proves the newest sample currently stored
+for that metric. They are intentionally separate because a recent receipt can
+contain old samples.
+
+The current Timescale writer reports accepted/skipped rows. It does not
+split accepted rows into inserted-new vs deduped-existing, so those receipt
+fields are nullable and `storage_result_level` is `accepted_only`.
 
 ## Insights
 

@@ -352,7 +352,7 @@ export interface paths {
         };
         /**
          * Sync Coverage
-         * @description Return metric-level receipt coverage from the Data Hub side.
+         * @description Return metric-level receipt and destination sample coverage.
          */
         get: operations["sync_coverage_api_v2_sync_coverage_get"];
         put?: never;

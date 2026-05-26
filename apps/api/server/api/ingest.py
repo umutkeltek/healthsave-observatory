@@ -12,6 +12,7 @@ and the post-ingest anomaly trigger.
 """
 
 import logging
+from datetime import datetime
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
@@ -19,7 +20,11 @@ from compat_v1.models import BatchPayload
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
-from storage.timescale.sync_receipts import record_sync_receipt
+from storage.timescale.sync_receipts import (
+    ReceiptIdempotencyConflict,
+    assert_receipt_idempotency,
+    record_sync_receipt,
+)
 
 from ..ingestion.owner import OWNER_HEADER, resolve_owner_id
 from ..ingestion.parsers import group_samples_by_device
@@ -131,6 +136,13 @@ async def apple_batch(
     batch_idx = payload.batch_index
     total = payload.total_batches
     samples = payload.samples
+    sample_min_at, sample_max_at = _sample_window_from_request(request, samples)
+    await _reject_conflicting_receipt_idempotency(
+        session,
+        request=request,
+        metric=metric,
+        batch_index=batch_idx,
+    )
 
     if not samples:
         raw_log_id = await audit.log_raw(session, None, raw_payload) if audit else None
@@ -141,8 +153,11 @@ async def apple_batch(
             batch_index=batch_idx,
             total_batches=total,
             status="empty",
+            records_received=0,
             records_accepted=0,
             records_skipped=0,
+            sample_min_at=sample_min_at,
+            sample_max_at=sample_max_at,
             raw_log_id=raw_log_id,
         )
         await session.commit()
@@ -159,6 +174,8 @@ async def apple_batch(
             records_received=0,
             records_accepted=0,
             records_rejected=0,
+            sample_min_at=sample_min_at,
+            sample_max_at=sample_max_at,
         )
 
     sample_groups = group_samples_by_device(samples)
@@ -200,6 +217,9 @@ async def apple_batch(
             metric=metric,
             batch_index=batch_idx,
             total_batches=total,
+            records_received=len(samples),
+            sample_min_at=sample_min_at,
+            sample_max_at=sample_max_at,
             raw_log_id=raw_log_id,
             error_message=str(exc),
         )
@@ -215,8 +235,11 @@ async def apple_batch(
         batch_index=batch_idx,
         total_batches=total,
         status="processed",
+        records_received=len(samples),
         records_accepted=count,
         records_skipped=max(len(samples) - count, 0),
+        sample_min_at=sample_min_at,
+        sample_max_at=sample_max_at,
         raw_log_id=raw_log_id,
     )
     await session.commit()
@@ -233,6 +256,8 @@ async def apple_batch(
         records_received=len(samples),
         records_accepted=count,
         records_rejected=max(len(samples) - count, 0),
+        sample_min_at=sample_min_at,
+        sample_max_at=sample_max_at,
     )
 
 
@@ -295,6 +320,8 @@ def _delivery_receipt_response(
     records_received: int,
     records_accepted: int,
     records_rejected: int,
+    sample_min_at: str | None,
+    sample_max_at: str | None,
 ) -> dict[str, Any]:
     """Return legacy v1 fields plus an additive delivery receipt.
 
@@ -306,12 +333,17 @@ def _delivery_receipt_response(
     headers = request.headers
     sync_run_id = _header(headers, "X-HealthSave-Sync-Run-ID")
     batch_id = _header(headers, "X-HealthSave-Batch-ID")
-    receipt_id = batch_id or f"{sync_run_id or 'runless'}:{metric}:{batch_index}"
+    idempotency_key = _idempotency_key(headers, sync_run_id, batch_id, metric, batch_index)
+    receipt_id = idempotency_key or batch_id or f"{sync_run_id or 'runless'}:{metric}:{batch_index}"
     per_metric = {
         metric: {
             "received": records_received,
             "accepted": records_accepted,
             "rejected": records_rejected,
+            "sample_window": {
+                "min_sample_time": sample_min_at,
+                "max_sample_time": sample_max_at,
+            },
         }
     }
     return {
@@ -323,10 +355,18 @@ def _delivery_receipt_response(
         "receipt_id": receipt_id,
         "sync_run_id": sync_run_id,
         "batch_id": batch_id,
+        "idempotency_key": idempotency_key,
         "batch_index": batch_index,
         "records_received": records_received,
         "records_accepted": records_accepted,
         "records_rejected": records_rejected,
+        "records_inserted_new": None,
+        "records_deduped_existing": None,
+        "storage_result_level": "accepted_only",
+        "sample_window": {
+            "min_sample_time": sample_min_at,
+            "max_sample_time": sample_max_at,
+        },
         "verification_level": "delivery_receipt",
         "per_metric": per_metric,
     }
@@ -339,6 +379,9 @@ async def _record_failed_sync_receipt(
     metric: str,
     batch_index: int,
     total_batches: int,
+    records_received: int,
+    sample_min_at: str | None,
+    sample_max_at: str | None,
     raw_log_id: int | None,
     error_message: str,
 ) -> None:
@@ -352,8 +395,11 @@ async def _record_failed_sync_receipt(
             batch_index=batch_index,
             total_batches=total_batches,
             status="failed",
+            records_received=records_received,
             records_accepted=0,
             records_skipped=0,
+            sample_min_at=sample_min_at,
+            sample_max_at=sample_max_at,
             raw_log_id=raw_log_id,
             error_message=error_message[:1000],
         )
@@ -371,8 +417,11 @@ async def _record_sync_receipt(
     batch_index: int,
     total_batches: int,
     status: str,
+    records_received: int,
     records_accepted: int,
     records_skipped: int,
+    sample_min_at: str | None,
+    sample_max_at: str | None,
     raw_log_id: int | None,
     error_message: str | None = None,
 ) -> None:
@@ -381,6 +430,7 @@ async def _record_sync_receipt(
     headers = request.headers
     sync_run_id = _header(headers, "X-HealthSave-Sync-Run-ID")
     batch_id = _header(headers, "X-HealthSave-Batch-ID")
+    idempotency_key = _idempotency_key(headers, sync_run_id, batch_id, metric, batch_index)
     payload_hash = _header(headers, "X-HealthSave-Payload-Hash")
     header_metric = _header(headers, "X-HealthSave-Metric")
 
@@ -388,16 +438,130 @@ async def _record_sync_receipt(
         session,
         sync_run_id=sync_run_id,
         batch_id=batch_id,
+        idempotency_key=idempotency_key,
         payload_hash=payload_hash,
         metric=header_metric or metric,
         batch_index=_header_int(headers, "X-HealthSave-Batch-Index", batch_index),
         total_batches=_header_int(headers, "X-HealthSave-Total-Batches", total_batches),
+        sync_mode=_header(headers, "X-HealthSave-Sync-Mode"),
+        anchor_present=_header_bool(headers, "X-HealthSave-Anchor-Present"),
+        lower_bound_reason=_header(headers, "X-HealthSave-Lower-Bound-Reason"),
+        full_export=_header_bool(headers, "X-HealthSave-Full-Export"),
+        query_lower_bound_at=_header(headers, "X-HealthSave-Query-Lower-Bound"),
         status=status,
+        records_received=records_received,
         records_accepted=records_accepted,
         records_skipped=records_skipped,
+        sample_min_at=sample_min_at,
+        sample_max_at=sample_max_at,
         raw_log_id=raw_log_id,
         error_message=error_message,
     )
+
+
+def _header_bool(headers: Any, name: str) -> bool | None:
+    value = _header(headers, name)
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized in {"true", "1", "yes"}:
+        return True
+    if normalized in {"false", "0", "no"}:
+        return False
+    return None
+
+
+def _idempotency_key(
+    headers: Any,
+    sync_run_id: str | None,
+    batch_id: str | None,
+    metric: str,
+    batch_index: int,
+) -> str | None:
+    explicit_key = _header(headers, "Idempotency-Key")
+    if explicit_key:
+        return explicit_key
+    if batch_id:
+        return batch_id
+    if sync_run_id:
+        return f"{sync_run_id}:{metric}:{batch_index}"
+    return None
+
+
+async def _reject_conflicting_receipt_idempotency(
+    session: AsyncSession,
+    *,
+    request: Request,
+    metric: str,
+    batch_index: int,
+) -> None:
+    headers = request.headers
+    sync_run_id = _header(headers, "X-HealthSave-Sync-Run-ID")
+    batch_id = _header(headers, "X-HealthSave-Batch-ID")
+    idempotency_key = _idempotency_key(headers, sync_run_id, batch_id, metric, batch_index)
+    payload_hash = _header(headers, "X-HealthSave-Payload-Hash")
+    try:
+        await assert_receipt_idempotency(
+            session,
+            idempotency_key=idempotency_key,
+            payload_hash=payload_hash,
+        )
+    except ReceiptIdempotencyConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "status": "rejected",
+                "error_code": "idempotency_key_payload_mismatch",
+                "message": str(exc),
+            },
+        ) from exc
+
+
+def _sample_window_from_request(
+    request: Request,
+    samples: list[dict[str, Any]],
+) -> tuple[str | None, str | None]:
+    headers = request.headers
+    header_min = _header(headers, "X-HealthSave-Sample-Min-Time")
+    header_max = _header(headers, "X-HealthSave-Sample-Max-Time")
+    if header_min or header_max:
+        return header_min, header_max
+    return _sample_window_from_samples(samples)
+
+
+def _sample_window_from_samples(samples: list[dict[str, Any]]) -> tuple[str | None, str | None]:
+    starts: list[tuple[datetime, str]] = []
+    ends: list[tuple[datetime, str]] = []
+    for sample in samples:
+        for key in ("date", "startDate", "start_date", "start", "start_time", "time"):
+            parsed = _parse_sample_time(sample.get(key))
+            if parsed is not None:
+                starts.append(parsed)
+                break
+        for key in ("endDate", "end_date", "end", "end_time", "date", "time"):
+            parsed = _parse_sample_time(sample.get(key))
+            if parsed is not None:
+                ends.append(parsed)
+                break
+    min_sample = min(starts, default=None, key=lambda item: item[0])
+    max_sample = max(ends, default=None, key=lambda item: item[0])
+    return (
+        min_sample[1] if min_sample is not None else None,
+        max_sample[1] if max_sample is not None else None,
+    )
+
+
+def _parse_sample_time(value: Any) -> tuple[datetime, str] | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text_value = value.strip()
+    parse_value = text_value
+    if parse_value.endswith("Z"):
+        parse_value = f"{parse_value[:-1]}+00:00"
+    try:
+        return datetime.fromisoformat(parse_value), text_value
+    except ValueError:
+        return None
 
 
 def _observe_ingest_metrics(*, metric: str, rows: int, started_at: float) -> None:

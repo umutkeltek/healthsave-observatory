@@ -62,7 +62,7 @@ async def sync_run(sync_run_id: str, session: Any = Depends(get_session)) -> dic
 
 @router.get("/api/v2/sync/coverage", dependencies=[Depends(verify_api_key)])
 async def sync_coverage(session: Any = Depends(get_session)) -> dict:
-    """Return metric-level receipt coverage from the Data Hub side."""
+    """Return metric-level receipt and destination sample coverage."""
 
     return await sync_receipts.sync_coverage(session)
 

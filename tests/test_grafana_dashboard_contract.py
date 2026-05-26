@@ -30,6 +30,19 @@ def _raw_sql() -> list[tuple[str, str]]:
     return queries
 
 
+def _dashboard(file_name: str) -> dict:
+    return json.loads((DASHBOARDS / file_name).read_text())
+
+
+def _panel_sql(file_name: str, title: str) -> str:
+    dashboard = _dashboard(file_name)
+    for panel in dashboard["panels"]:
+        if panel.get("title") == title:
+            targets = panel.get("targets", [])
+            return "\n".join(target.get("rawSql", "") for target in targets)
+    raise AssertionError(f"panel not found: {file_name} / {title}")
+
+
 def test_dashboards_do_not_query_legacy_personal_stack_columns():
     forbidden = (
         "sleep_efficiency_pct",
@@ -87,3 +100,44 @@ def test_whoop_dashboard_metric_coverage_matches_plugin_output():
         "sleep_respiratory_rate",
     ):
         assert metric_name in raw
+
+
+def test_sleep_duration_dashboard_uses_single_best_source_per_day():
+    sql = _panel_sql("sleep.json", "Sleep Duration Trend")
+
+    assert "FROM sleep_sessions" in sql
+    assert "row_number() OVER (PARTITION BY time" in sql
+    assert "LEAST(hours, 16)" in sql
+    assert "FROM sleep_stages" not in sql
+
+
+def test_sleep_stat_cards_do_not_sum_overlapping_stage_sources():
+    panels = (
+        "Avg Sleep Duration (7d)",
+        "Avg Deep Sleep (7d)",
+        "Avg REM Sleep (7d)",
+        "Sleep Efficiency (7d)",
+    )
+
+    for title in panels:
+        sql = _panel_sql("sleep.json", title)
+        assert "FROM sleep_sessions" in sql
+        assert "row_number() OVER (PARTITION BY day" in sql
+        assert "FROM sleep_stages" not in sql
+
+
+def test_overview_sleep_duration_uses_single_best_source_per_day():
+    sql = _panel_sql("healthsave-overview.json", "Sleep Duration (14 Days)")
+
+    assert "FROM sleep_sessions" in sql
+    assert "row_number() OVER (PARTITION BY time" in sql
+    assert "LEAST(hours, 16)" in sql
+    assert "FROM sleep_stages" not in sql
+
+
+def test_overview_latest_hr_stat_does_not_show_stale_all_time_value():
+    sql = _panel_sql("healthsave-overview.json", "Latest HR")
+
+    assert "FROM heart_rate" in sql
+    assert "time >= now() - interval '24 hours'" in sql
+    assert "COALESCE" not in sql

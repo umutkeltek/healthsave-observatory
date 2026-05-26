@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from fastapi import HTTPException
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -308,14 +309,27 @@ async def test_batch_uses_sample_source_for_device_identity_and_logs_raw_payload
 def test_schema_declares_sync_receipts_for_end_to_end_healthsave_proof():
     schema = Path("db/schema.sql").read_text()
     migration = Path("db/migrations/007_healthsave_sync_receipts.sql").read_text()
+    additive_migration = Path("db/migrations/011_healthsave_sync_receipt_evidence.sql").read_text()
 
     for text_blob in (schema, migration):
         assert "healthsave_sync_receipts" in text_blob
         assert "sync_run_id" in text_blob
         assert "batch_id" in text_blob
+        assert "idempotency_key" in text_blob
         assert "payload_hash" in text_blob
+        assert "records_received" in text_blob
         assert "records_accepted" in text_blob
+        assert "records_inserted_new" in text_blob
+        assert "records_deduped_existing" in text_blob
+        assert "storage_result_level" in text_blob
+        assert "sample_min_at" in text_blob
+        assert "sample_max_at" in text_blob
         assert "idx_healthsave_sync_receipts_run" in text_blob
+        assert "uq_healthsave_sync_receipts_idempotency_key" in text_blob
+
+    assert "ADD COLUMN IF NOT EXISTS idempotency_key" in additive_migration
+    assert "SET idempotency_key = batch_id" in additive_migration
+    assert "sync_run_id || ':' || metric" not in additive_migration
 
 
 def test_public_contract_exposes_specific_sync_run_receipt_route():
@@ -344,12 +358,20 @@ async def test_batch_records_healthsave_sync_receipt_headers():
             ],
         },
         headers={
+            "Idempotency-Key": "batch-002",
             "X-HealthSave-Sync-Run-ID": "run-abc",
             "X-HealthSave-Batch-ID": "batch-002",
             "X-HealthSave-Payload-Hash": "sha256:payload",
             "X-HealthSave-Metric": "heart_rate",
             "X-HealthSave-Batch-Index": "2",
             "X-HealthSave-Total-Batches": "3",
+            "X-HealthSave-Sync-Mode": "recovery",
+            "X-HealthSave-Anchor-Present": "false",
+            "X-HealthSave-Lower-Bound-Reason": "local_metric_success",
+            "X-HealthSave-Full-Export": "false",
+            "X-HealthSave-Query-Lower-Bound": "2026-04-10T11:00:00.000Z",
+            "X-HealthSave-Sample-Min-Time": "2026-04-10T12:00:00.000Z",
+            "X-HealthSave-Sample-Max-Time": "2026-04-10T12:05:00.000Z",
         },
     )
 
@@ -360,22 +382,85 @@ async def test_batch_records_healthsave_sync_receipt_headers():
     assert result["verification_level"] == "delivery_receipt"
     assert result["sync_run_id"] == "run-abc"
     assert result["batch_id"] == "batch-002"
+    assert result["idempotency_key"] == "batch-002"
     assert result["records_received"] == 1
     assert result["records_accepted"] == 1
     assert result["records_rejected"] == 0
+    assert result["records_inserted_new"] is None
+    assert result["records_deduped_existing"] is None
+    assert result["storage_result_level"] == "accepted_only"
+    assert result["sample_window"] == {
+        "min_sample_time": "2026-04-10T12:00:00.000Z",
+        "max_sample_time": "2026-04-10T12:05:00.000Z",
+    }
     assert result["per_metric"]["heart_rate"]["received"] == 1
     assert result["per_metric"]["heart_rate"]["accepted"] == 1
     assert receipt is not None
     assert receipt["sync_run_id"] == "run-abc"
     assert receipt["batch_id"] == "batch-002"
+    assert receipt["idempotency_key"] == "batch-002"
     assert receipt["payload_hash"] == "sha256:payload"
     assert receipt["metric"] == "heart_rate"
     assert receipt["batch_index"] == 2
     assert receipt["total_batches"] == 3
     assert receipt["status"] == "processed"
+    assert receipt["sync_mode"] == "recovery"
+    assert receipt["anchor_present"] is False
+    assert receipt["lower_bound_reason"] == "local_metric_success"
+    assert receipt["full_export"] is False
+    assert receipt["query_lower_bound_at"] == "2026-04-10T11:00:00.000Z"
+    assert receipt["records_received"] == 1
     assert receipt["records_accepted"] == 1
+    assert receipt["records_inserted_new"] is None
+    assert receipt["records_deduped_existing"] is None
+    assert receipt["storage_result_level"] == "accepted_only"
+    assert receipt["sample_min_at"] == "2026-04-10T12:00:00.000Z"
+    assert receipt["sample_max_at"] == "2026-04-10T12:05:00.000Z"
     receipt_sql = [sql for sql, _ in session.calls if "INSERT INTO healthsave_sync_receipts" in sql]
-    assert any("ON CONFLICT (batch_id)" in sql for sql in receipt_sql)
+    assert any("ON CONFLICT (idempotency_key)" in sql for sql in receipt_sql)
+
+
+@pytest.mark.asyncio
+async def test_batch_derives_sample_window_from_start_end_payload_when_headers_absent():
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "workouts",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [
+                {
+                    "start": "2026-04-10T06:10:00.000Z",
+                    "end": "2026-04-10T06:55:00.000Z",
+                    "name": "Running",
+                    "duration": 2700,
+                    "source": "Apple Watch Ultra",
+                },
+                {
+                    "start": "2026-04-10T07:20:00.000Z",
+                    "end": "2026-04-10T08:05:00.000Z",
+                    "name": "Cycling",
+                    "duration": 2700,
+                    "source": "Apple Watch Ultra",
+                },
+            ],
+        },
+        headers={
+            "Idempotency-Key": "workouts-batch-001",
+            "X-HealthSave-Payload-Hash": "sha256:workouts",
+        },
+    )
+
+    result = await server.apple_batch(request, session)
+
+    receipt = session.insert_params_for("healthsave_sync_receipts")
+    assert result["sample_window"] == {
+        "min_sample_time": "2026-04-10T06:10:00.000Z",
+        "max_sample_time": "2026-04-10T08:05:00.000Z",
+    }
+    assert receipt is not None
+    assert receipt["sample_min_at"] == "2026-04-10T06:10:00.000Z"
+    assert receipt["sample_max_at"] == "2026-04-10T08:05:00.000Z"
 
 
 @pytest.mark.asyncio
@@ -395,12 +480,15 @@ async def test_batch_records_failed_sync_receipt_when_ingest_raises():
             ],
         },
         headers={
+            "Idempotency-Key": "batch-failed-001",
             "X-HealthSave-Sync-Run-ID": "run-failed",
             "X-HealthSave-Batch-ID": "batch-failed-001",
             "X-HealthSave-Payload-Hash": "sha256:failed-payload",
             "X-HealthSave-Metric": "heart_rate",
             "X-HealthSave-Batch-Index": "0",
             "X-HealthSave-Total-Batches": "1",
+            "X-HealthSave-Sample-Min-Time": "2026-04-10T12:00:00.000Z",
+            "X-HealthSave-Sample-Max-Time": "2026-04-10T12:00:00.000Z",
         },
     )
     request.app = type(
@@ -428,8 +516,52 @@ async def test_batch_records_failed_sync_receipt_when_ingest_raises():
     assert receipt["batch_index"] == 0
     assert receipt["total_batches"] == 1
     assert receipt["status"] == "failed"
+    assert receipt["records_received"] == 1
     assert receipt["records_accepted"] == 0
+    assert receipt["sample_min_at"] == "2026-04-10T12:00:00.000Z"
+    assert receipt["sample_max_at"] == "2026-04-10T12:00:00.000Z"
     assert "forced ingest failure" in receipt["error_message"]
+
+
+class ReceiptIdempotencyConflictSession(FakeSession):
+    async def execute(self, statement, params=None):
+        sql = " ".join(str(statement).split())
+        self.calls.append((sql, params or {}))
+        if "SELECT payload_hash FROM healthsave_sync_receipts" in sql:
+            assert params == {"idempotency_key": "batch-conflict"}
+            return FakeResult(row={"payload_hash": "sha256:first-payload"})
+        return await super().execute(statement, params)
+
+
+@pytest.mark.asyncio
+async def test_batch_rejects_same_idempotency_key_with_different_payload_hash_before_ingest():
+    session = ReceiptIdempotencyConflictSession()
+    request = FakeRequest(
+        {
+            "metric": "heart_rate",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [
+                {
+                    "date": "2026-04-10T12:00:00+00:00",
+                    "qty": 72,
+                    "source": "Apple Watch Ultra",
+                }
+            ],
+        },
+        headers={
+            "Idempotency-Key": "batch-conflict",
+            "X-HealthSave-Payload-Hash": "sha256:second-payload",
+        },
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await server.apple_batch(request, session)
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail["error_code"] == "idempotency_key_payload_mismatch"
+    assert session.insert_params_for("raw_ingestion_log") is None
+    assert session.insert_params_for("healthsave_sync_receipts") is None
 
 
 @pytest.mark.asyncio
@@ -519,9 +651,12 @@ class SpecificSyncRunSession(FakeSession):
                         "batches_failed": 0,
                         "records_accepted": 512,
                         "records_skipped": 0,
+                        "records_received": 512,
+                        "sample_min_at": "2026-05-23T10:00:00Z",
+                        "sample_max_at": "2026-05-23T10:02:00Z",
+                        "latest_sample_at": "2026-05-23T10:02:00Z",
                         "started_at": "2026-05-23T10:01:00Z",
                         "completed_at": "2026-05-23T10:02:00Z",
-                        "latest_sample_end_at": None,
                     },
                     {
                         "metric": "steps",
@@ -531,13 +666,58 @@ class SpecificSyncRunSession(FakeSession):
                         "batches_failed": 0,
                         "records_accepted": 24,
                         "records_skipped": 0,
+                        "records_received": 24,
+                        "sample_min_at": "2026-05-23T10:00:00Z",
+                        "sample_max_at": "2026-05-23T10:03:00Z",
+                        "latest_sample_at": "2026-05-23T10:03:00Z",
                         "started_at": "2026-05-23T10:03:00Z",
                         "completed_at": "2026-05-23T10:03:05Z",
-                        "latest_sample_end_at": None,
                     },
                 ]
             )
         return await super().execute(statement, params)
+
+
+class LatestSyncRunSession(FakeSession):
+    async def execute(self, statement, params=None):
+        sql = " ".join(str(statement).split())
+        self.calls.append((sql, params or {}))
+        if "SELECT sync_run_id FROM healthsave_sync_receipts" in sql:
+            return FakeResult(row={"sync_run_id": "run-latest"})
+        if "GROUP BY sync_run_id" in sql:
+            return FakeResult(
+                row={
+                    "sync_run_id": "run-latest",
+                    "started_at": "2026-05-24T07:10:00Z",
+                    "completed_at": "2026-05-24T07:13:22Z",
+                    "batches_seen": 2,
+                    "batches_processed": 2,
+                    "batches_empty": 0,
+                    "batches_failed": 0,
+                    "records_received": 512,
+                    "records_accepted": 488,
+                    "records_skipped": 24,
+                    "sample_min_at": "2026-05-24T07:10:00Z",
+                    "sample_max_at": "2026-05-24T07:13:00Z",
+                    "metrics": ["heart_rate"],
+                }
+            )
+        return await super().execute(statement, params)
+
+
+@pytest.mark.asyncio
+async def test_latest_sync_run_exposes_sample_window_separately_from_receipt_time():
+    from storage.timescale import sync_receipts
+
+    session = LatestSyncRunSession()
+
+    result = await sync_receipts.latest_sync_run(session)
+
+    assert result["status"] == "ok"
+    assert result["sync_run_id"] == "run-latest"
+    assert result["completed_at"] == "2026-05-24T07:13:22Z"
+    assert result["sample_window"]["max_sample_time"] == "2026-05-24T07:13:00Z"
+    assert result["latest_sample_time"] == "2026-05-24T07:13:00Z"
 
 
 @pytest.mark.asyncio
@@ -552,9 +732,60 @@ async def test_sync_run_summary_reports_delivery_receipt_level_for_one_run():
     assert result["sync_run_id"] == "run-abc"
     assert result["verification_level"] == "delivery_receipt"
     assert result["summary"]["batches_seen"] == 3
+    assert result["summary"]["records_received"] == 536
     assert result["summary"]["records_accepted"] == 536
     assert result["per_metric"]["heart_rate"]["accepted"] == 512
+    assert (
+        result["per_metric"]["heart_rate"]["sample_window"]["max_sample_time"]
+        == "2026-05-23T10:02:00Z"
+    )
+    assert result["per_metric"]["heart_rate"]["latest_sample_time"] == "2026-05-23T10:02:00Z"
     assert result["per_metric"]["steps"]["batches_seen"] == 1
+
+
+class SyncCoverageSession(FakeSession):
+    async def execute(self, statement, params=None):
+        sql = " ".join(str(statement).split())
+        self.calls.append((sql, params or {}))
+        if "WITH receipt_coverage AS" in sql and "destination_coverage AS" in sql:
+            return FakeResult(
+                rows=[
+                    {
+                        "metric": "heart_rate",
+                        "batches_seen": 20,
+                        "batches_processed": 20,
+                        "batches_empty": 0,
+                        "batches_failed": 0,
+                        "records_received": 40000,
+                        "records_accepted": 40000,
+                        "records_skipped": 0,
+                        "newest_receipt_at": "2026-05-26T00:06:12Z",
+                        "receipt_sample_min_at": "2025-02-21T21:00:00Z",
+                        "receipt_sample_max_at": "2025-03-04T20:59:00Z",
+                        "destination_row_count": 864909,
+                        "latest_destination_sample_at": "2026-05-19T16:59:47.667Z",
+                    }
+                ]
+            )
+        return await super().execute(statement, params)
+
+
+@pytest.mark.asyncio
+async def test_sync_coverage_separates_receipt_time_from_destination_sample_freshness():
+    from storage.timescale import sync_receipts
+
+    session = SyncCoverageSession()
+
+    result = await sync_receipts.sync_coverage(session)
+
+    assert result["status"] == "ok"
+    assert result["summary"]["metrics_seen"] == 1
+    metric = result["metrics"][0]
+    assert metric["metric"] == "heart_rate"
+    assert metric["newest_receipt_at"] == "2026-05-26T00:06:12Z"
+    assert metric["receipt_sample_window"]["max_sample_time"] == "2025-03-04T20:59:00Z"
+    assert metric["latest_destination_sample_time"] == "2026-05-19T16:59:47.667Z"
+    assert metric["freshness_state"] == "stale_payload"
 
 
 @pytest.mark.asyncio

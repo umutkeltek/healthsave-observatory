@@ -305,7 +305,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT date_trunc('day', start_time) AS time, round(sum(total_duration_ms) / 3600000.0, 2) AS sleep_hours\nFROM sleep_sessions\nWHERE $__timeFilter(start_time)\nGROUP BY 1\nORDER BY 1",
+          "rawSql": "WITH daily_source AS (SELECT date_trunc('day', start_time) AS time, COALESCE(NULLIF(source_id, ''), 'Unknown') AS source, sum(total_duration_ms) / 3600000.0 AS hours FROM sleep_sessions WHERE $__timeFilter(start_time) AND total_duration_ms IS NOT NULL GROUP BY 1, 2), ranked AS (SELECT time, hours, row_number() OVER (PARTITION BY time ORDER BY CASE WHEN hours BETWEEN 0 AND 16 THEN 0 ELSE 1 END, hours DESC) AS rn FROM daily_source) SELECT time, round(LEAST(hours, 16)::numeric, 2) AS sleep_hours FROM ranked WHERE rn = 1 ORDER BY time",
           "refId": "A"
         }
       ],
@@ -369,7 +369,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT now() AS time, COALESCE((SELECT bpm FROM heart_rate ORDER BY time DESC LIMIT 1), 0) AS value",
+          "rawSql": "SELECT now() AS time, (SELECT bpm FROM heart_rate WHERE time >= now() - interval '24 hours' ORDER BY time DESC LIMIT 1) AS value",
           "refId": "A"
         }
       ],
