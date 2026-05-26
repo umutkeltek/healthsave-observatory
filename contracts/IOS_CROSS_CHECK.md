@@ -88,12 +88,20 @@ key name on either side breaks ingest).
 |--------|--------|-------------|
 | `Content-Type: application/json` | `SyncEngine.swift:1034,1097` | yes (FastAPI body parsing) |
 | `x-api-key: <key>` | `SyncEngine.swift:1185` (when `Config.serverAPIKey` set) | yes (`server/api/deps.py:verify_api_key`) |
+| `Idempotency-Key` | `SyncReliability.swift` | yes (`healthsave_sync_receipts.idempotency_key`) |
 | `X-HealthSave-Sync-Run-ID` | `SyncReliability.swift:456` | yes (`healthsave_sync_receipts.sync_run_id`) |
 | `X-HealthSave-Batch-ID` | `SyncReliability.swift:457` | yes (`healthsave_sync_receipts.batch_id`) |
 | `X-HealthSave-Payload-Hash` | `SyncReliability.swift:458` | yes (`healthsave_sync_receipts.payload_hash`) |
 | `X-HealthSave-Metric` | `SyncReliability.swift:459` | yes (`healthsave_sync_receipts.metric`) |
 | `X-HealthSave-Batch-Index` | `SyncReliability.swift:460` | yes (`healthsave_sync_receipts.batch_index`) |
 | `X-HealthSave-Total-Batches` | `SyncReliability.swift:461` | yes (`healthsave_sync_receipts.total_batches`) |
+| `X-HealthSave-Sync-Mode` | `SyncReliability.swift` | yes (`healthsave_sync_receipts.sync_mode`) |
+| `X-HealthSave-Anchor-Present` | `SyncReliability.swift` | yes (`healthsave_sync_receipts.anchor_present`) |
+| `X-HealthSave-Lower-Bound-Reason` | `SyncReliability.swift` | yes (`healthsave_sync_receipts.lower_bound_reason`) |
+| `X-HealthSave-Full-Export` | `SyncReliability.swift` | yes (`healthsave_sync_receipts.full_export`) |
+| `X-HealthSave-Query-Lower-Bound` | `SyncReliability.swift` | yes (`healthsave_sync_receipts.query_lower_bound_at`) |
+| `X-HealthSave-Sample-Min-Time` | `SyncReliability.swift` | yes (`healthsave_sync_receipts.sample_min_at`) |
+| `X-HealthSave-Sample-Max-Time` | `SyncReliability.swift` | yes (`healthsave_sync_receipts.sample_max_at`) |
 
 **iOS does NOT send:**
 
@@ -102,11 +110,14 @@ key name on either side breaks ingest).
   v1.x contract is single-user-by-default. Multi-user iOS coordination
   is a v2 concern.
 
-**Verdict:** match. The 6 `X-HealthSave-*` headers are part of the iOS
+**Verdict:** match. The `X-HealthSave-*` headers are part of the iOS
 wire iOS produces; the server records them as delivery receipts for
-operator proof, support diagnostics, and duplicate-safe retry analysis.
+operator proof, support diagnostics, degraded-recovery analysis, and
+duplicate-safe retry analysis.
 The batch response includes additive receipt fields such as `receipt_id`,
-`sync_run_id`, `records_received`, `records_accepted`, and
+`sync_run_id`, `idempotency_key`, `records_received`, `records_accepted`,
+nullable `records_inserted_new` / `records_deduped_existing`,
+`storage_result_level`, `sample_window`, `latest_sample_time`, and
 `verification_level: "delivery_receipt"` while preserving the legacy v1
 `status/inserted/skipped` response fields.
 
