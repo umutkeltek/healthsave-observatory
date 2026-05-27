@@ -74,7 +74,20 @@ async def record_sync_receipt(
 
     ``batch_id`` is unique when present so app retries update the receipt instead
     of making the support/operator view look like duplicate batches arrived.
+
+    Timestamp inputs (``query_lower_bound_at``, ``sample_min_at``,
+    ``sample_max_at``) arrive from iOS as ISO8601 strings via request headers.
+    The receipts table columns are ``TIMESTAMPTZ``, so asyncpg refuses to
+    encode a raw string and returns ``HTTP 500`` from /api/apple/batch — the
+    exact failure mode the deployed Data Hub hit on every quantity-typed
+    batch (heart_rate, hrv, blood_oxygen, …) once iOS started sending
+    evidence headers in build 28+. Parse them to ``datetime`` before binding;
+    leave malformed inputs as ``None`` rather than 500-ing the entire batch.
     """
+
+    parsed_query_lower_bound_at = _parse_time_value(query_lower_bound_at)
+    parsed_sample_min_at = _parse_time_value(sample_min_at)
+    parsed_sample_max_at = _parse_time_value(sample_max_at)
 
     await session.execute(
         text(
@@ -173,7 +186,7 @@ async def record_sync_receipt(
             "anchor_present": anchor_present,
             "lower_bound_reason": lower_bound_reason,
             "full_export": full_export,
-            "query_lower_bound_at": query_lower_bound_at,
+            "query_lower_bound_at": parsed_query_lower_bound_at,
             "status": status,
             "records_received": records_received,
             "records_accepted": records_accepted,
@@ -181,8 +194,8 @@ async def record_sync_receipt(
             "records_inserted_new": None,
             "records_deduped_existing": None,
             "storage_result_level": "accepted_only",
-            "sample_min_at": sample_min_at,
-            "sample_max_at": sample_max_at,
+            "sample_min_at": parsed_sample_min_at,
+            "sample_max_at": parsed_sample_max_at,
             "error_message": error_message,
             "raw_log_id": raw_log_id,
             "source_endpoint": "/api/apple/batch",
