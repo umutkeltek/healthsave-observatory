@@ -89,6 +89,11 @@ class FakeRequest:
         return self.payload
 
 
+class InvalidJsonRequest(FakeRequest):
+    async def json(self):
+        raise json.JSONDecodeError("Expecting value", "not json at all", 0)
+
+
 class FakeBackgroundTasks:
     def __init__(self):
         self.tasks = []
@@ -189,6 +194,18 @@ async def test_batch_ingest_schedules_anomaly_check_when_on_ingest_enabled():
     assert result["records"] == 1
     assert len(background_tasks.tasks) == 1
     assert background_tasks.tasks[0][0].__name__ == "run_anomaly_check"
+
+
+@pytest.mark.asyncio
+async def test_apple_batch_invalid_json_returns_400():
+    session = FakeSession()
+    request = InvalidJsonRequest({"ignored": True})
+
+    with pytest.raises(HTTPException) as exc_info:
+        await server.apple_batch(request, session)
+
+    assert exc_info.value.status_code == 400
+    assert "json" in exc_info.value.detail.lower()
 
 
 @pytest.mark.asyncio
@@ -390,9 +407,13 @@ async def test_batch_records_healthsave_sync_receipt_headers():
     assert result["records_inserted_new"] is None
     assert result["records_deduped_existing"] is None
     assert result["storage_result_level"] == "accepted_only"
+    # BUG-D: header-derived sample_window is now normalized through
+    # datetime.isoformat() before being echoed; zero microseconds drop the
+    # ``.000`` padding iOS sends. The wire shape stays ISO8601-with-Z and
+    # remains parseable by every client that accepted the pre-fix string.
     assert result["sample_window"] == {
-        "min_sample_time": "2026-04-10T12:00:00.000Z",
-        "max_sample_time": "2026-04-10T12:05:00.000Z",
+        "min_sample_time": "2026-04-10T12:00:00Z",
+        "max_sample_time": "2026-04-10T12:05:00Z",
     }
     assert result["per_metric"]["heart_rate"]["received"] == 1
     assert result["per_metric"]["heart_rate"]["accepted"] == 1
@@ -558,6 +579,29 @@ async def test_batch_receipt_leaves_malformed_timestamp_as_null_instead_of_500()
     assert receipt is not None
     assert receipt["query_lower_bound_at"] is None
     assert receipt["sample_min_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_apple_batch_garbage_sample_window_headers_return_null_in_response():
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "heart_rate",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [],
+        },
+        headers={
+            "X-HealthSave-Sample-Min-Time": "oops-not-iso",
+            "X-HealthSave-Sample-Max-Time": "also-bad",
+        },
+    )
+
+    result = await server.apple_batch(request, session)
+
+    assert result["status"] == "empty"
+    assert result["sample_window"]["min_sample_time"] is None
+    assert result["sample_window"]["max_sample_time"] is None
 
 
 @pytest.mark.asyncio
