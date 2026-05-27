@@ -20,6 +20,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from storage.ports import AgentRepository  # noqa: E402
+from storage.timescale import measurements as measurement_writers  # noqa: E402
 from storage.timescale.agents import (  # noqa: E402
     DEFAULT_OWNER_ID,
     ProposalRow,
@@ -74,6 +75,10 @@ class _FakeSession:
 
     def last_call(self) -> tuple[str, dict]:
         return self.calls[-1]
+
+
+def _params_for(session: _FakeSession, *, sql_substring: str) -> list[dict]:
+    return [params for sql, params in session.calls if sql_substring in sql]
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -364,3 +369,90 @@ async def test_fetch_recent_proposals_handles_serialized_payload():
     rows = await fetch_recent_proposals(session, limit=10)
     assert rows[0].payload == {"text": "elevated HRV"}
     assert rows[1].payload == {"text": "from-string"}
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Measurement writers — targeted ingest hygiene regressions
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_ingest_dedicated_in_batch_dedupe_bumps_rejected_counter(monkeypatch):
+    session = _FakeSession()
+    rejected: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        measurement_writers,
+        "_bump_rejected",
+        lambda metric, reason: rejected.append((metric, reason)),
+    )
+
+    count = await measurement_writers._ingest_dedicated(
+        session,
+        device_id=42,
+        metric="heart_rate",
+        samples=[
+            {"date": "2026-05-22T08:00:00Z", "qty": 61, "source": "Apple Watch"},
+            {"date": "2026-05-22T08:00:00Z", "qty": 62, "source": "Apple Watch"},
+        ],
+    )
+
+    inserts = _params_for(session, sql_substring="INSERT INTO heart_rate")
+    assert count == 1
+    assert len(inserts) == 1
+    assert rejected == [("heart_rate", "in_batch_dedupe")]
+
+
+@pytest.mark.asyncio
+async def test_ingest_ecg_writes_average_hr_to_quantity_samples():
+    session = _FakeSession()
+
+    count = await measurement_writers._ingest_metric(
+        session,
+        device_id=42,
+        metric="ecg",
+        samples=[
+            {
+                "start": "2025-11-03T13:30:25.616Z",
+                "end": "2025-11-03T13:30:55.616Z",
+                "averageHeartRate": 58,
+                "classification": "Sinus Rhythm",
+                "source": "Apple Watch",
+            }
+        ],
+    )
+
+    [params] = _params_for(session, sql_substring="INSERT INTO quantity_samples")
+    assert count == 1
+    assert params["metric"] == "ecg_average_heart_rate"
+    assert params["value"] == 58.0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "sample",
+    [
+        {"averageHeartRate": 58, "source": "Apple Watch"},
+        {"start": "2025-11-03T13:30:25.616Z", "source": "Apple Watch"},
+    ],
+)
+async def test_ingest_ecg_missing_start_is_rejected(monkeypatch, sample):
+    session = _FakeSession()
+    rejected: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        measurement_writers,
+        "_bump_rejected",
+        lambda metric, reason: rejected.append((metric, reason)),
+    )
+
+    count = await measurement_writers._ingest_metric(
+        session,
+        device_id=42,
+        metric="ecg",
+        samples=[sample],
+    )
+
+    assert count == 0
+    assert rejected == [("ecg", "missing_start_or_average_hr")]
+    assert _params_for(session, sql_substring="INSERT INTO quantity_samples") == []

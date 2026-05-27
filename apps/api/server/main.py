@@ -21,6 +21,7 @@ counter is the runtime warning; this assertion is the build-time safety
 net.
 """
 
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -29,7 +30,8 @@ from pathlib import Path
 from analysis.config import load_config
 from analysis.engine import AnalysisEngine
 from analysis.llm.client import HealthLLMClient
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from .api import health_routes, ingest, insights, metrics, status, sync, v2_agents
 from .api.ingest import _load_apple_health_plugin
@@ -104,6 +106,12 @@ async def lifespan(a: FastAPI):
 
 
 app = FastAPI(title="Health Data Hub", version="1.0.0", lifespan=lifespan)
+
+
+@app.exception_handler(json.JSONDecodeError)
+async def handle_invalid_json(_: Request, exc: json.JSONDecodeError) -> JSONResponse:
+    return JSONResponse(status_code=400, content={"detail": "invalid JSON body"})
+
 
 app.include_router(health_routes.router)
 app.include_router(ingest.router)

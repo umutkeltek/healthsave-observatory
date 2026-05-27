@@ -159,6 +159,8 @@ async def _ingest_metric(
         return await _ingest_sleep(session, device_id, samples, owner_id=owner_id)
     if metric == "workouts":
         return await _ingest_workouts(session, device_id, samples, owner_id=owner_id)
+    if metric == "ecg":
+        return await _ingest_ecg(session, device_id, samples, owner_id=owner_id)
     if metric in DEDICATED_TABLES:
         return await _ingest_dedicated(session, device_id, metric, samples, owner_id=owner_id)
     return await _ingest_generic(session, device_id, metric, samples, owner_id=owner_id)
@@ -199,6 +201,8 @@ async def _ingest_dedicated(
     seen = {}
     for row in rows:
         key = tuple(row.get(c) for c in conflict_cols)
+        if key in seen:
+            _bump_rejected(metric, "in_batch_dedupe")
         seen[key] = row
     rows = list(seen.values())
 
@@ -251,6 +255,48 @@ async def _ingest_generic(
                 "value": v,
                 "unit": s.get("unit", ""),
                 "source": s.get("source", ""),
+                "owner_id": str(owner_id),
+            },
+        )
+        count += 1
+    return count
+
+
+async def _ingest_ecg(
+    session: AsyncSession,
+    device_id: int,
+    samples: list,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+) -> int:
+    """Persist ECG batches as average-HR quantity samples for now.
+
+    Scope decision: capture only ``averageHeartRate`` + timestamp here;
+    classification, samplingFrequency, and voltage-trace fields belong in
+    a future dedicated ECG table.
+    """
+    count = 0
+    for sample in samples:
+        start = parse_ts(sample.get("start"))
+        average_heart_rate = to_float(sample.get("averageHeartRate"))
+        if start is None or average_heart_rate is None:
+            _bump_rejected("ecg", "missing_start_or_average_hr")
+            continue
+        await session.execute(
+            text("""
+                INSERT INTO quantity_samples
+                    (time, device_id, metric_name, value, unit, source_id, owner_id)
+                VALUES (:time, :device_id, :metric, :value, :unit, :source, :owner_id)
+                ON CONFLICT (time, device_id, metric_name, owner_id) DO UPDATE
+                SET value = EXCLUDED.value, unit = EXCLUDED.unit
+            """),
+            {
+                "time": start,
+                "device_id": device_id,
+                "metric": "ecg_average_heart_rate",
+                "value": average_heart_rate,
+                "unit": "bpm",
+                "source": _sample_source(sample),
                 "owner_id": str(owner_id),
             },
         )

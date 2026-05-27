@@ -11,6 +11,7 @@ branch, the ``RAW_LOG_ORPHANED`` error boundary, the response shape,
 and the post-ingest anomaly trigger.
 """
 
+import json
 import logging
 from datetime import datetime
 from time import perf_counter
@@ -22,6 +23,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.timescale.sync_receipts import (
     ReceiptIdempotencyConflict,
+    _parse_time_value,
     assert_receipt_idempotency,
     record_sync_receipt,
 )
@@ -118,7 +120,10 @@ async def apple_batch(
     }
     """
     started_at = perf_counter()
-    raw_payload = await request.json()
+    try:
+        raw_payload = await request.json()
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="invalid JSON body") from exc
     try:
         payload = BatchPayload.model_validate(raw_payload)
     except ValidationError as exc:
@@ -525,7 +530,7 @@ def _sample_window_from_request(
     header_min = _header(headers, "X-HealthSave-Sample-Min-Time")
     header_max = _header(headers, "X-HealthSave-Sample-Max-Time")
     if header_min or header_max:
-        return header_min, header_max
+        return _format_sample_window_time(header_min), _format_sample_window_time(header_max)
     return _sample_window_from_samples(samples)
 
 
@@ -562,6 +567,13 @@ def _parse_sample_time(value: Any) -> tuple[datetime, str] | None:
         return datetime.fromisoformat(parse_value), text_value
     except ValueError:
         return None
+
+
+def _format_sample_window_time(value: str | None) -> str | None:
+    parsed = _parse_time_value(value)
+    if parsed is None:
+        return None
+    return parsed.isoformat().replace("+00:00", "Z")
 
 
 def _observe_ingest_metrics(*, metric: str, rows: int, started_at: float) -> None:
