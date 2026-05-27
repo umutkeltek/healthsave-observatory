@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -408,14 +409,19 @@ async def test_batch_records_healthsave_sync_receipt_headers():
     assert receipt["anchor_present"] is False
     assert receipt["lower_bound_reason"] == "local_metric_success"
     assert receipt["full_export"] is False
-    assert receipt["query_lower_bound_at"] == "2026-04-10T11:00:00.000Z"
+    # Timestamps are TIMESTAMPTZ columns, asyncpg refuses raw strings — these
+    # arrive from iOS as ISO8601 'Z'-terminated headers and are parsed in
+    # record_sync_receipt before binding. The bound value MUST be a
+    # datetime.datetime instance with tzinfo, otherwise every quantity-typed
+    # batch from iOS HTTP-500s the way the deployed Data Hub did until this fix.
+    assert receipt["query_lower_bound_at"] == datetime(2026, 4, 10, 11, 0, 0, tzinfo=timezone.utc)
     assert receipt["records_received"] == 1
     assert receipt["records_accepted"] == 1
     assert receipt["records_inserted_new"] is None
     assert receipt["records_deduped_existing"] is None
     assert receipt["storage_result_level"] == "accepted_only"
-    assert receipt["sample_min_at"] == "2026-04-10T12:00:00.000Z"
-    assert receipt["sample_max_at"] == "2026-04-10T12:05:00.000Z"
+    assert receipt["sample_min_at"] == datetime(2026, 4, 10, 12, 0, 0, tzinfo=timezone.utc)
+    assert receipt["sample_max_at"] == datetime(2026, 4, 10, 12, 5, 0, tzinfo=timezone.utc)
     receipt_sql = [sql for sql, _ in session.calls if "INSERT INTO healthsave_sync_receipts" in sql]
     assert any("ON CONFLICT (idempotency_key)" in sql for sql in receipt_sql)
 
@@ -459,8 +465,99 @@ async def test_batch_derives_sample_window_from_start_end_payload_when_headers_a
         "max_sample_time": "2026-04-10T08:05:00.000Z",
     }
     assert receipt is not None
-    assert receipt["sample_min_at"] == "2026-04-10T06:10:00.000Z"
-    assert receipt["sample_max_at"] == "2026-04-10T08:05:00.000Z"
+    assert receipt["sample_min_at"] == datetime(2026, 4, 10, 6, 10, 0, tzinfo=timezone.utc)
+    assert receipt["sample_max_at"] == datetime(2026, 4, 10, 8, 5, 0, tzinfo=timezone.utc)
+
+
+@pytest.mark.asyncio
+async def test_batch_receipt_converts_iso8601_z_headers_to_datetime():
+    """Regression: every quantity-typed batch from iOS HTTP-500'd on the
+    deployed Data Hub because asyncpg refuses to encode ISO8601 strings into
+    TIMESTAMPTZ columns. The fix parses them in record_sync_receipt; this test
+    pins the exact 'Z'-terminated format iOS sends and asserts the bound
+    params are timezone-aware datetimes.
+
+    Without this fix, every heart_rate / hrv / blood_oxygen batch from
+    HealthSave build 28+ returned HTTP 500 — explaining why heart_rate
+    freshness stuck on May 19 in the deployed Data Hub for 8 days.
+    """
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "heart_rate",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [
+                {"date": "2026-05-27T10:00:00.000Z", "qty": 72.5, "source": "Apple Watch Ultra"},
+            ],
+        },
+        headers={
+            "Idempotency-Key": "audit-key",
+            "X-HealthSave-Sync-Run-ID": "audit-run",
+            "X-HealthSave-Batch-ID": "audit-batch",
+            "X-HealthSave-Payload-Hash": "sha256:audit",
+            "X-HealthSave-Metric": "heart_rate",
+            "X-HealthSave-Batch-Index": "0",
+            "X-HealthSave-Total-Batches": "1",
+            "X-HealthSave-Sync-Mode": "latest_changes",
+            "X-HealthSave-Anchor-Present": "false",
+            "X-HealthSave-Lower-Bound-Reason": "thirty_day_fallback",
+            "X-HealthSave-Full-Export": "false",
+            # 'Z' suffix — what iOS sends.
+            "X-HealthSave-Query-Lower-Bound": "2026-04-27T00:00:00.000Z",
+            "X-HealthSave-Sample-Min-Time": "2026-05-27T10:00:00.000Z",
+            "X-HealthSave-Sample-Max-Time": "2026-05-27T10:00:00.000Z",
+        },
+    )
+
+    await server.apple_batch(request, session)
+
+    receipt = session.insert_params_for("healthsave_sync_receipts")
+    assert receipt is not None
+    for field in ("query_lower_bound_at", "sample_min_at", "sample_max_at"):
+        bound = receipt[field]
+        assert isinstance(bound, datetime), (
+            f"{field} must be a datetime instance, asyncpg refuses raw strings; got {type(bound).__name__}"
+        )
+        assert bound.tzinfo is not None, (
+            f"{field} must be timezone-aware so TIMESTAMPTZ binding is unambiguous"
+        )
+    assert receipt["query_lower_bound_at"] == datetime(2026, 4, 27, 0, 0, 0, tzinfo=timezone.utc)
+    assert receipt["sample_min_at"] == datetime(2026, 5, 27, 10, 0, 0, tzinfo=timezone.utc)
+    assert receipt["sample_max_at"] == datetime(2026, 5, 27, 10, 0, 0, tzinfo=timezone.utc)
+
+
+@pytest.mark.asyncio
+async def test_batch_receipt_leaves_malformed_timestamp_as_null_instead_of_500():
+    """Defensive: if iOS ever sends a malformed timestamp header, the receipt
+    binding still must NOT 500. _parse_time_value returns None on parse
+    failure; the bound column stays NULL and the batch otherwise succeeds.
+    """
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "heart_rate",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [{"date": "2026-05-27T10:00:00.000Z", "qty": 72, "source": "Apple Watch"}],
+        },
+        headers={
+            "Idempotency-Key": "audit-malformed",
+            "X-HealthSave-Sync-Run-ID": "audit-malformed",
+            "X-HealthSave-Batch-ID": "audit-malformed",
+            "X-HealthSave-Payload-Hash": "sha256:malformed",
+            "X-HealthSave-Sample-Min-Time": "not-an-iso8601-string",
+            "X-HealthSave-Query-Lower-Bound": "also-garbage",
+        },
+    )
+
+    result = await server.apple_batch(request, session)
+
+    receipt = session.insert_params_for("healthsave_sync_receipts")
+    assert result["records"] == 1
+    assert receipt is not None
+    assert receipt["query_lower_bound_at"] is None
+    assert receipt["sample_min_at"] is None
 
 
 @pytest.mark.asyncio
@@ -518,8 +615,8 @@ async def test_batch_records_failed_sync_receipt_when_ingest_raises():
     assert receipt["status"] == "failed"
     assert receipt["records_received"] == 1
     assert receipt["records_accepted"] == 0
-    assert receipt["sample_min_at"] == "2026-04-10T12:00:00.000Z"
-    assert receipt["sample_max_at"] == "2026-04-10T12:00:00.000Z"
+    assert receipt["sample_min_at"] == datetime(2026, 4, 10, 12, 0, 0, tzinfo=timezone.utc)
+    assert receipt["sample_max_at"] == datetime(2026, 4, 10, 12, 0, 0, tzinfo=timezone.utc)
     assert "forced ingest failure" in receipt["error_message"]
 
 
