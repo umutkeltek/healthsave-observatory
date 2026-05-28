@@ -116,10 +116,9 @@ def _iso_z(dt: datetime) -> str:
 def parse_steps_csv(fh: IO[str], *, source: str) -> Iterator[Sample]:
     """Each row is a 10-minute step bucket; emit one ``step_count`` per row.
 
-    The server treats ``step_count`` as a daily activity quantity and
-    folds it into ``daily_activity.steps`` via the existing
-    ``daily_activity_quantity_fields`` mapping (mappers.py). Multiple
-    same-day buckets accumulate idempotently.
+    ``batches_for`` folds these bucket rows into one daily total per source
+    before posting, because the server stores ``step_count`` as
+    ``daily_activity.steps`` rather than as interval samples.
     """
     reader = csv.DictReader(fh)
     for row in reader:
@@ -302,7 +301,7 @@ def walk_directory(root: Path) -> ParseResult:
 def batches_for(samples: Iterable[Sample], *, batch_size: int = 500) -> Iterator[dict[str, Any]]:
     """Group samples by metric, then by ``batch_size`` chunks."""
     buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for sample in samples:
+    for sample in _normalize_samples_for_server(samples):
         buckets[sample.metric].append(sample.payload)
 
     for metric, payloads in buckets.items():
@@ -315,6 +314,50 @@ def batches_for(samples: Iterable[Sample], *, batch_size: int = 500) -> Iterator
                 "total_batches": total,
                 "samples": chunk,
             }
+
+
+def _normalize_samples_for_server(samples: Iterable[Sample]) -> list[Sample]:
+    """Adapt parsed Health Sync rows to Data Hub's storage grain.
+
+    Health Sync exports steps as interval buckets. Data Hub's ``step_count``
+    path is daily-activity storage, so sending bucket rows would repeatedly
+    overwrite a day's total with the current bucket. Aggregate by UTC day and
+    source first; all other metrics already match the server's sample grain.
+    """
+    normalized: list[Sample] = []
+    step_totals: dict[tuple[str, str], int] = defaultdict(int)
+    step_units: dict[tuple[str, str], str] = {}
+
+    for sample in samples:
+        if sample.metric != "step_count":
+            normalized.append(sample)
+            continue
+
+        payload = sample.payload
+        raw_date = str(payload.get("date") or "")
+        day = raw_date.split("T", 1)[0]
+        if not day:
+            normalized.append(sample)
+            continue
+        source = str(payload.get("source") or "")
+        key = (day, source)
+        step_totals[key] += int(payload.get("qty") or 0)
+        step_units.setdefault(key, str(payload.get("unit") or "count"))
+
+    for (day, source), total in step_totals.items():
+        normalized.append(
+            Sample(
+                metric="step_count",
+                payload={
+                    "date": day,
+                    "qty": total,
+                    "source": source,
+                    "unit": step_units[(day, source)],
+                },
+            )
+        )
+
+    return normalized
 
 
 def post_batches(
