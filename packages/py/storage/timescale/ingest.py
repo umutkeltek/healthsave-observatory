@@ -19,6 +19,7 @@ from typing import Any
 from uuid import UUID
 
 from storage.results import IngestWriteResult
+
 # NOTE: ``measurements`` is imported *lazily* inside each method below.
 # Eager import here re-introduces a circular import:
 #   storage.timescale.ingest → storage.timescale.measurements

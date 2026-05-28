@@ -58,11 +58,12 @@ class AppleHealthSource(Source):
         ``payload`` MUST be the parsed BatchPayload-shaped dict — the
         same shape ``apps/api/server/api/ingest.py`` validates from
         ``await request.json()``. Returns
-        ``{"accepted": N, "rejected": N}``. ``rejected`` is operator-side
-        via the ``INGEST_REJECTED`` counter that the storage layer bumps
-        on silent sample-skip — the plugin cannot read counter values
-        back without coupling to the registry, so ``rejected`` here is
-        always ``0`` by contract; operators alert on the counter.
+        ``{"accepted": N, "rejected": N, "deduped_in_batch": N, ...}``.
+        ``rejected`` is the TRUE validation-failure count (missing/unparseable
+        fields) reported by the storage writers via ``IngestWriteResult``;
+        ``deduped_in_batch`` counts legitimate in-batch duplicate collapse
+        (NOT a rejection). The ``INGEST_REJECTED`` Prometheus counter still
+        fires per skip for operator alerting.
 
         Required keys in ``payload``:
 
@@ -113,4 +114,4 @@ class AppleHealthSource(Source):
             )
             summary = summary.combine(coerce_ingest_result(written))
 
-        return summary.to_plugin_result(rejected=0)
+        return summary.to_plugin_result()
