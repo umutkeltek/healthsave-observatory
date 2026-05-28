@@ -223,12 +223,17 @@ def test_post_batches_uses_api_key_header_and_path():
         batches,
         base_url="http://hub.example",
         api_key="K",
+        sync_run_id="android-history",
         transport=transport,
     )
     assert sent_batches == 1
     assert sent_records == 1
     assert captured[0]["url"].endswith("/api/apple/batch")
     assert captured[0]["headers"].get("x-api-key") == "K"
+    assert captured[0]["headers"].get("x-healthsave-sync-run-id") == "android-history"
+    assert captured[0]["headers"].get("x-healthsave-batch-id") == "android-history:step_count:0"
+    assert captured[0]["headers"].get("idempotency-key") == "android-history:step_count:0"
+    assert captured[0]["headers"].get("x-healthsave-payload-hash", "").startswith("sha256:")
 
 
 def test_post_batches_raises_on_non_200():
@@ -259,8 +264,14 @@ def test_main_dry_run_does_not_post(capsys):
 def test_arg_parser_uses_health_data_hub_env_defaults(monkeypatch):
     monkeypatch.setenv("HDH_SERVER", "http://hub.example")
     monkeypatch.setenv("HDH_API_KEY", "secret")
+    monkeypatch.setenv("HDH_SYNC_RUN_ID", "run-env")
+    monkeypatch.setenv("HDH_TIMEOUT", "240")
+    monkeypatch.setenv("HDH_PROGRESS_EVERY", "10")
 
     args = import_samsung.build_arg_parser().parse_args([str(FIXTURES)])
 
     assert args.server == "http://hub.example"
     assert args.api_key == "secret"
+    assert args.sync_run_id == "run-env"
+    assert args.timeout == 240
+    assert args.progress_every == 10
