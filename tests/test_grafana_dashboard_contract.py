@@ -141,3 +141,22 @@ def test_overview_latest_hr_stat_does_not_show_stale_all_time_value():
     assert "FROM heart_rate" in sql
     assert "time >= now() - interval '24 hours'" in sql
     assert "COALESCE" not in sql
+
+
+def test_heart_resting_panels_use_healthsave_resting_metric():
+    for title in ("Latest Resting HR", "Resting Heart Rate Trend"):
+        sql = _panel_sql("heart.json", title)
+
+        assert "FROM quantity_samples" in sql
+        assert "metric_name='resting_heart_rate'" in sql
+        assert "context='resting'" not in sql
+
+
+def test_today_stat_cards_tolerate_local_day_utc_boundary():
+    overview_sql = _panel_sql("healthsave-overview.json", "Steps Today")
+    activity_sql = _panel_sql("activity.json", "Stand Hours Today")
+
+    assert "current_date - interval '1 day'" in overview_sql
+    assert "current_date - interval '1 day'" in activity_sql
+    assert "ORDER BY date DESC LIMIT 1" in overview_sql
+    assert "ORDER BY date DESC LIMIT 1" in activity_sql

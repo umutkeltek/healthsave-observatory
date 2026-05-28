@@ -462,7 +462,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT now() AS time, COALESCE((SELECT steps FROM daily_activity WHERE date = current_date ORDER BY date DESC LIMIT 1), 0) AS value",
+          "rawSql": "SELECT now() AS time, COALESCE((SELECT steps FROM daily_activity WHERE date >= (current_date - interval '1 day')::date ORDER BY date DESC LIMIT 1), 0) AS value",
           "refId": "A"
         }
       ],
