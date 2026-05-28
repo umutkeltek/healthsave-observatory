@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any
 from plugin_sdk import PluginManifest, Source
 from server.ingestion.owner import DEFAULT_OWNER_ID
 from server.ingestion.parsers import group_samples_by_device
+from storage.results import IngestWriteResult, coerce_ingest_result
 
 if TYPE_CHECKING:
     from storage.ports import IngestStorage
@@ -51,7 +52,7 @@ class AppleHealthSource(Source):
     def __init__(self, manifest: PluginManifest) -> None:
         super().__init__(manifest)
 
-    async def ingest(self, payload: dict[str, Any]) -> dict[str, int]:
+    async def ingest(self, payload: dict[str, Any]) -> dict[str, int | str | None]:
         """Ingest one HealthSave batch through the injected storage Protocol.
 
         ``payload`` MUST be the parsed BatchPayload-shaped dict — the
@@ -100,15 +101,16 @@ class AppleHealthSource(Source):
             return {"accepted": 0, "rejected": 0}
 
         sample_groups = group_samples_by_device(samples)
-        accepted = 0
+        summary = IngestWriteResult()
         for device_name, device_samples in sample_groups:
             resolved_device_id = (
                 device_id
                 if device_name == first_device_name
                 else await storage.get_or_create_device(session, device_name)
             )
-            accepted += await storage.ingest_metric(
+            written = await storage.ingest_metric(
                 session, resolved_device_id, metric, device_samples, owner_id
             )
+            summary = summary.combine(coerce_ingest_result(written))
 
-        return {"accepted": accepted, "rejected": 0}
+        return summary.to_plugin_result(rejected=0)

@@ -44,6 +44,7 @@ from server.ingestion.parsers import (
     to_float,
     to_int,
 )
+from storage.results import IngestWriteResult
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -83,6 +84,30 @@ def _bump_rejected(metric: str, reason: str) -> None:
     except Exception:  # pragma: no cover - metrics import optional
         # Failing to bump a counter is never a reason to fail ingest.
         pass
+
+
+def _inserted_new_flag(result: object) -> bool | None:
+    """Read ``RETURNING (xmax = 0) AS inserted_new`` when the session exposes it."""
+
+    mappings = getattr(result, "mappings", None)
+    if mappings is None:
+        return None
+    row = mappings().first()
+    if row is None:
+        return None
+    value = row.get("inserted_new") if hasattr(row, "get") else None
+    if value is None:
+        return None
+    return bool(value)
+
+
+async def _execute_insert_with_result(
+    session: AsyncSession,
+    sql: str,
+    params: dict,
+) -> bool | None:
+    result = await session.execute(text(sql), params)
+    return _inserted_new_flag(result)
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -145,7 +170,7 @@ async def _ingest_metric(
     metric: str,
     samples: list[dict],
     owner_id: UUID = DEFAULT_OWNER_ID,
-) -> int:
+) -> IngestWriteResult:
     """Route a parsed batch to the correct writer.
 
     Falls back to ``quantity_samples`` (catch-all) when no dedicated
@@ -173,7 +198,7 @@ async def _ingest_dedicated(
     samples: list,
     *,
     owner_id: UUID = DEFAULT_OWNER_ID,
-) -> int:
+) -> IngestWriteResult:
     spec = DEDICATED_TABLES[metric]
     rows = []
     value_col = list(spec["columns"].values())[1]
@@ -194,7 +219,7 @@ async def _ingest_dedicated(
             _bump_rejected(metric, "missing_time_or_value")
 
     if not rows:
-        return 0
+        return IngestWriteResult()
 
     # Dedup within batch (conflict_cols already include owner_id via the schema)
     conflict_cols = list(spec["conflict"]) + ["owner_id"]
@@ -215,12 +240,15 @@ async def _ingest_dedicated(
         INSERT INTO {spec["table"]} ({col_names})
         VALUES ({placeholders})
         ON CONFLICT ({conflict_sql}) DO UPDATE SET {update_set}
+        RETURNING (xmax = 0) AS inserted_new
     """
 
+    result = IngestWriteResult()
     for row in rows:
-        await session.execute(text(sql), row)
+        inserted_new = await _execute_insert_with_result(session, sql, row)
+        result = result.with_insert_flag(inserted_new)
 
-    return len(rows)
+    return result
 
 
 async def _ingest_generic(
@@ -230,9 +258,9 @@ async def _ingest_generic(
     samples: list,
     *,
     owner_id: UUID = DEFAULT_OWNER_ID,
-) -> int:
+) -> IngestWriteResult:
     """Insert into the catch-all quantity_samples table."""
-    count = 0
+    result = IngestWriteResult()
     for s in samples:
         t = parse_ts(s.get("date"))
         v = to_float(s.get("qty"))
@@ -240,14 +268,16 @@ async def _ingest_generic(
             _bump_rejected(metric, "missing_or_unparseable_date_or_qty")
             continue
         sample_metric = s.get("metric") if isinstance(s.get("metric"), str) else metric
-        await session.execute(
-            text("""
+        inserted_new = await _execute_insert_with_result(
+            session,
+            """
                 INSERT INTO quantity_samples
                     (time, device_id, metric_name, value, unit, source_id, owner_id)
                 VALUES (:time, :device_id, :metric, :value, :unit, :source, :owner_id)
                 ON CONFLICT (time, device_id, metric_name, owner_id) DO UPDATE
                 SET value = EXCLUDED.value, unit = EXCLUDED.unit
-            """),
+                RETURNING (xmax = 0) AS inserted_new
+            """,
             {
                 "time": t,
                 "device_id": device_id,
@@ -258,8 +288,8 @@ async def _ingest_generic(
                 "owner_id": str(owner_id),
             },
         )
-        count += 1
-    return count
+        result = result.with_insert_flag(inserted_new)
+    return result
 
 
 async def _ingest_ecg(
@@ -268,28 +298,30 @@ async def _ingest_ecg(
     samples: list,
     *,
     owner_id: UUID = DEFAULT_OWNER_ID,
-) -> int:
+) -> IngestWriteResult:
     """Persist ECG batches as average-HR quantity samples for now.
 
     Scope decision: capture only ``averageHeartRate`` + timestamp here;
     classification, samplingFrequency, and voltage-trace fields belong in
     a future dedicated ECG table.
     """
-    count = 0
+    result = IngestWriteResult()
     for sample in samples:
         start = parse_ts(sample.get("start"))
         average_heart_rate = to_float(sample.get("averageHeartRate"))
         if start is None or average_heart_rate is None:
             _bump_rejected("ecg", "missing_start_or_average_hr")
             continue
-        await session.execute(
-            text("""
+        inserted_new = await _execute_insert_with_result(
+            session,
+            """
                 INSERT INTO quantity_samples
                     (time, device_id, metric_name, value, unit, source_id, owner_id)
                 VALUES (:time, :device_id, :metric, :value, :unit, :source, :owner_id)
                 ON CONFLICT (time, device_id, metric_name, owner_id) DO UPDATE
                 SET value = EXCLUDED.value, unit = EXCLUDED.unit
-            """),
+                RETURNING (xmax = 0) AS inserted_new
+            """,
             {
                 "time": start,
                 "device_id": device_id,
@@ -300,8 +332,8 @@ async def _ingest_ecg(
                 "owner_id": str(owner_id),
             },
         )
-        count += 1
-    return count
+        result = result.with_insert_flag(inserted_new)
+    return result
 
 
 async def _ingest_activity(
@@ -310,8 +342,8 @@ async def _ingest_activity(
     samples: list,
     *,
     owner_id: UUID = DEFAULT_OWNER_ID,
-) -> int:
-    count = 0
+) -> IngestWriteResult:
+    result = IngestWriteResult()
     for s in samples:
         d = parse_date(s.get("date"))
         if not d:
@@ -334,15 +366,17 @@ async def _ingest_activity(
             if k not in ("date", "device_id", "owner_id")
         )
 
-        await session.execute(
-            text(f"""
+        inserted_new = await _execute_insert_with_result(
+            session,
+            f"""
                 INSERT INTO daily_activity ({cols}) VALUES ({vals})
                 ON CONFLICT (date, device_id, owner_id) DO UPDATE SET {updates}
-            """),
+                RETURNING (xmax = 0) AS inserted_new
+            """,
             row,
         )
-        count += 1
-    return count
+        result = result.with_insert_flag(inserted_new)
+    return result
 
 
 async def _ingest_daily_quantity(
@@ -352,9 +386,9 @@ async def _ingest_daily_quantity(
     samples: list,
     *,
     owner_id: UUID = DEFAULT_OWNER_ID,
-) -> int:
+) -> IngestWriteResult:
     column, converter = DAILY_ACTIVITY_QUANTITY_FIELDS[metric]
-    count = 0
+    result = IngestWriteResult()
     for sample in samples:
         d = parse_date(sample.get("date"))
         value = converter(sample.get("qty"))
@@ -363,14 +397,16 @@ async def _ingest_daily_quantity(
             continue
 
         source_id = _sample_source(sample)
-        await session.execute(
-            text(f"""
+        inserted_new = await _execute_insert_with_result(
+            session,
+            f"""
                 INSERT INTO daily_activity (date, device_id, owner_id, source_id, {column})
                 VALUES (:date, :device_id, :owner_id, :source_id, :{column})
                 ON CONFLICT (date, device_id, owner_id) DO UPDATE
                 SET {column} = EXCLUDED.{column},
                     source_id = COALESCE(EXCLUDED.source_id, daily_activity.source_id)
-            """),
+                RETURNING (xmax = 0) AS inserted_new
+            """,
             {
                 "date": d,
                 "device_id": device_id,
@@ -379,8 +415,8 @@ async def _ingest_daily_quantity(
                 column: value,
             },
         )
-        count += 1
-    return count
+        result = result.with_insert_flag(inserted_new)
+    return result
 
 
 async def _ingest_workouts(
@@ -389,8 +425,8 @@ async def _ingest_workouts(
     samples: list,
     *,
     owner_id: UUID = DEFAULT_OWNER_ID,
-) -> int:
-    count = 0
+) -> IngestWriteResult:
+    result = IngestWriteResult()
     for s in samples:
         start = parse_ts(first_present(s, "start_date", "startDate", "start", "date"))
         end = parse_ts(first_present(s, "end_date", "endDate", "end"))
@@ -403,8 +439,9 @@ async def _ingest_workouts(
             duration_ms = int(duration_seconds * 1000) if duration_seconds is not None else None
         else:
             duration_ms = to_int(duration_ms)
-        await session.execute(
-            text("""
+        inserted_new = await _execute_insert_with_result(
+            session,
+            """
                 INSERT INTO workouts (device_id, sport_type, start_time, end_time,
                     duration_ms, avg_hr, max_hr, calories, distance_m, source_id, owner_id)
                 VALUES (:device_id, :sport, :start, :end, :dur, :avg_hr, :max_hr, :cal, :dist,
@@ -418,7 +455,8 @@ async def _ingest_workouts(
                     calories = EXCLUDED.calories,
                     distance_m = EXCLUDED.distance_m,
                     source_id = COALESCE(EXCLUDED.source_id, workouts.source_id)
-            """),
+                RETURNING (xmax = 0) AS inserted_new
+            """,
             {
                 "device_id": device_id,
                 "sport": first_present(s, "sport_type", "sportType", "name") or "unknown",
@@ -433,8 +471,8 @@ async def _ingest_workouts(
                 "owner_id": str(owner_id),
             },
         )
-        count += 1
-    return count
+        result = result.with_insert_flag(inserted_new)
+    return result
 
 
 # ──────────────────────────────────────────────────────────────────

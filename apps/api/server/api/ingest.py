@@ -179,6 +179,9 @@ async def apple_batch(
             records_received=0,
             records_accepted=0,
             records_rejected=0,
+            records_inserted_new=None,
+            records_deduped_existing=None,
+            storage_result_level="accepted_only",
             sample_min_at=sample_min_at,
             sample_max_at=sample_max_at,
         )
@@ -209,7 +212,10 @@ async def apple_batch(
                 "owner_id": owner_id,
             }
         )
-        count = result["accepted"]
+        count = int(result["accepted"])
+        records_inserted_new = _optional_int(result.get("inserted_new"))
+        records_deduped_existing = _optional_int(result.get("deduped_existing"))
+        storage_result_level = str(result.get("storage_result_level") or "accepted_only")
     except Exception as exc:
         try:
             RAW_LOG_ORPHANED.labels(metric=metric).inc()
@@ -243,6 +249,9 @@ async def apple_batch(
         records_received=len(samples),
         records_accepted=count,
         records_skipped=max(len(samples) - count, 0),
+        records_inserted_new=records_inserted_new,
+        records_deduped_existing=records_deduped_existing,
+        storage_result_level=storage_result_level,
         sample_min_at=sample_min_at,
         sample_max_at=sample_max_at,
         raw_log_id=raw_log_id,
@@ -261,6 +270,9 @@ async def apple_batch(
         records_received=len(samples),
         records_accepted=count,
         records_rejected=max(len(samples) - count, 0),
+        records_inserted_new=records_inserted_new,
+        records_deduped_existing=records_deduped_existing,
+        storage_result_level=storage_result_level,
         sample_min_at=sample_min_at,
         sample_max_at=sample_max_at,
     )
@@ -325,6 +337,9 @@ def _delivery_receipt_response(
     records_received: int,
     records_accepted: int,
     records_rejected: int,
+    records_inserted_new: int | None,
+    records_deduped_existing: int | None,
+    storage_result_level: str,
     sample_min_at: str | None,
     sample_max_at: str | None,
 ) -> dict[str, Any]:
@@ -345,6 +360,8 @@ def _delivery_receipt_response(
             "received": records_received,
             "accepted": records_accepted,
             "rejected": records_rejected,
+            "inserted_new": records_inserted_new,
+            "deduped_existing": records_deduped_existing,
             "sample_window": {
                 "min_sample_time": sample_min_at,
                 "max_sample_time": sample_max_at,
@@ -365,9 +382,9 @@ def _delivery_receipt_response(
         "records_received": records_received,
         "records_accepted": records_accepted,
         "records_rejected": records_rejected,
-        "records_inserted_new": None,
-        "records_deduped_existing": None,
-        "storage_result_level": "accepted_only",
+        "records_inserted_new": records_inserted_new,
+        "records_deduped_existing": records_deduped_existing,
+        "storage_result_level": storage_result_level,
         "sample_window": {
             "min_sample_time": sample_min_at,
             "max_sample_time": sample_max_at,
@@ -428,6 +445,9 @@ async def _record_sync_receipt(
     sample_min_at: str | None,
     sample_max_at: str | None,
     raw_log_id: int | None,
+    records_inserted_new: int | None = None,
+    records_deduped_existing: int | None = None,
+    storage_result_level: str = "accepted_only",
     error_message: str | None = None,
 ) -> None:
     """Persist the HealthSave sync headers that released iOS already sends."""
@@ -457,6 +477,9 @@ async def _record_sync_receipt(
         records_received=records_received,
         records_accepted=records_accepted,
         records_skipped=records_skipped,
+        records_inserted_new=records_inserted_new,
+        records_deduped_existing=records_deduped_existing,
+        storage_result_level=storage_result_level,
         sample_min_at=sample_min_at,
         sample_max_at=sample_max_at,
         raw_log_id=raw_log_id,
@@ -474,6 +497,15 @@ def _header_bool(headers: Any, name: str) -> bool | None:
     if normalized in {"false", "0", "no"}:
         return False
     return None
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _idempotency_key(

@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
+from storage.results import IngestWriteResult
 # NOTE: ``measurements`` is imported *lazily* inside each method below.
 # Eager import here re-introduces a circular import:
 #   storage.timescale.ingest → storage.timescale.measurements
@@ -53,7 +54,7 @@ class PostgresIngestStorage:
         metric: str,
         samples: list[dict],
         owner_id: UUID,
-    ) -> int:
+    ) -> IngestWriteResult:
         from . import measurements
 
         return await measurements._ingest_metric(session, device_id, metric, samples, owner_id)

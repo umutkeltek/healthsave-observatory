@@ -68,6 +68,9 @@ async def record_sync_receipt(
     sample_min_at: str | None,
     sample_max_at: str | None,
     raw_log_id: int | None,
+    records_inserted_new: int | None = None,
+    records_deduped_existing: int | None = None,
+    storage_result_level: str = "accepted_only",
     error_message: str | None = None,
 ) -> None:
     """Insert or update one HealthSave batch receipt.
@@ -191,9 +194,9 @@ async def record_sync_receipt(
             "records_received": records_received,
             "records_accepted": records_accepted,
             "records_skipped": records_skipped,
-            "records_inserted_new": None,
-            "records_deduped_existing": None,
-            "storage_result_level": "accepted_only",
+            "records_inserted_new": records_inserted_new,
+            "records_deduped_existing": records_deduped_existing,
+            "storage_result_level": storage_result_level,
             "sample_min_at": parsed_sample_min_at,
             "sample_max_at": parsed_sample_max_at,
             "error_message": error_message,
@@ -235,6 +238,14 @@ async def latest_sync_run(session: AsyncSession) -> dict[str, Any]:
                 count(*) FILTER (WHERE status = 'failed') AS batches_failed,
                 coalesce(sum(records_received), 0) AS records_received,
                 coalesce(sum(records_accepted), 0) AS records_accepted,
+                sum(records_inserted_new) AS records_inserted_new,
+                sum(records_deduped_existing) AS records_deduped_existing,
+                CASE
+                    WHEN count(*) FILTER (
+                        WHERE storage_result_level = 'inserted_vs_existing'
+                    ) = count(*) THEN 'inserted_vs_existing'
+                    ELSE 'accepted_only'
+                END AS storage_result_level,
                 coalesce(sum(records_skipped), 0) AS records_skipped,
                 min(sample_min_at) AS sample_min_at,
                 max(sample_max_at) AS sample_max_at,
@@ -273,6 +284,14 @@ async def sync_run(session: AsyncSession, sync_run_id: str) -> dict[str, Any]:
                 count(*) FILTER (WHERE status = 'failed') AS batches_failed,
                 coalesce(sum(records_received), 0) AS records_received,
                 coalesce(sum(records_accepted), 0) AS records_accepted,
+                sum(records_inserted_new) AS records_inserted_new,
+                sum(records_deduped_existing) AS records_deduped_existing,
+                CASE
+                    WHEN count(*) FILTER (
+                        WHERE storage_result_level = 'inserted_vs_existing'
+                    ) = count(*) THEN 'inserted_vs_existing'
+                    ELSE 'accepted_only'
+                END AS storage_result_level,
                 coalesce(sum(records_skipped), 0) AS records_skipped,
                 min(sample_min_at) AS sample_min_at,
                 max(sample_max_at) AS sample_max_at,
@@ -301,6 +320,9 @@ async def sync_run(session: AsyncSession, sync_run_id: str) -> dict[str, Any]:
             "batches_failed": row["batches_failed"],
             "received": row["records_received"],
             "accepted": row["records_accepted"],
+            "inserted_new": row.get("records_inserted_new"),
+            "deduped_existing": row.get("records_deduped_existing"),
+            "storage_result_level": row.get("storage_result_level", "accepted_only"),
             "rejected": row["records_skipped"],
             "sample_window": _sample_window(row),
             "latest_sample_time": row["latest_sample_at"],
@@ -321,6 +343,11 @@ async def sync_run(session: AsyncSession, sync_run_id: str) -> dict[str, Any]:
             "batches_failed": sum(row["batches_failed"] for row in rows),
             "records_received": sum(row["records_received"] for row in rows),
             "records_accepted": sum(row["records_accepted"] for row in rows),
+            "records_inserted_new": _sum_optional(row.get("records_inserted_new") for row in rows),
+            "records_deduped_existing": _sum_optional(
+                row.get("records_deduped_existing") for row in rows
+            ),
+            "storage_result_level": _combined_storage_result_level(rows),
             "records_rejected": sum(row["records_skipped"] for row in rows),
             "sample_window": {
                 "min_sample_time": min(
@@ -352,6 +379,14 @@ async def sync_coverage(session: AsyncSession) -> dict[str, Any]:
                     count(*) FILTER (WHERE status = 'failed') AS batches_failed,
                     coalesce(sum(records_received), 0) AS records_received,
                     coalesce(sum(records_accepted), 0) AS records_accepted,
+                    sum(records_inserted_new) AS records_inserted_new,
+                    sum(records_deduped_existing) AS records_deduped_existing,
+                    CASE
+                        WHEN count(*) FILTER (
+                            WHERE storage_result_level = 'inserted_vs_existing'
+                        ) = count(*) THEN 'inserted_vs_existing'
+                        ELSE 'accepted_only'
+                    END AS storage_result_level,
                     coalesce(sum(records_skipped), 0) AS records_skipped,
                     max(coalesce(completed_at, received_at)) AS newest_receipt_at,
                     min(sample_min_at) AS receipt_sample_min_at,
@@ -419,6 +454,9 @@ async def sync_coverage(session: AsyncSession) -> dict[str, Any]:
                 coalesce(r.batches_failed, 0) AS batches_failed,
                 coalesce(r.records_received, 0) AS records_received,
                 coalesce(r.records_accepted, 0) AS records_accepted,
+                r.records_inserted_new,
+                r.records_deduped_existing,
+                coalesce(r.storage_result_level, 'accepted_only') AS storage_result_level,
                 coalesce(r.records_skipped, 0) AS records_skipped,
                 r.newest_receipt_at,
                 r.receipt_sample_min_at,
@@ -439,6 +477,10 @@ async def sync_coverage(session: AsyncSession) -> dict[str, Any]:
             "batches_seen": sum(row["batches_seen"] for row in rows),
             "records_received": sum(row["records_received"] for row in rows),
             "records_accepted": sum(row["records_accepted"] for row in rows),
+            "records_inserted_new": _sum_optional(row.get("records_inserted_new") for row in rows),
+            "records_deduped_existing": _sum_optional(
+                row.get("records_deduped_existing") for row in rows
+            ),
             "records_skipped": sum(row["records_skipped"] for row in rows),
         },
         "metrics": rows,
@@ -463,6 +505,9 @@ def _format_coverage_row(row: dict[str, Any]) -> dict[str, Any]:
         "batches_failed": row["batches_failed"],
         "records_received": row["records_received"],
         "records_accepted": row["records_accepted"],
+        "records_inserted_new": row.get("records_inserted_new"),
+        "records_deduped_existing": row.get("records_deduped_existing"),
+        "storage_result_level": row.get("storage_result_level", "accepted_only"),
         "records_skipped": row["records_skipped"],
         "newest_receipt_at": row["newest_receipt_at"],
         "receipt_sample_window": _sample_window(row),
@@ -509,6 +554,19 @@ def _parse_time_value(value: Any) -> datetime | None:
         return datetime.fromisoformat(text_value)
     except ValueError:
         return None
+
+
+def _sum_optional(values: Any) -> int | None:
+    materialized = [value for value in values if value is not None]
+    if not materialized:
+        return None
+    return sum(materialized)
+
+
+def _combined_storage_result_level(rows: list[dict[str, Any]]) -> str:
+    if rows and all(row.get("storage_result_level") == "inserted_vs_existing" for row in rows):
+        return "inserted_vs_existing"
+    return "accepted_only"
 
 
 async def sync_anomalies(session: AsyncSession, lookback_minutes: int = 15) -> dict[str, Any]:

@@ -41,6 +41,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from .results import IngestWriteResult
     from .timescale.agents import (
         ActionKind,
         ArtifactKind,
@@ -174,7 +175,7 @@ class IngestStorage(Protocol):
         metric: str,
         samples: list[dict],
         owner_id: UUID,
-    ) -> int: ...
+    ) -> int | IngestWriteResult: ...
 
 
 @runtime_checkable

@@ -71,6 +71,23 @@ class FakeSession:
         return [params for sql, params in self.calls if needle in sql]
 
 
+class StorageBreakdownSession(FakeSession):
+    def __init__(self, insert_flags: list[bool]):
+        super().__init__()
+        self.insert_flags = insert_flags
+
+    async def execute(self, statement, params=None):
+        sql = " ".join(str(statement).split())
+        self.calls.append((sql, params or {}))
+        if "INSERT INTO heart_rate" in sql:
+            return FakeResult(row={"inserted_new": self.insert_flags.pop(0)})
+        if sql.startswith("SELECT id FROM devices"):
+            return FakeResult(row=(1,))
+        if sql.startswith("SELECT count(*)"):
+            return FakeResult(row=(0, None, None))
+        return FakeResult()
+
+
 class FailingStatusSession(FakeSession):
     async def execute(self, statement, params=None):
         sql = " ".join(str(statement).split())
@@ -448,6 +465,44 @@ async def test_batch_records_healthsave_sync_receipt_headers():
 
 
 @pytest.mark.asyncio
+async def test_batch_receipt_reports_inserted_new_and_existing_row_counts():
+    session = StorageBreakdownSession(insert_flags=[True, False])
+    request = FakeRequest(
+        {
+            "metric": "heart_rate",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [
+                {"date": "2026-05-28T10:00:00Z", "qty": 72, "source": "Apple Watch"},
+                {"date": "2026-05-28T10:01:00Z", "qty": 73, "source": "Apple Watch"},
+            ],
+        },
+        headers={
+            "Idempotency-Key": "breakdown-batch",
+            "X-HealthSave-Sync-Run-ID": "breakdown-run",
+            "X-HealthSave-Batch-ID": "breakdown-batch",
+            "X-HealthSave-Payload-Hash": "sha256:breakdown",
+            "X-HealthSave-Metric": "heart_rate",
+        },
+    )
+
+    result = await server.apple_batch(request, session)
+
+    receipt = session.insert_params_for("healthsave_sync_receipts")
+    assert result["records_accepted"] == 2
+    assert result["records_inserted_new"] == 1
+    assert result["records_deduped_existing"] == 1
+    assert result["storage_result_level"] == "inserted_vs_existing"
+    assert result["per_metric"]["heart_rate"]["inserted_new"] == 1
+    assert result["per_metric"]["heart_rate"]["deduped_existing"] == 1
+    assert receipt is not None
+    assert receipt["records_accepted"] == 2
+    assert receipt["records_inserted_new"] == 1
+    assert receipt["records_deduped_existing"] == 1
+    assert receipt["storage_result_level"] == "inserted_vs_existing"
+
+
+@pytest.mark.asyncio
 async def test_batch_derives_sample_window_from_start_end_payload_when_headers_absent():
     session = FakeSession()
     request = FakeRequest(
@@ -791,6 +846,9 @@ class SpecificSyncRunSession(FakeSession):
                         "batches_empty": 0,
                         "batches_failed": 0,
                         "records_accepted": 512,
+                        "records_inserted_new": 112,
+                        "records_deduped_existing": 400,
+                        "storage_result_level": "inserted_vs_existing",
                         "records_skipped": 0,
                         "records_received": 512,
                         "sample_min_at": "2026-05-23T10:00:00Z",
@@ -806,6 +864,9 @@ class SpecificSyncRunSession(FakeSession):
                         "batches_empty": 0,
                         "batches_failed": 0,
                         "records_accepted": 24,
+                        "records_inserted_new": 24,
+                        "records_deduped_existing": 0,
+                        "storage_result_level": "inserted_vs_existing",
                         "records_skipped": 0,
                         "records_received": 24,
                         "sample_min_at": "2026-05-23T10:00:00Z",
@@ -837,6 +898,9 @@ class LatestSyncRunSession(FakeSession):
                     "batches_failed": 0,
                     "records_received": 512,
                     "records_accepted": 488,
+                    "records_inserted_new": 88,
+                    "records_deduped_existing": 400,
+                    "storage_result_level": "inserted_vs_existing",
                     "records_skipped": 24,
                     "sample_min_at": "2026-05-24T07:10:00Z",
                     "sample_max_at": "2026-05-24T07:13:00Z",
@@ -859,6 +923,9 @@ async def test_latest_sync_run_exposes_sample_window_separately_from_receipt_tim
     assert result["completed_at"] == "2026-05-24T07:13:22Z"
     assert result["sample_window"]["max_sample_time"] == "2026-05-24T07:13:00Z"
     assert result["latest_sample_time"] == "2026-05-24T07:13:00Z"
+    assert result["records_inserted_new"] == 88
+    assert result["records_deduped_existing"] == 400
+    assert result["storage_result_level"] == "inserted_vs_existing"
 
 
 @pytest.mark.asyncio
@@ -875,7 +942,12 @@ async def test_sync_run_summary_reports_delivery_receipt_level_for_one_run():
     assert result["summary"]["batches_seen"] == 3
     assert result["summary"]["records_received"] == 536
     assert result["summary"]["records_accepted"] == 536
+    assert result["summary"]["records_inserted_new"] == 136
+    assert result["summary"]["records_deduped_existing"] == 400
+    assert result["summary"]["storage_result_level"] == "inserted_vs_existing"
     assert result["per_metric"]["heart_rate"]["accepted"] == 512
+    assert result["per_metric"]["heart_rate"]["inserted_new"] == 112
+    assert result["per_metric"]["heart_rate"]["deduped_existing"] == 400
     assert (
         result["per_metric"]["heart_rate"]["sample_window"]["max_sample_time"]
         == "2026-05-23T10:02:00Z"
