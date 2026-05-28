@@ -410,7 +410,9 @@ behavior, and optional Data Hub proof endpoints.
 
 **Core app/setup contract**
 
-1. `GET /api/health` returns a successful `2xx` liveness response.
+1. `GET /api/health` returns a successful `2xx` liveness response. iOS 1.5+
+   also accepts `GET /health` as a fallback — see "iOS liveness probe
+   behavior" below.
 2. `GET /api/apple/status` returns flat metric status objects.
 3. `POST /api/apple/batch` accepts HealthSave metric batches and returns a
    successful `2xx` response for uploads it accepts.
@@ -427,7 +429,38 @@ from the minimal setup probe contract.
 Data Hub also implements `GET /api/v2/sync/runs/latest` and
 `GET /api/v2/sync/coverage` for richer receipt and coverage diagnostics.
 HealthSave uses those only when present, so third-party servers can start with
-the core contract and add receipt proof later.
+the core contract and add receipt proof later. The iOS app reads run-specific
+receipts via `GET /api/v2/sync/runs/{sync_run_id}` to light up its
+"delivery receipt" confidence tier; a v1-only server still syncs cleanly and
+simply doesn't unlock that tier.
+
+### iOS liveness probe behavior (1.5+)
+
+HealthSave 1.5 broadened the liveness probe so third-party servers don't fail
+on plausible variations the v1 contract never pinned. Third-party
+implementers should know the tolerances:
+
+- **Endpoint discovery.** iOS calls `GET /api/health` first. If the response
+  is `404`, iOS retries once at `GET /health`. Implement either one (or both);
+  Data Hub exposes both.
+- **Status-value accept-list.** The response `status` field is matched
+  case-insensitively with surrounding whitespace trimmed against
+  `{ "ok", "healthy", "alive", "ready", "up" }`. The reference Data Hub
+  returns `"ok"`; other values in the set are accepted. Anything else
+  (`"broken"`, `"error"`, `"down"`, `"starting"`, …) is rejected as
+  not-HealthSave.
+- **Authentication.** The configured `x-api-key` header is forwarded on the
+  liveness request when the user has set one. Servers that protect
+  `/api/health` (defense in depth) are welcome.
+- **Auth classification.** `401` or `403` on the liveness path is classified
+  as `authFailed` (the user sees "check your API key" copy), not
+  `notHealthsave`. This means a key-rotation issue surfaces with actionable
+  copy instead of pointing the user at the wrong problem.
+- **Timeout.** 10 seconds on the liveness request.
+
+These behaviors are pinned by `BackendCompatibilityTests` in the iOS repo;
+see `ios_app/Sources/HealthSync/BackendCompatibility.swift` for the source of
+truth.
 
 ### `GET /api/v2/setup/diagnostics`
 
