@@ -54,7 +54,7 @@
       "targets": [
         {
           "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
-          "rawSql": "SELECT sport_type, count(*) AS count FROM workouts WHERE $__timeFilter(start_time) AND device_id IN ($device) GROUP BY sport_type ORDER BY count DESC",
+          "rawSql": "SELECT sport_type AS metric, count(*) AS value FROM workouts WHERE $__timeFilter(start_time) AND device_id IN ($device) GROUP BY sport_type ORDER BY value DESC",
           "format": "table",
           "refId": "A"
         }
@@ -67,9 +67,9 @@
       },
       "options": {
         "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
+          "values": true,
+          "calcs": [],
+          "fields": "/^value$/"
         },
         "pieType": "pie",
         "tooltip": {"mode": "single", "sort": "none"},
@@ -448,9 +448,9 @@
       },
       "options": {
         "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
+          "values": true,
+          "calcs": [],
+          "fields": "/^value$/"
         },
         "pieType": "pie",
         "tooltip": {"mode": "single", "sort": "none"},

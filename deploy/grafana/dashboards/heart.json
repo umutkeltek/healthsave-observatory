@@ -213,7 +213,7 @@
       "targets": [
         {
           "datasource": { "type": "postgres", "uid": "healthsave-pg" },
-          "rawSql": "SELECT time, bpm, context FROM heart_rate WHERE $__timeFilter(time) AND device_id IN ($device) AND source_id IN ($source) ORDER BY time",
+          "rawSql": "SELECT time_bucket('1 hour', time) AS time, avg(bpm)::numeric(5,1) AS bpm FROM heart_rate WHERE $__timeFilter(time) AND device_id IN ($device) AND source_id IN ($source) GROUP BY 1 ORDER BY 1",
           "format": "time_series",
           "refId": "A"
         }
@@ -739,7 +739,7 @@
       "targets": [
         {
           "datasource": { "type": "postgres", "uid": "healthsave-pg" },
-          "rawSql": "SELECT time, bpm FROM heart_rate WHERE $__timeFilter(time) AND device_id IN ($device) AND source_id IN ($source) ORDER BY time",
+          "rawSql": "SELECT time_bucket('1 hour', time) AS time, avg(bpm)::numeric(5,1) AS bpm FROM heart_rate WHERE $__timeFilter(time) AND device_id IN ($device) AND source_id IN ($source) GROUP BY 1 ORDER BY 1",
           "format": "time_series",
           "refId": "A"
         }

@@ -39,7 +39,7 @@
             "type": "postgres",
             "uid": "healthsave-pg"
           },
-          "rawSql": "SELECT time, stage, duration_ms/60000.0 AS duration_min FROM sleep_stages WHERE stage IN ('core','deep','rem','awake') AND $__timeFilter(time) AND device_id IN ($device) ORDER BY time",
+          "rawSql": "SELECT time, stage FROM sleep_stages WHERE stage IN ('core','deep','rem','awake') AND $__timeFilter(time) AND device_id IN ($device) ORDER BY time",
           "format": "table",
           "refId": "A"
         }
@@ -240,7 +240,7 @@
             "type": "postgres",
             "uid": "healthsave-pg"
           },
-          "rawSql": "WITH daily_source AS (SELECT date_trunc('day', start_time) AS day, COALESCE(NULLIF(source_id, ''), 'Unknown') AS source, sum(total_duration_ms) / 3600000.0 AS total_hours, sum(deep_ms) / 3600000.0 AS deep_hours, sum(rem_ms) / 3600000.0 AS rem_hours, sum(light_ms) / 3600000.0 AS core_hours, sum(awake_ms) / 3600000.0 AS awake_hours FROM sleep_sessions WHERE $__timeFilter(start_time) AND device_id IN ($device) GROUP BY 1, 2), ranked AS (SELECT *, row_number() OVER (PARTITION BY day ORDER BY CASE WHEN total_hours BETWEEN 0 AND 16 THEN 0 ELSE 1 END, total_hours DESC) AS rn FROM daily_source) SELECT stage, sum(hours) AS hours FROM ranked CROSS JOIN LATERAL (VALUES ('deep', deep_hours), ('rem', rem_hours), ('core', core_hours), ('awake', awake_hours)) AS stages(stage, hours) WHERE rn = 1 AND hours > 0 GROUP BY stage ORDER BY hours DESC",
+          "rawSql": "WITH daily_source AS (SELECT date_trunc('day', start_time) AS day, COALESCE(NULLIF(source_id, ''), 'Unknown') AS source, sum(total_duration_ms) / 3600000.0 AS total_hours, sum(deep_ms) / 3600000.0 AS deep_hours, sum(rem_ms) / 3600000.0 AS rem_hours, sum(light_ms) / 3600000.0 AS core_hours, sum(awake_ms) / 3600000.0 AS awake_hours FROM sleep_sessions WHERE $__timeFilter(start_time) AND device_id IN ($device) GROUP BY 1, 2), ranked AS (SELECT *, row_number() OVER (PARTITION BY day ORDER BY CASE WHEN total_hours BETWEEN 0 AND 16 THEN 0 ELSE 1 END, total_hours DESC) AS rn FROM daily_source) SELECT stage AS metric, sum(hours) AS value FROM ranked CROSS JOIN LATERAL (VALUES ('deep', deep_hours), ('rem', rem_hours), ('core', core_hours), ('awake', awake_hours)) AS stages(stage, hours) WHERE rn = 1 AND hours > 0 GROUP BY stage ORDER BY value DESC",
           "format": "table",
           "refId": "A"
         }
@@ -317,11 +317,9 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": [
-            "sum"
-          ],
-          "fields": "/^hours$/",
-          "values": false
+          "calcs": [],
+          "fields": "/^value$/",
+          "values": true
         },
         "pieType": "donut",
         "legend": {
