@@ -157,12 +157,69 @@ Decisions") and in tests (`tests/test_api_contract.py::test_status_endpoint_retu
 
 ## `GET /api/health` — response shape
 
-**iOS:** calls the endpoint, doesn't decode the body. Used as a
-liveness probe in the destination-setup assistant.
+**iOS:** calls the endpoint, parses the JSON body and accepts the
+response when `status` matches the iOS-side healthy-value accept-list
+(see "Liveness probe acceptance" below). Used as a liveness probe in
+the destination-setup assistant.
 
-**Server:** returns `{"status": "ok"}`.
+**Server:** returns `{"status": "ok"}`. The reference Data Hub value
+is `"ok"`; any value in the iOS accept-list is acceptable for a
+generic compatible backend.
 
-**Verdict:** match (body is incidental to iOS's use).
+**Verdict:** match. The reference Data Hub satisfies the iOS check
+exactly; alternative backends have a tolerant window (next section).
+
+## Liveness probe acceptance (iOS-side semantics, build 1.5+)
+
+The iOS liveness probe is intentionally tolerant of generic compatible
+servers. The contract a third-party backend has to satisfy is wider
+than the reference Data Hub's exact response. Source of truth:
+`ios_app/Sources/HealthSync/BackendCompatibility.swift`.
+
+**Endpoint discovery.** iOS calls `/api/health` first. If that returns
+`404`, iOS retries once at `/health`. Either path may be the only one
+implemented. Both reaching `404` produces the `notHealthsave` verdict.
+
+**Status-value accept-list.** iOS accepts any of the following values
+in the response `status` field, case-insensitive, with surrounding
+whitespace trimmed:
+
+- `ok` *(reference Data Hub)*
+- `healthy`
+- `alive`
+- `ready`
+- `up`
+
+Anything else — including `broken`, `error`, `down`, `fail`,
+`starting`, or a missing/non-string `status` field — produces
+`notHealthsave`.
+
+**Authentication.** iOS forwards the configured `x-api-key` header on
+the liveness request when the user has set one. A `401` or `403`
+response on the liveness path is classified as `authFailed` (the user
+gets "check your key" copy), not `notHealthsave`. Generic compatible
+servers may protect `/api/health` (defense in depth) without breaking
+the probe.
+
+**Timeout.** 10 seconds on the liveness request. Matches the contract
+probe.
+
+**iOS-side enforcement.** All five behaviors above are pinned by
+`Tests/HealthSyncTests/BackendCompatibilityTests.swift`:
+
+- `testLivenessAcceptsCommonHealthyStatusValues` (9 accepted values)
+- `testLivenessRejectsExplicitlyBrokenStatusValues` (5 rejected)
+- `testLiveness401IsClassifiedAsAuthFailed`
+- `testLiveness403IsClassifiedAsAuthFailed`
+- `testLivenessSendsAPIKeyWhenConfigured`
+- `testLivenessOmitsAPIKeyWhenNotConfigured`
+- `testLivenessTreatsWhitespaceAPIKeyAsAbsent`
+- `testLivenessFallsBackToShortHealthPath`
+- `testLivenessFallbackAcceptsAlternateHealthyStatusValues`
+- `testLivenessFallback401IsAuthFailed`
+- `testLivenessFallbackSendsAPIKeyWhenConfigured`
+- `testLivenessDoesNotProbeFallbackWhenPrimaryIsHealthy`
+- `testLiveness404OnBothHealthPathsClassifiesAsNotHealthsave`
 
 ## Cross-check is enforced by
 
