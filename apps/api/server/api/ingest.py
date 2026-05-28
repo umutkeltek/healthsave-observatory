@@ -215,6 +215,13 @@ async def apple_batch(
         count = int(result["accepted"])
         records_inserted_new = _optional_int(result.get("inserted_new"))
         records_deduped_existing = _optional_int(result.get("deduped_existing"))
+        # Honest accounting: rejected = TRUE validation failures only (defaults
+        # to 0 when a backend doesn't report it). Aggregation rollup (e.g. sleep
+        # stages -> sessions) and in-batch dedupe are NOT rejections. Deriving
+        # rejected as (received - accepted) reported ~95% of a healthy sleep
+        # sync as rejected — see storage.results.IngestWriteResult.
+        records_rejected = _optional_int(result.get("rejected")) or 0
+        records_deduped_in_batch = _optional_int(result.get("deduped_in_batch"))
         storage_result_level = str(result.get("storage_result_level") or "accepted_only")
     except Exception as exc:
         try:
@@ -248,7 +255,7 @@ async def apple_batch(
         status="processed",
         records_received=len(samples),
         records_accepted=count,
-        records_skipped=max(len(samples) - count, 0),
+        records_skipped=records_rejected,
         records_inserted_new=records_inserted_new,
         records_deduped_existing=records_deduped_existing,
         storage_result_level=storage_result_level,
@@ -269,12 +276,13 @@ async def apple_batch(
         total_batches=total,
         records_received=len(samples),
         records_accepted=count,
-        records_rejected=max(len(samples) - count, 0),
+        records_rejected=records_rejected,
         records_inserted_new=records_inserted_new,
         records_deduped_existing=records_deduped_existing,
         storage_result_level=storage_result_level,
         sample_min_at=sample_min_at,
         sample_max_at=sample_max_at,
+        records_deduped_in_batch=records_deduped_in_batch,
     )
 
 
@@ -342,6 +350,7 @@ def _delivery_receipt_response(
     storage_result_level: str,
     sample_min_at: str | None,
     sample_max_at: str | None,
+    records_deduped_in_batch: int | None = None,
 ) -> dict[str, Any]:
     """Return legacy v1 fields plus an additive delivery receipt.
 
@@ -362,6 +371,7 @@ def _delivery_receipt_response(
             "rejected": records_rejected,
             "inserted_new": records_inserted_new,
             "deduped_existing": records_deduped_existing,
+            "deduped_in_batch": records_deduped_in_batch,
             "sample_window": {
                 "min_sample_time": sample_min_at,
                 "max_sample_time": sample_max_at,
@@ -384,6 +394,7 @@ def _delivery_receipt_response(
         "records_rejected": records_rejected,
         "records_inserted_new": records_inserted_new,
         "records_deduped_existing": records_deduped_existing,
+        "records_deduped_in_batch": records_deduped_in_batch,
         "storage_result_level": storage_result_level,
         "sample_window": {
             "min_sample_time": sample_min_at,

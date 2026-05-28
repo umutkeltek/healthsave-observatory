@@ -513,8 +513,8 @@ returns `409 Conflict` and does not ingest the replacement payload.
 ### `GET /api/v2/sync/runs/latest`
 
 Protected by `x-api-key` when `API_KEY` is set. Returns the latest observed
-HealthSave sync run with batch counts, accepted/skipped record counts, and metric
-names.
+HealthSave sync run with batch counts, accepted / rejected / in-batch-deduped
+record counts, and metric names.
 
 ### `GET /api/v2/sync/runs/{sync_run_id}`
 
@@ -535,8 +535,9 @@ Example response:
   "records_inserted_new": null,
   "records_deduped_existing": null,
   "storage_result_level": "accepted_only",
-  "records_skipped": 24,
+  "records_skipped": 0,
   "records_rejected": 0,
+  "records_deduped_in_batch": 24,
   "sample_window": {
     "min_sample_time": "2026-05-24T07:10:00Z",
     "max_sample_time": "2026-05-24T07:13:00Z"
@@ -551,6 +552,17 @@ Example response:
 }
 ```
 
+**Honest accounting (1.5+).** `records_rejected` (and the persisted
+`records_skipped`) count ONLY true validation failures — samples missing a
+parseable time/value/date. They never include aggregation rollup (sleep stage
+samples folded into sessions are preserved in `sleep_stages`) nor
+`records_deduped_in_batch` (legitimate HealthKit full-export overlap collapsed
+on the conflict key). A healthy full-history sync therefore reports
+`records_rejected: 0`, not a large number derived from
+`records_received - records_accepted`. In the example above, 512 received
+samples yielded 488 unique rows with 24 in-batch duplicates collapsed and 0
+genuine rejections.
+
 ### `GET /api/v2/sync/coverage`
 
 Protected by `x-api-key` when `API_KEY` is set. Returns metric-level receipt
@@ -559,9 +571,11 @@ time; `latest_destination_sample_time` proves the newest sample currently stored
 for that metric. They are intentionally separate because a recent receipt can
 contain old samples.
 
-The current Timescale writer reports accepted/skipped rows. It does not
-split accepted rows into inserted-new vs deduped-existing, so those receipt
-fields are nullable and `storage_result_level` is `accepted_only`.
+The Timescale writer splits accepted rows into inserted-new vs deduped-existing
+(`storage_result_level: inserted_vs_existing`) and reports true
+`records_rejected` plus `records_deduped_in_batch` counts. Backends that cannot
+distinguish inserted-vs-existing leave those fields nullable and report
+`storage_result_level: accepted_only`.
 
 ## Insights
 

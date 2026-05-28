@@ -44,9 +44,10 @@ from server.ingestion.parsers import (
     to_float,
     to_int,
 )
-from storage.results import IngestWriteResult
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from storage.results import IngestWriteResult
 
 
 def _sample_source(sample: dict) -> str | None:
@@ -201,6 +202,7 @@ async def _ingest_dedicated(
 ) -> IngestWriteResult:
     spec = DEDICATED_TABLES[metric]
     rows = []
+    rejected_count = 0
     value_col = list(spec["columns"].values())[1]
     for s in samples:
         row = {"device_id": device_id, "owner_id": str(owner_id)}
@@ -216,17 +218,22 @@ async def _ingest_dedicated(
         if row.get("time") and row.get(value_col) is not None:
             rows.append(row)
         else:
+            rejected_count += 1
             _bump_rejected(metric, "missing_time_or_value")
 
     if not rows:
-        return IngestWriteResult()
+        return IngestWriteResult(rejected=rejected_count)
 
-    # Dedup within batch (conflict_cols already include owner_id via the schema)
+    # Dedup within batch (conflict_cols already include owner_id via the schema).
+    # An in-batch collision is legitimate HealthKit full-export overlap, NOT a
+    # rejection — count it separately so the receipt never calls it "rejected".
     conflict_cols = list(spec["conflict"]) + ["owner_id"]
     seen = {}
+    dedup_count = 0
     for row in rows:
         key = tuple(row.get(c) for c in conflict_cols)
         if key in seen:
+            dedup_count += 1
             _bump_rejected(metric, "in_batch_dedupe")
         seen[key] = row
     rows = list(seen.values())
@@ -248,7 +255,7 @@ async def _ingest_dedicated(
         inserted_new = await _execute_insert_with_result(session, sql, row)
         result = result.with_insert_flag(inserted_new)
 
-    return result
+    return result.with_counts(rejected=rejected_count, deduped_in_batch=dedup_count)
 
 
 async def _ingest_generic(
@@ -261,10 +268,12 @@ async def _ingest_generic(
 ) -> IngestWriteResult:
     """Insert into the catch-all quantity_samples table."""
     result = IngestWriteResult()
+    rejected_count = 0
     for s in samples:
         t = parse_ts(s.get("date"))
         v = to_float(s.get("qty"))
         if t is None or v is None:
+            rejected_count += 1
             _bump_rejected(metric, "missing_or_unparseable_date_or_qty")
             continue
         sample_metric = s.get("metric") if isinstance(s.get("metric"), str) else metric
@@ -289,7 +298,7 @@ async def _ingest_generic(
             },
         )
         result = result.with_insert_flag(inserted_new)
-    return result
+    return result.with_counts(rejected=rejected_count)
 
 
 async def _ingest_ecg(
@@ -305,11 +314,17 @@ async def _ingest_ecg(
     classification, samplingFrequency, and voltage-trace fields belong in
     a future dedicated ECG table.
     """
+    # TODO(ISC-3): persist avgHR-less ECG events (AFib / inconclusive / poor
+    # reading). Today an ECG with no averageHeartRate is dropped — those are
+    # often the most clinically important readings. For now we at least count
+    # them honestly as rejected instead of inflating an aggregate skip number.
     result = IngestWriteResult()
+    rejected_count = 0
     for sample in samples:
         start = parse_ts(sample.get("start"))
         average_heart_rate = to_float(sample.get("averageHeartRate"))
         if start is None or average_heart_rate is None:
+            rejected_count += 1
             _bump_rejected("ecg", "missing_start_or_average_hr")
             continue
         inserted_new = await _execute_insert_with_result(
@@ -333,7 +348,7 @@ async def _ingest_ecg(
             },
         )
         result = result.with_insert_flag(inserted_new)
-    return result
+    return result.with_counts(rejected=rejected_count)
 
 
 async def _ingest_activity(
@@ -344,9 +359,11 @@ async def _ingest_activity(
     owner_id: UUID = DEFAULT_OWNER_ID,
 ) -> IngestWriteResult:
     result = IngestWriteResult()
+    rejected_count = 0
     for s in samples:
         d = parse_date(s.get("date"))
         if not d:
+            rejected_count += 1
             _bump_rejected("activity_summaries", "missing_or_unparseable_date")
             continue
 
@@ -376,7 +393,7 @@ async def _ingest_activity(
             row,
         )
         result = result.with_insert_flag(inserted_new)
-    return result
+    return result.with_counts(rejected=rejected_count)
 
 
 async def _ingest_daily_quantity(
@@ -389,10 +406,12 @@ async def _ingest_daily_quantity(
 ) -> IngestWriteResult:
     column, converter = DAILY_ACTIVITY_QUANTITY_FIELDS[metric]
     result = IngestWriteResult()
+    rejected_count = 0
     for sample in samples:
         d = parse_date(sample.get("date"))
         value = converter(sample.get("qty"))
         if not d or value is None:
+            rejected_count += 1
             _bump_rejected(metric, "missing_or_unparseable_date_or_qty")
             continue
 
@@ -416,7 +435,7 @@ async def _ingest_daily_quantity(
             },
         )
         result = result.with_insert_flag(inserted_new)
-    return result
+    return result.with_counts(rejected=rejected_count)
 
 
 async def _ingest_workouts(
@@ -427,10 +446,12 @@ async def _ingest_workouts(
     owner_id: UUID = DEFAULT_OWNER_ID,
 ) -> IngestWriteResult:
     result = IngestWriteResult()
+    rejected_count = 0
     for s in samples:
         start = parse_ts(first_present(s, "start_date", "startDate", "start", "date"))
         end = parse_ts(first_present(s, "end_date", "endDate", "end"))
         if not start or not end:
+            rejected_count += 1
             _bump_rejected("workouts", "missing_or_unparseable_start_or_end")
             continue
         duration_ms = first_present(s, "duration_ms")
@@ -472,7 +493,7 @@ async def _ingest_workouts(
             },
         )
         result = result.with_insert_flag(inserted_new)
-    return result
+    return result.with_counts(rejected=rejected_count)
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -642,7 +663,12 @@ async def ingest_sleep(
     samples: list,
     *,
     owner_id: UUID = DEFAULT_OWNER_ID,
-) -> int:
+) -> IngestWriteResult:
+    # Aggregating path: many raw stage samples roll up into M sessions. Every
+    # stage row is preserved in sleep_stages, so the N-stages -> M-sessions
+    # difference is AGGREGATION, not rejection. accepted = sessions, rejected = 0.
+    # (Deriving rejected as received-accepted here is what reported ~95% of a
+    # healthy sleep sync as "rejected".)
     if any("startDate" in sample or "value" in sample for sample in samples):
         rows = sleep_session_rows(device_id, samples)
         count = 0
@@ -652,13 +678,15 @@ async def ingest_sleep(
             session_id = await _upsert_sleep_session(session, row)
             await _upsert_sleep_stages(session, device_id, session_id, segments, owner_id=owner_id)
             count += 1
-        return count
+        return IngestWriteResult(accepted=count)
 
     count = 0
+    rejected_count = 0
     for s in samples:
         start = parse_ts(first_present(s, "start_date", "startDate", "date"))
         end = parse_ts(first_present(s, "end_date", "endDate"))
         if not start or not end:
+            rejected_count += 1
             _bump_rejected("sleep_analysis", "missing_or_unparseable_start_or_end")
             continue
         await _upsert_sleep_session(
@@ -677,7 +705,7 @@ async def ingest_sleep(
             },
         )
         count += 1
-    return count
+    return IngestWriteResult(accepted=count, rejected=rejected_count)
 
 
 # Historical private alias preserved for the dispatch table in this

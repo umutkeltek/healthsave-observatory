@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -452,14 +452,14 @@ async def test_batch_records_healthsave_sync_receipt_headers():
     # record_sync_receipt before binding. The bound value MUST be a
     # datetime.datetime instance with tzinfo, otherwise every quantity-typed
     # batch from iOS HTTP-500s the way the deployed Data Hub did until this fix.
-    assert receipt["query_lower_bound_at"] == datetime(2026, 4, 10, 11, 0, 0, tzinfo=timezone.utc)
+    assert receipt["query_lower_bound_at"] == datetime(2026, 4, 10, 11, 0, 0, tzinfo=UTC)
     assert receipt["records_received"] == 1
     assert receipt["records_accepted"] == 1
     assert receipt["records_inserted_new"] is None
     assert receipt["records_deduped_existing"] is None
     assert receipt["storage_result_level"] == "accepted_only"
-    assert receipt["sample_min_at"] == datetime(2026, 4, 10, 12, 0, 0, tzinfo=timezone.utc)
-    assert receipt["sample_max_at"] == datetime(2026, 4, 10, 12, 5, 0, tzinfo=timezone.utc)
+    assert receipt["sample_min_at"] == datetime(2026, 4, 10, 12, 0, 0, tzinfo=UTC)
+    assert receipt["sample_max_at"] == datetime(2026, 4, 10, 12, 5, 0, tzinfo=UTC)
     receipt_sql = [sql for sql, _ in session.calls if "INSERT INTO healthsave_sync_receipts" in sql]
     assert any("ON CONFLICT (idempotency_key)" in sql for sql in receipt_sql)
 
@@ -503,6 +503,61 @@ async def test_batch_receipt_reports_inserted_new_and_existing_row_counts():
 
 
 @pytest.mark.asyncio
+async def test_sleep_batch_does_not_report_aggregation_as_rejected():
+    """Regression: a healthy full-history sleep sync must NOT report ~95%
+    rejected. Stage segments roll up into sessions (preserved in sleep_stages);
+    the wire receipt's rejected/skipped reflect only true validation failures,
+    and an additive ``records_deduped_in_batch`` field carries legitimate
+    duplicate collapse."""
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "sleep_analysis",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [
+                {
+                    "startDate": "2026-05-28T23:00:00Z",
+                    "endDate": "2026-05-28T23:40:00Z",
+                    "value": "core",
+                    "source": "Apple Watch",
+                },
+                {
+                    "startDate": "2026-05-28T23:40:00Z",
+                    "endDate": "2026-05-29T00:50:00Z",
+                    "value": "deep",
+                    "source": "Apple Watch",
+                },
+                {
+                    "startDate": "2026-05-29T00:50:00Z",
+                    "endDate": "2026-05-29T01:30:00Z",
+                    "value": "rem",
+                    "source": "Apple Watch",
+                },
+                {
+                    "startDate": "2026-05-29T01:30:00Z",
+                    "endDate": "2026-05-29T06:00:00Z",
+                    "value": "core",
+                    "source": "Apple Watch",
+                },
+            ],
+        },
+        headers={"X-HealthSave-Metric": "sleep_analysis"},
+    )
+
+    result = await server.apple_batch(request, session)
+
+    assert result["records_received"] == 4
+    assert result["records_accepted"] == 1  # four segments -> one session
+    assert result["records_rejected"] == 0  # NOT 3 — aggregation is not rejection
+    assert result["records_deduped_in_batch"] == 0
+    assert result["per_metric"]["sleep_analysis"]["rejected"] == 0
+    receipt = session.insert_params_for("healthsave_sync_receipts")
+    assert receipt is not None
+    assert receipt["records_skipped"] == 0  # the killed lie
+
+
+@pytest.mark.asyncio
 async def test_batch_derives_sample_window_from_start_end_payload_when_headers_absent():
     session = FakeSession()
     request = FakeRequest(
@@ -541,8 +596,8 @@ async def test_batch_derives_sample_window_from_start_end_payload_when_headers_a
         "max_sample_time": "2026-04-10T08:05:00.000Z",
     }
     assert receipt is not None
-    assert receipt["sample_min_at"] == datetime(2026, 4, 10, 6, 10, 0, tzinfo=timezone.utc)
-    assert receipt["sample_max_at"] == datetime(2026, 4, 10, 8, 5, 0, tzinfo=timezone.utc)
+    assert receipt["sample_min_at"] == datetime(2026, 4, 10, 6, 10, 0, tzinfo=UTC)
+    assert receipt["sample_max_at"] == datetime(2026, 4, 10, 8, 5, 0, tzinfo=UTC)
 
 
 @pytest.mark.asyncio
@@ -593,14 +648,15 @@ async def test_batch_receipt_converts_iso8601_z_headers_to_datetime():
     for field in ("query_lower_bound_at", "sample_min_at", "sample_max_at"):
         bound = receipt[field]
         assert isinstance(bound, datetime), (
-            f"{field} must be a datetime instance, asyncpg refuses raw strings; got {type(bound).__name__}"
+            f"{field} must be a datetime instance, asyncpg refuses raw strings; "
+            f"got {type(bound).__name__}"
         )
         assert bound.tzinfo is not None, (
             f"{field} must be timezone-aware so TIMESTAMPTZ binding is unambiguous"
         )
-    assert receipt["query_lower_bound_at"] == datetime(2026, 4, 27, 0, 0, 0, tzinfo=timezone.utc)
-    assert receipt["sample_min_at"] == datetime(2026, 5, 27, 10, 0, 0, tzinfo=timezone.utc)
-    assert receipt["sample_max_at"] == datetime(2026, 5, 27, 10, 0, 0, tzinfo=timezone.utc)
+    assert receipt["query_lower_bound_at"] == datetime(2026, 4, 27, 0, 0, 0, tzinfo=UTC)
+    assert receipt["sample_min_at"] == datetime(2026, 5, 27, 10, 0, 0, tzinfo=UTC)
+    assert receipt["sample_max_at"] == datetime(2026, 5, 27, 10, 0, 0, tzinfo=UTC)
 
 
 @pytest.mark.asyncio
@@ -714,8 +770,8 @@ async def test_batch_records_failed_sync_receipt_when_ingest_raises():
     assert receipt["status"] == "failed"
     assert receipt["records_received"] == 1
     assert receipt["records_accepted"] == 0
-    assert receipt["sample_min_at"] == datetime(2026, 4, 10, 12, 0, 0, tzinfo=timezone.utc)
-    assert receipt["sample_max_at"] == datetime(2026, 4, 10, 12, 0, 0, tzinfo=timezone.utc)
+    assert receipt["sample_min_at"] == datetime(2026, 4, 10, 12, 0, 0, tzinfo=UTC)
+    assert receipt["sample_max_at"] == datetime(2026, 4, 10, 12, 0, 0, tzinfo=UTC)
     assert "forced ingest failure" in receipt["error_message"]
 
 
