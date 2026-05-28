@@ -155,10 +155,41 @@ def test_batches_for_groups_by_metric_and_chunks():
     for batch in out:
         by_metric.setdefault(batch["metric"], []).append(batch)
     assert len(by_metric["heart_rate"]) == 3  # 2,2,1
-    assert len(by_metric["step_count"]) == 2  # 2,1
+    assert len(by_metric["step_count"]) == 1  # same-day buckets fold into one total
     # total_batches consistent within a metric
     assert {b["total_batches"] for b in by_metric["heart_rate"]} == {3}
-    assert {b["total_batches"] for b in by_metric["step_count"]} == {2}
+    assert {b["total_batches"] for b in by_metric["step_count"]} == {1}
+
+
+def test_batches_for_aggregates_step_buckets_by_day_and_source():
+    samples = [
+        import_samsung.Sample(
+            "step_count",
+            {"date": "2024-01-03T08:00:00Z", "qty": 42, "source": "Samsung Health"},
+        ),
+        import_samsung.Sample(
+            "step_count",
+            {"date": "2024-01-03T08:10:00Z", "qty": 118, "source": "Samsung Health"},
+        ),
+        import_samsung.Sample(
+            "step_count",
+            {"date": "2024-01-03T09:00:00Z", "qty": 7, "source": "Huawei Health"},
+        ),
+        import_samsung.Sample(
+            "step_count",
+            {"date": "2024-01-04T08:00:00Z", "qty": 10, "source": "Samsung Health"},
+        ),
+    ]
+
+    batches = list(import_samsung.batches_for(samples, batch_size=10))
+
+    assert len(batches) == 1
+    payloads = batches[0]["samples"]
+    assert payloads == [
+        {"date": "2024-01-03", "qty": 160, "source": "Samsung Health", "unit": "count"},
+        {"date": "2024-01-03", "qty": 7, "source": "Huawei Health", "unit": "count"},
+        {"date": "2024-01-04", "qty": 10, "source": "Samsung Health", "unit": "count"},
+    ]
 
 
 def test_batches_for_emits_empty_batch_when_no_samples():
