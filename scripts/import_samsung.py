@@ -33,6 +33,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
+import json
 import logging
 import os
 import re
@@ -365,18 +367,38 @@ def post_batches(
     *,
     base_url: str,
     api_key: str | None = None,
+    sync_run_id: str | None = None,
     transport: httpx.BaseTransport | None = None,
-    timeout: float = 30.0,
+    timeout: float = 120.0,
+    progress_every: int = 25,
 ) -> tuple[int, int]:
     """POST each batch to ``/api/apple/batch``. Returns ``(batches_sent, samples_sent)``."""
-    headers = {"Content-Type": "application/json"}
+    base_headers = {"Content-Type": "application/json"}
     if api_key:
-        headers["x-api-key"] = api_key
+        base_headers["x-api-key"] = api_key
+    if sync_run_id:
+        base_headers["X-HealthSave-Sync-Run-ID"] = sync_run_id
+        base_headers["X-HealthSave-Sync-Mode"] = "historical_import"
+        base_headers["X-HealthSave-Full-Export"] = "true"
 
     sent_batches = 0
     sent_records = 0
     with httpx.Client(transport=transport, timeout=timeout) as client:
         for batch in batches:
+            headers = dict(base_headers)
+            if sync_run_id:
+                batch_id = f"{sync_run_id}:{batch['metric']}:{batch['batch_index']}"
+                payload_hash = _payload_hash(batch)
+                headers.update(
+                    {
+                        "Idempotency-Key": batch_id,
+                        "X-HealthSave-Batch-ID": batch_id,
+                        "X-HealthSave-Payload-Hash": payload_hash,
+                        "X-HealthSave-Metric": str(batch["metric"]),
+                        "X-HealthSave-Batch-Index": str(batch["batch_index"]),
+                        "X-HealthSave-Total-Batches": str(batch["total_batches"]),
+                    }
+                )
             response = client.post(
                 f"{base_url.rstrip('/')}/api/apple/batch",
                 json=batch,
@@ -385,7 +407,14 @@ def post_batches(
             response.raise_for_status()
             sent_batches += 1
             sent_records += len(batch["samples"])
+            if progress_every > 0 and sent_batches % progress_every == 0:
+                log.info("sent %d batch(es), %d sample(s)", sent_batches, sent_records)
     return sent_batches, sent_records
+
+
+def _payload_hash(batch: dict[str, Any]) -> str:
+    payload = json.dumps(batch, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return "sha256:" + hashlib.sha256(payload).hexdigest()
 
 
 # ─── CLI ─────────────────────────────────────────────────────────────
@@ -412,6 +441,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=int,
         default=500,
         help="Samples per /api/apple/batch POST (default: 500)",
+    )
+    parser.add_argument(
+        "--sync-run-id",
+        default=os.environ.get("HDH_SYNC_RUN_ID"),
+        help="Stable sync run id used for receipts and retry-safe idempotency headers.",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=float(os.environ.get("HDH_TIMEOUT", "120")),
+        help="Per-request timeout in seconds (default: 120).",
+    )
+    parser.add_argument(
+        "--progress-every",
+        type=int,
+        default=int(os.environ.get("HDH_PROGRESS_EVERY", "25")),
+        help="Log progress every N posted batches; 0 disables progress logs.",
     )
     parser.add_argument(
         "--dry-run",
@@ -453,6 +499,9 @@ def main(argv: list[str] | None = None) -> int:
         batches_for(result.samples, batch_size=args.batch_size),
         base_url=args.server,
         api_key=args.api_key,
+        sync_run_id=args.sync_run_id,
+        timeout=args.timeout,
+        progress_every=args.progress_every,
     )
     log.info("sent %d batch(es) carrying %d sample(s)", sent_batches, sent_records)
     return 0
