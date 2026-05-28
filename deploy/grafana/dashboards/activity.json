@@ -291,7 +291,7 @@
       "datasource": {"type": "postgres", "uid": "healthsave-pg"},
       "targets": [{
         "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-        "rawSql": "SELECT stand_hours AS value FROM daily_activity WHERE date = current_date AND device_id IN ($device) LIMIT 1",
+        "rawSql": "SELECT stand_hours AS value FROM daily_activity WHERE date >= (current_date - interval '1 day')::date AND device_id IN ($device) AND stand_hours IS NOT NULL ORDER BY date DESC LIMIT 1",
         "format": "table",
         "refId": "A"
       }],
