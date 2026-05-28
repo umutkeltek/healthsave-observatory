@@ -43,6 +43,14 @@ def _panel_sql(file_name: str, title: str) -> str:
     raise AssertionError(f"panel not found: {file_name} / {title}")
 
 
+def _panel(file_name: str, title: str) -> dict:
+    dashboard = _dashboard(file_name)
+    for panel in dashboard["panels"]:
+        if panel.get("title") == title:
+            return panel
+    raise AssertionError(f"panel not found: {file_name} / {title}")
+
+
 def test_dashboards_do_not_query_legacy_personal_stack_columns():
     forbidden = (
         "sleep_efficiency_pct",
@@ -158,5 +166,55 @@ def test_today_stat_cards_tolerate_local_day_utc_boundary():
 
     assert "current_date - interval '1 day'" in overview_sql
     assert "current_date - interval '1 day'" in activity_sql
+    assert "steps IS NOT NULL" in overview_sql
     assert "ORDER BY date DESC LIMIT 1" in overview_sql
     assert "ORDER BY date DESC LIMIT 1" in activity_sql
+
+
+def test_overview_daily_steps_ignores_null_duplicate_daily_rows():
+    sql = _panel_sql("healthsave-overview.json", "Daily Steps (14 Days)")
+
+    assert "steps IS NOT NULL" in sql
+    assert "max(steps)" in sql
+    assert "GROUP BY date" in sql
+    assert "COALESCE(steps, 0)" not in sql
+
+
+def test_insights_respiratory_stat_uses_all_public_respiration_paths():
+    sql = _panel_sql("insights.json", "Avg Respiratory Rate")
+
+    assert "FROM sleep_sessions" in sql
+    assert "sleep_respiratory_rate" in sql
+    assert "'respiratory_rate'" in sql
+
+
+def test_sleep_stage_timeline_does_not_turn_durations_into_states():
+    sql = _panel_sql("sleep.json", "Sleep Stages Timeline")
+
+    assert "SELECT time, stage" in sql
+    assert "duration_ms" not in sql
+    assert "duration_min" not in sql
+
+
+def test_pie_panels_return_metric_value_shape_for_grafana():
+    for file_name, title in (
+        ("sleep.json", "Sleep Stage Distribution"),
+        ("workouts.json", "Workout Type Distribution"),
+        ("workouts.json", "Workouts by Device"),
+    ):
+        sql = _panel_sql(file_name, title)
+        reduce_options = _panel(file_name, title)["options"]["reduceOptions"]
+
+        assert " AS metric" in sql
+        assert " AS value" in sql
+        assert reduce_options["values"] is True
+        assert reduce_options["fields"] == "/^value$/"
+
+
+def test_raw_heart_rate_panels_bucket_dense_year_ranges():
+    for title in ("Heart Rate Timeline", "HR Heatmap by Hour"):
+        sql = _panel_sql("heart.json", title)
+
+        assert "time_bucket('1 hour', time)" in sql
+        assert "avg(bpm)" in sql
+        assert "GROUP BY 1" in sql

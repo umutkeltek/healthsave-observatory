@@ -258,7 +258,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT date::timestamp AS time, COALESCE(steps, 0) AS steps\nFROM daily_activity\nWHERE date >= current_date - interval '14 days'\nORDER BY 1",
+          "rawSql": "SELECT date::timestamp AS time, max(steps) AS steps\nFROM daily_activity\nWHERE date >= current_date - interval '14 days'\n  AND steps IS NOT NULL\nGROUP BY date\nORDER BY 1",
           "refId": "A"
         }
       ],
@@ -462,7 +462,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT now() AS time, COALESCE((SELECT steps FROM daily_activity WHERE date >= (current_date - interval '1 day')::date ORDER BY date DESC LIMIT 1), 0) AS value",
+          "rawSql": "SELECT now() AS time, COALESCE((SELECT steps FROM daily_activity WHERE date >= (current_date - interval '1 day')::date AND steps IS NOT NULL ORDER BY date DESC LIMIT 1), 0) AS value",
           "refId": "A"
         }
       ],

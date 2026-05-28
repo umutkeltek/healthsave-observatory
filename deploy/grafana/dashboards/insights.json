@@ -373,7 +373,7 @@
       "targets": [
         {
           "datasource": {"type": "postgres", "uid": "healthsave-pg"},
-          "rawSql": "SELECT avg(value) AS \"Resp Rate\"\nFROM (\n  SELECT respiratory_rate AS value FROM sleep_sessions\n  WHERE $__timeFilter(start_time) AND device_id IN ($device) AND respiratory_rate IS NOT NULL\n  UNION ALL\n  SELECT value FROM quantity_samples\n  WHERE metric_name = 'sleep_respiratory_rate' AND $__timeFilter(time) AND device_id IN ($device)\n) x",
+          "rawSql": "SELECT avg(value) AS \"Resp Rate\"\nFROM (\n  SELECT respiratory_rate AS value FROM sleep_sessions\n  WHERE $__timeFilter(start_time) AND device_id IN ($device) AND respiratory_rate IS NOT NULL\n  UNION ALL\n  SELECT value FROM quantity_samples\n  WHERE metric_name IN ('sleep_respiratory_rate', 'respiratory_rate') AND $__timeFilter(time) AND device_id IN ($device)\n) x",
           "format": "table",
           "refId": "A"
         }
