@@ -13,14 +13,19 @@ and the post-ingest anomaly trigger.
 
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 from compat_v1.models import BatchPayload
+from contracts._base import Provenance
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from normalization import normalize_apple_batch
+from plugin_sdk import SDK_VERSION
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
+from storage.timescale.observations import CanonicalObservationRepository
 from storage.timescale.sync_receipts import (
     ReceiptIdempotencyConflict,
     _parse_time_value,
@@ -37,7 +42,19 @@ from ..ingestion.storage import (
     default_storage,
 )
 from .deps import get_session, verify_api_key
-from .metrics import INGEST_BATCHES, INGEST_DURATION, INGEST_ROWS, RAW_LOG_ORPHANED
+from .metrics import (
+    CANONICAL_DUAL_WRITE,
+    INGEST_BATCHES,
+    INGEST_DURATION,
+    INGEST_ROWS,
+    RAW_LOG_ORPHANED,
+)
+
+# v2 canonical dual-write (Decision C migration bridge). Stable source id for the
+# Apple Health / HealthSave source; the repository is stateless and reused.
+APPLE_HEALTHKIT_SOURCE_ID = UUID("a9b1e7e0-0000-4000-8000-000000000001")
+_APPLE_PLUGIN_ID = "apple-health-healthsave"
+_canonical_repo = CanonicalObservationRepository()
 
 if TYPE_CHECKING:
     from plugin_sdk import Source
@@ -264,6 +281,9 @@ async def apple_batch(
         raw_log_id=raw_log_id,
     )
     await session.commit()
+    await _dual_write_canonical(
+        session, metric=metric, samples=samples, owner_id=owner_id, raw_log_id=raw_log_id
+    )
     _observe_ingest_metrics(metric=metric, rows=count, started_at=started_at)
     log.info("Ingested %d records for %s (batch %d/%d)", count, metric, batch_idx + 1, total)
     _schedule_anomaly_check_if_enabled(request, background_tasks, count)
@@ -284,6 +304,54 @@ async def apple_batch(
         sample_max_at=sample_max_at,
         records_deduped_in_batch=records_deduped_in_batch,
     )
+
+
+async def _dual_write_canonical(
+    session: AsyncSession,
+    *,
+    metric: str,
+    samples: list[dict[str, Any]],
+    owner_id: Any,
+    raw_log_id: int | None,
+) -> None:
+    """Best-effort v2 dual-write into canonical_observations (Decision C).
+
+    Runs AFTER the v1 commit, in its own transaction, fully guarded: a
+    canonical-side failure is logged + counted and NEVER affects the locked v1
+    ingest path or its response. The v1 per-metric tables stay the live source
+    of truth until v2 cuts over; this mirrors each batch into the canonical
+    store the read API + LLM narrator consume.
+    """
+    try:
+        provenance = Provenance(
+            source_plugin_id=_APPLE_PLUGIN_ID,
+            sdk_version=str(SDK_VERSION),
+            captured_at=datetime.now(UTC),
+            raw_payload_ref=str(raw_log_id) if raw_log_id is not None else None,
+        )
+        result = normalize_apple_batch(
+            {"metric": metric, "samples": samples},
+            source_id=APPLE_HEALTHKIT_SOURCE_ID,
+            provenance=provenance,
+            owner_id=owner_id,
+        )
+        if result.observations:
+            await _canonical_repo.insert_many(session, result.observations)
+            await session.commit()
+        if result.accepted:
+            CANONICAL_DUAL_WRITE.labels(metric=metric, result="ok").inc(result.accepted)
+        if result.rejected:
+            CANONICAL_DUAL_WRITE.labels(metric=metric, result="rejected").inc(result.rejected)
+    except Exception as exc:
+        try:
+            await session.rollback()
+        except Exception:  # pragma: no cover - rollback is itself best-effort
+            log.debug("canonical dual-write rollback failed for %s", metric)
+        log.warning("canonical dual-write failed for %s (v1 path unaffected): %s", metric, exc)
+        try:
+            CANONICAL_DUAL_WRITE.labels(metric=metric, result="error").inc()
+        except Exception:  # pragma: no cover - metrics optional
+            log.debug("failed to record CANONICAL_DUAL_WRITE error for %s", metric)
 
 
 def _resolve_storage(request: Request) -> IngestStorage:

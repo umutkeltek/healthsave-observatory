@@ -62,6 +62,14 @@ LEDGER_LISTENER_FAILURES = Counter(
     "stuck-run reaper for full coverage.",
     ["phase"],
 )
+CANONICAL_DUAL_WRITE = Counter(
+    "hdh_canonical_dual_write",
+    "v2 canonical_observations dual-write outcomes from /api/apple/batch. "
+    "result=ok counts observations written; rejected counts unmapped/invalid "
+    "samples; error counts a GUARDED canonical-side failure that left the v1 "
+    "path and its response untouched (Decision C migration bridge).",
+    ["metric", "result"],
+)
 
 
 @router.get("/metrics")
@@ -80,6 +88,7 @@ def reset_metrics() -> None:
     _reset_metric_children(STATUS_QUERY_FAILURES)
     _reset_metric_children(PIPELINE_RUNS_LEDGER_FAILURES)
     _reset_metric_children(LEDGER_LISTENER_FAILURES)
+    _reset_metric_children(CANONICAL_DUAL_WRITE)
 
 
 def _reset_metric_children(metric: MetricWrapperBase) -> None:
