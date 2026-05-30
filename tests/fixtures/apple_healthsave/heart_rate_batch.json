@@ -1,0 +1,10 @@
+{
+  "metric": "heart_rate",
+  "batch_index": 0,
+  "total_batches": 1,
+  "samples": [
+    { "date": "2026-05-28T08:00:00Z", "qty": 61, "unit": "count/min", "source": "Apple Watch" },
+    { "date": "2026-05-28T08:01:00Z", "qty": 64, "unit": "count/min", "source": "Apple Watch" },
+    { "date": "2026-05-28T08:02:00Z", "qty": 59, "unit": "count/min", "source": "Apple Watch" }
+  ]
+}
