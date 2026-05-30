@@ -6,3 +6,6 @@
 __pycache__
 tests/__pycache__
 *.pyc
+node_modules
+apps/web/.next
+*.tsbuildinfo

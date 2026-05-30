@@ -93,6 +93,7 @@ include = [
     "runtime*",
     "homeassistant_mqtt*",
     "storage*",
+    "normalization*",
     "worker*",
     "agents*",
     "plugin_sdk*",
