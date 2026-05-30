@@ -1426,6 +1426,90 @@
         "summary": "V2 Meta"
       }
     },
+    "/api/v2/metrics": {
+      "get": {
+        "description": "The full canonical metric catalog (ontology-driven, no DB hit).",
+        "operationId": "list_metrics_api_v2_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "object"
+                  },
+                  "title": "Response List Metrics Api V2 Metrics Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Metrics"
+      }
+    },
+    "/api/v2/metrics/{metric_id}/series": {
+      "get": {
+        "description": "One metric's time-series over a multi-timescale window.",
+        "operationId": "metric_series_api_v2_metrics__metric_id__series_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "metric_id",
+            "required": true,
+            "schema": {
+              "title": "Metric Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "default": "7d",
+              "title": "Range",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Metric Series Api V2 Metrics  Metric Id  Series Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Metric Series"
+      }
+    },
     "/api/v2/setup/diagnostics": {
       "get": {
         "description": "Return a no-secret setup fingerprint for humans and clients.\n\nThis is intentionally unauthenticated: it exposes no health data and helps\nusers distinguish the Data Hub API from nearby Grafana/Homepage ports before\nthey troubleshoot keys or sync.",
