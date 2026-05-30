@@ -328,6 +328,10 @@ def build_discovery_messages(
             "availability_topic": availability_topic(config),
             "device": _device_payload(config),
             "enabled_by_default": True,
+            # Re-fire HA state events on every 60s republish (even when the value is
+            # unchanged) so dependent template sensors / the room_health brain
+            # re-evaluate continuously instead of freezing on a startup-time value.
+            "force_update": True,
             "name": _metric_name(config, spec),
             "object_id": _topic_part(spec.key),
             "state_topic": state_topic(config, spec),
@@ -455,6 +459,10 @@ def build_source_discovery_messages(
             "availability_topic": availability_topic(config),
             "device": device,
             "enabled_by_default": True,
+            # Re-fire HA state events on every 60s republish (even when the value is
+            # unchanged) so dependent template sensors / the room_health brain
+            # re-evaluate continuously instead of freezing on a startup-time value.
+            "force_update": True,
             "name": name_suffix,
             "object_id": attr,
             "state_topic": state_topic_value,
