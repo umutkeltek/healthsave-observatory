@@ -262,14 +262,17 @@ class TimescaleHealthSnapshotRepository:
         """
         collected_at = datetime.now(UTC)
 
-        # Latest heart_rate per source within 24h.
+        # Latest heart_rate per source within 72h. Wider than the aggregate's
+        # "latest sample" because a multi-device user doesn't sync every source
+        # daily — a watch synced ~1-2 days ago is still a live source for the HA
+        # "<source> available" sensors, not a ghost.
         hr_rows = (
             await session.execute(
                 text(
                     """
                     SELECT DISTINCT ON (source_id) source_id, bpm
                     FROM heart_rate
-                    WHERE time > now() - interval '24 hours'
+                    WHERE time > now() - interval '72 hours'
                     ORDER BY source_id, time DESC
                     """
                 )
