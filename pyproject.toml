@@ -7,7 +7,7 @@ name = "health-data-hub"
 version = "1.0.0"
 description = "Self-hosted Apple Health server - HealthKit ingest into TimescaleDB, Grafana dashboards, and local LLM briefings via Ollama."
 requires-python = ">=3.12,<3.14"
-license = { text = "MIT" }
+license = { text = "Elastic-2.0" }
 readme = "README.md"
 keywords = [
     "apple-health",
@@ -36,7 +36,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Healthcare Industry",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: MIT License",
+    "License :: Other/Proprietary License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
