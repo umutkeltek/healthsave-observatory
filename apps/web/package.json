@@ -1,0 +1,24 @@
+{
+  "name": "@hdh/web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "HealthSave standalone dashboard — insight-first read UI over the datahub v2 API (replaces Grafana).",
+  "scripts": {
+    "dev": "next dev -p 4173",
+    "build": "next build",
+    "start": "next start -p 4173",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "typescript": "^5.7.3"
+  }
+}
