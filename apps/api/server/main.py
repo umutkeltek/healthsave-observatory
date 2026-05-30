@@ -33,7 +33,7 @@ from analysis.llm.client import HealthLLMClient
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from .api import health_routes, ingest, insights, metrics, status, sync, v2_agents
+from .api import health_routes, ingest, insights, metrics, status, sync, v2_agents, v2_meta
 from .api.ingest import _load_apple_health_plugin
 from .db.session import async_session, engine
 from .ingestion.registry import resolve_from_env
@@ -120,3 +120,4 @@ app.include_router(status.router)
 app.include_router(sync.router)
 app.include_router(insights.router)
 app.include_router(v2_agents.router)
+app.include_router(v2_meta.router)

@@ -1406,6 +1406,26 @@
         ]
       }
     },
+    "/api/v2/meta": {
+      "get": {
+        "description": "Return the v2 version axes. Unauthenticated, read-only, no health data.",
+        "operationId": "v2_meta_api_v2_meta_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response V2 Meta Api V2 Meta Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "V2 Meta"
+      }
+    },
     "/api/v2/setup/diagnostics": {
       "get": {
         "description": "Return a no-secret setup fingerprint for humans and clients.\n\nThis is intentionally unauthenticated: it exposes no health data and helps\nusers distinguish the Data Hub API from nearby Grafana/Homepage ports before\nthey troubleshoot keys or sync.",

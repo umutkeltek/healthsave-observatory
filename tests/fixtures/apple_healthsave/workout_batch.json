@@ -1,0 +1,16 @@
+{
+  "metric": "workouts",
+  "batch_index": 0,
+  "total_batches": 1,
+  "samples": [
+    {
+      "startDate": "2026-05-28T18:00:00Z",
+      "endDate": "2026-05-28T18:32:00Z",
+      "duration": 1920,
+      "workout_type": "running",
+      "total_energy": 312.5,
+      "total_distance": 5020,
+      "source": "Apple Watch"
+    }
+  ]
+}

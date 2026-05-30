@@ -1,0 +1,11 @@
+{
+  "metric": "sleep_analysis",
+  "batch_index": 0,
+  "total_batches": 1,
+  "samples": [
+    { "startDate": "2026-05-28T23:00:00Z", "endDate": "2026-05-28T23:40:00Z", "value": "core", "source": "Apple Watch" },
+    { "startDate": "2026-05-28T23:40:00Z", "endDate": "2026-05-29T00:50:00Z", "value": "deep", "source": "Apple Watch" },
+    { "startDate": "2026-05-29T00:50:00Z", "endDate": "2026-05-29T01:30:00Z", "value": "rem", "source": "Apple Watch" },
+    { "startDate": "2026-05-29T01:30:00Z", "endDate": "2026-05-29T06:00:00Z", "value": "core", "source": "Apple Watch" }
+  ]
+}
