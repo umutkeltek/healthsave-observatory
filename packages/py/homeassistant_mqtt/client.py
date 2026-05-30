@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 from collections.abc import Iterable
 from typing import Any
 
-from .bridge import HomeAssistantMQTTConfig, MQTTMessage
+from .bridge import HomeAssistantMQTTConfig, MQTTMessage, availability_topic
 
 
 class PahoMQTTPublisher:
@@ -22,6 +23,11 @@ class PahoMQTTPublisher:
         client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         if self.config.username:
             client.username_pw_set(self.config.username, self.config.password or None)
+        # Last Will & Testament: if the bridge crashes or the network drops, the
+        # broker auto-publishes "offline" (retained) to the availability topic so
+        # Home Assistant marks every HealthSave entity unavailable instead of
+        # leaving the last retained value showing as if it were live.
+        client.will_set(availability_topic(self.config), payload="offline", qos=0, retain=True)
         client.connect(self.config.broker, self.config.port, keepalive=60)
         client.loop_start()
         self._client = client
@@ -38,6 +44,12 @@ class PahoMQTTPublisher:
 
     def close(self) -> None:
         if self._client is not None:
+            # Announce "offline" on graceful shutdown too (the LWT only fires on
+            # an ungraceful drop), so HA reflects the bridge state either way.
+            with contextlib.suppress(Exception):
+                self._client.publish(
+                    availability_topic(self.config), "offline", qos=0, retain=True
+                ).wait_for_publish()
             self._client.loop_stop()
             self._client.disconnect()
             self._client = None
