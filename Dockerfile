@@ -21,6 +21,7 @@ COPY packages/py/plugin_sdk/ ./plugin_sdk/
 COPY packages/py/homeassistant_mqtt/ ./homeassistant_mqtt/
 COPY packages/py/runtime/ ./runtime/
 COPY packages/py/storage/ ./storage/
+COPY packages/py/normalization/ ./normalization/
 COPY plugins/ ./plugins/
 COPY db/migrations/ ./db/migrations/
 COPY scripts/ ./scripts/
