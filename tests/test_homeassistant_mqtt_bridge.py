@@ -65,6 +65,7 @@ def test_discovery_messages_use_home_assistant_mqtt_discovery_shape() -> None:
                     "name": "HealthSave",
                 },
                 "enabled_by_default": True,
+                "force_update": True,
                 "icon": "mdi:heart-pulse",
                 "name": "Heart Rate",
                 "object_id": "heart_rate",
