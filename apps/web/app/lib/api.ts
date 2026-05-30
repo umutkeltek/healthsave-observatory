@@ -27,9 +27,14 @@ export type MetricSeries = {
 };
 
 const API_BASE = process.env.API_BASE ?? "http://localhost:8000";
+// Server-side only — the key stays in the Next server (these are server
+// components), never shipped to the browser.
+const API_KEY = process.env.API_KEY ?? "";
 
 async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
+  const headers: Record<string, string> = {};
+  if (API_KEY) headers["X-API-Key"] = API_KEY;
+  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store", headers });
   if (!res.ok) throw new Error(`${path} -> ${res.status}`);
   return res.json() as Promise<T>;
 }
