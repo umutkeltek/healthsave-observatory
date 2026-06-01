@@ -1,4 +1,4 @@
-.PHONY: help regen-lock check-lock regen-v2-schemas check-v2-schemas regen-ts-client check-ts-client typecheck-ts test lint format compose-up compose-down
+.PHONY: help regen-lock check-lock regen-v2-schemas check-v2-schemas regen-ts-client check-ts-client typecheck-ts test lint format doctor compose-up compose-down
 
 help:
 	@echo "Targets:"
@@ -12,6 +12,7 @@ help:
 	@echo "  test               Run the full pytest suite"
 	@echo "  lint               ruff check + ruff format --check"
 	@echo "  format             ruff format (writes)"
+	@echo "  doctor             Run post-install stack health checks"
 	@echo "  compose-up         docker compose up -d"
 	@echo "  compose-down       docker compose down"
 
@@ -62,6 +63,9 @@ lint:
 format:
 	@python3 -m ruff format .
 	@python3 -m ruff check --fix .
+
+doctor:
+	@./setup.sh doctor
 
 compose-up:
 	@docker compose up -d
