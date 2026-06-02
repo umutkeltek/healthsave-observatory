@@ -2,6 +2,8 @@
 
 import { usePathname } from "next/navigation";
 
+import { ThemeToggle } from "./ThemeToggle";
+
 const TITLES: Record<string, { title: string; sub: string }> = {
   "/": { title: "Overview", sub: "Your data, interpreted — not just charted." },
   "/experiments": { title: "Experiments", sub: "Run, measure, and act on what to try next." },
@@ -32,6 +34,7 @@ export function Topbar({
           {provider} · {isLocal ? "local" : "cloud"}
         </span>
         <span className="pill mono">synced {synced}</span>
+        <ThemeToggle />
       </div>
     </header>
   );

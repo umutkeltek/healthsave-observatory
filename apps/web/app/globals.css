@@ -24,6 +24,8 @@
   --warn: #fbbf24;
   --down: #fb7185;
 
+  --hover: rgba(255, 255, 255, 0.03);
+
   --radius: 12px;
   --radius-sm: 8px;
 
@@ -131,7 +133,7 @@ a {
 
 .nav-item:hover {
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--hover);
 }
 
 .nav-item.active {
@@ -218,6 +220,7 @@ a {
 
 .topbar-status {
   display: flex;
+  align-items: center;
   gap: 8px;
   flex-shrink: 0;
 }
@@ -507,6 +510,16 @@ a {
   flex-direction: column;
   gap: 3px;
   min-width: 0;
+  flex: 1 1 auto;
+}
+
+.metric-spark {
+  width: 88px;
+  height: 26px;
+  flex: 0 0 auto;
+  color: var(--accent);
+  opacity: 0.7;
+  display: block;
 }
 
 .metric-name {
@@ -824,4 +837,153 @@ a {
   color: var(--up);
   font-size: 13px;
   font-weight: 600;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Polish layer — light theme, refinements, loading skeletons
+   ───────────────────────────────────────────────────────────────────── */
+
+/* Light theme: the token-based components re-skin automatically. */
+[data-theme="light"] {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --raise: #f3f5f8;
+  --line: #e4e8ef;
+  --line-soft: #eef1f5;
+
+  --ink: #161d29;
+  --muted: #586172;
+  --faint: #8a94a3;
+
+  --accent: #5b6cff;
+  --accent-weak: rgba(91, 108, 255, 0.1);
+  --accent-line: rgba(91, 108, 255, 0.28);
+
+  --up: #0f9d6b;
+  --warn: #b7791f;
+  --down: #e11d48;
+
+  --hover: rgba(16, 24, 40, 0.04);
+}
+
+[data-theme="light"] .status-dot {
+  box-shadow: 0 0 0 3px rgba(15, 157, 107, 0.14);
+}
+
+/* Theme toggle button (topbar) */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.theme-toggle:hover {
+  color: var(--ink);
+  border-color: var(--faint);
+}
+
+/* Accessibility: a visible focus ring on every interactive element. */
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+.nav-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Press feedback on the primary action. */
+.btn:active {
+  transform: translateY(1px);
+}
+
+/* Selection + smooth in-page scroll. */
+::selection {
+  background: var(--accent-weak);
+  color: var(--ink);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Quiet, on-brand scrollbars. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+  border: 3px solid var(--bg);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--faint);
+}
+
+/* Loading skeletons (App Router loading.tsx). */
+@keyframes sk-shimmer {
+  0% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.55;
+  }
+}
+
+.skeleton-card .sk {
+  background: var(--raise);
+  border-radius: 6px;
+  animation: sk-shimmer 1.3s ease-in-out infinite;
+}
+
+.sk-eyebrow {
+  width: 120px;
+  height: 11px;
+  margin-bottom: 18px;
+}
+
+.sk-line {
+  height: 14px;
+  margin-top: 12px;
+}
+
+.sk-line.lg {
+  width: 40%;
+  height: 30px;
+  margin-top: 0;
+}
+
+.sk-line.sm {
+  width: 55%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .skeleton-card .sk {
+    animation: none;
+  }
 }

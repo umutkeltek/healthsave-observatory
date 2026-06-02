@@ -91,6 +91,24 @@ export function loadGrid(): Promise<(MetricSeries | null)[]> {
   return Promise.all(GRID_METRICS.map((metric) => safeSeries(metric.id, "7d")));
 }
 
+// Recent values per readiness metric, for the inline row sparklines. Best-effort
+// — a metric with no series just renders without one.
+export async function loadReadinessSparklines(
+  readiness: Readiness | null,
+): Promise<Record<string, number[]>> {
+  if (!readiness) return {};
+  const entries = await Promise.all(
+    readiness.metrics.map(async (metric) => {
+      const series = await safeSeries(metric.metric_id, "30d");
+      const values = series
+        ? series.points.map((p) => p.value).filter((v): v is number => v !== null)
+        : [];
+      return [metric.metric_id, values] as const;
+    }),
+  );
+  return Object.fromEntries(entries);
+}
+
 // "2h ago" style relative label for the shell's sync status. Server-side only.
 export function agoLabel(iso: string | null | undefined): string {
   if (!iso) return "never";

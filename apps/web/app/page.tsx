@@ -8,6 +8,7 @@ import { WeeklyBriefCard } from "./components/WeeklyBriefCard";
 import {
   GRID_METRICS,
   loadGrid,
+  loadReadinessSparklines,
   safeCandidates,
   safeExperiments,
   safeFindings,
@@ -21,9 +22,9 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [readiness, latest, findings, candidates, experiments, privacy, sleep, gridSeries] =
+  const readiness = await safeReadiness();
+  const [latest, findings, candidates, experiments, privacy, sleep, gridSeries, sparklines] =
     await Promise.all([
-      safeReadiness(),
       safeLatest(),
       safeFindings(),
       safeCandidates(),
@@ -31,12 +32,13 @@ export default async function Home() {
       safePrivacy(),
       safeSeries("sleep.stage", "7d"),
       loadGrid(),
+      loadReadinessSparklines(readiness),
     ]);
 
   return (
     <>
       <section className="lead">
-        <ReadinessCard readiness={readiness} />
+        <ReadinessCard readiness={readiness} sparklines={sparklines} />
       </section>
 
       <div className="row-2">
