@@ -343,6 +343,12 @@ body {
   color: var(--muted);
 }
 
+.why {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .calc {
   margin-top: 8px;
 }

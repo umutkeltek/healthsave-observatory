@@ -51,6 +51,30 @@ function summarize(finding: Finding): string {
   }
 }
 
+// Why this finding earned a spot in the feed — the gate that surfaced it,
+// derived from the structured data (no LLM). Makes the cut transparent.
+function why(finding: Finding): string {
+  const d = finding.structured_data ?? {};
+  switch (finding.finding_type) {
+    case "anomaly":
+      return `${finding.severity ?? "flagged"} severity · deviated from your baseline`;
+    case "trend": {
+      const p = num(d.p_value, 3);
+      return p ? `statistically significant trend (p=${p})` : "a sustained multi-day direction";
+    }
+    case "correlation": {
+      const p = num(d.p_value, 3);
+      return p
+        ? `strong and significant enough to act on (p=${p})`
+        : "a strong cross-metric association";
+    }
+    case "summary":
+      return "period rollup vs your 30-day baseline";
+    default:
+      return "surfaced by the analysis engine";
+  }
+}
+
 function EvidenceRow({ finding }: { finding: Finding }) {
   const kind = finding.finding_type ?? "finding";
   const label = TYPE_LABELS[kind] ?? kind;
@@ -62,6 +86,7 @@ function EvidenceRow({ finding }: { finding: Finding }) {
         <span className="evidence-metric">{finding.metric ?? "—"}</span>
         <span className="evidence-sum">{summarize(finding)}</span>
       </div>
+      <div className="why">Why included: {why(finding)}</div>
       {entries.length > 0 && (
         <details className="calc">
           <summary>show calculation</summary>
