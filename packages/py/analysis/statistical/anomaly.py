@@ -36,11 +36,11 @@ background).
 from __future__ import annotations
 
 import logging
-import statistics
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from ..types import Anomaly, Sensitivity, Severity
+from .baselines import compute_baseline
 from .gates import MINIMUM_DATA_REQUIREMENTS
 
 log = logging.getLogger("healthsave.analysis")
@@ -183,13 +183,13 @@ class AnomalyDetector:
         if not self._has_sufficient_baseline(baseline_samples):
             return []
 
-        mean, stddev = self._mean_stddev(baseline_samples)
-        if stddev == 0:
+        baseline = compute_baseline(baseline_samples)
+        if baseline is None or baseline.stddev == 0:
             return []
 
         anomalies: list[Anomaly] = []
         for obs_time, value in observations:
-            z = (value - mean) / stddev
+            z = (value - baseline.mean) / baseline.stddev
             severity = _severity_for(z, threshold)
             if severity is None:
                 continue
@@ -200,7 +200,11 @@ class AnomalyDetector:
                     direction="up" if z > 0 else "down",
                     severity=severity,
                     detected_at=obs_time,
-                    context={"value": value, "baseline_mean": mean, "baseline_stddev": stddev},
+                    context={
+                        "value": value,
+                        "baseline_mean": baseline.mean,
+                        "baseline_stddev": baseline.stddev,
+                    },
                 )
             )
         return anomalies
@@ -276,14 +280,6 @@ class AnomalyDetector:
         minimum_days = int(requirements["min_days"])
         days_with_data = {sample_time.date() for sample_time, _ in samples}
         return len(samples) >= minimum_observations and len(days_with_data) >= minimum_days
-
-    @staticmethod
-    def _mean_stddev(samples: list[tuple[datetime, float]]) -> tuple[float, float]:
-        """Compute population mean + sample stddev of the value column."""
-        values = [value for _, value in samples]
-        mean = statistics.fmean(values)
-        stddev = statistics.stdev(values) if len(values) > 1 else 0.0
-        return mean, stddev
 
     @staticmethod
     def _in_sleep_window(when: datetime) -> bool:
