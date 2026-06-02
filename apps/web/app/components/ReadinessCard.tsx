@@ -35,7 +35,35 @@ function GateBadge({ label, verdict }: { label: string; verdict: MetricReadiness
   return <span className="badge waiting">{`${label} · ${more}`}</span>;
 }
 
-function MetricRow({ metric }: { metric: MetricReadiness }) {
+// Compact trend line for a readiness row — drawn from the metric's recent
+// series when available, so the table shows shape, not just counts.
+function MiniSparkline({ values }: { values: number[] }) {
+  if (values.length < 2) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const w = 88;
+  const h = 26;
+  const step = w / (values.length - 1);
+  const d = values
+    .map(
+      (v, i) =>
+        `${i === 0 ? "M" : "L"} ${(i * step).toFixed(1)} ${(h - ((v - min) / span) * h).toFixed(1)}`,
+    )
+    .join(" ");
+  return (
+    <svg
+      className="metric-spark"
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      aria-hidden
+    >
+      <path d={d} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function MetricRow({ metric, values }: { metric: MetricReadiness; values?: number[] }) {
   return (
     <li className="metric-row">
       <div className="metric-id">
@@ -44,6 +72,7 @@ function MetricRow({ metric }: { metric: MetricReadiness }) {
           {metric.observation_count.toLocaleString()} readings · {metric.days_with_data} days
         </span>
       </div>
+      {values && values.length >= 2 && <MiniSparkline values={values} />}
       <div className="badges">
         {Object.entries(GATE_LABELS).map(([key, label]) => {
           const verdict = metric.analyzable[key];
@@ -54,7 +83,13 @@ function MetricRow({ metric }: { metric: MetricReadiness }) {
   );
 }
 
-export function ReadinessCard({ readiness }: { readiness: Readiness | null }) {
+export function ReadinessCard({
+  readiness,
+  sparklines,
+}: {
+  readiness: Readiness | null;
+  sparklines?: Record<string, number[]>;
+}) {
   if (!readiness) {
     return (
       <article className="card readiness">
@@ -108,7 +143,11 @@ export function ReadinessCard({ readiness }: { readiness: Readiness | null }) {
 
       <ul className="metric-rows">
         {readiness.metrics.map((metric) => (
-          <MetricRow key={metric.metric_id} metric={metric} />
+          <MetricRow
+            key={metric.metric_id}
+            metric={metric}
+            values={sparklines?.[metric.metric_id]}
+          />
         ))}
       </ul>
 

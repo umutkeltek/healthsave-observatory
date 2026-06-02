@@ -1,20 +1,30 @@
+import type { Metadata } from "next";
+
 import { MetricCard } from "../components/MetricCard";
 import { ReadinessCard } from "../components/ReadinessCard";
 import { SleepCard } from "../components/SleepCard";
-import { GRID_METRICS, loadGrid, safeReadiness, safeSeries } from "../lib/load";
+import {
+  GRID_METRICS,
+  loadGrid,
+  loadReadinessSparklines,
+  safeReadiness,
+  safeSeries,
+} from "../lib/load";
 
+export const metadata: Metadata = { title: "Data · HealthSave" };
 export const dynamic = "force-dynamic";
 
 export default async function DataPage() {
-  const [readiness, sleep, gridSeries] = await Promise.all([
-    safeReadiness(),
+  const readiness = await safeReadiness();
+  const [sleep, gridSeries, sparklines] = await Promise.all([
     safeSeries("sleep.stage", "7d"),
     loadGrid(),
+    loadReadinessSparklines(readiness),
   ]);
   return (
     <>
       <section className="lead">
-        <ReadinessCard readiness={readiness} />
+        <ReadinessCard readiness={readiness} sparklines={sparklines} />
       </section>
       <div className="section-label">Metrics</div>
       <section className="grid">

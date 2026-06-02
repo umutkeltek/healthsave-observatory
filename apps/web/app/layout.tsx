@@ -24,7 +24,16 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const synced = agoLabel(readiness?.last_ingested_at ?? readiness?.last_observation_at ?? null);
 
   return (
-    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
+    <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
+      <head>
+        {/* Apply the saved theme before paint so there's no light/dark flash. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('theme');document.documentElement.dataset.theme=(t==='light'||t==='dark')?t:'dark';}catch(e){document.documentElement.dataset.theme='dark';}})();",
+          }}
+        />
+      </head>
       <body>
         <div className="app">
           <Sidebar provider={provider} isLocal={isLocal} synced={synced} />
