@@ -376,3 +376,61 @@ body {
   font-variant-numeric: tabular-nums;
   word-break: break-word;
 }
+
+/* ── What to Try Next (experiment candidates) ────────────────────── */
+
+.experiments {
+  color: var(--ink);
+}
+
+.cand-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+}
+
+.cand-item {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.cand-item:first-child {
+  border-top: none;
+}
+
+.muted-item {
+  opacity: 0.72;
+}
+
+.cand-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cand-hyp {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.cand-strength {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cand-protocol {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.cand-rationale {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}

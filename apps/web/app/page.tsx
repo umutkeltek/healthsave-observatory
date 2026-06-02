@@ -1,9 +1,12 @@
 import { EvidenceCard } from "./components/EvidenceCard";
+import { ExperimentsCard } from "./components/ExperimentsCard";
 import { MetricCard } from "./components/MetricCard";
 import { ReadinessCard } from "./components/ReadinessCard";
 import { SleepCard } from "./components/SleepCard";
 import { WeeklyBriefCard } from "./components/WeeklyBriefCard";
 import {
+  type Candidates,
+  fetchCandidates,
   fetchFindings,
   fetchLatest,
   fetchReadiness,
@@ -49,11 +52,20 @@ async function safeFindings(): Promise<Finding[] | null> {
   }
 }
 
+async function safeCandidates(): Promise<Candidates | null> {
+  try {
+    return await fetchCandidates();
+  } catch {
+    return null;
+  }
+}
+
 export default async function Home() {
-  const [readiness, latest, findings, heartRate, sleep] = await Promise.all([
+  const [readiness, latest, findings, candidates, heartRate, sleep] = await Promise.all([
     safeReadiness(),
     safeLatest(),
     safeFindings(),
+    safeCandidates(),
     safeSeries("vital.heart_rate", "7d"),
     safeSeries("sleep.stage", "7d"),
   ]);
@@ -75,6 +87,10 @@ export default async function Home() {
 
       <section className="lead">
         <EvidenceCard findings={findings} />
+      </section>
+
+      <section className="lead">
+        <ExperimentsCard candidates={candidates} />
       </section>
 
       <section className="grid">
