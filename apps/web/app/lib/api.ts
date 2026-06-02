@@ -155,3 +155,26 @@ export type Candidates = {
 export function fetchCandidates(): Promise<Candidates> {
   return getJson<Candidates>("/api/v2/experiments/candidates");
 }
+
+// Egress posture — "what leaves this host". Mirrors server/api/v2_privacy.py.
+
+export type EgressClass = {
+  payload_class: string;
+  allowed: boolean;
+  leaves_host: boolean;
+  reason: string;
+};
+
+export type Privacy = {
+  provider: string;
+  destination: string; // "local" | "cloud"
+  is_local: boolean;
+  allow_cloud_egress: boolean;
+  cloud_active: boolean;
+  raw_observations_leave_host: boolean;
+  egress: EgressClass[];
+};
+
+export function fetchPrivacy(): Promise<Privacy> {
+  return getJson<Privacy>("/api/v2/privacy");
+}
