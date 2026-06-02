@@ -580,3 +580,93 @@ async def fetch_metric_daily_series(
         },
     )
     return _fetchall(result)
+
+
+# ──────────────────────────────────────────────────────────────────
+#  Data-readiness coverage  (Insight Action Loop — card #1)
+# ──────────────────────────────────────────────────────────────────
+
+
+async def fetch_canonical_coverage(
+    session,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+    workspace_id: UUID = DEFAULT_WORKSPACE_ID,
+) -> list[dict[str, Any]]:
+    """Per-metric coverage over the whole canonical store, one row per metric_id.
+
+    The read behind the data-readiness card: for every metric that has any
+    active observation, how much is there (count + distinct days) and over what
+    span (first / last observation, last ingest). The analysis layer turns these
+    into "analyzable now / needs N more days" via the sufficiency gates. Owner /
+    workspace default to the v1 single-tenant sentinel.
+    """
+    result = await session.execute(
+        text(
+            """
+            SELECT metric_id,
+                   count(*) AS observation_count,
+                   count(DISTINCT date_trunc('day', interval_start)) AS days_with_data,
+                   min(interval_start) AS first_at,
+                   max(interval_start) AS last_at,
+                   max(created_at) AS last_ingested_at
+            FROM canonical_observations
+            WHERE owner_id = :owner_id
+              AND workspace_id = :workspace_id
+              AND status = 'active'
+            GROUP BY metric_id
+            ORDER BY metric_id ASC
+            """
+        ),
+        {"owner_id": str(owner_id), "workspace_id": str(workspace_id)},
+    )
+    return [
+        {
+            "metric_id": row.metric_id,
+            "observation_count": row.observation_count or 0,
+            "days_with_data": row.days_with_data or 0,
+            "first_observation_at": row.first_at,
+            "last_observation_at": row.last_at,
+            "last_ingested_at": row.last_ingested_at,
+        }
+        for row in _fetchall(result)
+    ]
+
+
+async def fetch_canonical_sources(
+    session,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+    workspace_id: UUID = DEFAULT_WORKSPACE_ID,
+) -> list[dict[str, Any]]:
+    """Source attribution over the canonical store, one row per source plugin.
+
+    Groups active observations by their provenance ``source_plugin_id`` (the
+    human-meaningful name like ``apple_healthkit``, not the opaque source UUID)
+    so the readiness card can show *where* the data came from and when each
+    source last delivered.
+    """
+    result = await session.execute(
+        text(
+            """
+            SELECT provenance->>'source_plugin_id' AS source_plugin_id,
+                   count(*) AS observation_count,
+                   max(created_at) AS last_ingested_at
+            FROM canonical_observations
+            WHERE owner_id = :owner_id
+              AND workspace_id = :workspace_id
+              AND status = 'active'
+            GROUP BY source_plugin_id
+            ORDER BY observation_count DESC
+            """
+        ),
+        {"owner_id": str(owner_id), "workspace_id": str(workspace_id)},
+    )
+    return [
+        {
+            "source_plugin_id": row.source_plugin_id,
+            "observation_count": row.observation_count or 0,
+            "last_ingested_at": row.last_ingested_at,
+        }
+        for row in _fetchall(result)
+    ]

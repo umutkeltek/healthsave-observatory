@@ -1641,6 +1641,48 @@
         "summary": "Metric Series"
       }
     },
+    "/api/v2/readiness": {
+      "get": {
+        "description": "Per-metric coverage + analyzability, plus source attribution and freshness.",
+        "operationId": "readiness_api_v2_readiness_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Readiness Api V2 Readiness Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Readiness"
+      }
+    },
     "/api/v2/setup/diagnostics": {
       "get": {
         "description": "Return a no-secret setup fingerprint for humans and clients.\n\nThis is intentionally unauthenticated: it exposes no health data and helps\nusers distinguish the Data Hub API from nearby Grafana/Homepage ports before\nthey troubleshoot keys or sync.",

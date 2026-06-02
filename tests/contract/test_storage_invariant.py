@@ -76,6 +76,11 @@ ALLOWLIST: dict[str, str] = {
         "stays — v2 insights read/trigger API. AsyncSession typing for Depends(); the "
         "SQL lives in storage.timescale.briefings (fetch_correlations), not the route."
     ),
+    "apps/api/server/api/v2_readiness.py": (
+        "stays — v2 data-readiness API. AsyncSession typing for Depends(); the SQL "
+        "lives in storage.timescale.analysis (fetch_canonical_coverage / "
+        "fetch_canonical_sources), the grading is the pure analysis.statistical.gates."
+    ),
     "apps/api/server/api/v2_agents.py": (
         "stays — Phase 7-E route. AsyncSession typing for Depends() + "
         "sqlalchemy.exc.IntegrityError catch to map FK violations on a "
