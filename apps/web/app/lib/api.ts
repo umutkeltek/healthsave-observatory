@@ -46,3 +46,42 @@ export function fetchMetrics(): Promise<MetricSummary[]> {
 export function fetchSeries(metricId: string, range = "7d"): Promise<MetricSeries> {
   return getJson<MetricSeries>(`/api/v2/metrics/${metricId}/series?range=${range}`);
 }
+
+// Data-readiness — Insight Action Loop card #1. Mirrors server/api/v2_readiness.py.
+
+export type GateVerdict = {
+  is_sufficient: boolean;
+  missing: string | null;
+  days_until_sufficient: number | null;
+};
+
+export type MetricReadiness = {
+  metric_id: string;
+  display_name: string;
+  category: string | null;
+  observation_count: number;
+  days_with_data: number;
+  first_observation_at: string | null;
+  last_observation_at: string | null;
+  // Keyed by analysis type (anomaly_detection, trend_analysis).
+  analyzable: Record<string, GateVerdict>;
+};
+
+export type SourceReadiness = {
+  source_plugin_id: string | null;
+  observation_count: number;
+  last_ingested_at: string | null;
+};
+
+export type Readiness = {
+  as_of: string;
+  last_observation_at: string | null;
+  last_ingested_at: string | null;
+  sources: SourceReadiness[];
+  metrics: MetricReadiness[];
+  summary: { metrics_with_data: number };
+};
+
+export function fetchReadiness(): Promise<Readiness> {
+  return getJson<Readiness>("/api/v2/readiness");
+}

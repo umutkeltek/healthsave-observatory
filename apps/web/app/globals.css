@@ -155,3 +155,121 @@ body {
   font-size: 12px;
   color: var(--muted);
 }
+
+/* ── Data-readiness card (Insight Action Loop card #1) ───────────── */
+
+.lead {
+  margin-top: 28px;
+}
+
+.readiness {
+  color: var(--ink);
+}
+
+.readiness-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.freshness {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.freshness.up {
+  color: var(--up);
+}
+
+.freshness.down {
+  color: var(--down);
+}
+
+.note {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  background: rgba(251, 113, 133, 0.08);
+  border: 1px solid rgba(251, 113, 133, 0.25);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.chip {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.metric-rows {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+}
+
+.metric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.metric-id {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.metric-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.metric-cov {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.badge {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 3px 9px;
+  white-space: nowrap;
+}
+
+.badge.ready {
+  color: var(--up);
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.badge.waiting {
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
