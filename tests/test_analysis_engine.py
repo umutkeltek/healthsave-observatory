@@ -586,6 +586,122 @@ async def test_fetch_metric_daily_series_maps_rows_to_day_value_and_skips_nulls(
 
 
 @pytest.mark.asyncio
+async def test_run_daily_briefing_folds_recent_trends_and_correlations_into_prompt():
+    """The briefing surfaces the latest persisted trend + correlation findings."""
+    # run_id=1200, hr_finding=1201; then two SELECTs (trends, correlations).
+    trend_rows = [
+        _Row(
+            id=1,
+            metric="heart_rate",
+            severity=None,
+            structured_data={
+                "metric": "heart_rate",
+                "direction": "down",
+                "slope": -0.5,
+                "p_value": 0.01,
+            },
+            created_at=datetime(2026, 5, 1),
+        )
+    ]
+    corr_rows = [
+        _Row(
+            id=2,
+            metric="vital.hrv_sdnn~vital.resting_heart_rate",
+            severity=None,
+            structured_data={
+                "metric_a": "vital.hrv_sdnn",
+                "metric_b": "vital.resting_heart_rate",
+                "coefficient": -0.8,
+                "method": "spearman",
+            },
+            created_at=datetime(2026, 5, 1),
+        )
+    ]
+    session = _FakeSession(run_queue=[1200, 1201], select_queue=[trend_rows, corr_rows])
+    summary = PeriodSummary(
+        period="daily",
+        metrics={"heart_rate": {"avg_bpm": 64.0, "sample_count": 24}},
+    )
+    llm_mock = AsyncMock()
+    llm_mock.generate_insight.return_value = InsightResult(
+        narrative="All steady. Not medical advice.",
+        tokens_in=5,
+        tokens_out=5,
+        model="ollama/llama3.1:8b",
+        insight_type="daily_briefing",
+    )
+
+    engine = _make_engine(session, summary, llm_mock)
+    await engine.run_daily_briefing()
+
+    prompt = llm_mock.generate_insight.await_args.args[0]
+    assert "heart_rate: down trend" in prompt
+    assert "vital.hrv_sdnn ~ vital.resting_heart_rate" in prompt
+
+
+@pytest.mark.asyncio
+async def test_run_weekly_summary_success_writes_run_finding_and_insight():
+    session = _FakeSession(run_queue=[700, 701])  # run_id=700, finding_id=701
+    summary = PeriodSummary(
+        period="weekly",
+        metrics={
+            "hrv": {
+                "avg_ms": 48.0,
+                "sample_count": 120,
+                "baseline_avg_ms": 52.0,
+                "delta_pct_vs_baseline": -7.7,
+            }
+        },
+    )
+    llm_mock = AsyncMock()
+    llm_mock.generate_insight.return_value = InsightResult(
+        narrative="Recovery dipped this week. Not medical advice.",
+        tokens_in=60,
+        tokens_out=120,
+        model="ollama/llama3.1:8b",
+        insight_type="weekly_summary",
+    )
+
+    config = AnalysisConfig.model_validate({"analysis": {"weekly_summary": {"enabled": True}}})
+    engine = AnalysisEngine(lambda: session, llm_mock, config)
+    engine.aggregator.summarize_period = AsyncMock(return_value=summary)
+
+    run_id = await engine.run_weekly_summary()
+
+    assert run_id == 700
+    run_inserts = session.all_insert_params_for("analysis_runs")
+    assert run_inserts[0]["run_type"] == "weekly_summary"
+    insight_inserts = session.all_insert_params_for("analysis_insights")
+    assert insight_inserts[0]["insight_type"] == "weekly_summary"
+    assert insight_inserts[0]["findings_used"] == [701]
+    # Week-over-baseline delta was folded into the prompt.
+    prompt = llm_mock.generate_insight.await_args.args[0]
+    assert "hrv: -7.7% vs 30-day baseline" in prompt
+    updates = session.all_update_statements()
+    assert any(
+        "status = 'completed'" in sql and params.get("tokens_in") == 60 for sql, params in updates
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_weekly_summary_skips_when_no_data():
+    session = _FakeSession(run_queue=[800])
+    llm_mock = AsyncMock()
+    config = AnalysisConfig.model_validate({"analysis": {"weekly_summary": {"enabled": True}}})
+    engine = AnalysisEngine(lambda: session, llm_mock, config)
+    engine.aggregator.summarize_period = AsyncMock(
+        return_value=PeriodSummary(period="weekly", metrics={})
+    )
+
+    run_id = await engine.run_weekly_summary()
+
+    assert run_id is None
+    llm_mock.generate_insight.assert_not_awaited()
+    updates = session.all_update_statements()
+    assert any("status = 'skipped'" in sql for sql, _ in updates)
+
+
+@pytest.mark.asyncio
 async def test_run_daily_briefing_marks_failed_when_llm_raises():
     session = _FakeSession(run_queue=[404, 505])
     summary = PeriodSummary(
