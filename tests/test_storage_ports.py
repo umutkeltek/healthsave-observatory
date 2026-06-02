@@ -27,6 +27,7 @@ from storage.ports import (
     IngestStorage,
     MeasurementRepository,
     RunRepository,
+    TimeSeriesQueryService,
 )
 from storage.timescale.briefings import (
     FindingRow,
@@ -34,6 +35,7 @@ from storage.timescale.briefings import (
     TimescaleBriefingRepository,
 )
 from storage.timescale.briefings import default_repository as briefing_default_repository
+from storage.timescale.observations import SeriesPoint
 from storage.timescale.runs import (
     PipelineRun,
     TimescaleRunRepository,
@@ -453,3 +455,83 @@ def test_analysis_module_exposes_expected_async_helpers() -> None:
         assert inspect.iscoroutinefunction(fn), (
             f"storage.timescale.analysis.{name} must be async — analysis classes await it"
         )
+
+
+# ──────────────────────────────────────────────────────────────
+#  TimeSeriesQueryService (Phase 5D) — the read port
+# ──────────────────────────────────────────────────────────────
+
+
+def test_canonical_repo_satisfies_timeseries_query_service() -> None:
+    """The real read path — ``CanonicalObservationRepository.query_series``
+    — satisfies the read port with no changes. This is the seam the
+    analysis engine and the v2 API depend on."""
+    from storage.timescale.observations import CanonicalObservationRepository
+
+    assert isinstance(CanonicalObservationRepository(), TimeSeriesQueryService)
+
+
+class _InMemoryTimeSeriesQueryService:
+    """Reference fake — proves the read port is genuinely swappable, not
+    TimescaleDB-coupled. Mirrors the SQL window semantics: half-open
+    ``[start, end)``, ascending, limit-capped."""
+
+    def __init__(self) -> None:
+        self.points: list[tuple[str, SeriesPoint]] = []  # (metric_id, point)
+
+    async def query_series(
+        self,
+        session: Any,
+        *,
+        owner_id: Any,
+        workspace_id: Any,
+        metric_id: str,
+        start: datetime,
+        end: datetime,
+        limit: int = 5000,
+    ) -> list[SeriesPoint]:
+        out = [p for mid, p in self.points if mid == metric_id and start <= p.t < end]
+        out.sort(key=lambda p: p.t)
+        return out[:limit]
+
+
+def test_in_memory_timeseries_query_service_satisfies_protocol() -> None:
+    """The whole point of the port — a fake reference impl conforms."""
+    assert isinstance(_InMemoryTimeSeriesQueryService(), TimeSeriesQueryService)
+
+
+@pytest.mark.asyncio
+async def test_in_memory_timeseries_query_filters_window_and_metric() -> None:
+    """Behavioral contract: half-open window ``[start, end)``, other metrics
+    excluded, results ascending by ``t``."""
+    repo: TimeSeriesQueryService = _InMemoryTimeSeriesQueryService()
+
+    def point(day: int, value: float) -> SeriesPoint:
+        t = datetime(2026, 5, day, tzinfo=UTC)
+        return SeriesPoint(
+            t=t,
+            interval_end=t,
+            value=value,
+            code=None,
+            unit="bpm",
+            source_id="watch",
+            confidence=None,
+        )
+
+    repo.points = [
+        ("vital.heart_rate", point(5, 62.0)),
+        ("vital.heart_rate", point(1, 60.0)),
+        ("vital.heart_rate", point(20, 64.0)),  # outside the window
+        ("sleep.stage", point(5, 1.0)),  # wrong metric
+    ]
+
+    got = await repo.query_series(
+        session=None,
+        owner_id=None,
+        workspace_id=None,
+        metric_id="vital.heart_rate",
+        start=datetime(2026, 5, 1, tzinfo=UTC),
+        end=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert [p.value for p in got] == [60.0, 62.0]
