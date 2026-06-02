@@ -44,6 +44,7 @@ from .api import (
     v2_insights,
     v2_meta,
     v2_metrics,
+    v2_readiness,
 )
 from .api.ingest import _load_apple_health_plugin
 from .db.session import async_session, engine
@@ -134,3 +135,4 @@ app.include_router(v2_agents.router)
 app.include_router(v2_insights.router)
 app.include_router(v2_meta.router)
 app.include_router(v2_metrics.router)
+app.include_router(v2_readiness.router)
