@@ -1785,6 +1785,48 @@
         "summary": "Metric Series"
       }
     },
+    "/api/v2/privacy": {
+      "get": {
+        "description": "The host's egress posture: provider, local-vs-cloud, and what may leave.\n\n``raw_observations_leave_host`` is always ``false`` \u2014 the privacy promise is\nan invariant, enforced unconditionally by the policy regardless of opt-in.",
+        "operationId": "privacy_api_v2_privacy_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Privacy Api V2 Privacy Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Privacy"
+      }
+    },
     "/api/v2/readiness": {
       "get": {
         "description": "Per-metric coverage + analyzability, plus source attribution and freshness.",
