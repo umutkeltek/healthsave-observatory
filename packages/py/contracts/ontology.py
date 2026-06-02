@@ -195,16 +195,24 @@ def _q(
     loinc: str | None = None,
     fusion: FusionPolicy | None = None,
     computed: bool = False,
+    wire_aliases: list[str] | None = None,
 ) -> MetricDefinition:
     """Build a uniform quantity MetricDefinition from a compact spec.
 
     ``wire`` is the HealthSave/HealthKit wire metric name; it becomes the
-    apple_healthkit source mapping so the normalizer can route it. ``computed``
-    marks a research-derived metric (no raw source mapping).
+    apple_healthkit source mapping so the normalizer can route it.
+    ``wire_aliases`` adds extra apple_healthkit wire names that resolve to the
+    same canonical metric (e.g. ``blood_oxygen`` alongside ``oxygen_saturation``).
+    ``computed`` marks a research-derived metric (no raw source mapping).
     """
     rng = NumericRange(min_value=lo, max_value=hi) if (lo is not None or hi is not None) else None
     mappings = (
-        [] if computed else [SourceVocabularyMapping(source="apple_healthkit", source_metric=wire)]
+        []
+        if computed
+        else [
+            SourceVocabularyMapping(source="apple_healthkit", source_metric=name)
+            for name in (wire, *(wire_aliases or ()))
+        ]
     )
     standards = [ExternalCoding(system="loinc", code=loinc)] if loinc else []
     return MetricDefinition(
@@ -309,6 +317,7 @@ _QUANTITY: list[MetricDefinition] = [
         lo=50,
         hi=100,
         loinc="59408-5",
+        wire_aliases=["blood_oxygen"],
     ),
     _q(
         "vital.respiratory_rate",
