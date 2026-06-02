@@ -299,6 +299,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/experiments/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Candidates
+         * @description Ranked correlation candidates annotated with experiment readiness.
+         *
+         *     Strongest correlations first — the top of the list is the best candidate to
+         *     promote into an experiment. Deduped to one row per metric pair (the strongest
+         *     seen), since the same pair recurs across correlation runs.
+         */
+        get: operations["list_candidates_api_v2_experiments_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/insights/correlations": {
         parameters: {
             query?: never;
@@ -1280,6 +1304,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DecideResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_candidates_api_v2_experiments_candidates_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
             /** @description Validation Error */

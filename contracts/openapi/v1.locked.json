@@ -1418,6 +1418,48 @@
         ]
       }
     },
+    "/api/v2/experiments/candidates": {
+      "get": {
+        "description": "Ranked correlation candidates annotated with experiment readiness.\n\nStrongest correlations first \u2014 the top of the list is the best candidate to\npromote into an experiment. Deduped to one row per metric pair (the strongest\nseen), since the same pair recurs across correlation runs.",
+        "operationId": "list_candidates_api_v2_experiments_candidates_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response List Candidates Api V2 Experiments Candidates Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Candidates"
+      }
+    },
     "/api/v2/insights/correlations": {
       "get": {
         "description": "Persisted cross-metric correlation findings, newest first.",
