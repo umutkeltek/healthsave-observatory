@@ -39,6 +39,33 @@ async function getJson<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// Server-side POST — used by the experiment write actions. The key never
+// reaches the browser (these run in server actions). On error we surface the
+// backend's `detail` (e.g. a 422 readiness rationale) so the UI can show it.
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (API_KEY) headers["X-API-Key"] = API_KEY;
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    cache: "no-store",
+    headers,
+    body: JSON.stringify(body ?? {}),
+  });
+  if (!res.ok) {
+    let detail = `${path} -> ${res.status}`;
+    try {
+      const payload = (await res.json()) as { detail?: unknown };
+      if (payload?.detail) {
+        detail = typeof payload.detail === "string" ? payload.detail : JSON.stringify(payload.detail);
+      }
+    } catch {
+      // non-JSON error body — keep the status line
+    }
+    throw new Error(detail);
+  }
+  return res.json() as Promise<T>;
+}
+
 export function fetchMetrics(): Promise<MetricSummary[]> {
   return getJson<MetricSummary[]>("/api/v2/metrics");
 }
@@ -177,4 +204,93 @@ export type Privacy = {
 
 export function fetchPrivacy(): Promise<Privacy> {
   return getJson<Privacy>("/api/v2/privacy");
+}
+
+// Experiments — committed n-of-1 ABAB runs. Mirrors the lifecycle routes in
+// server/api/v2_experiments.py (ExperimentView et al.).
+
+export type Phase = {
+  label: string; // "A" (baseline) | "B" (intervention)
+  index: number;
+  start: string;
+  end: string;
+};
+
+export type Progress = {
+  current_phase: string | null;
+  day_index: number;
+  total_days: number;
+  days_remaining: number;
+  is_complete: boolean;
+  pct: number;
+};
+
+export type ExperimentResult = {
+  kind: string; // "retrospective" | "controlled"
+  computed_at: string;
+  direction: string | null;
+  diff: number | null;
+  effect_size: number | null;
+  p_value: number | null;
+  inference: string | null;
+  summary: string | null;
+  n_a: number | null;
+  n_b: number | null;
+  mean_a: number | null;
+  mean_b: number | null;
+  n_blocks_used: number | null;
+  caveat: string | null;
+  adherence: Record<string, unknown> | null;
+};
+
+export type Experiment = {
+  id: string;
+  lever_metric_id: string;
+  outcome_metric_id: string;
+  lever: string; // human-readable tail
+  outcome: string;
+  design: string;
+  block_days: number;
+  start_date: string;
+  hypothesis: string | null;
+  status: string; // "collecting" | "completed" | "abandoned"
+  created_at: string;
+  calendar: Phase[];
+  progress: Progress;
+  results: Record<string, ExperimentResult>;
+};
+
+export type ExperimentList = {
+  experiments: Experiment[];
+  count: number;
+};
+
+export function fetchExperiments(status?: string): Promise<ExperimentList> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return getJson<ExperimentList>(`/api/v2/experiments${query}`);
+}
+
+export function fetchExperiment(id: string): Promise<Experiment> {
+  return getJson<Experiment>(`/api/v2/experiments/${id}`);
+}
+
+// Write helpers — server-side only, called from server actions (lib/actions.ts).
+
+export function createExperiment(body: {
+  lever_metric_id: string;
+  outcome_metric_id: string;
+  design?: string;
+  block_days?: number;
+  start_date?: string;
+  hypothesis?: string | null;
+}): Promise<Experiment> {
+  return postJson<Experiment>("/api/v2/experiments", body);
+}
+
+export function analyzeExperiment(id: string): Promise<Experiment> {
+  return postJson<Experiment>(`/api/v2/experiments/${id}/analyze`, {});
+}
+
+export function abandonExperiment(id: string): Promise<Experiment> {
+  return postJson<Experiment>(`/api/v2/experiments/${id}/abandon`, {});
 }

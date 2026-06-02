@@ -441,6 +441,119 @@ body {
   color: var(--muted);
 }
 
+/* ── Running experiments (n-of-1 engine) ─────────────────────────── */
+
+.exp-item {
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.exp-item:first-child {
+  border-top: none;
+}
+
+.exp-progress {
+  margin-top: 10px;
+}
+
+.exp-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.exp-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.exp-result {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.exp-result-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.exp-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.adherence {
+  font-weight: 600;
+}
+
+.adherence.strong {
+  color: var(--up);
+}
+
+.adherence.weak {
+  color: #fbbf24;
+}
+
+.adherence.none,
+.adherence.insufficient {
+  color: var(--down);
+}
+
+.exp-caveat p {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.exp-action {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.btn {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.btn-ghost {
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+}
+
+.exp-error {
+  font-size: 12px;
+  color: var(--down);
+}
+
 /* ── What Leaves This Host (privacy / egress posture) ────────────── */
 
 .privacy {

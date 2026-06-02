@@ -7,7 +7,9 @@ import { SleepCard } from "./components/SleepCard";
 import { WeeklyBriefCard } from "./components/WeeklyBriefCard";
 import {
   type Candidates,
+  type ExperimentList,
   fetchCandidates,
+  fetchExperiments,
   fetchFindings,
   fetchLatest,
   fetchPrivacy,
@@ -76,6 +78,14 @@ async function safeCandidates(): Promise<Candidates | null> {
   }
 }
 
+async function safeExperiments(): Promise<ExperimentList | null> {
+  try {
+    return await fetchExperiments();
+  } catch {
+    return null;
+  }
+}
+
 async function safePrivacy(): Promise<Privacy | null> {
   try {
     return await fetchPrivacy();
@@ -85,15 +95,17 @@ async function safePrivacy(): Promise<Privacy | null> {
 }
 
 export default async function Home() {
-  const [readiness, latest, findings, candidates, privacy, sleep, gridSeries] = await Promise.all([
-    safeReadiness(),
-    safeLatest(),
-    safeFindings(),
-    safeCandidates(),
-    safePrivacy(),
-    safeSeries("sleep.stage", "7d"),
-    Promise.all(GRID_METRICS.map((metric) => safeSeries(metric.id, "7d"))),
-  ]);
+  const [readiness, latest, findings, candidates, experiments, privacy, sleep, gridSeries] =
+    await Promise.all([
+      safeReadiness(),
+      safeLatest(),
+      safeFindings(),
+      safeCandidates(),
+      safeExperiments(),
+      safePrivacy(),
+      safeSeries("sleep.stage", "7d"),
+      Promise.all(GRID_METRICS.map((metric) => safeSeries(metric.id, "7d"))),
+    ]);
 
   return (
     <main className="shell">
@@ -115,7 +127,7 @@ export default async function Home() {
       </section>
 
       <section className="lead">
-        <ExperimentsCard candidates={candidates} />
+        <ExperimentsCard experiments={experiments} candidates={candidates} />
       </section>
 
       <section className="lead">
