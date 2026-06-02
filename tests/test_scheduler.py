@@ -70,3 +70,30 @@ def test_scheduler_registers_trend_analysis_when_explicitly_enabled(monkeypatch)
     assert instance.jobs[0]["id"] == "trend_analysis"
     assert instance.jobs[0]["func"] == engine.run_trend_analysis
     assert instance.jobs[0]["trigger"] == {"cron": "0 9 * * 1"}
+
+
+def test_scheduler_registers_correlation_analysis_when_explicitly_enabled(monkeypatch):
+    fake_scheduler = _install_fake_apscheduler(monkeypatch)
+    config = AnalysisConfig.model_validate(
+        {"analysis": {"correlation_analysis": {"enabled": True, "cron": "0 10 1 * *"}}}
+    )
+    engine = type("Engine", (), {"run_correlation_analysis": AsyncMock()})()
+
+    scheduler = AnalysisScheduler(engine, config)
+    scheduler.start()
+
+    instance = fake_scheduler.instances[0]
+    assert instance.started is True
+    assert len(instance.jobs) == 1
+    assert instance.jobs[0]["id"] == "correlation_analysis"
+    assert instance.jobs[0]["func"] == engine.run_correlation_analysis
+    assert instance.jobs[0]["trigger"] == {"cron": "0 10 1 * *"}
+
+
+def test_scheduler_does_not_start_when_all_jobs_disabled(monkeypatch):
+    fake_scheduler = _install_fake_apscheduler(monkeypatch)
+    scheduler = AnalysisScheduler(type("Engine", (), {})(), AnalysisConfig())
+    scheduler.start()
+    # All jobs default-disabled → scheduler never constructed/started.
+    assert fake_scheduler.instances == []
+    assert scheduler.scheduler is None
