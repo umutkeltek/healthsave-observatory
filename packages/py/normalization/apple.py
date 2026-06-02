@@ -39,6 +39,16 @@ def _apple_wire_index() -> dict[str, MetricDefinition]:
 _WIRE_INDEX = _apple_wire_index()
 
 
+def mapped_apple_wire_metrics() -> set[str]:
+    """Apple wire metric names the normalizer can map to a canonical metric.
+
+    Any metric the v1 ingest path accepts that is NOT in this set silently
+    writes zero canonical observations — the dual-write coverage gap that
+    ``server.ingestion.coverage`` surfaces (ADR-0001 divergence risk).
+    """
+    return set(_WIRE_INDEX)
+
+
 @dataclass
 class Rejection:
     """One sample the normalizer could not turn into an observation."""
