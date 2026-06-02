@@ -85,3 +85,40 @@ export type Readiness = {
 export function fetchReadiness(): Promise<Readiness> {
   return getJson<Readiness>("/api/v2/readiness");
 }
+
+// Insights — Weekly Brief (narratives) + Evidence (findings).
+// Mirrors server/api/v2_insights.py /latest + /findings.
+
+export type Narrative = {
+  insight_type: string;
+  narrative: string;
+  created_at: string | null;
+};
+
+export type InsightsLatest = {
+  daily_briefing: Narrative | null;
+  weekly_summary: Narrative | null;
+};
+
+export type Finding = {
+  id: number;
+  finding_type: string | null;
+  metric: string | null;
+  severity: string | null;
+  structured_data: Record<string, unknown>;
+  created_at: string | null;
+};
+
+export type FindingsList = {
+  findings: Finding[];
+  count: number;
+};
+
+export function fetchLatest(): Promise<InsightsLatest> {
+  return getJson<InsightsLatest>("/api/v2/insights/latest");
+}
+
+export function fetchFindings(type?: string): Promise<FindingsList> {
+  const query = type ? `?type=${encodeURIComponent(type)}` : "";
+  return getJson<FindingsList>(`/api/v2/insights/findings${query}`);
+}
