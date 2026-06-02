@@ -434,3 +434,20 @@ body {
   line-height: 1.5;
   color: var(--muted);
 }
+
+/* ── What Leaves This Host (privacy / egress posture) ────────────── */
+
+.privacy {
+  color: var(--ink);
+}
+
+.assurance {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: rgba(52, 211, 153, 0.08);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  border-radius: 10px;
+  color: var(--up);
+  font-size: 13px;
+  font-weight: 600;
+}

@@ -1,6 +1,7 @@
 import { EvidenceCard } from "./components/EvidenceCard";
 import { ExperimentsCard } from "./components/ExperimentsCard";
 import { MetricCard } from "./components/MetricCard";
+import { PrivacyCard } from "./components/PrivacyCard";
 import { ReadinessCard } from "./components/ReadinessCard";
 import { SleepCard } from "./components/SleepCard";
 import { WeeklyBriefCard } from "./components/WeeklyBriefCard";
@@ -9,11 +10,13 @@ import {
   fetchCandidates,
   fetchFindings,
   fetchLatest,
+  fetchPrivacy,
   fetchReadiness,
   fetchSeries,
   type Finding,
   type InsightsLatest,
   type MetricSeries,
+  type Privacy,
   type Readiness,
 } from "./lib/api";
 
@@ -60,12 +63,21 @@ async function safeCandidates(): Promise<Candidates | null> {
   }
 }
 
+async function safePrivacy(): Promise<Privacy | null> {
+  try {
+    return await fetchPrivacy();
+  } catch {
+    return null;
+  }
+}
+
 export default async function Home() {
-  const [readiness, latest, findings, candidates, heartRate, sleep] = await Promise.all([
+  const [readiness, latest, findings, candidates, privacy, heartRate, sleep] = await Promise.all([
     safeReadiness(),
     safeLatest(),
     safeFindings(),
     safeCandidates(),
+    safePrivacy(),
     safeSeries("vital.heart_rate", "7d"),
     safeSeries("sleep.stage", "7d"),
   ]);
@@ -91,6 +103,10 @@ export default async function Home() {
 
       <section className="lead">
         <ExperimentsCard candidates={candidates} />
+      </section>
+
+      <section className="lead">
+        <PrivacyCard privacy={privacy} />
       </section>
 
       <section className="grid">
