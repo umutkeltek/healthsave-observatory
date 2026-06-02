@@ -623,6 +623,18 @@
         "title": "TrendsListResponse",
         "type": "object"
       },
+      "TriggerBody": {
+        "description": "v2 trigger request \u2014 extensible by ``type`` (correlation_analysis today).",
+        "properties": {
+          "type": {
+            "default": "correlation_analysis",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "title": "TriggerBody",
+        "type": "object"
+      },
       "TriggerRequest": {
         "properties": {
           "type": {
@@ -1404,6 +1416,125 @@
         "tags": [
           "v2-agents"
         ]
+      }
+    },
+    "/api/v2/insights/correlations": {
+      "get": {
+        "description": "Persisted cross-metric correlation findings, newest first.",
+        "operationId": "list_correlations_api_v2_insights_correlations_get",
+        "parameters": [
+          {
+            "description": "Optional day window such as 30d or 90d",
+            "in": "query",
+            "name": "period",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional day window such as 30d or 90d",
+              "title": "Period"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response List Correlations Api V2 Insights Correlations Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Correlations"
+      }
+    },
+    "/api/v2/insights/trigger": {
+      "post": {
+        "description": "Run an analysis job on demand. Currently supports ``correlation_analysis``.",
+        "operationId": "trigger_api_v2_insights_trigger_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/TriggerBody"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Trigger Api V2 Insights Trigger Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Trigger"
       }
     },
     "/api/v2/meta": {

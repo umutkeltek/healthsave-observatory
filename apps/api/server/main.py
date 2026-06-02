@@ -41,6 +41,7 @@ from .api import (
     status,
     sync,
     v2_agents,
+    v2_insights,
     v2_meta,
     v2_metrics,
 )
@@ -130,5 +131,6 @@ app.include_router(status.router)
 app.include_router(sync.router)
 app.include_router(insights.router)
 app.include_router(v2_agents.router)
+app.include_router(v2_insights.router)
 app.include_router(v2_meta.router)
 app.include_router(v2_metrics.router)
