@@ -348,7 +348,7 @@ def adherence_from_lever(lever_by_day: dict[date, float], calendar: list[Phase])
     the manipulation, a flat/negative one says it likely didn't happen.
     """
     pc = analyze_abab(lever_by_day, calendar)
-    if pc.status != "ok" or pc.effect_size is None:
+    if pc.status != "ok" or pc.diff is None or pc.effect_size is None:
         return AdherenceCheck(
             status="insufficient",
             lever_diff=pc.diff,
@@ -357,19 +357,25 @@ def adherence_from_lever(lever_by_day: dict[date, float], calendar: list[Phase])
         )
 
     d = pc.effect_size
-    if d >= _ADHERENCE_STRONG_D:
+    # Cohen's d is undefined (reported as 0.0) when there's no within-phase
+    # spread — but a clean A/B gap with zero noise is *perfect* separation, not
+    # "no effect". Treat zero pooled variance as a maximal separation so a
+    # flawless manipulation isn't misread as non-adherence.
+    perfect = pc.pooled_sd == 0.0 and pc.direction != "flat"
+
+    if pc.direction == "increase" and (perfect or d >= _ADHERENCE_STRONG_D):
         status = "strong"
         note = (
             "The lever clearly separated between baseline and intervention blocks "
             "— the intervention was carried out."
         )
-    elif d >= _ADHERENCE_WEAK_D:
+    elif pc.direction == "increase" and d >= _ADHERENCE_WEAK_D:
         status = "weak"
         note = (
             "The lever separated only weakly between blocks — the intervention may "
             "have been inconsistent, so read the result with caution."
         )
-    elif d <= -_ADHERENCE_WEAK_D:
+    elif pc.direction == "decrease":
         status = "none"
         note = (
             "The lever moved the wrong way (lower during intervention blocks) — the "
