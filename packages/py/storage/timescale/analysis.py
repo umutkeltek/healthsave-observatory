@@ -29,9 +29,13 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
 from sqlalchemy import text
+
+if TYPE_CHECKING:
+    from uuid import UUID
 
 # ──────────────────────────────────────────────────────────────────
 #  Shared helpers
@@ -475,5 +479,52 @@ async def fetch_hrv_daily(session, start: datetime, end: datetime) -> list[Any]:
             """
         ),
         {"start": start, "end": end},
+    )
+    return _fetchall(result)
+
+
+async def fetch_metric_daily_series(
+    session,
+    metric_id: str,
+    start: datetime,
+    end: datetime,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+    workspace_id: UUID = DEFAULT_WORKSPACE_ID,
+) -> list[Any]:
+    """Daily mean of a canonical metric's numeric values over ``[start, end)``.
+
+    Generic over *any* ontology ``metric_id`` — reads the canonical
+    Observation store (the ADR-0001 truth), not a per-metric legacy table, so
+    the correlation engine isn't limited to the handful of metrics with
+    bespoke daily aggregates. Returns rows with ``.day`` (date) and ``.value``
+    (float daily mean), ascending; superseded rows are excluded. Owner /
+    workspace default to the v1 single-tenant sentinel.
+    """
+    result = await session.execute(
+        text(
+            """
+            SELECT date_trunc('day', interval_start)::date AS day,
+                   avg(numeric_value)::float AS value,
+                   count(*) AS sample_count
+            FROM canonical_observations
+            WHERE owner_id = :owner_id
+              AND workspace_id = :workspace_id
+              AND metric_id = :metric_id
+              AND interval_start >= :start
+              AND interval_start < :end
+              AND numeric_value IS NOT NULL
+              AND status = 'active'
+            GROUP BY day
+            ORDER BY day ASC
+            """
+        ),
+        {
+            "owner_id": str(owner_id),
+            "workspace_id": str(workspace_id),
+            "metric_id": metric_id,
+            "start": start,
+            "end": end,
+        },
     )
     return _fetchall(result)

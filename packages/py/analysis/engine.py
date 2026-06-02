@@ -22,12 +22,13 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import TypeVar
 
 from .llm.prompts.daily_briefing import DAILY_BRIEFING_PROMPT_TEMPLATE
 from .statistical.aggregator import DataAggregator
 from .statistical.anomaly import AnomalyDetector
+from .statistical.correlations import CorrelationAnalyzer
 from .statistical.trends import TrendAnalyzer
 from .types import Anomaly, Finding, Insight
 
@@ -78,6 +79,7 @@ class AnalysisEngine:
         self.aggregator = DataAggregator(session_factory)
         self.anomaly_detector = AnomalyDetector(session_factory, config)
         self.trend_analyzer = TrendAnalyzer(session_factory)
+        self.correlation_analyzer = CorrelationAnalyzer(self._fetch_metric_daily_series)
 
     async def run_daily_briefing(self) -> int | None:
         return await self._run_job_with_metrics("daily_briefing", self._run_daily_briefing_impl)
@@ -137,7 +139,7 @@ class AnalysisEngine:
                 period_summary=json.dumps(summary.metrics, indent=2, default=str),
                 anomalies=_format_anomalies_for_prompt(anomalies),
                 trends="(trend analysis runs separately; see /api/insights/trends)",
-                correlations="(correlation analysis deferred to Phase 2b)",
+                correlations="(correlation analysis runs separately as a Brain-1 job)",
                 days_of_data=_daily_data_days(summary.metrics),
                 minimum_required=1,
             )
@@ -249,11 +251,62 @@ class AnalysisEngine:
             return findings
 
     async def run_correlation_analysis(self) -> list[Finding]:
-        """Compute Spearman correlations for the configured metric pairs."""
-        raise NotImplementedError(
-            "Correlation analysis run deferred to Phase 2b - "
-            "current scope is daily briefing + anomaly check"
+        return await self._run_job_with_metrics(
+            "correlation_analysis", self._run_correlation_analysis_impl
         )
+
+    async def _run_correlation_analysis_impl(self) -> list[Finding]:
+        """Persist Spearman correlations for the configured metric pairs.
+
+        Brain-1-only (no LLM): each significant, non-trivial correlation
+        becomes a ``correlation`` finding, strongest-first — the order is the
+        candidate ranking for an eventual n-of-1 experiment. No correlations
+        (insufficient/misaligned data, or nothing meaningful) → skipped run.
+        """
+        async with (
+            self.session_factory() as session,
+            self._run_context(session, "correlation_analysis") as run_id,
+        ):
+            period_days = self.config.analysis.correlation_analysis.period_days
+            correlations = await self.correlation_analyzer.analyze(days=period_days)
+
+            if not correlations:
+                await _sql().mark_run_skipped(session, run_id)
+                await session.commit()
+                return []
+
+            findings: list[Finding] = []
+            for correlation in correlations:
+                finding = Finding(
+                    finding_type="correlation",
+                    metric=f"{correlation.metric_a}~{correlation.metric_b}",
+                    severity="info",
+                    structured_data=correlation.model_dump(mode="json"),
+                )
+                await self._insert_finding(session, run_id=run_id, finding=finding)
+                findings.append(finding)
+
+            await _sql().mark_run_completed(session, run_id)
+            await session.commit()
+            return findings
+
+    async def _fetch_metric_daily_series(self, metric_id: str, days: int) -> dict[date, float]:
+        """Daily-series fetcher injected into :class:`CorrelationAnalyzer`.
+
+        Reads the canonical store (via the storage zone) for ``metric_id`` over
+        the trailing ``days`` window and returns a ``{day: mean_value}`` map.
+        Opens its own session per metric, mirroring how the trend analyzer
+        self-manages reads.
+        """
+        end = datetime.now(tz=UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        start = end - timedelta(days=days)
+        async with self.session_factory() as session:
+            rows = await _sql().fetch_metric_daily_series(session, metric_id, start, end)
+        return {
+            row.day: float(row.value)
+            for row in rows
+            if getattr(row, "value", None) is not None and getattr(row, "day", None) is not None
+        }
 
     # ──────────────────────────────────────────────────────────────
     #  Internals

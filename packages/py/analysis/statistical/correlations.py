@@ -163,12 +163,21 @@ class CorrelationAnalyzer:
     empty series, fails the sufficiency gate, and is silently skipped.
     """
 
+    # Real ontology metric_ids (see contracts/ontology.py), chosen for
+    # physiological plausibility and because Apple Watch populates them:
+    #   * HRV ↑ ↔ resting HR ↓ — the classic autonomic recovery signature.
+    #   * resting HR ↔ respiratory rate — co-elevate under stress / illness.
+    #   * steps ↔ active energy — activity coupling (a sanity correlation).
+    #   * heart rate ↔ HRV — inverse autonomic tone.
+    #   * active energy ↔ resting HR — training load vs recovery (same-day proxy).
+    # Lagged pairs (yesterday's load → next-morning HRV/RHR) are deferred —
+    # they need lag-alignment, which lands with the n-of-1 experiment engine.
     CORRELATION_PAIRS: list[tuple[str, str]] = [
-        ("sleep_efficiency", "resting_hr"),
-        ("hrv", "sleep_deep_pct"),
-        ("alcohol_logged", "hrv_next_morning"),
-        ("steps", "sleep_quality"),
-        ("active_calories", "resting_hr_next"),
+        ("vital.hrv_sdnn", "vital.resting_heart_rate"),
+        ("vital.resting_heart_rate", "vital.respiratory_rate"),
+        ("activity.steps", "activity.active_energy"),
+        ("vital.heart_rate", "vital.hrv_sdnn"),
+        ("activity.active_energy", "vital.resting_heart_rate"),
     ]
 
     def __init__(
