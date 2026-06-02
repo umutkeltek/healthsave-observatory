@@ -46,6 +46,11 @@ class FindingRow:
     severity: str | None
     structured_data: dict[str, Any]
     created_at: datetime
+    # The kind of finding (anomaly / trend / correlation / summary / …). The
+    # per-type readers (fetch_anomalies/_trends/_correlations) leave this None —
+    # their type is implied by the method. The generic :meth:`fetch_findings`
+    # populates it so a mixed evidence feed can tell rows apart.
+    finding_type: str | None = None
 
 
 def _parse_structured_data(value: Any) -> dict[str, Any]:
@@ -250,6 +255,50 @@ class TimescaleBriefingRepository:
             for row in rows
         ]
 
+    async def fetch_findings(
+        self,
+        session: AsyncSession,
+        *,
+        finding_type: str | None = None,
+        limit: int = 200,
+    ) -> list[FindingRow]:
+        """Recent findings of any kind (or one ``finding_type``), newest first.
+
+        The generic read behind the v2 evidence feed — it generalizes
+        :meth:`fetch_anomalies` / :meth:`fetch_trends` / :meth:`fetch_correlations`
+        so the evidence card can show findings across types in one stream and,
+        unlike those, carries each row's ``finding_type`` so the client knows
+        how to render it. ``finding_type`` is treated as a pre-validated value
+        (the route rejects unknown kinds before calling).
+        """
+        where_clauses: list[str] = []
+        params: dict[str, Any] = {"limit": limit}
+        if finding_type is not None:
+            where_clauses.append("finding_type = :finding_type")
+            params["finding_type"] = finding_type
+
+        where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+        sql = text(
+            f"""
+            SELECT id, finding_type, metric, severity, structured_data, created_at
+              FROM analysis_findings{where_sql}
+             ORDER BY created_at DESC
+             LIMIT :limit
+            """
+        )
+        rows = (await session.execute(sql, params)).fetchall()
+        return [
+            FindingRow(
+                id=row.id,
+                metric=row.metric,
+                severity=getattr(row, "severity", None),
+                structured_data=_parse_structured_data(row.structured_data),
+                created_at=row.created_at,
+                finding_type=getattr(row, "finding_type", None),
+            )
+            for row in rows
+        ]
+
 
 # Default instance for v1.x callers that haven't migrated to injection.
 default_repository = TimescaleBriefingRepository()
@@ -297,3 +346,12 @@ async def fetch_correlations(
     return await default_repository.fetch_correlations(
         session, period_days=period_days, limit=limit
     )
+
+
+async def fetch_findings(
+    session: AsyncSession,
+    *,
+    finding_type: str | None = None,
+    limit: int = 200,
+) -> list[FindingRow]:
+    return await default_repository.fetch_findings(session, finding_type=finding_type, limit=limit)

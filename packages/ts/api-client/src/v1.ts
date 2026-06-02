@@ -319,6 +319,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/insights/findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Findings
+         * @description Recent structured findings (the evidence feed), newest first.
+         *
+         *     Each row carries its ``structured_data`` so the evidence card can show the
+         *     calculation behind a finding (effect size, window, p-value, …). Optional
+         *     ``?type=`` narrows to one kind.
+         */
+        get: operations["list_findings_api_v2_insights_findings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/insights/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Latest Narratives
+         * @description Most recent daily-briefing + weekly-summary narratives (the weekly-brief card).
+         */
+        get: operations["latest_narratives_api_v2_insights_latest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/insights/trigger": {
         parameters: {
             query?: never;
@@ -1255,6 +1299,71 @@ export interface operations {
                 /** @description Optional day window such as 30d or 90d */
                 period?: string | null;
             };
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_findings_api_v2_insights_findings_get: {
+        parameters: {
+            query?: {
+                /** @description Optional finding kind (anomaly / trend / correlation / summary). */
+                type?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    latest_narratives_api_v2_insights_latest_get: {
+        parameters: {
+            query?: never;
             header?: {
                 "x-api-key"?: string;
             };
