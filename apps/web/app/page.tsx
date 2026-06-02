@@ -23,6 +23,19 @@ import {
 // Always render fresh — this is a live dashboard, not a static page.
 export const dynamic = "force-dynamic";
 
+// Curated metrics shown as sparkline cards under the insight surface. Each is a
+// real ontology metric_id the v2 series endpoint serves; one with no data
+// renders its own "no data yet" state, so the list is safe to extend.
+const GRID_METRICS: { id: string; title: string }[] = [
+  { id: "vital.heart_rate", title: "Heart Rate" },
+  { id: "vital.resting_heart_rate", title: "Resting Heart Rate" },
+  { id: "vital.hrv_sdnn", title: "Heart Rate Variability" },
+  { id: "vital.respiratory_rate", title: "Respiratory Rate" },
+  { id: "activity.steps", title: "Steps" },
+  { id: "activity.active_energy", title: "Active Energy" },
+  { id: "body.weight", title: "Body Weight" },
+];
+
 async function safeSeries(id: string, range = "7d"): Promise<MetricSeries | null> {
   try {
     return await fetchSeries(id, range);
@@ -72,14 +85,14 @@ async function safePrivacy(): Promise<Privacy | null> {
 }
 
 export default async function Home() {
-  const [readiness, latest, findings, candidates, privacy, heartRate, sleep] = await Promise.all([
+  const [readiness, latest, findings, candidates, privacy, sleep, gridSeries] = await Promise.all([
     safeReadiness(),
     safeLatest(),
     safeFindings(),
     safeCandidates(),
     safePrivacy(),
-    safeSeries("vital.heart_rate", "7d"),
     safeSeries("sleep.stage", "7d"),
+    Promise.all(GRID_METRICS.map((metric) => safeSeries(metric.id, "7d"))),
   ]);
 
   return (
@@ -110,7 +123,9 @@ export default async function Home() {
       </section>
 
       <section className="grid">
-        <MetricCard series={heartRate} fallbackTitle="Heart Rate" />
+        {GRID_METRICS.map((metric, index) => (
+          <MetricCard key={metric.id} series={gridSeries[index]} fallbackTitle={metric.title} />
+        ))}
         <SleepCard series={sleep} />
       </section>
 
