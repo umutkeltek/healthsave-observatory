@@ -39,9 +39,9 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from ..types import Anomaly, Sensitivity, Severity
+from ..types import Anomaly, DataSummary, Sensitivity, Severity
 from .baselines import compute_baseline
-from .gates import MINIMUM_DATA_REQUIREMENTS
+from .gates import check_sufficiency
 
 log = logging.getLogger("healthsave.analysis")
 
@@ -275,11 +275,11 @@ class AnomalyDetector:
 
     def _has_sufficient_baseline(self, samples: list[tuple[datetime, float]]) -> bool:
         """Enforce the Phase 2 data-sufficiency gate on the baseline."""
-        requirements = MINIMUM_DATA_REQUIREMENTS["anomaly_detection"]
-        minimum_observations = int(requirements["min_observations"])
-        minimum_days = int(requirements["min_days"])
-        days_with_data = {sample_time.date() for sample_time, _ in samples}
-        return len(samples) >= minimum_observations and len(days_with_data) >= minimum_days
+        summary = DataSummary(
+            observation_count=len(samples),
+            days_with_data=len({sample_time.date() for sample_time, _ in samples}),
+        )
+        return check_sufficiency("anomaly_detection", summary).is_sufficient
 
     @staticmethod
     def _in_sleep_window(when: datetime) -> bool:
