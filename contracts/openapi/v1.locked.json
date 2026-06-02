@@ -103,6 +103,61 @@
         "title": "AnomalyResponse",
         "type": "object"
       },
+      "CreateExperimentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "block_days": {
+            "default": 7,
+            "maximum": 90.0,
+            "minimum": 1.0,
+            "title": "Block Days",
+            "type": "integer"
+          },
+          "design": {
+            "default": "ABAB",
+            "title": "Design",
+            "type": "string"
+          },
+          "hypothesis": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hypothesis"
+          },
+          "lever_metric_id": {
+            "title": "Lever Metric Id",
+            "type": "string"
+          },
+          "outcome_metric_id": {
+            "title": "Outcome Metric Id",
+            "type": "string"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          }
+        },
+        "required": [
+          "lever_metric_id",
+          "outcome_metric_id"
+        ],
+        "title": "CreateExperimentRequest",
+        "type": "object"
+      },
       "DailyBriefingResponse": {
         "properties": {
           "created_at": {
@@ -234,6 +289,122 @@
         "title": "DecideResponse",
         "type": "object"
       },
+      "ExperimentListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "experiments": {
+            "items": {
+              "$ref": "#/components/schemas/ExperimentView"
+            },
+            "title": "Experiments",
+            "type": "array"
+          }
+        },
+        "required": [
+          "experiments",
+          "count"
+        ],
+        "title": "ExperimentListResponse",
+        "type": "object"
+      },
+      "ExperimentView": {
+        "additionalProperties": false,
+        "properties": {
+          "block_days": {
+            "title": "Block Days",
+            "type": "integer"
+          },
+          "calendar": {
+            "items": {
+              "$ref": "#/components/schemas/PhaseView"
+            },
+            "title": "Calendar",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "design": {
+            "title": "Design",
+            "type": "string"
+          },
+          "hypothesis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hypothesis"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lever": {
+            "title": "Lever",
+            "type": "string"
+          },
+          "lever_metric_id": {
+            "title": "Lever Metric Id",
+            "type": "string"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "outcome_metric_id": {
+            "title": "Outcome Metric Id",
+            "type": "string"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/ProgressView"
+          },
+          "results": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ResultView"
+            },
+            "title": "Results",
+            "type": "object"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "lever_metric_id",
+          "outcome_metric_id",
+          "lever",
+          "outcome",
+          "design",
+          "block_days",
+          "start_date",
+          "hypothesis",
+          "status",
+          "created_at",
+          "calendar",
+          "progress",
+          "results"
+        ],
+        "title": "ExperimentView",
+        "type": "object"
+      },
       "FindingResponse": {
         "properties": {
           "created_at": {
@@ -353,6 +524,83 @@
         "title": "InsightsLatestResponse",
         "type": "object"
       },
+      "PhaseView": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "index",
+          "start",
+          "end"
+        ],
+        "title": "PhaseView",
+        "type": "object"
+      },
+      "ProgressView": {
+        "additionalProperties": false,
+        "properties": {
+          "current_phase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Phase"
+          },
+          "day_index": {
+            "title": "Day Index",
+            "type": "integer"
+          },
+          "days_remaining": {
+            "title": "Days Remaining",
+            "type": "integer"
+          },
+          "is_complete": {
+            "title": "Is Complete",
+            "type": "boolean"
+          },
+          "pct": {
+            "title": "Pct",
+            "type": "number"
+          },
+          "total_days": {
+            "title": "Total Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "current_phase",
+          "day_index",
+          "total_days",
+          "days_remaining",
+          "is_complete",
+          "pct"
+        ],
+        "title": "ProgressView",
+        "type": "object"
+      },
       "ProposalView": {
         "additionalProperties": false,
         "description": "One proposal as it appears on the wire.\n\nSingle-user-mode drops ``owner_id`` + ``workspace_id`` \u2014 they're\nsentinel UUIDs on every row and add noise. Phase 9+ multi-tenant\nwork re-surfaces them. ``decided`` is a convenience flag so\ndashboards can render decision status without joining client-side.",
@@ -444,6 +692,182 @@
           "count"
         ],
         "title": "ProposalsListResponse",
+        "type": "object"
+      },
+      "ResultView": {
+        "additionalProperties": false,
+        "properties": {
+          "adherence": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adherence"
+          },
+          "caveat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caveat"
+          },
+          "computed_at": {
+            "format": "date-time",
+            "title": "Computed At",
+            "type": "string"
+          },
+          "diff": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diff"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "effect_size": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effect Size"
+          },
+          "inference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inference"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "mean_a": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean A"
+          },
+          "mean_b": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean B"
+          },
+          "n_a": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N A"
+          },
+          "n_b": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N B"
+          },
+          "n_blocks_used": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Blocks Used"
+          },
+          "p_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Value"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          }
+        },
+        "required": [
+          "kind",
+          "computed_at",
+          "direction",
+          "diff",
+          "effect_size",
+          "p_value",
+          "inference",
+          "summary",
+          "n_a",
+          "n_b",
+          "mean_a",
+          "mean_b",
+          "n_blocks_used",
+          "caveat",
+          "adherence"
+        ],
+        "title": "ResultView",
         "type": "object"
       },
       "RunSummaryResponse": {
@@ -1418,6 +1842,112 @@
         ]
       }
     },
+    "/api/v2/experiments": {
+      "get": {
+        "description": "List experiments, newest first; optional ``?status=`` filter.",
+        "operationId": "list_experiments_api_v2_experiments_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExperimentListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Experiments"
+      },
+      "post": {
+        "description": "Create an experiment from a testable candidate.\n\nValidates the pair with the pure readiness classifier: the pair must be\n``testable`` *and* the supplied ``lever_metric_id`` must actually be the\ncontrollable lever (not the outcome). On success the experiment is created\nand an immediate retrospective (observational) preview is computed over\nexisting history \u2014 best-effort, so a thin-history install still creates the\nexperiment cleanly.",
+        "operationId": "create_experiment_api_v2_experiments_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExperimentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExperimentView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Experiment"
+      }
+    },
     "/api/v2/experiments/candidates": {
       "get": {
         "description": "Ranked correlation candidates annotated with experiment readiness.\n\nStrongest correlations first \u2014 the top of the list is the best candidate to\npromote into an experiment. Deduped to one row per metric pair (the strongest\nseen), since the same pair recurs across correlation runs.",
@@ -1458,6 +1988,159 @@
           }
         },
         "summary": "List Candidates"
+      }
+    },
+    "/api/v2/experiments/{experiment_id}": {
+      "get": {
+        "description": "One experiment: definition + phase calendar + progress + latest results.",
+        "operationId": "get_experiment_api_v2_experiments__experiment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExperimentView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Experiment"
+      }
+    },
+    "/api/v2/experiments/{experiment_id}/abandon": {
+      "post": {
+        "description": "Stop an experiment (status \u2192 abandoned).",
+        "operationId": "abandon_experiment_api_v2_experiments__experiment_id__abandon_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExperimentView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Abandon Experiment"
+      }
+    },
+    "/api/v2/experiments/{experiment_id}/analyze": {
+      "post": {
+        "description": "(Re)compute the controlled ABAB result now and return the refreshed view.\n\nCompletes the experiment automatically once its window has fully elapsed.",
+        "operationId": "analyze_experiment_api_v2_experiments__experiment_id__analyze_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExperimentView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Analyze Experiment"
       }
     },
     "/api/v2/insights/correlations": {
