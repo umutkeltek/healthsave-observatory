@@ -82,9 +82,10 @@ ALLOWLIST: dict[str, str] = {
         "fetch_canonical_sources), the grading is the pure analysis.statistical.gates."
     ),
     "apps/api/server/api/v2_experiments.py": (
-        "stays — v2 experiment-candidates API. AsyncSession typing for Depends(); the "
-        "SQL lives in storage.timescale.briefings (fetch_correlations), the readiness "
-        "classification is the pure analysis.statistical.experiment_readiness."
+        "stays — v2 experiment engine API (candidates + lifecycle). AsyncSession typing "
+        "for Depends(); the SQL lives in storage.timescale.{briefings,experiments}, the "
+        "stats are the pure analysis.statistical.experiment{_readiness,s}, and the "
+        "read→stats→write orchestration is analysis.experiments.ExperimentRunner."
     ),
     "apps/api/server/api/v2_agents.py": (
         "stays — Phase 7-E route. AsyncSession typing for Depends() + "

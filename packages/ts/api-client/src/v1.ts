@@ -299,6 +299,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/experiments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Experiments
+         * @description List experiments, newest first; optional ``?status=`` filter.
+         */
+        get: operations["list_experiments_api_v2_experiments_get"];
+        put?: never;
+        /**
+         * Create Experiment
+         * @description Create an experiment from a testable candidate.
+         *
+         *     Validates the pair with the pure readiness classifier: the pair must be
+         *     ``testable`` *and* the supplied ``lever_metric_id`` must actually be the
+         *     controllable lever (not the outcome). On success the experiment is created
+         *     and an immediate retrospective (observational) preview is computed over
+         *     existing history — best-effort, so a thin-history install still creates the
+         *     experiment cleanly.
+         */
+        post: operations["create_experiment_api_v2_experiments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/experiments/candidates": {
         parameters: {
             query?: never;
@@ -317,6 +348,68 @@ export interface paths {
         get: operations["list_candidates_api_v2_experiments_candidates_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/experiments/{experiment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Experiment
+         * @description One experiment: definition + phase calendar + progress + latest results.
+         */
+        get: operations["get_experiment_api_v2_experiments__experiment_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/experiments/{experiment_id}/abandon": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Abandon Experiment
+         * @description Stop an experiment (status → abandoned).
+         */
+        post: operations["abandon_experiment_api_v2_experiments__experiment_id__abandon_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/experiments/{experiment_id}/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyze Experiment
+         * @description (Re)compute the controlled ABAB result now and return the refreshed view.
+         *
+         *     Completes the experiment automatically once its window has fully elapsed.
+         */
+        post: operations["analyze_experiment_api_v2_experiments__experiment_id__analyze_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -696,6 +789,27 @@ export interface components {
             /** Severity */
             severity?: string | null;
         };
+        /** CreateExperimentRequest */
+        CreateExperimentRequest: {
+            /**
+             * Block Days
+             * @default 7
+             */
+            block_days: number;
+            /**
+             * Design
+             * @default ABAB
+             */
+            design: string;
+            /** Hypothesis */
+            hypothesis?: string | null;
+            /** Lever Metric Id */
+            lever_metric_id: string;
+            /** Outcome Metric Id */
+            outcome_metric_id: string;
+            /** Start Date */
+            start_date?: string | null;
+        };
         /** DailyBriefingResponse */
         DailyBriefingResponse: {
             /** Created At */
@@ -749,6 +863,54 @@ export interface components {
              */
             proposal_id: string;
         };
+        /** ExperimentListResponse */
+        ExperimentListResponse: {
+            /** Count */
+            count: number;
+            /** Experiments */
+            experiments: components["schemas"]["ExperimentView"][];
+        };
+        /** ExperimentView */
+        ExperimentView: {
+            /** Block Days */
+            block_days: number;
+            /** Calendar */
+            calendar: components["schemas"]["PhaseView"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Design */
+            design: string;
+            /** Hypothesis */
+            hypothesis: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Lever */
+            lever: string;
+            /** Lever Metric Id */
+            lever_metric_id: string;
+            /** Outcome */
+            outcome: string;
+            /** Outcome Metric Id */
+            outcome_metric_id: string;
+            progress: components["schemas"]["ProgressView"];
+            /** Results */
+            results: {
+                [key: string]: components["schemas"]["ResultView"];
+            };
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** Status */
+            status: string;
+        };
         /** FindingResponse */
         FindingResponse: {
             /** Created At */
@@ -775,6 +937,38 @@ export interface components {
             /** Recent Findings */
             recent_findings?: components["schemas"]["FindingResponse"][];
             weekly_summary?: components["schemas"]["WeeklySummaryResponse"] | null;
+        };
+        /** PhaseView */
+        PhaseView: {
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Index */
+            index: number;
+            /** Label */
+            label: string;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+        };
+        /** ProgressView */
+        ProgressView: {
+            /** Current Phase */
+            current_phase: string | null;
+            /** Day Index */
+            day_index: number;
+            /** Days Remaining */
+            days_remaining: number;
+            /** Is Complete */
+            is_complete: boolean;
+            /** Pct */
+            pct: number;
+            /** Total Days */
+            total_days: number;
         };
         /**
          * ProposalView
@@ -823,6 +1017,42 @@ export interface components {
             proposals: components["schemas"]["ProposalView"][];
             /** Undecided Only */
             undecided_only: boolean;
+        };
+        /** ResultView */
+        ResultView: {
+            /** Adherence */
+            adherence: Record<string, never> | null;
+            /** Caveat */
+            caveat: string | null;
+            /**
+             * Computed At
+             * Format: date-time
+             */
+            computed_at: string;
+            /** Diff */
+            diff: number | null;
+            /** Direction */
+            direction: string | null;
+            /** Effect Size */
+            effect_size: number | null;
+            /** Inference */
+            inference: string | null;
+            /** Kind */
+            kind: string;
+            /** Mean A */
+            mean_a: number | null;
+            /** Mean B */
+            mean_b: number | null;
+            /** N A */
+            n_a: number | null;
+            /** N B */
+            n_b: number | null;
+            /** N Blocks Used */
+            n_blocks_used: number | null;
+            /** P Value */
+            p_value: number | null;
+            /** Summary */
+            summary: string | null;
         };
         /**
          * RunSummaryResponse
@@ -1340,6 +1570,74 @@ export interface operations {
             };
         };
     };
+    list_experiments_api_v2_experiments_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_experiment_api_v2_experiments_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateExperimentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_candidates_api_v2_experiments_candidates_get: {
         parameters: {
             query?: never;
@@ -1358,6 +1656,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_experiment_api_v2_experiments__experiment_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                experiment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    abandon_experiment_api_v2_experiments__experiment_id__abandon_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                experiment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyze_experiment_api_v2_experiments__experiment_id__analyze_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                experiment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentView"];
                 };
             };
             /** @description Validation Error */
