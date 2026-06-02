@@ -122,3 +122,36 @@ export function fetchFindings(type?: string): Promise<FindingsList> {
   const query = type ? `?type=${encodeURIComponent(type)}` : "";
   return getJson<FindingsList>(`/api/v2/insights/findings${query}`);
 }
+
+// Experiment candidates — "what to try next". Mirrors
+// server/api/v2_experiments.py /candidates.
+
+export type ExperimentReadiness = {
+  verdict: string; // "testable" | "not_controllable"
+  lever: string | null;
+  outcome: string | null;
+  suggested_protocol: string | null;
+  required_days: number | null;
+  rationale: string;
+};
+
+export type Candidate = {
+  metric_a: string;
+  metric_b: string;
+  coefficient: number | null;
+  method: string | null;
+  period_days: number | null;
+  p_value: number | null;
+  created_at: string | null;
+  readiness: ExperimentReadiness;
+};
+
+export type Candidates = {
+  candidates: Candidate[];
+  count: number;
+  testable_count: number;
+};
+
+export function fetchCandidates(): Promise<Candidates> {
+  return getJson<Candidates>("/api/v2/experiments/candidates");
+}
