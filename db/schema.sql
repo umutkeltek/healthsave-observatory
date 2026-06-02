@@ -537,3 +537,44 @@ CREATE TRIGGER agent_runs_updated_at
     BEFORE UPDATE ON agent_runs
     FOR EACH ROW
     EXECUTE FUNCTION agent_runs_set_updated_at();
+
+-- ─── n-of-1 experiment engine (migration 013) ──────────────────────
+-- Committed ABAB experiments + the analysis the runtime computes against
+-- them. owner_id/workspace_id default to the single-user sentinel.
+CREATE TABLE IF NOT EXISTS experiments (
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner_id           UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    workspace_id       UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    lever_metric_id    TEXT NOT NULL,
+    outcome_metric_id  TEXT NOT NULL,
+    design             TEXT NOT NULL DEFAULT 'ABAB',
+    block_days         INTEGER NOT NULL DEFAULT 7 CHECK (block_days BETWEEN 1 AND 90),
+    start_date         DATE NOT NULL,
+    hypothesis         TEXT,
+    status             TEXT NOT NULL DEFAULT 'collecting'
+                       CHECK (status IN ('collecting', 'completed', 'abandoned')),
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS experiment_results (
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    experiment_id      UUID NOT NULL REFERENCES experiments(id) ON DELETE CASCADE,
+    owner_id           UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    workspace_id       UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    kind               TEXT NOT NULL DEFAULT 'controlled'
+                       CHECK (kind IN ('retrospective', 'controlled')),
+    computed_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    direction          TEXT,
+    diff               DOUBLE PRECISION,
+    effect_size        DOUBLE PRECISION,
+    p_value            DOUBLE PRECISION,
+    inference          TEXT,
+    summary            TEXT,
+    structured_data    JSONB NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_experiments_owner_status
+    ON experiments (owner_id, workspace_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_experiment_results_experiment
+    ON experiment_results (experiment_id, computed_at DESC);

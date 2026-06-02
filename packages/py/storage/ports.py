@@ -18,10 +18,10 @@ Defined ports:
   time-series, satisfied by
   ``storage.timescale.observations.CanonicalObservationRepository``. The
   seam the analysis engine, the v2 read API, and the n-of-1 runner share.
-
-Still to come:
-- ``ExperimentRepository`` (n-of-1 runner, Phase 9+) — builds on the
-  read port above.
+- :class:`ExperimentRepository` (n-of-1 engine) — CRUD for committed ABAB
+  experiments + the analysis results the runtime computes against them,
+  reading time-series through the port above. Impl:
+  ``storage.timescale.experiments.TimescaleExperimentRepository``.
 
 Discipline:
 - Methods are async.
@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-    from datetime import datetime
+    from datetime import date, datetime
     from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,6 +57,7 @@ if TYPE_CHECKING:
         TriggerKind,
     )
     from .timescale.briefings import FindingRow, NarrativeRow
+    from .timescale.experiments import ExperimentResultRow, ExperimentRow
     from .timescale.observations import SeriesPoint
     from .timescale.runs import PipelineRun, TriggeredBy
 
@@ -355,3 +356,84 @@ class AgentRepository(Protocol):
         limit: int = 50,
         undecided_only: bool = False,
     ) -> list[ProposalRow]: ...
+
+
+@runtime_checkable
+class ExperimentRepository(Protocol):
+    """CRUD for the n-of-1 experiment engine.
+
+    Persists committed ABAB experiment definitions (lever, outcome, design,
+    schedule, status) and the analysis results the runtime computes against
+    them. Reads the underlying time-series through
+    :class:`TimeSeriesQueryService`; the pure statistics live in
+    ``analysis.statistical.experiments`` and the orchestration in
+    ``analysis.experiments`` — this port only reads and writes rows.
+
+    Impl: :class:`storage.timescale.experiments.TimescaleExperimentRepository`.
+    Returns frozen ``ExperimentRow`` / ``ExperimentResultRow`` dataclasses, never
+    ORM rows. Stateless — the caller owns the session/transaction and commits.
+    """
+
+    async def create_experiment(
+        self,
+        session: AsyncSession,
+        *,
+        lever_metric_id: str,
+        outcome_metric_id: str,
+        design: str,
+        block_days: int,
+        start_date: date,
+        hypothesis: str | None = None,
+        owner_id: UUID = ...,
+        workspace_id: UUID = ...,
+    ) -> ExperimentRow: ...
+
+    async def get_experiment(
+        self,
+        session: AsyncSession,
+        *,
+        experiment_id: UUID,
+        owner_id: UUID = ...,
+    ) -> ExperimentRow | None: ...
+
+    async def list_experiments(
+        self,
+        session: AsyncSession,
+        *,
+        status: str | None = None,
+        owner_id: UUID = ...,
+        limit: int = 100,
+    ) -> list[ExperimentRow]: ...
+
+    async def set_status(
+        self,
+        session: AsyncSession,
+        *,
+        experiment_id: UUID,
+        status: str,
+        owner_id: UUID = ...,
+    ) -> ExperimentRow | None: ...
+
+    async def insert_result(
+        self,
+        session: AsyncSession,
+        *,
+        experiment_id: UUID,
+        kind: str,
+        direction: str | None,
+        diff: float | None,
+        effect_size: float | None,
+        p_value: float | None,
+        inference: str | None,
+        summary: str | None,
+        structured_data: dict[str, Any],
+        owner_id: UUID = ...,
+        workspace_id: UUID = ...,
+    ) -> ExperimentResultRow: ...
+
+    async def latest_results_by_kind(
+        self,
+        session: AsyncSession,
+        *,
+        experiment_id: UUID,
+    ) -> dict[str, ExperimentResultRow]: ...
