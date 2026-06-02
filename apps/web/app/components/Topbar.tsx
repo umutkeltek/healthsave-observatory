@@ -16,15 +16,22 @@ export function Topbar({
   provider,
   isLocal,
   synced,
+  onMenu,
 }: {
   provider: string;
   isLocal: boolean;
   synced: string;
+  onMenu?: () => void;
 }) {
   const pathname = usePathname();
   const { title, sub } = TITLES[pathname] ?? TITLES["/"];
   return (
     <header className="topbar">
+      <button type="button" className="menu-btn" onClick={onMenu} aria-label="Open navigation">
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
+          <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" />
+        </svg>
+      </button>
       <div className="topbar-title">
         <h1>{title}</h1>
         <p>{sub}</p>
