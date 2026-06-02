@@ -483,6 +483,58 @@ async def fetch_hrv_daily(session, start: datetime, end: datetime) -> list[Any]:
     return _fetchall(result)
 
 
+async def summarize_metric_window(
+    session,
+    metric_id: str,
+    start: datetime,
+    end: datetime,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+    workspace_id: UUID = DEFAULT_WORKSPACE_ID,
+) -> dict[str, Any]:
+    """avg / min / max / count of a canonical metric's numeric values over ``[start, end)``.
+
+    The canonical-store analogue of the per-table ``hr_summary`` / ``hrv_summary``
+    helpers, generic over any ontology ``metric_id`` — lets the period aggregator
+    summarize the whole dual-written metric set, not just HR/HRV. Owner / workspace
+    default to the v1 single-tenant sentinel; non-numeric metrics return ``count=0``.
+    """
+    result = await session.execute(
+        text(
+            """
+            SELECT avg(numeric_value)::float AS avg_v,
+                   min(numeric_value)::float AS min_v,
+                   max(numeric_value)::float AS max_v,
+                   count(numeric_value) AS count_v
+            FROM canonical_observations
+            WHERE owner_id = :owner_id
+              AND workspace_id = :workspace_id
+              AND metric_id = :metric_id
+              AND interval_start >= :start
+              AND interval_start < :end
+              AND numeric_value IS NOT NULL
+              AND status = 'active'
+            """
+        ),
+        {
+            "owner_id": str(owner_id),
+            "workspace_id": str(workspace_id),
+            "metric_id": metric_id,
+            "start": start,
+            "end": end,
+        },
+    )
+    row = result.fetchone()
+    if row is None:
+        return {"avg": None, "min": None, "max": None, "count": 0}
+    return {
+        "avg": row.avg_v,
+        "min": row.min_v,
+        "max": row.max_v,
+        "count": row.count_v or 0,
+    }
+
+
 async def fetch_metric_daily_series(
     session,
     metric_id: str,

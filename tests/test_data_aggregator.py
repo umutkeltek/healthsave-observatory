@@ -1,9 +1,9 @@
 """Unit tests for :class:`analysis.statistical.aggregator.DataAggregator`.
 
-Extends the Phase 1 ``FakeSession`` discipline from
-``test_api_contract.py``: no live DB, every SQL call short-circuited by
-canned fakes so the aggregator's window math + delta calculation can be
-exercised deterministically.
+FakeSession discipline — no live DB. The aggregator reads the canonical store
+via ``summarize_metric_window`` (one window query per metric, plus a baseline
+query when the window has data), so each test queues ``_Row`` results in that
+order and asserts the generic per-metric summary shape + delta math.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from analysis.statistical.aggregator import DataAggregator  # noqa: E402
+from analysis.statistical.aggregator import _DEFAULT_SUMMARY_METRICS, DataAggregator  # noqa: E402
 
 
 class _Row:
@@ -26,6 +26,10 @@ class _Row:
         self.min_v = min_v
         self.max_v = max_v
         self.count_v = count_v
+
+
+def _empty() -> _Row:
+    return _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
 
 
 class _Result:
@@ -52,7 +56,7 @@ class _FakeSession:
     async def execute(self, statement, params=None):
         sql = " ".join(str(statement).split())
         self.calls.append((sql, params or {}))
-        row = self._queue.pop(0) if self._queue else None
+        row = self._queue.pop(0) if self._queue else _empty()
         return _Result(row)
 
 
@@ -68,115 +72,88 @@ def _session_factory(rows):
 
 @pytest.mark.asyncio
 async def test_summarize_period_computes_delta_vs_baseline():
-    yesterday = _Row(avg_v=65.0, min_v=55, max_v=120, count_v=24)
+    # One metric: window row then baseline row.
+    window = _Row(avg_v=65.0, min_v=55, max_v=120, count_v=24)
     baseline = _Row(avg_v=62.0, min_v=50, max_v=140, count_v=720)
-    factory = _session_factory([yesterday, baseline])
+    factory = _session_factory([window, baseline])
 
-    summary = await DataAggregator(factory).summarize_period("daily", 1)
+    summary = await DataAggregator(factory).summarize_period(
+        "daily", 1, metrics=["vital.heart_rate"]
+    )
 
-    hr = summary.metrics["heart_rate"]
-    assert hr["avg_bpm"] == 65.0
-    assert hr["min_bpm"] == 55
-    assert hr["max_bpm"] == 120
+    hr = summary.metrics["vital.heart_rate"]
+    assert hr["avg"] == 65.0
+    assert hr["min"] == 55
+    assert hr["max"] == 120
     assert hr["sample_count"] == 24
-    assert hr["baseline_avg_bpm"] == 62.0
+    assert hr["baseline_avg"] == 62.0
     assert hr["delta_pct_vs_baseline"] == pytest.approx(4.8387, rel=1e-3)
     assert summary.period == "daily"
 
+    # Reads the canonical store, scoped by metric_id.
+    sql, params = factory.session.calls[0]
+    assert "FROM canonical_observations" in sql
+    assert params["metric_id"] == "vital.heart_rate"
+
 
 @pytest.mark.asyncio
-async def test_summarize_period_returns_empty_when_yesterday_has_no_data():
-    yesterday = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
-    raw_yesterday = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
-    factory = _session_factory([yesterday, raw_yesterday])
+async def test_summarize_period_omits_metrics_with_no_window_data():
+    # HR empty (1 query, no baseline) → skipped; steps has data (window+baseline).
+    factory = _session_factory(
+        [
+            _empty(),  # vital.heart_rate window — no data
+            _Row(avg_v=8200.0, min_v=0, max_v=900, count_v=14),  # activity.steps window
+            _Row(avg_v=7000.0, min_v=0, max_v=1200, count_v=400),  # activity.steps baseline
+        ]
+    )
 
-    summary = await DataAggregator(factory).summarize_period("daily", 1)
+    summary = await DataAggregator(factory).summarize_period(
+        "daily", 1, metrics=["vital.heart_rate", "activity.steps"]
+    )
 
-    assert summary.metrics == {}
-    assert summary.period == "daily"
+    assert "vital.heart_rate" not in summary.metrics
+    steps = summary.metrics["activity.steps"]
+    assert steps["sample_count"] == 14
+    assert steps["delta_pct_vs_baseline"] == pytest.approx(17.142, rel=1e-3)
 
 
 @pytest.mark.asyncio
 async def test_summarize_period_handles_missing_baseline():
-    """Yesterday has data but baseline window is empty (e.g. fresh install)."""
-    yesterday = _Row(avg_v=70.0, min_v=58, max_v=110, count_v=24)
-    baseline = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
-    raw_baseline = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
-    factory = _session_factory([yesterday, baseline, raw_baseline])
+    window = _Row(avg_v=70.0, min_v=58, max_v=110, count_v=24)
+    baseline = _empty()  # fresh install — no baseline window
+    factory = _session_factory([window, baseline])
 
-    summary = await DataAggregator(factory).summarize_period("daily", 1)
+    summary = await DataAggregator(factory).summarize_period(
+        "daily", 1, metrics=["vital.heart_rate"]
+    )
 
-    hr = summary.metrics["heart_rate"]
-    assert hr["avg_bpm"] == 70.0
-    assert hr["baseline_avg_bpm"] is None
+    hr = summary.metrics["vital.heart_rate"]
+    assert hr["avg"] == 70.0
+    assert hr["baseline_avg"] is None
     assert hr["delta_pct_vs_baseline"] is None
 
 
 @pytest.mark.asyncio
-async def test_summarize_period_falls_back_to_raw_heart_rate_when_hourly_view_is_empty():
-    empty_hourly = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
-    raw_yesterday = _Row(avg_v=72.0, min_v=60, max_v=128, count_v=1440)
-    baseline = _Row(avg_v=68.0, min_v=50, max_v=140, count_v=720)
-    factory = _session_factory([empty_hourly, raw_yesterday, baseline])
+async def test_summarize_period_returns_empty_when_no_metric_has_data():
+    factory = _session_factory([_empty(), _empty()])
 
-    summary = await DataAggregator(factory).summarize_period("daily", 1)
-
-    hr = summary.metrics["heart_rate"]
-    assert hr["avg_bpm"] == 72.0
-    assert hr["sample_count"] == 1440
-    assert hr["baseline_avg_bpm"] == 68.0
-    queries = [sql for sql, _ in factory.session.calls]
-    assert any("FROM hr_hourly" in sql for sql in queries)
-    assert any("FROM heart_rate" in sql for sql in queries)
-
-
-@pytest.mark.asyncio
-async def test_summarize_period_populates_hrv_metrics_when_raw_rows_present():
-    """HRV happy path: yesterday HRV + baseline HRV both have samples."""
-    empty_hr_hourly = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
-    empty_hr_raw = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
-    yesterday_hrv = _Row(avg_v=52.0, min_v=28, max_v=95, count_v=24)
-    baseline_hrv = _Row(avg_v=58.0, min_v=25, max_v=105, count_v=480)
-    factory = _session_factory([empty_hr_hourly, empty_hr_raw, yesterday_hrv, baseline_hrv])
-
-    summary = await DataAggregator(factory).summarize_period("daily", 1)
-
-    # HR has no samples, so no heart_rate entry in metrics.
-    assert "heart_rate" not in summary.metrics
-    hrv = summary.metrics["hrv"]
-    assert hrv["avg_ms"] == 52.0
-    assert hrv["min_ms"] == 28
-    assert hrv["max_ms"] == 95
-    assert hrv["sample_count"] == 24
-    assert hrv["baseline_avg_ms"] == 58.0
-    assert hrv["delta_pct_vs_baseline"] == pytest.approx(-10.3448, rel=1e-3)
-
-    queries = [sql for sql, _ in factory.session.calls]
-    assert any("FROM hrv" in sql for sql in queries)
-
-
-@pytest.mark.asyncio
-async def test_summarize_period_skips_hrv_when_lookback_is_empty():
-    """HRV empty path: only HR present - ``metrics['hrv']`` absent, HR fine."""
-    yesterday_hr = _Row(avg_v=68.0, min_v=55, max_v=125, count_v=24)
-    baseline_hr = _Row(avg_v=65.0, min_v=50, max_v=140, count_v=720)
-    empty_hrv = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
-    factory = _session_factory([yesterday_hr, baseline_hr, empty_hrv])
-
-    summary = await DataAggregator(factory).summarize_period("daily", 1)
-
-    assert "heart_rate" in summary.metrics
-    assert "hrv" not in summary.metrics
-
-
-@pytest.mark.asyncio
-async def test_summarize_period_returns_empty_metrics_when_neither_hr_nor_hrv_have_data():
-    """Totally-empty path: no HR, no HRV → ``metrics == {}`` (engine will skip)."""
-    empty_hr_hourly = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
-    empty_hr_raw = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
-    empty_hrv = _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
-    factory = _session_factory([empty_hr_hourly, empty_hr_raw, empty_hrv])
-
-    summary = await DataAggregator(factory).summarize_period("daily", 1)
+    summary = await DataAggregator(factory).summarize_period(
+        "daily", 1, metrics=["vital.heart_rate", "activity.steps"]
+    )
 
     assert summary.metrics == {}
+    assert summary.period == "daily"
+
+
+@pytest.mark.asyncio
+async def test_summarize_period_defaults_to_the_curated_metric_set():
+    # No metrics arg → the default list is queried. All empty → one window
+    # query per default metric (no baselines), and no metrics survive.
+    factory = _session_factory([])  # every execute yields an empty row
+
+    summary = await DataAggregator(factory).summarize_period("weekly", 7)
+
+    assert summary.metrics == {}
+    queried = {params["metric_id"] for _, params in factory.session.calls}
+    assert queried == set(_DEFAULT_SUMMARY_METRICS)
+    assert len(factory.session.calls) == len(_DEFAULT_SUMMARY_METRICS)
