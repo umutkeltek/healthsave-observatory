@@ -8,6 +8,10 @@ enabled:
   findings, no LLM call.
 * ``trend_analysis`` - runs weekly/monthly regression checks and persists
   structured trend findings, no LLM call.
+* ``correlation_analysis`` - runs cross-metric Spearman correlation and
+  persists structured correlation findings, no LLM call.
+* ``weekly_summary`` - runs the weekly rollup end-to-end (aggregate +
+  trends/correlations context + LLM narrative).
 
 APScheduler is imported inside ``start()`` so module import stays cheap
 for pytest collection (``AsyncIOScheduler()`` constructed at import time
@@ -46,8 +50,15 @@ class AnalysisScheduler:
         anomaly = self.config.analysis.anomaly_detection
         trend = self.config.analysis.trend_analysis
         correlation = self.config.analysis.correlation_analysis
+        weekly = self.config.analysis.weekly_summary
 
-        if not (daily.enabled or anomaly.enabled or trend.enabled or correlation.enabled):
+        if not (
+            daily.enabled
+            or anomaly.enabled
+            or trend.enabled
+            or correlation.enabled
+            or weekly.enabled
+        ):
             log.info("all analysis jobs disabled; scheduler not starting")
             return
 
@@ -95,6 +106,16 @@ class AnalysisScheduler:
                 coalesce=True,
             )
             log.info("registered correlation_analysis cron=%s", correlation.cron)
+
+        if weekly.enabled:
+            self.scheduler.add_job(
+                self.engine.run_weekly_summary,
+                CronTrigger.from_crontab(weekly.cron),
+                id="weekly_summary",
+                max_instances=1,
+                coalesce=True,
+            )
+            log.info("registered weekly_summary cron=%s", weekly.cron)
 
         self.scheduler.start()
         log.info("AnalysisScheduler started")

@@ -23,9 +23,10 @@ import logging
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, timedelta
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from .llm.prompts.daily_briefing import DAILY_BRIEFING_PROMPT_TEMPLATE
+from .llm.prompts.weekly_summary import WEEKLY_SUMMARY_PROMPT_TEMPLATE
 from .statistical.aggregator import DataAggregator
 from .statistical.anomaly import AnomalyDetector
 from .statistical.correlations import CorrelationAnalyzer
@@ -54,6 +55,13 @@ def _sql():
     from storage.timescale import analysis as analysis_sql
 
     return analysis_sql
+
+
+def _briefings():
+    """Lazy handle for ``storage.timescale.briefings`` (same cycle-avoidance as ``_sql``)."""
+    from storage.timescale import briefings
+
+    return briefings
 
 
 log = logging.getLogger("healthsave.analysis")
@@ -135,11 +143,14 @@ class AnalysisEngine:
                 if anomaly_finding_id is not None:
                     finding_ids.append(anomaly_finding_id)
 
+            recent_trends = await self._fetch_recent_findings(session, "trend")
+            recent_correlations = await self._fetch_recent_findings(session, "correlation")
+
             prompt = DAILY_BRIEFING_PROMPT_TEMPLATE.format(
                 period_summary=json.dumps(summary.metrics, indent=2, default=str),
                 anomalies=_format_anomalies_for_prompt(anomalies),
-                trends="(trend analysis runs separately; see /api/insights/trends)",
-                correlations="(correlation analysis runs separately as a Brain-1 job)",
+                trends=_format_trends_for_prompt(recent_trends),
+                correlations=_format_correlations_for_prompt(recent_correlations),
                 days_of_data=_daily_data_days(summary.metrics),
                 minimum_required=1,
             )
@@ -207,12 +218,82 @@ class AnalysisEngine:
                 await session.commit()
                 return run_id
 
-    async def run_weekly_summary(self) -> Insight:
-        """Produce the weekly rollup narrative."""
-        raise NotImplementedError(
-            "Weekly summary run deferred to Phase 2b - "
-            "current scope is daily briefing + anomaly check"
-        )
+    async def run_weekly_summary(self) -> int | None:
+        return await self._run_job_with_metrics("weekly_summary", self._run_weekly_summary_impl)
+
+    async def _run_weekly_summary_impl(self) -> int | None:
+        """Produce the weekly rollup narrative.
+
+        Mirrors the daily briefing over a config-driven multi-day window:
+        aggregate the week, persist summary findings, fold in the latest
+        trends/correlations, narrate, and persist a ``weekly_summary`` insight.
+        Returns the ``analysis_runs.id`` on completion, or ``None`` when the
+        week had no data (skipped, no LLM call).
+        """
+        lookback_days = self.config.analysis.weekly_summary.lookback_days
+        async with (
+            self.session_factory() as session,
+            self._run_context(session, "weekly_summary") as run_id,
+        ):
+            summary = await self.aggregator.summarize_period(period="weekly", days=lookback_days)
+
+            if not summary.metrics:
+                await _sql().mark_run_skipped(session, run_id)
+                await session.commit()
+                return None
+
+            finding_ids: list[int] = []
+            for metric, metric_summary in summary.metrics.items():
+                finding_id = await self._insert_finding(
+                    session,
+                    run_id=run_id,
+                    finding=Finding(
+                        finding_type="summary",
+                        metric=metric,
+                        severity="info",
+                        structured_data=metric_summary,
+                    ),
+                )
+                if finding_id is not None:
+                    finding_ids.append(finding_id)
+
+            recent_trends = await self._fetch_recent_findings(session, "trend")
+            recent_correlations = await self._fetch_recent_findings(session, "correlation")
+
+            prompt = WEEKLY_SUMMARY_PROMPT_TEMPLATE.format(
+                period_summary=json.dumps(summary.metrics, indent=2, default=str),
+                week_comparison=_format_week_comparison(summary.metrics),
+                trends=_format_trends_for_prompt(recent_trends),
+                correlations=_format_correlations_for_prompt(recent_correlations),
+                # The aggregator does not expose distinct-day counts; like the
+                # daily briefing this reports "data present for the period".
+                days_of_data=_daily_data_days(summary.metrics),
+                minimum_required=1,
+            )
+
+            insight_result = await self.llm_client.generate_insight(
+                prompt, insight_type="weekly_summary"
+            )
+
+            await self._insert_insight(
+                session,
+                insight=Insight(
+                    insight_type="weekly_summary",
+                    narrative=insight_result.narrative,
+                    findings_used=finding_ids,
+                ),
+                run_id=run_id,
+            )
+
+            await _sql().mark_run_completed(
+                session,
+                run_id,
+                llm_provider=insight_result.model,
+                llm_tokens_in=insight_result.tokens_in,
+                llm_tokens_out=insight_result.tokens_out,
+            )
+            await session.commit()
+            return run_id
 
     async def run_trend_analysis(self) -> list[Finding]:
         return await self._run_job_with_metrics("trend_analysis", self._run_trend_analysis_impl)
@@ -386,6 +467,25 @@ class AnalysisEngine:
         }
         return [anomaly for anomaly in anomalies if _anomaly_key(anomaly) not in existing]
 
+    async def _fetch_recent_findings(self, session, finding_type: str, limit: int = 5) -> list[Any]:
+        """Best-effort read of the latest persisted findings of a type, for prompt context.
+
+        Trends and correlations are produced by separate Brain-1 runs; a briefing
+        surfaces the most recent ones as narrative context. A read hiccup must
+        never kill the briefing, so failures degrade to an empty list (the
+        formatter then renders a "none detected" line).
+        """
+        briefings = _briefings()
+        try:
+            if finding_type == "trend":
+                return await briefings.fetch_trends(session, limit=limit)
+            if finding_type == "correlation":
+                return await briefings.fetch_correlations(session, limit=limit)
+            return []
+        except Exception as exc:  # pragma: no cover - defensive
+            log.warning("fetch of recent %s findings failed; continuing: %s", finding_type, exc)
+            return []
+
     async def _detect_anomalies_safely(self) -> list[Anomaly]:
         """Run the detector, swallowing errors so the briefing keeps flowing.
 
@@ -412,6 +512,44 @@ def _format_anomalies_for_prompt(anomalies: list[Anomaly]) -> str:
         f"- {a.metric}: {a.direction} deviation, severity={a.severity}, z={a.magnitude:.2f}"
         for a in anomalies
     )
+
+
+def _format_trends_for_prompt(trends: list[Any]) -> str:
+    """Render recent trend findings (FindingRow) as a short bullet block."""
+    if not trends:
+        return "no significant trends detected"
+    lines = []
+    for trend in trends:
+        data = trend.structured_data
+        lines.append(
+            f"- {trend.metric or data.get('metric')}: {data.get('direction')} trend "
+            f"(slope={data.get('slope')}, p={data.get('p_value')})"
+        )
+    return "\n".join(lines)
+
+
+def _format_correlations_for_prompt(correlations: list[Any]) -> str:
+    """Render recent correlation findings (FindingRow) as a short bullet block."""
+    if not correlations:
+        return "no notable correlations detected"
+    lines = []
+    for correlation in correlations:
+        data = correlation.structured_data
+        lines.append(
+            f"- {data.get('metric_a')} ~ {data.get('metric_b')}: "
+            f"r={data.get('coefficient')} ({data.get('method')})"
+        )
+    return "\n".join(lines)
+
+
+def _format_week_comparison(metrics: dict[str, dict]) -> str:
+    """Per-metric week-over-baseline deltas the aggregator already computed."""
+    lines = [
+        f"- {name}: {metric['delta_pct_vs_baseline']:+.1f}% vs 30-day baseline"
+        for name, metric in metrics.items()
+        if metric.get("delta_pct_vs_baseline") is not None
+    ]
+    return "\n".join(lines) if lines else "insufficient baseline for week-over-week comparison"
 
 
 def _daily_data_days(metrics: dict[str, dict]) -> int:
