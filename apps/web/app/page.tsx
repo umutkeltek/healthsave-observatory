@@ -1,7 +1,18 @@
+import { EvidenceCard } from "./components/EvidenceCard";
 import { MetricCard } from "./components/MetricCard";
 import { ReadinessCard } from "./components/ReadinessCard";
 import { SleepCard } from "./components/SleepCard";
-import { fetchReadiness, fetchSeries, type MetricSeries, type Readiness } from "./lib/api";
+import { WeeklyBriefCard } from "./components/WeeklyBriefCard";
+import {
+  fetchFindings,
+  fetchLatest,
+  fetchReadiness,
+  fetchSeries,
+  type Finding,
+  type InsightsLatest,
+  type MetricSeries,
+  type Readiness,
+} from "./lib/api";
 
 // Always render fresh — this is a live dashboard, not a static page.
 export const dynamic = "force-dynamic";
@@ -22,9 +33,27 @@ async function safeReadiness(): Promise<Readiness | null> {
   }
 }
 
+async function safeLatest(): Promise<InsightsLatest | null> {
+  try {
+    return await fetchLatest();
+  } catch {
+    return null;
+  }
+}
+
+async function safeFindings(): Promise<Finding[] | null> {
+  try {
+    return (await fetchFindings()).findings;
+  } catch {
+    return null;
+  }
+}
+
 export default async function Home() {
-  const [readiness, heartRate, sleep] = await Promise.all([
+  const [readiness, latest, findings, heartRate, sleep] = await Promise.all([
     safeReadiness(),
+    safeLatest(),
+    safeFindings(),
     safeSeries("vital.heart_rate", "7d"),
     safeSeries("sleep.stage", "7d"),
   ]);
@@ -38,6 +67,14 @@ export default async function Home() {
 
       <section className="lead">
         <ReadinessCard readiness={readiness} />
+      </section>
+
+      <section className="lead">
+        <WeeklyBriefCard latest={latest} />
+      </section>
+
+      <section className="lead">
+        <EvidenceCard findings={findings} />
       </section>
 
       <section className="grid">

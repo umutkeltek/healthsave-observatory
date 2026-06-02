@@ -273,3 +273,106 @@ body {
   background: var(--bg);
   border: 1px solid var(--line);
 }
+
+/* ── Weekly Brief card ───────────────────────────────────────────── */
+
+.brief {
+  color: var(--ink);
+}
+
+.brief-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.brief-body {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+/* ── Evidence card ───────────────────────────────────────────────── */
+
+.evidence {
+  color: var(--ink);
+}
+
+.evidence-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.evidence-item {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.evidence-item:first-child {
+  border-top: none;
+}
+
+.evidence-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.type-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(94, 179, 255, 0.1);
+  border: 1px solid rgba(94, 179, 255, 0.28);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+.evidence-metric {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.evidence-sum {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.calc {
+  margin-top: 8px;
+}
+
+.calc summary {
+  font-size: 12px;
+  color: var(--accent);
+  cursor: pointer;
+  user-select: none;
+}
+
+.calc-grid {
+  margin: 10px 0 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  font-size: 12px;
+}
+
+.calc-row {
+  display: contents;
+}
+
+.calc-row dt {
+  color: var(--muted);
+}
+
+.calc-row dd {
+  margin: 0;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
+}
