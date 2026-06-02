@@ -209,6 +209,47 @@ class TimescaleBriefingRepository:
             for row in rows
         ]
 
+    async def fetch_correlations(
+        self,
+        session: AsyncSession,
+        *,
+        period_days: str | None = None,
+        limit: int = 200,
+    ) -> list[FindingRow]:
+        """Correlation findings, newest first.
+
+        Mirrors :meth:`fetch_trends`: optional ``period_days`` matches the
+        JSONB ``structured_data->>'period_days'`` so the API can filter by
+        ``?period=90d``. Pre-validation lives in the route.
+        """
+        where_clauses = ["finding_type = 'correlation'"]
+        params: dict[str, Any] = {"limit": limit}
+
+        if period_days is not None:
+            params["period_days"] = period_days
+            where_clauses.append("structured_data->>'period_days' = :period_days")
+
+        sql = text(
+            f"""
+            SELECT id, metric, severity, structured_data, created_at
+              FROM analysis_findings
+             WHERE {" AND ".join(where_clauses)}
+             ORDER BY created_at DESC
+             LIMIT :limit
+            """
+        )
+        rows = (await session.execute(sql, params)).fetchall()
+        return [
+            FindingRow(
+                id=row.id,
+                metric=row.metric,
+                severity=getattr(row, "severity", None),
+                structured_data=_parse_structured_data(row.structured_data),
+                created_at=row.created_at,
+            )
+            for row in rows
+        ]
+
 
 # Default instance for v1.x callers that haven't migrated to injection.
 default_repository = TimescaleBriefingRepository()
@@ -245,3 +286,14 @@ async def fetch_trends(
     limit: int = 200,
 ) -> list[FindingRow]:
     return await default_repository.fetch_trends(session, period_days=period_days, limit=limit)
+
+
+async def fetch_correlations(
+    session: AsyncSession,
+    *,
+    period_days: str | None = None,
+    limit: int = 200,
+) -> list[FindingRow]:
+    return await default_repository.fetch_correlations(
+        session, period_days=period_days, limit=limit
+    )
