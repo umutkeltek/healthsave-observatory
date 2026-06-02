@@ -45,8 +45,9 @@ class AnalysisScheduler:
         daily = self.config.analysis.daily_briefing
         anomaly = self.config.analysis.anomaly_detection
         trend = self.config.analysis.trend_analysis
+        correlation = self.config.analysis.correlation_analysis
 
-        if not daily.enabled and not anomaly.enabled and not trend.enabled:
+        if not (daily.enabled or anomaly.enabled or trend.enabled or correlation.enabled):
             log.info("all analysis jobs disabled; scheduler not starting")
             return
 
@@ -84,6 +85,16 @@ class AnalysisScheduler:
                 coalesce=True,
             )
             log.info("registered trend_analysis cron=%s", trend.cron)
+
+        if correlation.enabled:
+            self.scheduler.add_job(
+                self.engine.run_correlation_analysis,
+                CronTrigger.from_crontab(correlation.cron),
+                id="correlation_analysis",
+                max_instances=1,
+                coalesce=True,
+            )
+            log.info("registered correlation_analysis cron=%s", correlation.cron)
 
         self.scheduler.start()
         log.info("AnalysisScheduler started")
