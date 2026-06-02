@@ -22,6 +22,22 @@ from .insights import _record_trigger_run  # reuse the pipeline_runs ledger wrap
 router = APIRouter(prefix="/api/v2/insights", dependencies=[Depends(verify_api_key)])
 
 _CORRELATIONS_LIMIT = 200
+_FINDINGS_LIMIT = 200
+
+# Finding kinds the evidence feed renders. Mirrors the finding_type values the
+# analysis engine persists (see analysis.engine); an unknown ?type is a 422.
+_EVIDENCE_TYPES = frozenset({"anomaly", "trend", "correlation", "summary", "recovery_score"})
+
+
+def _narrative(row) -> dict | None:
+    """Shape a NarrativeRow for the wire, or None when absent."""
+    if row is None:
+        return None
+    return {
+        "insight_type": row.insight_type,
+        "narrative": row.narrative,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
 
 
 def _validate_period(period: str | None) -> str | None:
@@ -55,6 +71,50 @@ async def list_correlations(
         for row in findings
     ]
     return {"correlations": correlations, "count": len(correlations)}
+
+
+@router.get("/latest")
+async def latest_narratives(session: AsyncSession = Depends(get_session)) -> dict:
+    """Most recent daily-briefing + weekly-summary narratives (the weekly-brief card)."""
+    narratives = await briefings.latest_narratives_by_type(
+        session, insight_types=("daily_briefing", "weekly_summary")
+    )
+    return {
+        "daily_briefing": _narrative(narratives.get("daily_briefing")),
+        "weekly_summary": _narrative(narratives.get("weekly_summary")),
+    }
+
+
+@router.get("/findings")
+async def list_findings(
+    finding_type: str | None = Query(
+        default=None,
+        alias="type",
+        description="Optional finding kind (anomaly / trend / correlation / summary).",
+    ),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Recent structured findings (the evidence feed), newest first.
+
+    Each row carries its ``structured_data`` so the evidence card can show the
+    calculation behind a finding (effect size, window, p-value, …). Optional
+    ``?type=`` narrows to one kind.
+    """
+    if finding_type is not None and finding_type not in _EVIDENCE_TYPES:
+        raise HTTPException(status_code=422, detail=f"unknown finding type: {finding_type}")
+    rows = await briefings.fetch_findings(session, finding_type=finding_type, limit=_FINDINGS_LIMIT)
+    findings = [
+        {
+            "id": row.id,
+            "finding_type": row.finding_type,
+            "metric": row.metric,
+            "severity": row.severity,
+            "structured_data": row.structured_data,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
+        for row in rows
+    ]
+    return {"findings": findings, "count": len(findings)}
 
 
 class TriggerBody(BaseModel):

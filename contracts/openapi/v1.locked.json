@@ -1478,6 +1478,108 @@
         "summary": "List Correlations"
       }
     },
+    "/api/v2/insights/findings": {
+      "get": {
+        "description": "Recent structured findings (the evidence feed), newest first.\n\nEach row carries its ``structured_data`` so the evidence card can show the\ncalculation behind a finding (effect size, window, p-value, \u2026). Optional\n``?type=`` narrows to one kind.",
+        "operationId": "list_findings_api_v2_insights_findings_get",
+        "parameters": [
+          {
+            "description": "Optional finding kind (anomaly / trend / correlation / summary).",
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional finding kind (anomaly / trend / correlation / summary).",
+              "title": "Type"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response List Findings Api V2 Insights Findings Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Findings"
+      }
+    },
+    "/api/v2/insights/latest": {
+      "get": {
+        "description": "Most recent daily-briefing + weekly-summary narratives (the weekly-brief card).",
+        "operationId": "latest_narratives_api_v2_insights_latest_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Latest Narratives Api V2 Insights Latest Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Latest Narratives"
+      }
+    },
     "/api/v2/insights/trigger": {
       "post": {
         "description": "Run an analysis job on demand. Currently supports ``correlation_analysis``.",
