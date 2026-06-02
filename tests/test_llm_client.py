@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import analysis.llm.client as llm_client  # noqa: E402
 from analysis.config import LLMConfig  # noqa: E402
+from analysis.egress import Destination, EgressDenied  # noqa: E402
 
 
 def _fake_response(content: str, prompt_tokens: int = 42, completion_tokens: int = 77):
@@ -101,6 +102,37 @@ async def test_generate_insight_wraps_failures_in_llm_unavailable_error(monkeypa
     with pytest.raises(llm_client.LLMUnavailableError) as exc_info:
         await client.generate_insight("p", insight_type="daily_briefing")
     assert "ollama unreachable" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_generate_insight_denies_cloud_without_opt_in(monkeypatch):
+    """Egress fail-closed: a cloud provider with no opt-in never calls out."""
+    acompletion = AsyncMock(return_value=_fake_response("should not be reached"))
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(LLMConfig(provider="openai", model="gpt-4o-mini"))
+
+    with pytest.raises(EgressDenied) as exc_info:
+        await client.generate_insight("derived findings", insight_type="daily_briefing")
+    # The provider was never contacted — denial happens before any byte leaves.
+    assert acompletion.await_count == 0
+    assert exc_info.value.envelope.destination is Destination.CLOUD
+
+
+@pytest.mark.asyncio
+async def test_generate_insight_allows_cloud_when_opted_in(monkeypatch):
+    acompletion = AsyncMock(return_value=_fake_response("Cloud narrative."))
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(
+        LLMConfig(provider="openai", model="gpt-4o-mini", allow_cloud_egress=True)
+    )
+    result = await client.generate_insight("derived findings", insight_type="daily_briefing")
+
+    assert acompletion.await_count == 1
+    # Non-ollama providers pass the model through unchanged (no ollama/ prefix).
+    assert acompletion.await_args.kwargs["model"] == "gpt-4o-mini"
+    assert "not medical advice" in result.narrative.lower()
 
 
 def test_litellm_is_not_imported_at_module_scope():

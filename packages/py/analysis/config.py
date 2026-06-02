@@ -79,6 +79,10 @@ class LLMConfig(BaseModel):
     temperature: float = 0.3
     max_tokens: int = 1000
     fallback: list[LLMFallbackEntry] = Field(default_factory=list)
+    # Egress trust boundary (ADR-0001 Decision G). Default-deny: a cloud
+    # provider also needs this explicit opt-in before any derived data leaves
+    # the host. Local Ollama is unaffected. Raw observations never leave.
+    allow_cloud_egress: bool = False
 
 
 class MQTTConfig(BaseModel):
@@ -122,6 +126,8 @@ def _with_environment_overrides(config: AnalysisConfig) -> AnalysisConfig:
         llm_updates["base_url"] = base_url
     if api_key := os.getenv("LLM_API_KEY"):
         llm_updates["api_key"] = api_key
+    if (raw := os.getenv("LLM_ALLOW_CLOUD_EGRESS")) is not None:
+        llm_updates["allow_cloud_egress"] = raw.strip().lower() in {"1", "true", "yes", "on"}
 
     if llm_updates:
         config.llm = config.llm.model_copy(update=llm_updates)

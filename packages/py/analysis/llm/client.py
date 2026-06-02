@@ -9,10 +9,15 @@ every touch of this module.
 
 from __future__ import annotations
 
+import logging
+
 from pydantic import BaseModel
 
+from ..egress import Destination, EgressPolicy, PayloadClass
 from .prompts.base import SYSTEM_PROMPT
 from .safety import inject_disclaimer
+
+log = logging.getLogger("healthsave.analysis")
 
 
 class LLMUnavailableError(RuntimeError):
@@ -56,6 +61,7 @@ class HealthLLMClient:
     def __init__(self, config) -> None:
         """Store the :class:`~analysis.config.LLMConfig`; no LiteLLM calls here."""
         self.config = config
+        self.egress_policy = EgressPolicy.from_config(config)
 
     async def generate_insight(self, prompt: str, *, insight_type: str) -> InsightResult:
         """Generate a narrative from ``prompt`` and return an :class:`InsightResult`.
@@ -68,7 +74,23 @@ class HealthLLMClient:
         Any exception (timeout, connection error, provider error) is
         wrapped in :class:`LLMUnavailableError` so upstream callers only
         need to catch one type.
+
+        Before any byte leaves the host, the egress policy (ADR-0001
+        Decision G) is enforced fail-closed: a cloud provider without an
+        explicit opt-in raises :class:`~analysis.egress.EgressDenied`. The
+        prompt is derived data (aggregates / findings), classified
+        ``PROMPT`` — raw observation rows are never sent here.
         """
+        envelope = self.egress_policy.enforce(
+            provider=self.config.provider, payload_class=PayloadClass.PROMPT
+        )
+        if envelope.destination is Destination.CLOUD:
+            log.info(
+                "egress: %s prompt → cloud provider %r (opted in)",
+                envelope.payload_class.value,
+                self.config.provider,
+            )
+
         import litellm  # deferred import - keeps module-load light
 
         messages = [
