@@ -116,38 +116,55 @@ def test_insufficient_data_short_circuits_to_none() -> None:
 # ──────────────────────────────────────────────────────────────
 
 
+class _ControlledPairs(CorrelationAnalyzer):
+    """Override the production pairs so the mechanics test is deterministic
+    and decoupled from which real metrics we happen to correlate."""
+
+    CORRELATION_PAIRS = [("a", "b"), ("c", "d"), ("e", "f")]
+
+
 @pytest.mark.asyncio
 async def test_analyzer_finds_pairs_and_ranks_strongest_first() -> None:
-    # Pair 0 (sleep_efficiency, resting_hr): perfect negative → |rho| = 1.
-    # Pair 1 (hrv, sleep_deep_pct): monotonic with the two endpoints swapped →
-    #   rho ≈ 0.63 (provably 0.3 < |rho| < 1, p well under 0.05).
-    # Every other configured metric returns empty → those pairs are skipped.
+    # Pair (a, b): perfect negative → |rho| = 1.
+    # Pair (c, d): monotonic with the two endpoints swapped → rho ≈ 0.63
+    #   (provably 0.3 < |rho| < 1, p well under 0.05).
+    # Pair (e, f): no data → skipped.
     perfect_up = [float(i) for i in range(30)]
     perfect_down = [float(-i) for i in range(30)]
     endpoints_swapped = [float(i) for i in range(30)]
     endpoints_swapped[0], endpoints_swapped[29] = endpoints_swapped[29], endpoints_swapped[0]
 
     data = {
-        "sleep_efficiency": _series(perfect_up),
-        "resting_hr": _series(perfect_down),
-        "hrv": _series(perfect_up),
-        "sleep_deep_pct": _series(endpoints_swapped),
+        "a": _series(perfect_up),
+        "b": _series(perfect_down),
+        "c": _series(perfect_up),
+        "d": _series(endpoints_swapped),
     }
 
     async def fetcher(metric: str, days: int):
         return data.get(metric, {})
 
-    results = await CorrelationAnalyzer(fetcher).analyze(days=30)
+    results = await _ControlledPairs(fetcher).analyze(days=30)
 
     pairs = [(c.metric_a, c.metric_b) for c in results]
-    assert ("sleep_efficiency", "resting_hr") in pairs
-    assert ("hrv", "sleep_deep_pct") in pairs
-    # Pairs with no data were skipped, not errored.
-    assert ("alcohol_logged", "hrv_next_morning") not in pairs
+    assert ("a", "b") in pairs
+    assert ("c", "d") in pairs
+    # The pair with no data was skipped, not errored.
+    assert ("e", "f") not in pairs
     # Strongest-first: the perfect pair leads, list is sorted by |coefficient|.
     magnitudes = [abs(c.coefficient) for c in results]
     assert magnitudes == sorted(magnitudes, reverse=True)
     assert abs(results[0].coefficient) == pytest.approx(1.0)
+
+
+def test_production_pairs_use_real_ontology_metric_ids() -> None:
+    """Guard against the pairs drifting back to aspirational names: every
+    metric in CORRELATION_PAIRS must be a registered ontology metric_id."""
+    from contracts.ontology import all_metrics
+
+    known = {metric.id for metric in all_metrics()}
+    referenced = {m for pair in CorrelationAnalyzer.CORRELATION_PAIRS for m in pair}
+    assert referenced <= known, f"unknown metric_ids in CORRELATION_PAIRS: {referenced - known}"
 
 
 @pytest.mark.asyncio

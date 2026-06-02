@@ -8,7 +8,7 @@ LLM-failure re-raise paths.
 from __future__ import annotations
 
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from analysis.config import AnalysisConfig  # noqa: E402
 from analysis.engine import AnalysisEngine  # noqa: E402
 from analysis.llm.client import InsightResult, LLMUnavailableError  # noqa: E402
-from analysis.types import Anomaly, PeriodSummary, Trend  # noqa: E402
+from analysis.types import Anomaly, Correlation, PeriodSummary, Trend  # noqa: E402
 
 
 class _Row:
@@ -497,6 +497,92 @@ async def test_run_trend_analysis_skips_when_no_metric_has_significant_trend():
     assert session.all_insert_params_for("analysis_findings") == []
     updates = session.all_update_statements()
     assert any("status = 'skipped'" in sql for sql, _ in updates)
+
+
+@pytest.mark.asyncio
+async def test_run_correlation_analysis_persists_findings_strongest_first():
+    """Phase 2b: correlations become structured findings, ranked, no LLM."""
+    session = _FakeSession(run_queue=[8000, 8001, 8002])
+    config = AnalysisConfig.model_validate(
+        {"analysis": {"correlation_analysis": {"enabled": True}}}
+    )
+    engine = _make_plain_engine(session, config)
+    engine.correlation_analyzer.analyze = AsyncMock(
+        return_value=[
+            Correlation(
+                metric_a="vital.hrv_sdnn",
+                metric_b="vital.resting_heart_rate",
+                coefficient=-0.82,
+                period_days=90,
+                p_value=0.0001,
+            ),
+            Correlation(
+                metric_a="activity.steps",
+                metric_b="activity.active_energy",
+                coefficient=0.61,
+                period_days=90,
+                p_value=0.002,
+            ),
+        ]
+    )
+
+    findings = await engine.run_correlation_analysis()
+
+    assert [f.metric for f in findings] == [
+        "vital.hrv_sdnn~vital.resting_heart_rate",
+        "activity.steps~activity.active_energy",
+    ]
+    run_inserts = session.all_insert_params_for("analysis_runs")
+    assert run_inserts[0]["run_type"] == "correlation_analysis"
+    finding_inserts = session.all_insert_params_for("analysis_findings")
+    assert len(finding_inserts) == 2
+    assert {row["finding_type"] for row in finding_inserts} == {"correlation"}
+    assert '"coefficient": -0.82' in finding_inserts[0]["structured_data"]
+    updates = session.all_update_statements()
+    assert any("status = 'completed'" in sql for sql, _ in updates)
+    engine.llm_client.generate_insight.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_run_correlation_analysis_skips_when_no_correlations():
+    session = _FakeSession(run_queue=[9000])
+    config = AnalysisConfig.model_validate(
+        {"analysis": {"correlation_analysis": {"enabled": True}}}
+    )
+    engine = _make_plain_engine(session, config)
+    engine.correlation_analyzer.analyze = AsyncMock(return_value=[])
+
+    findings = await engine.run_correlation_analysis()
+
+    assert findings == []
+    assert session.all_insert_params_for("analysis_findings") == []
+    updates = session.all_update_statements()
+    assert any("status = 'skipped'" in sql for sql, _ in updates)
+
+
+@pytest.mark.asyncio
+async def test_fetch_metric_daily_series_maps_rows_to_day_value_and_skips_nulls(monkeypatch):
+    """The injected fetcher turns canonical daily rows into a {day: value} map,
+    dropping rows missing a day or value."""
+    import storage.timescale.analysis as analysis_sql
+
+    d1, d2 = date(2026, 5, 1), date(2026, 5, 2)
+    canned = [
+        _Row(day=d1, value=55.0, sample_count=10),
+        _Row(day=d2, value=58.0, sample_count=12),
+        _Row(day=None, value=99.0, sample_count=1),  # no day → dropped
+        _Row(day=date(2026, 5, 3), value=None, sample_count=0),  # no value → dropped
+    ]
+
+    async def fake_fetch(session, metric_id, start, end, **kwargs):
+        return canned
+
+    monkeypatch.setattr(analysis_sql, "fetch_metric_daily_series", fake_fetch)
+
+    engine = _make_plain_engine(_FakeSession(run_queue=[]))
+    series = await engine._fetch_metric_daily_series("vital.hrv_sdnn", days=90)
+
+    assert series == {d1: 55.0, d2: 58.0}
 
 
 @pytest.mark.asyncio
