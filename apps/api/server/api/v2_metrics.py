@@ -14,13 +14,15 @@ from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
 from contracts.ontology import MetricDefinition, all_metrics, get_metric
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from storage.ports import TimeSeriesQueryService
 from storage.timescale.observations import CanonicalObservationRepository
 
 from .deps import get_session, verify_api_key
 
 router = APIRouter(prefix="/api/v2")
 
-_REPO = CanonicalObservationRepository()
+# Depend on the read port, not the concrete repo (Decision F seam).
+_REPO: TimeSeriesQueryService = CanonicalObservationRepository()
 
 RANGE_WINDOWS: dict[str, timedelta] = {
     "24h": timedelta(hours=24),

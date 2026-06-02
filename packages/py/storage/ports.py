@@ -14,11 +14,14 @@ Defined ports:
 - :class:`MeasurementRepository` (Phase 5C, skeleton) — placeholder
   Protocol that Phase 5D fills in as per-metric SQL migrates out of
   ``server.ingestion.handlers``.
+- :class:`TimeSeriesQueryService` (Phase 5D) — read port for metric
+  time-series, satisfied by
+  ``storage.timescale.observations.CanonicalObservationRepository``. The
+  seam the analysis engine, the v2 read API, and the n-of-1 runner share.
 
-Phase 5D and later will add:
-- ``TimeSeriesQueryService`` — Grafana-shaped chart queries.
-- ``AgentRunRepository`` (Phase 7).
-- ``ExperimentRepository`` (n-of-1 runner, Phase 9+).
+Still to come:
+- ``ExperimentRepository`` (n-of-1 runner, Phase 9+) — builds on the
+  read port above.
 
 Discipline:
 - Methods are async.
@@ -54,6 +57,7 @@ if TYPE_CHECKING:
         TriggerKind,
     )
     from .timescale.briefings import FindingRow, NarrativeRow
+    from .timescale.observations import SeriesPoint
     from .timescale.runs import PipelineRun, TriggeredBy
 
 
@@ -210,6 +214,37 @@ class MeasurementRepository(Protocol):
     real methods (``insert_heart_rate``, ``insert_workout``,
     ``fetch_series``, etc.) as their SQL migrates here.
     """
+
+
+@runtime_checkable
+class TimeSeriesQueryService(Protocol):
+    """Read port for metric time-series.
+
+    The seam the analysis engine, the v2 read API, and the (future)
+    :class:`ExperimentRepository` all query. Satisfied today by
+    :class:`storage.timescale.observations.CanonicalObservationRepository`
+    with no changes — formalizing the port lets consumers depend on the
+    abstraction and inject in-memory fakes in tests instead of reaching
+    into the concrete TimescaleDB repo.
+
+    Returns storage-shaped
+    :class:`~storage.timescale.observations.SeriesPoint` dataclasses,
+    never ORM rows. Stateless — the caller owns the session/transaction,
+    matching every other read port in this module. The window is
+    half-open ``[start, end)`` and results are ascending by ``t``.
+    """
+
+    async def query_series(
+        self,
+        session: AsyncSession,
+        *,
+        owner_id: UUID,
+        workspace_id: UUID,
+        metric_id: str,
+        start: datetime,
+        end: datetime,
+        limit: int = 5000,
+    ) -> list[SeriesPoint]: ...
 
 
 @runtime_checkable
