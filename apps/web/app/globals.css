@@ -192,6 +192,33 @@ a {
   min-width: 0;
 }
 
+/* Mobile drawer chrome — hidden on desktop. */
+.menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-right: 4px;
+  flex: 0 0 auto;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.menu-btn:hover {
+  color: var(--ink);
+  border-color: var(--faint);
+}
+
+.nav-scrim {
+  display: none;
+  border: 0;
+  padding: 0;
+}
+
 .topbar {
   position: sticky;
   top: 0;
@@ -296,6 +323,55 @@ a {
   .content {
     padding-left: 24px;
     padding-right: 24px;
+  }
+}
+
+@media (max-width: 760px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 40;
+    width: 240px;
+    flex-basis: 240px;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+  }
+  .app.nav-open .sidebar {
+    transform: translateX(0);
+    box-shadow: 0 0 48px rgba(0, 0, 0, 0.45);
+  }
+  .nav-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease;
+  }
+  .app.nav-open .nav-scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .menu-btn {
+    display: inline-flex;
+  }
+  .topbar {
+    padding: 16px 18px 13px;
+  }
+  .content {
+    padding: 22px 18px 56px;
+  }
+  .topbar-title h1 {
+    font-size: 19px;
+  }
+  .topbar-title p {
+    display: none;
+  }
+  .topbar-status .pill {
+    display: none;
   }
 }
 
@@ -788,6 +864,8 @@ a {
 }
 
 .btn {
+  display: inline-flex;
+  align-items: center;
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -797,6 +875,7 @@ a {
   border-radius: var(--radius-sm);
   padding: 8px 15px;
   cursor: pointer;
+  text-decoration: none;
   transition: filter 0.12s ease;
 }
 
@@ -979,11 +1058,28 @@ html {
   width: 55%;
 }
 
+/* Gentle entrance for content as a view renders. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.content > * {
+  animation: rise 0.22s ease both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
   }
-  .skeleton-card .sk {
+  .skeleton-card .sk,
+  .content > * {
     animation: none;
   }
 }

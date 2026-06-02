@@ -68,10 +68,12 @@ export function Sidebar({
   provider,
   isLocal,
   synced,
+  onNavigate,
 }: {
   provider: string;
   isLocal: boolean;
   synced: string;
+  onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   return (
@@ -88,7 +90,12 @@ export function Sidebar({
         {NAV.map((item) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           return (
-            <Link key={item.href} href={item.href} className={`nav-item ${active ? "active" : ""}`}>
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`nav-item ${active ? "active" : ""}`}
+              onClick={onNavigate}
+            >
               <NavIcon name={item.icon} />
               {item.label}
             </Link>

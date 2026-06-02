@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 
-import { Sidebar } from "./components/Sidebar";
-import { Topbar } from "./components/Topbar";
+import { Shell } from "./components/Shell";
 import "./globals.css";
 import { agoLabel, safePrivacy, safeReadiness } from "./lib/load";
 
@@ -35,13 +34,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         />
       </head>
       <body>
-        <div className="app">
-          <Sidebar provider={provider} isLocal={isLocal} synced={synced} />
-          <div className="app-main">
-            <Topbar provider={provider} isLocal={isLocal} synced={synced} />
-            <main className="content">{children}</main>
-          </div>
-        </div>
+        <Shell provider={provider} isLocal={isLocal} synced={synced}>
+          {children}
+        </Shell>
       </body>
     </html>
   );
