@@ -45,6 +45,7 @@ from .api import (
     v2_insights,
     v2_meta,
     v2_metrics,
+    v2_privacy,
     v2_readiness,
 )
 from .api.ingest import _load_apple_health_plugin
@@ -138,3 +139,4 @@ app.include_router(v2_meta.router)
 app.include_router(v2_metrics.router)
 app.include_router(v2_readiness.router)
 app.include_router(v2_experiments.router)
+app.include_router(v2_privacy.router)

@@ -467,6 +467,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/privacy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Privacy
+         * @description The host's egress posture: provider, local-vs-cloud, and what may leave.
+         *
+         *     ``raw_observations_leave_host`` is always ``false`` — the privacy promise is
+         *     an invariant, enforced unconditionally by the policy regardless of opt-in.
+         */
+        get: operations["privacy_api_v2_privacy_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/readiness": {
         parameters: {
             query?: never;
@@ -1533,6 +1556,37 @@ export interface operations {
             path: {
                 metric_id: string;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    privacy_api_v2_privacy_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
