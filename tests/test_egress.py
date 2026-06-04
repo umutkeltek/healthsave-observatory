@@ -12,10 +12,12 @@ from analysis.config import LLMConfig
 from analysis.egress import (
     Destination,
     EgressDenied,
+    EgressGate,
     EgressPolicy,
     PayloadClass,
     classify_destination,
 )
+from analysis.redaction import RedactionPolicy
 
 
 def test_ollama_is_local_everything_else_is_cloud() -> None:
@@ -86,3 +88,44 @@ def test_from_config_defaults_to_local_only() -> None:
 def test_from_config_honors_explicit_opt_in() -> None:
     policy = EgressPolicy.from_config(LLMConfig(provider="openai", allow_cloud_egress=True))
     assert policy.allow_cloud is True
+
+
+def test_egress_gate_leaves_local_payload_untouched() -> None:
+    gate = EgressGate(EgressPolicy(allow_cloud=False), RedactionPolicy())
+
+    prepared = gate.prepare(
+        "owner contact jane.doe@example.com",
+        provider="ollama",
+        payload_class=PayloadClass.PROMPT,
+    )
+
+    assert prepared.payload == "owner contact jane.doe@example.com"
+    assert prepared.envelope.destination is Destination.LOCAL
+    assert prepared.redaction is None
+
+
+def test_egress_gate_redacts_cloud_payload_after_allow() -> None:
+    gate = EgressGate(EgressPolicy(allow_cloud=True), RedactionPolicy())
+
+    prepared = gate.prepare(
+        "owner contact jane.doe@example.com",
+        provider="openai",
+        payload_class=PayloadClass.PROMPT,
+    )
+
+    assert prepared.envelope.destination is Destination.CLOUD
+    assert "jane.doe@example.com" not in prepared.payload
+    assert "[EMAIL]" in prepared.payload
+    assert prepared.redaction is not None
+    assert prepared.redaction.total == 1
+
+
+def test_egress_gate_denies_before_redaction() -> None:
+    gate = EgressGate(EgressPolicy(allow_cloud=False), RedactionPolicy())
+
+    with pytest.raises(EgressDenied):
+        gate.prepare(
+            "owner contact jane.doe@example.com",
+            provider="openai",
+            payload_class=PayloadClass.PROMPT,
+        )

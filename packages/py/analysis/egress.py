@@ -29,6 +29,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from .redaction import RedactionPolicy, RedactionResult
+
 
 class Destination(StrEnum):
     """Where an egress is headed, relative to the user's trust boundary."""
@@ -84,6 +86,15 @@ class EgressDenied(RuntimeError):
     def __init__(self, envelope: EgressEnvelope) -> None:
         super().__init__(f"egress denied: {envelope.reason}")
         self.envelope = envelope
+
+
+@dataclass(frozen=True)
+class PreparedEgressPayload:
+    """Payload after the trust-boundary decision and any required redaction."""
+
+    payload: str
+    envelope: EgressEnvelope
+    redaction: RedactionResult | None = None
 
 
 @dataclass(frozen=True)
@@ -145,3 +156,30 @@ class EgressPolicy:
         if not envelope.allowed:
             raise EgressDenied(envelope)
         return envelope
+
+
+@dataclass(frozen=True)
+class EgressGate:
+    """One seam for enforce + redact before payloads leave the host."""
+
+    egress_policy: EgressPolicy
+    redaction_policy: RedactionPolicy
+
+    def prepare(
+        self,
+        payload: str,
+        *,
+        provider: str,
+        payload_class: PayloadClass,
+    ) -> PreparedEgressPayload:
+        """Fail closed, then redact cloud-bound derived payloads."""
+        envelope = self.egress_policy.enforce(provider=provider, payload_class=payload_class)
+        if envelope.destination is not Destination.CLOUD or not self.redaction_policy.enabled:
+            return PreparedEgressPayload(payload=payload, envelope=envelope)
+
+        redaction = self.redaction_policy.apply(payload)
+        return PreparedEgressPayload(
+            payload=redaction.text,
+            envelope=envelope,
+            redaction=redaction,
+        )
