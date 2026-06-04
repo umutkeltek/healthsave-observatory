@@ -38,7 +38,7 @@ const ICONS: Record<string, ReactNode> = {
 };
 
 const NAV = [
-  { href: "/", label: "Overview", icon: "overview" },
+  { href: "/", label: "Today", icon: "overview" },
   { href: "/experiments", label: "Experiments", icon: "experiments" },
   { href: "/evidence", label: "Evidence", icon: "evidence" },
   { href: "/data", label: "Data", icon: "data" },

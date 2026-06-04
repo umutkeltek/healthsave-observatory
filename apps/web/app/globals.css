@@ -5,29 +5,64 @@
    ───────────────────────────────────────────────────────────────────── */
 
 :root {
-  --bg: #0a0d12; /* near-black canvas */
-  --surface: #11151b; /* cards */
-  --surface-2: #0c0f15; /* sidebar */
-  --raise: #0e1218; /* inset wells (result blocks, progress track) */
-  --line: #1e2530; /* hairline border */
-  --line-soft: #161b22;
+  /* ── Foundation — deeper, calmer near-black "observatory" canvas ── */
+  --bg: #07090d; /* canvas */
+  --bg-radial: #0b1220; /* faint glow toward the top of the canvas */
+  --surface: #0d1218; /* cards */
+  --surface-2: #090d12; /* sidebar */
+  --surface-3: #111923; /* raised panels / hover wells */
+  --raise: #0a0f15; /* inset wells (result blocks, progress track) */
 
-  --ink: #e8edf4;
-  --muted: #8b9bb0;
-  --faint: #5e6b7d;
+  --line: rgba(184, 199, 218, 0.11); /* hairline border */
+  --line-soft: rgba(184, 199, 218, 0.07);
+  --line-strong: rgba(184, 199, 218, 0.18);
+  --line-glow: rgba(124, 140, 255, 0.32);
 
-  --accent: #6e7bff; /* indigo */
-  --accent-weak: rgba(110, 123, 255, 0.12);
-  --accent-line: rgba(110, 123, 255, 0.28);
+  --ink: #eef3f7;
+  --muted: #9aa8b7;
+  --faint: #657386;
+  --ghost: #465264;
 
-  --up: #34d399;
-  --warn: #fbbf24;
-  --down: #fb7185;
+  /* Brand = intelligence (indigo). --accent kept as the name everything uses. */
+  --accent: #7c83ff;
+  --brand: #7c83ff;
+  --accent-weak: rgba(124, 131, 255, 0.12);
+  --accent-line: rgba(124, 131, 255, 0.28);
+  --brand-weak: rgba(124, 131, 255, 0.12);
+
+  /* Signal = physiology / live / local-only proof (mint). The second voice. */
+  --signal: #5eead4;
+  --signal-weak: rgba(94, 234, 212, 0.12);
+  --signal-line: rgba(94, 234, 212, 0.3);
+
+  /* Health semantics */
+  --up: #38d996;
+  --warn: #e8b45f;
+  --down: #ff6b8a;
+  --neutral: #8ea2b8;
+
+  /* Chart system */
+  --baseline-fill: rgba(124, 131, 255, 0.11);
+  --baseline-line: rgba(124, 131, 255, 0.28);
+  --anomaly: #ff9f7a;
+  --experiment: #c084fc;
+
+  /* Sleep stages */
+  --sleep-awake: #e8b45f;
+  --sleep-rem: #5eead4;
+  --sleep-core: #6f83ff;
+  --sleep-deep: #2d3f8f;
 
   --hover: rgba(255, 255, 255, 0.03);
 
-  --radius: 12px;
-  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-sm: 9px;
+
+  --shadow-card: 0 20px 70px rgba(0, 0, 0, 0.34);
+
+  /* Type scale */
+  --text-hero: clamp(44px, 6vw, 72px);
 
   --mono: var(--font-mono), ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   --sans: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -41,7 +76,9 @@ html,
 body {
   margin: 0;
   padding: 0;
-  background: var(--bg);
+  background-color: var(--bg);
+  background-image: radial-gradient(1100px 620px at 50% -8%, var(--bg-radial), transparent 68%);
+  background-attachment: fixed;
   color: var(--ink);
   font-family: var(--sans);
   font-size: 15px;
@@ -267,8 +304,8 @@ a {
 }
 
 .content {
-  padding: 28px 40px 72px;
-  max-width: 1120px;
+  padding: 32px 44px 84px;
+  max-width: 1320px;
 }
 
 /* ── Layout helpers ────────────────────────────────────────────────── */
@@ -944,6 +981,28 @@ a {
   --down: #e11d48;
 
   --hover: rgba(16, 24, 40, 0.04);
+
+  /* Observatory tokens, light variant */
+  --bg-radial: #e9edf6;
+  --surface-3: #f7f9fc;
+  --line-strong: #d4dae4;
+  --line-glow: rgba(91, 108, 255, 0.3);
+  --ghost: #aab2c0;
+  --brand: #5b6cff;
+  --brand-weak: rgba(91, 108, 255, 0.1);
+  --signal: #0d9488;
+  --signal-weak: rgba(13, 148, 136, 0.1);
+  --signal-line: rgba(13, 148, 136, 0.28);
+  --neutral: #586172;
+  --baseline-fill: rgba(91, 108, 255, 0.09);
+  --baseline-line: rgba(91, 108, 255, 0.26);
+  --anomaly: #ea6a3a;
+  --experiment: #9333ea;
+  --sleep-awake: #b7791f;
+  --sleep-rem: #0d9488;
+  --sleep-core: #5b6cff;
+  --sleep-deep: #1e2a6b;
+  --shadow-card: 0 16px 50px rgba(20, 30, 55, 0.1);
 }
 
 [data-theme="light"] .status-dot {
@@ -1082,4 +1141,335 @@ html {
   .content > * {
     animation: none;
   }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Private Observatory — Today hero, signal ribbon, contributors, vault
+   ───────────────────────────────────────────────────────────────────── */
+
+/* Human (non-mono) card title — reserve mono+uppercase for system metadata. */
+.card-title {
+  margin: 0 0 4px;
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--ink);
+}
+
+/* 12-column Today grid */
+.today-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 4px;
+}
+.col-12 {
+  grid-column: 1 / -1;
+}
+.col-8 {
+  grid-column: span 8;
+}
+.col-7 {
+  grid-column: span 7;
+}
+.col-5 {
+  grid-column: span 5;
+}
+.col-4 {
+  grid-column: span 4;
+}
+@media (max-width: 980px) {
+  .today-grid {
+    grid-template-columns: 1fr;
+  }
+  .col-8,
+  .col-7,
+  .col-5,
+  .col-4 {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Hero card — raised, with a faint signature glow */
+.hero {
+  position: relative;
+  background:
+    radial-gradient(130% 150% at 0% 0%, rgba(124, 131, 255, 0.07), transparent 56%), var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 26px 28px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.hero-eyebrow {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.recovery {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  margin-top: 8px;
+}
+.recovery-score {
+  font-family: var(--mono);
+  font-size: var(--text-hero);
+  line-height: 0.9;
+  letter-spacing: -0.055em;
+  font-variant-numeric: tabular-nums slashed-zero;
+  color: var(--ink);
+}
+.recovery-state {
+  font-size: 13px;
+  font-weight: 650;
+  padding: 5px 12px;
+  border-radius: 999px;
+  margin-bottom: 9px;
+  white-space: nowrap;
+}
+.state-prime {
+  color: var(--up);
+  background: rgba(56, 217, 150, 0.12);
+  border: 1px solid rgba(56, 217, 150, 0.3);
+}
+.state-steady {
+  color: var(--signal);
+  background: var(--signal-weak);
+  border: 1px solid var(--signal-line);
+}
+.state-caution {
+  color: var(--warn);
+  background: rgba(232, 180, 95, 0.12);
+  border: 1px solid rgba(232, 180, 95, 0.32);
+}
+.state-suppressed {
+  color: var(--down);
+  background: rgba(255, 107, 138, 0.1);
+  border: 1px solid rgba(255, 107, 138, 0.3);
+}
+.recovery-line {
+  margin: 16px 0 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+/* Signal ribbon — the signature primitive */
+.ribbon-wrap {
+  margin-top: 20px;
+}
+.ribbon-plot {
+  position: relative;
+}
+.ribbon {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.ribbon-band {
+  fill: var(--baseline-fill);
+}
+.ribbon-band-edge {
+  fill: none;
+  stroke: var(--baseline-line);
+  stroke-width: 1;
+}
+.ribbon-median {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+}
+.ribbon-trace {
+  fill: none;
+  stroke: var(--signal);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 8px rgba(94, 234, 212, 0.28));
+}
+.ribbon-pin {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: var(--anomaly);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 4px rgba(255, 159, 122, 0.16);
+}
+.ribbon-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
+/* Contributor stack — why the score moved */
+.contribs {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.contrib {
+  display: grid;
+  grid-template-columns: 116px 1fr 78px;
+  align-items: center;
+  gap: 12px;
+}
+.contrib-name {
+  font-size: 13px;
+  color: var(--muted);
+}
+.contrib-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--raise);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.contrib-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+.contrib-fill.down {
+  background: linear-gradient(90deg, rgba(255, 107, 138, 0.45), var(--down));
+}
+.contrib-fill.up {
+  background: linear-gradient(90deg, rgba(56, 217, 150, 0.45), var(--up));
+}
+.contrib-val {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: right;
+}
+.contrib-val.down {
+  color: var(--down);
+}
+.contrib-val.up {
+  color: var(--up);
+}
+
+/* Local Vault Receipt — privacy as a chain of custody */
+.vault {
+  height: 100%;
+}
+.vault-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.vault-seal {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--signal);
+  background: var(--signal-weak);
+  border: 1px solid var(--signal-line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+.chain {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+}
+.chain-step {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0 11px 22px;
+}
+.chain-step::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 15px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--signal);
+  box-shadow: 0 0 0 4px var(--signal-weak);
+}
+.chain-step::after {
+  content: "";
+  position: absolute;
+  left: 6.5px;
+  top: 21px;
+  bottom: -3px;
+  width: 1px;
+  background: var(--line-strong);
+}
+.chain-step:last-child::after {
+  display: none;
+}
+.chain-step.blocked::before {
+  background: var(--down);
+  box-shadow: 0 0 0 4px rgba(255, 107, 138, 0.14);
+}
+.chain-label {
+  font-size: 13px;
+  color: var(--ink);
+}
+.chain-meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.chain-step.blocked .chain-meta {
+  color: var(--down);
+}
+
+/* Evidence pins */
+.ev-pin {
+  display: flex;
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.ev-pin:first-child {
+  border-top: none;
+}
+.ev-dot {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  margin-top: 5px;
+  background: var(--anomaly);
+  box-shadow: 0 0 0 4px rgba(255, 159, 122, 0.13);
+}
+.ev-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ev-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.ev-calc {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.ev-conf {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--faint);
+  margin-top: 4px;
 }
