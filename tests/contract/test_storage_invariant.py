@@ -182,3 +182,29 @@ def test_storage_timescale_baseline() -> None:
     actual = {p.name for p in timescale.iterdir() if p.suffix == ".py"}
     missing = expected_modules - actual
     assert not missing, f"Expected timescale modules missing: {missing}"
+
+
+def test_migrated_v2_routes_depend_on_ports_not_timescale_adapters() -> None:
+    """Routes migrated to storage ports must not import concrete Timescale adapters.
+
+    ``storage.defaults`` owns production adapter selection; route modules keep
+    their dependency on ``storage.ports`` so tests can substitute fakes at the
+    interface.
+    """
+    migrated = {
+        "apps/api/server/api/v2_metrics.py",
+        "apps/api/server/api/v2_insights.py",
+        "apps/api/server/api/v2_agents.py",
+    }
+    offenders = []
+    for rel in migrated:
+        text = (REPO_ROOT / rel).read_text()
+        if "storage.timescale" in text:
+            offenders.append(rel)
+
+    assert not offenders, (
+        "migrated v2 routes imported concrete storage.timescale adapters:\n"
+        + "\n".join(f"  - {path}" for path in sorted(offenders))
+        + "\n\nImport storage.ports plus storage.defaults instead; concrete Timescale "
+        "selection belongs behind the storage seam."
+    )

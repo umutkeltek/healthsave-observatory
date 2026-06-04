@@ -255,6 +255,30 @@ class _InMemoryBriefingRepository:
         out.sort(key=lambda r: r.created_at, reverse=True)
         return out[:limit]
 
+    async def fetch_correlations(
+        self,
+        session: Any,
+        *,
+        period_days: str | None = None,
+        limit: int = 200,
+    ) -> list[FindingRow]:
+        out = [r for ft, r in self.findings if ft == "correlation"]
+        if period_days is not None:
+            out = [r for r in out if str(r.structured_data.get("period_days")) == period_days]
+        out.sort(key=lambda r: r.created_at, reverse=True)
+        return out[:limit]
+
+    async def fetch_findings(
+        self,
+        session: Any,
+        *,
+        finding_type: str | None = None,
+        limit: int = 200,
+    ) -> list[FindingRow]:
+        out = [r for ft, r in self.findings if finding_type is None or ft == finding_type]
+        out.sort(key=lambda r: r.created_at, reverse=True)
+        return out[:limit]
+
 
 def test_in_memory_briefing_repo_satisfies_protocol() -> None:
     fake = _InMemoryBriefingRepository()
@@ -307,6 +331,18 @@ async def test_in_memory_briefing_repo_walks_all_three_methods() -> None:
             ),
         )
     )
+    repo.findings.append(
+        (
+            "correlation",
+            FindingRow(
+                id=3,
+                metric="vital.hrv_sdnn~vital.resting_heart_rate",
+                severity=None,
+                structured_data={"metric_a": "hrv", "metric_b": "rhr", "period_days": 90},
+                created_at=datetime(2026, 5, 11, tzinfo=UTC),
+            ),
+        )
+    )
 
     latest = await repo.latest_narratives_by_type(
         session=None, insight_types=("daily_briefing", "weekly_summary")
@@ -323,6 +359,15 @@ async def test_in_memory_briefing_repo_walks_all_three_methods() -> None:
 
     trends_none = await repo.fetch_trends(session=None, period_days="999")
     assert trends_none == []
+
+    correlations = await repo.fetch_correlations(session=None, period_days="90")
+    assert len(correlations) == 1 and correlations[0].id == 3
+
+    findings = await repo.fetch_findings(session=None)
+    assert [row.id for row in findings] == [3, 1, 2]
+
+    only_trends = await repo.fetch_findings(session=None, finding_type="trend")
+    assert [row.id for row in only_trends] == [2]
 
 
 # ──────────────────────────────────────────────────────────────

@@ -159,6 +159,22 @@ class BriefingRepository(Protocol):
         limit: int = 200,
     ) -> list[FindingRow]: ...
 
+    async def fetch_correlations(
+        self,
+        session: AsyncSession,
+        *,
+        period_days: str | None = None,
+        limit: int = 200,
+    ) -> list[FindingRow]: ...
+
+    async def fetch_findings(
+        self,
+        session: AsyncSession,
+        *,
+        finding_type: str | None = None,
+        limit: int = 200,
+    ) -> list[FindingRow]: ...
+
 
 @runtime_checkable
 class IngestStorage(Protocol):

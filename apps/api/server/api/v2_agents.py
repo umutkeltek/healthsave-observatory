@@ -18,8 +18,8 @@ Two endpoints:
 
 Discipline:
 
-  * Reads / writes go through :class:`storage.timescale.agents` (the
-    Phase 7-B repository), never raw SQL.
+  * Reads / writes go through :class:`storage.ports.AgentRepository`, never raw
+    SQL.
   * Wire shapes are :class:`V2Model` subclasses defined inline — the
     contracts module's ``ActionProposal`` carries owner/workspace ids
     which are single-user sentinels here; the wire shape drops them
@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from contracts._base import V2Model
@@ -39,12 +39,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from storage.timescale import agents as agent_ledger
-from storage.timescale.agents import ProposalRow
+from storage.defaults import agent_repository
+from storage.ports import AgentRepository
 
 from .deps import get_session, verify_api_key
 
 _log = logging.getLogger("healthsave.api.v2_agents")
+_AGENT_REPO: AgentRepository = agent_repository()
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -107,7 +108,7 @@ class DecideResponse(V2Model):
 # ──────────────────────────────────────────────────────────────────────
 
 
-def _row_to_view(row: ProposalRow) -> ProposalView:
+def _row_to_view(row: Any) -> ProposalView:
     """Storage projection → wire view. Drops owner/workspace sentinels."""
     return ProposalView(
         id=row.id,
@@ -147,12 +148,10 @@ async def list_proposals(
 ) -> ProposalsListResponse:
     """List recent proposals.
 
-    Reads through :func:`storage.timescale.agents.fetch_recent_proposals`
-    — the Phase 7-B repository owns the SQL (default newest-first via
-    the supplied ORDER BY). Per the Phase 5 storage-zone rule, the
+    Reads through the agent repository. Per the Phase 5 storage-zone rule, the
     route never composes its own query against ``action_proposals``.
     """
-    rows = await agent_ledger.fetch_recent_proposals(
+    rows = await _AGENT_REPO.fetch_recent_proposals(
         session,
         limit=limit,
         undecided_only=undecided_only,
@@ -177,8 +176,8 @@ async def decide_proposal(
     """Record the operator's decision on one proposal.
 
     Writes a single row into ``action_decisions`` via
-    :func:`storage.timescale.agents.decide_action`. The decision is
-    append-only — re-deciding (e.g. flipping a rejection to an
+    :class:`storage.ports.AgentRepository`. The decision is append-only —
+    re-deciding (e.g. flipping a rejection to an
     approval) writes a new row, and downstream readers take the
     newest. The supervisor / executor path that picks up an approved
     proposal is Phase 7-F territory; Phase 7-E only persists the
@@ -191,7 +190,7 @@ async def decide_proposal(
         truly absent; both surface as 404.
     """
     try:
-        decision_id = await agent_ledger.decide_action(
+        decision_id = await _AGENT_REPO.decide_action(
             session,
             proposal_id=proposal_id,
             decision=body.decision,
