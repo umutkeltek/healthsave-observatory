@@ -66,6 +66,13 @@ class CorrelationConfig(BaseModel):
     period_days: int = 90
 
 
+class RecoveryConfig(BaseModel):
+    enabled: bool = False
+    cron: str = "0 6 * * *"  # 6:00 AM, ahead of the 7:00 AM daily briefing
+    lookback_days: int = 1
+    baseline_days: int = 30
+
+
 class LLMFallbackEntry(BaseModel):
     provider: str
     model: str
@@ -112,6 +119,7 @@ class AnalysisBlock(BaseModel):
     anomaly_detection: AnomalyConfig = Field(default_factory=AnomalyConfig)
     trend_analysis: TrendConfig = Field(default_factory=TrendConfig)
     correlation_analysis: CorrelationConfig = Field(default_factory=CorrelationConfig)
+    recovery: RecoveryConfig = Field(default_factory=RecoveryConfig)
 
 
 class AnalysisConfig(BaseModel):

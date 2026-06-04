@@ -12,6 +12,8 @@ enabled:
   persists structured correlation findings, no LLM call.
 * ``weekly_summary`` - runs the weekly rollup end-to-end (aggregate +
   trends/correlations context + LLM narrative).
+* ``recovery_check`` - computes the open Recovery Score from the daily
+  period summary and persists a single ``recovery_score`` finding, no LLM call.
 
 APScheduler is imported inside ``start()`` so module import stays cheap
 for pytest collection (``AsyncIOScheduler()`` constructed at import time
@@ -51,6 +53,7 @@ class AnalysisScheduler:
         trend = self.config.analysis.trend_analysis
         correlation = self.config.analysis.correlation_analysis
         weekly = self.config.analysis.weekly_summary
+        recovery = self.config.analysis.recovery
 
         if not (
             daily.enabled
@@ -58,6 +61,7 @@ class AnalysisScheduler:
             or trend.enabled
             or correlation.enabled
             or weekly.enabled
+            or recovery.enabled
         ):
             log.info("all analysis jobs disabled; scheduler not starting")
             return
@@ -116,6 +120,16 @@ class AnalysisScheduler:
                 coalesce=True,
             )
             log.info("registered weekly_summary cron=%s", weekly.cron)
+
+        if recovery.enabled:
+            self.scheduler.add_job(
+                self.engine.run_recovery_check,
+                CronTrigger.from_crontab(recovery.cron),
+                id="recovery_check",
+                max_instances=1,
+                coalesce=True,
+            )
+            log.info("registered recovery_check cron=%s", recovery.cron)
 
         self.scheduler.start()
         log.info("AnalysisScheduler started")

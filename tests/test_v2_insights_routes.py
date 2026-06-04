@@ -263,3 +263,52 @@ async def test_trigger_400_for_unknown_type():
     with pytest.raises(Exception) as exc_info:
         await trigger(request, TriggerBody(type="weekly_summary"))
     assert getattr(exc_info.value, "status_code", None) == 400
+
+
+class _FakeRecoveryEngine:
+    def __init__(self, run_id):
+        self._run_id = run_id
+        self.calls = 0
+
+    async def run_recovery_check(self):
+        self.calls += 1
+        return self._run_id
+
+
+def _recovery_request(*, enabled: bool, run_id: int | None = 7):
+    config = AnalysisConfig.model_validate({"analysis": {"recovery": {"enabled": enabled}}})
+    return SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                analysis_config=config,
+                analysis_engine=_FakeRecoveryEngine(run_id),
+            )
+        )
+    )
+
+
+@pytest.mark.asyncio
+async def test_trigger_recovery_check_runs_engine_when_enabled():
+    request = _recovery_request(enabled=True, run_id=42)
+    result = await trigger(request, TriggerBody(type="recovery_check"))
+    assert result["status"] == "completed"
+    assert result["run_type"] == "recovery_check"
+    assert result["run_id"] == 42
+    assert request.app.state.analysis_engine.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_trigger_recovery_check_reports_skipped_when_no_signal():
+    request = _recovery_request(enabled=True, run_id=None)
+    result = await trigger(request, TriggerBody(type="recovery_check"))
+    assert result["status"] == "skipped"
+    assert result["run_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_trigger_recovery_check_409_when_disabled():
+    request = _recovery_request(enabled=False)
+    with pytest.raises(Exception) as exc_info:
+        await trigger(request, TriggerBody(type="recovery_check"))
+    assert getattr(exc_info.value, "status_code", None) == 409
+    assert request.app.state.analysis_engine.calls == 0
