@@ -10,10 +10,12 @@ from __future__ import annotations
 from storage.ports import (
     AgentRepository,
     BriefingRepository,
+    ExperimentRepository,
     TimeSeriesQueryService,
 )
 from storage.timescale.agents import default_repository as _agent_repository
 from storage.timescale.briefings import default_repository as _briefing_repository
+from storage.timescale.experiments import default_repository as _experiment_repository
 from storage.timescale.observations import CanonicalObservationRepository
 
 _time_series_query_service = CanonicalObservationRepository()
@@ -27,6 +29,10 @@ def briefing_repository() -> BriefingRepository:
     return _briefing_repository
 
 
+def experiment_repository() -> ExperimentRepository:
+    return _experiment_repository
+
+
 def time_series_query_service() -> TimeSeriesQueryService:
     return _time_series_query_service
 
@@ -34,5 +40,6 @@ def time_series_query_service() -> TimeSeriesQueryService:
 __all__ = [
     "agent_repository",
     "briefing_repository",
+    "experiment_repository",
     "time_series_query_service",
 ]
