@@ -8,6 +8,12 @@
 # are safe defaults: ingestion works immediately, while AI briefing stays
 # off until setup.sh or you explicitly enable daily_briefing below.
 
+# Each job's `enabled` flag can also be set from .env — handy for container
+# deploys that mount this example file read-only and can't edit it:
+#   ANALYSIS_DAILY_BRIEFING_ENABLED, ANALYSIS_WEEKLY_SUMMARY_ENABLED,
+#   ANALYSIS_ANOMALY_DETECTION_ENABLED, ANALYSIS_TREND_ANALYSIS_ENABLED,
+#   ANALYSIS_CORRELATION_ANALYSIS_ENABLED, ANALYSIS_RECOVERY_ENABLED
+# (any of 1/true/yes/on). The .env value wins over the value here.
 analysis:
   daily_briefing:
     enabled: false
