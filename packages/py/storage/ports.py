@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from datetime import date, datetime
     from uuid import UUID
 
+    from contracts.observation import Observation
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from .results import IngestWriteResult
@@ -262,6 +263,18 @@ class TimeSeriesQueryService(Protocol):
         end: datetime,
         limit: int = 5000,
     ) -> list[SeriesPoint]: ...
+
+
+@runtime_checkable
+class ObservationRepository(TimeSeriesQueryService, Protocol):
+    """Canonical Observation store write+read port.
+
+    Ingest owns canonical truth through ``insert_many``; read routes and
+    analysis consume the same store through ``query_series`` inherited from
+    :class:`TimeSeriesQueryService`.
+    """
+
+    async def insert_many(self, session: AsyncSession, observations: list[Observation]) -> int: ...
 
 
 @runtime_checkable

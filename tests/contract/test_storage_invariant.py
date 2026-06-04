@@ -211,3 +211,10 @@ def test_migrated_v2_routes_depend_on_ports_not_timescale_adapters() -> None:
         + "\n\nImport storage.ports plus storage.defaults instead; concrete Timescale "
         "selection belongs behind the storage seam."
     )
+
+
+def test_ingest_route_depends_on_observation_port_not_timescale_adapter() -> None:
+    """The canonical Observation write is ingest truth, so the route uses the port seam."""
+    text = (REPO_ROOT / "apps/api/server/api/ingest.py").read_text()
+
+    assert "storage.timescale.observations" not in text
