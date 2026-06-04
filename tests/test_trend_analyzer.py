@@ -1,7 +1,7 @@
 """Unit tests for :class:`analysis.statistical.trends.TrendAnalyzer`.
 
-The trend analyzer follows the existing no-live-DB discipline: tests
-queue fake SQL rowsets and assert behavior from those rows.
+The trend analyzer follows the no-live-DB discipline: tests queue fake daily
+value rowsets and assert behavior from those rows.
 """
 
 from __future__ import annotations
@@ -22,40 +22,14 @@ class _Row(SimpleNamespace):
     """Lightweight row stub - attribute access mimics SQLAlchemy ``Row``."""
 
 
-class _Result:
-    def __init__(self, rows):
-        self._rows = list(rows)
-
-    def fetchall(self):
-        return list(self._rows)
-
-
-class _FakeSession:
+class _DailyValueFetcher:
     def __init__(self, batches):
         self._batches = list(batches)
-        self.calls: list[tuple[str, dict]] = []
+        self.calls: list[tuple[str, object, object]] = []
 
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-    async def execute(self, statement, params=None):
-        sql = " ".join(str(statement).split())
-        self.calls.append((sql, params or {}))
-        rows = self._batches.pop(0) if self._batches else []
-        return _Result(rows)
-
-
-def _session_factory(batches):
-    session = _FakeSession(batches)
-
-    def factory():
-        return session
-
-    factory.session = session
-    return factory
+    async def __call__(self, metric, start, end):
+        self.calls.append((metric, start, end))
+        return self._batches.pop(0) if self._batches else []
 
 
 def _daily_rows(*, start: date, values: list[float]) -> list[_Row]:
@@ -66,14 +40,34 @@ def _daily_rows(*, start: date, values: list[float]) -> list[_Row]:
 
 
 @pytest.mark.asyncio
+async def test_analyze_uses_injected_daily_value_fetcher_without_session():
+    rows = _daily_rows(
+        start=date(2026, 3, 1),
+        values=[60.0 + (index * 0.5) for index in range(30)],
+    )
+    calls: list[tuple[str, object, object]] = []
+
+    async def fetch_daily_values(metric, start, end):
+        calls.append((metric, start, end))
+        return rows
+
+    trend = await TrendAnalyzer(fetch_daily_values).analyze("heart_rate", days=30)
+
+    assert trend is not None
+    assert trend.metric == "heart_rate"
+    assert trend.slope == pytest.approx(0.5, rel=1e-6)
+    assert [call[0] for call in calls] == ["heart_rate"]
+
+
+@pytest.mark.asyncio
 async def test_analyze_detects_significant_upward_heart_rate_trend():
     rows = _daily_rows(
         start=date(2026, 3, 1),
         values=[60.0 + (index * 0.5) for index in range(30)],
     )
-    factory = _session_factory([rows])
+    fetch_daily_values = _DailyValueFetcher([rows])
 
-    trend = await TrendAnalyzer(factory).analyze("heart_rate", days=30)
+    trend = await TrendAnalyzer(fetch_daily_values).analyze("heart_rate", days=30)
 
     assert trend is not None
     assert trend.metric == "heart_rate"
@@ -83,25 +77,22 @@ async def test_analyze_detects_significant_upward_heart_rate_trend():
     assert trend.p_value is not None
     assert trend.p_value < 0.05
     assert trend.confidence == "high"
-    assert "FROM hr_hourly" in factory.session.calls[0][0]
+    assert fetch_daily_values.calls[0][0] == "heart_rate"
 
 
 @pytest.mark.asyncio
-async def test_analyze_falls_back_to_raw_heart_rate_when_hourly_view_is_empty():
+async def test_analyze_detects_significant_downward_heart_rate_trend():
     rows = _daily_rows(
         start=date(2026, 3, 1),
         values=[72.0 - (index * 0.25) for index in range(30)],
     )
-    factory = _session_factory([[], rows])
+    fetch_daily_values = _DailyValueFetcher([rows])
 
-    trend = await TrendAnalyzer(factory).analyze("heart_rate", days=30)
+    trend = await TrendAnalyzer(fetch_daily_values).analyze("heart_rate", days=30)
 
     assert trend is not None
     assert trend.direction == "down"
     assert trend.slope == pytest.approx(-0.25, rel=1e-6)
-    queries = [sql for sql, _ in factory.session.calls]
-    assert any("FROM hr_hourly" in sql for sql in queries)
-    assert any("FROM heart_rate" in sql for sql in queries)
 
 
 @pytest.mark.asyncio
@@ -110,9 +101,9 @@ async def test_analyze_detects_significant_downward_hrv_trend():
         start=date(2026, 3, 1),
         values=[80.0 - index for index in range(30)],
     )
-    factory = _session_factory([rows])
+    fetch_daily_values = _DailyValueFetcher([rows])
 
-    trend = await TrendAnalyzer(factory).analyze("hrv", days=30)
+    trend = await TrendAnalyzer(fetch_daily_values).analyze("hrv", days=30)
 
     assert trend is not None
     assert trend.metric == "hrv"
@@ -120,7 +111,7 @@ async def test_analyze_detects_significant_downward_hrv_trend():
     assert trend.slope == pytest.approx(-1.0, rel=1e-6)
     assert trend.p_value is not None
     assert trend.p_value < 0.05
-    assert "FROM hrv" in factory.session.calls[0][0]
+    assert fetch_daily_values.calls[0][0] == "hrv"
 
 
 @pytest.mark.asyncio
@@ -129,9 +120,9 @@ async def test_analyze_returns_none_when_data_is_below_trend_sufficiency_gate():
         start=date(2026, 3, 1),
         values=[60.0 + (index * 0.5) for index in range(20)],
     )
-    factory = _session_factory([rows])
+    fetch_daily_values = _DailyValueFetcher([rows])
 
-    trend = await TrendAnalyzer(factory).analyze("heart_rate", days=30)
+    trend = await TrendAnalyzer(fetch_daily_values).analyze("heart_rate", days=30)
 
     assert trend is None
 
@@ -173,8 +164,8 @@ async def test_analyze_returns_none_when_regression_is_not_significant():
             68.0,
         ],
     )
-    factory = _session_factory([rows])
+    fetch_daily_values = _DailyValueFetcher([rows])
 
-    trend = await TrendAnalyzer(factory).analyze("heart_rate", days=30)
+    trend = await TrendAnalyzer(fetch_daily_values).analyze("heart_rate", days=30)
 
     assert trend is None

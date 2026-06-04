@@ -87,7 +87,7 @@ class AnalysisEngine:
         self.llm_client = llm_client
         self.aggregator = DataAggregator(self._summarize_metric_window)
         self.anomaly_detector = AnomalyDetector(session_factory, config)
-        self.trend_analyzer = TrendAnalyzer(session_factory)
+        self.trend_analyzer = TrendAnalyzer(self._fetch_trend_daily_values)
         self.correlation_analyzer = CorrelationAnalyzer(self._fetch_metric_daily_series)
 
     async def run_daily_briefing(self) -> int | None:
@@ -437,6 +437,18 @@ class AnalysisEngine:
         """Metric-window fetcher injected into :class:`DataAggregator`."""
         async with self.session_factory() as session:
             return await _sql().summarize_metric_window(session, metric_id, start, end)
+
+    async def _fetch_trend_daily_values(
+        self, metric: str, start: datetime, end: datetime
+    ) -> list[Any]:
+        """Daily-value fetcher injected into :class:`TrendAnalyzer`."""
+        async with self.session_factory() as session:
+            if metric == "heart_rate":
+                rows = await _sql().fetch_heart_rate_daily_from_hourly(session, start, end)
+                if rows:
+                    return rows
+                return await _sql().fetch_heart_rate_daily_from_raw(session, start, end)
+            return await _sql().fetch_hrv_daily(session, start, end)
 
     # ──────────────────────────────────────────────────────────────
     #  Internals

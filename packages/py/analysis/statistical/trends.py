@@ -1,46 +1,37 @@
-"""Trend analysis - linear regression over daily aggregates.
+"""Trend analysis - linear regression over injected daily aggregates.
 
-Phase 5F lifted the SQL out of this module into
-``storage.timescale.analysis``. Statistical machinery (regression,
-sufficiency gates, day coercion) stays here; data access is delegated
-through the lazy ``_sql()`` handle (see :func:`analysis.engine._sql`
-for the cycle background).
+Statistical machinery (regression, sufficiency gates, day coercion) stays here;
+the caller owns the storage-backed daily-value fetcher.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..types import Trend
 from .gates import MINIMUM_DATA_REQUIREMENTS
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    DailyValueFetcher = Callable[[str, datetime, datetime], Awaitable[list[Any]]]
 
 _SUPPORTED_METRICS = frozenset({"heart_rate", "hrv"})
 _SIGNIFICANCE_P = 0.05
 _HIGH_CONFIDENCE_P = 0.01
 
 
-def _sql():
-    """Lazy import handle for ``storage.timescale.analysis`` — see
-    :func:`analysis.engine._sql` for the cycle background.
-    """
-    from storage.timescale import analysis as analysis_sql
-
-    return analysis_sql
-
-
 class TrendAnalyzer:
     """Detect multi-day/multi-week trends via linear regression."""
 
-    def __init__(self, session_factory) -> None:
-        self.session_factory = session_factory
+    def __init__(self, fetch_daily_values: DailyValueFetcher) -> None:
+        self._fetch_daily_values = fetch_daily_values
 
     async def analyze(self, metric: str, days: int = 30) -> Trend | None:
         """Return a significant trend for ``metric`` over the window, or None.
 
-        Phase 2b supports ``heart_rate`` and ``hrv``. Heart rate uses the
-        ``hr_hourly`` continuous aggregate with a raw ``heart_rate`` fallback
-        for fresh installs. HRV uses the raw ``hrv`` hypertable.
+        Phase 2b supports ``heart_rate`` and ``hrv``.
         """
         if metric not in _SUPPORTED_METRICS:
             raise ValueError(f"Unsupported trend metric: {metric}")
@@ -48,8 +39,7 @@ class TrendAnalyzer:
         end = datetime.now(tz=UTC).replace(hour=0, minute=0, second=0, microsecond=0)
         start = end - timedelta(days=days)
 
-        async with self.session_factory() as session:
-            rows = await self._fetch_daily_values(session, metric, start, end)
+        rows = await self._fetch_daily_values(metric, start, end)
 
         if not _has_sufficient_data(rows):
             return None
@@ -77,16 +67,6 @@ class TrendAnalyzer:
             p_value=float(result.pvalue),
             confidence="high" if result.pvalue < _HIGH_CONFIDENCE_P else "medium",
         )
-
-    async def _fetch_daily_values(
-        self, session, metric: str, start: datetime, end: datetime
-    ) -> list[Any]:
-        if metric == "heart_rate":
-            rows = await _sql().fetch_heart_rate_daily_from_hourly(session, start, end)
-            if rows:
-                return rows
-            return await _sql().fetch_heart_rate_daily_from_raw(session, start, end)
-        return await _sql().fetch_hrv_daily(session, start, end)
 
 
 def _has_sufficient_data(rows: list[Any]) -> bool:
