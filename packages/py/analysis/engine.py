@@ -85,7 +85,7 @@ class AnalysisEngine:
         self.session_factory = session_factory
         self.config = config
         self.llm_client = llm_client
-        self.aggregator = DataAggregator(session_factory)
+        self.aggregator = DataAggregator(self._summarize_metric_window)
         self.anomaly_detector = AnomalyDetector(session_factory, config)
         self.trend_analyzer = TrendAnalyzer(session_factory)
         self.correlation_analyzer = CorrelationAnalyzer(self._fetch_metric_daily_series)
@@ -430,6 +430,13 @@ class AnalysisEngine:
             for row in rows
             if getattr(row, "value", None) is not None and getattr(row, "day", None) is not None
         }
+
+    async def _summarize_metric_window(
+        self, metric_id: str, start: datetime, end: datetime
+    ) -> dict[str, Any]:
+        """Metric-window fetcher injected into :class:`DataAggregator`."""
+        async with self.session_factory() as session:
+            return await _sql().summarize_metric_window(session, metric_id, start, end)
 
     # ──────────────────────────────────────────────────────────────
     #  Internals
