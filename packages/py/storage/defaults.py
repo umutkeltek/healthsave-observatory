@@ -11,6 +11,7 @@ from storage.ports import (
     AgentRepository,
     BriefingRepository,
     ExperimentRepository,
+    ObservationRepository,
     ReadinessRepository,
     SyncReceiptRepository,
     TimeSeriesQueryService,
@@ -37,6 +38,10 @@ def experiment_repository() -> ExperimentRepository:
     return _experiment_repository
 
 
+def observation_repository() -> ObservationRepository:
+    return _time_series_query_service
+
+
 def readiness_repository() -> ReadinessRepository:
     return _readiness_repository
 
@@ -53,6 +58,7 @@ __all__ = [
     "agent_repository",
     "briefing_repository",
     "experiment_repository",
+    "observation_repository",
     "readiness_repository",
     "sync_receipt_repository",
     "time_series_query_service",

@@ -25,7 +25,7 @@ from normalization import normalize_apple_batch
 from plugin_sdk import SDK_VERSION
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
-from storage.timescale.observations import CanonicalObservationRepository
+from storage.defaults import observation_repository
 from storage.timescale.sync_receipts import (
     ReceiptIdempotencyConflict,
     _parse_time_value,
@@ -50,11 +50,11 @@ from .metrics import (
     RAW_LOG_ORPHANED,
 )
 
-# v2 canonical dual-write (Decision C migration bridge). Stable source id for the
-# Apple Health / HealthSave source; the repository is stateless and reused.
+# v2 canonical write (Decision C). Stable source id for the Apple Health /
+# HealthSave source; production adapter selection lives behind storage.defaults.
 APPLE_HEALTHKIT_SOURCE_ID = UUID("a9b1e7e0-0000-4000-8000-000000000001")
 _APPLE_PLUGIN_ID = "apple-health-healthsave"
-_canonical_repo = CanonicalObservationRepository()
+_canonical_repo = observation_repository()
 
 if TYPE_CHECKING:
     from plugin_sdk import Source

@@ -518,6 +518,14 @@ def test_canonical_repo_satisfies_timeseries_query_service() -> None:
     assert isinstance(CanonicalObservationRepository(), TimeSeriesQueryService)
 
 
+def test_canonical_repo_satisfies_observation_repository() -> None:
+    """The canonical store adapter is also the ingest write port."""
+    from storage.ports import ObservationRepository
+    from storage.timescale.observations import CanonicalObservationRepository
+
+    assert isinstance(CanonicalObservationRepository(), ObservationRepository)
+
+
 class _InMemoryTimeSeriesQueryService:
     """Reference fake — proves the read port is genuinely swappable, not
     TimescaleDB-coupled. Mirrors the SQL window semantics: half-open
