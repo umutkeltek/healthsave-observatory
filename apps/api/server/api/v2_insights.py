@@ -14,7 +14,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from storage.timescale import briefings
+from storage.defaults import briefing_repository
+from storage.ports import BriefingRepository
 
 from .deps import get_session, verify_api_key
 from .insights import _record_trigger_run  # reuse the pipeline_runs ledger wrapper
@@ -23,6 +24,7 @@ router = APIRouter(prefix="/api/v2/insights", dependencies=[Depends(verify_api_k
 
 _CORRELATIONS_LIMIT = 200
 _FINDINGS_LIMIT = 200
+_BRIEFING_REPO: BriefingRepository = briefing_repository()
 
 # Finding kinds the evidence feed renders. Mirrors the finding_type values the
 # analysis engine persists (see analysis.engine); an unknown ?type is a 422.
@@ -55,7 +57,7 @@ async def list_correlations(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Persisted cross-metric correlation findings, newest first."""
-    findings = await briefings.fetch_correlations(
+    findings = await _BRIEFING_REPO.fetch_correlations(
         session, period_days=_validate_period(period), limit=_CORRELATIONS_LIMIT
     )
     correlations = [
@@ -76,7 +78,7 @@ async def list_correlations(
 @router.get("/latest")
 async def latest_narratives(session: AsyncSession = Depends(get_session)) -> dict:
     """Most recent daily-briefing + weekly-summary narratives (the weekly-brief card)."""
-    narratives = await briefings.latest_narratives_by_type(
+    narratives = await _BRIEFING_REPO.latest_narratives_by_type(
         session, insight_types=("daily_briefing", "weekly_summary")
     )
     return {
@@ -102,7 +104,9 @@ async def list_findings(
     """
     if finding_type is not None and finding_type not in _EVIDENCE_TYPES:
         raise HTTPException(status_code=422, detail=f"unknown finding type: {finding_type}")
-    rows = await briefings.fetch_findings(session, finding_type=finding_type, limit=_FINDINGS_LIMIT)
+    rows = await _BRIEFING_REPO.fetch_findings(
+        session, finding_type=finding_type, limit=_FINDINGS_LIMIT
+    )
     findings = [
         {
             "id": row.id,
