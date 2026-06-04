@@ -130,6 +130,28 @@ class AnalysisConfig(BaseModel):
     notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
 
 
+# .env name -> AnalysisBlock attribute for the per-job enable flag. The remote
+# deploy mounts config.yaml.example (every job off) and wipes any host
+# config.yaml on redeploy, so the persistent .env in REMOTE_ENV_DIR is the only
+# deploy-survivable way to turn a Brain-1 job on in production.
+_JOB_ENABLE_ENV: dict[str, str] = {
+    "ANALYSIS_DAILY_BRIEFING_ENABLED": "daily_briefing",
+    "ANALYSIS_WEEKLY_SUMMARY_ENABLED": "weekly_summary",
+    "ANALYSIS_ANOMALY_DETECTION_ENABLED": "anomaly_detection",
+    "ANALYSIS_TREND_ANALYSIS_ENABLED": "trend_analysis",
+    "ANALYSIS_CORRELATION_ANALYSIS_ENABLED": "correlation_analysis",
+    "ANALYSIS_RECOVERY_ENABLED": "recovery",
+}
+
+
+def _env_bool(name: str) -> bool | None:
+    """Parse a boolean .env value, or None when the var is unset."""
+    raw = os.getenv(name)
+    if raw is None:
+        return None
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _with_environment_overrides(config: AnalysisConfig) -> AnalysisConfig:
     """Let Docker/.env values override checked-in YAML defaults."""
     llm_updates = {}
@@ -141,15 +163,26 @@ def _with_environment_overrides(config: AnalysisConfig) -> AnalysisConfig:
         llm_updates["base_url"] = base_url
     if api_key := os.getenv("LLM_API_KEY"):
         llm_updates["api_key"] = api_key
-    if (raw := os.getenv("LLM_ALLOW_CLOUD_EGRESS")) is not None:
-        llm_updates["allow_cloud_egress"] = raw.strip().lower() in {"1", "true", "yes", "on"}
-    if (raw := os.getenv("LLM_REDACT_CLOUD_PROMPTS")) is not None:
-        llm_updates["redact_cloud_prompts"] = raw.strip().lower() in {"1", "true", "yes", "on"}
+    if (flag := _env_bool("LLM_ALLOW_CLOUD_EGRESS")) is not None:
+        llm_updates["allow_cloud_egress"] = flag
+    if (flag := _env_bool("LLM_REDACT_CLOUD_PROMPTS")) is not None:
+        llm_updates["redact_cloud_prompts"] = flag
     if salt := os.getenv("LLM_REDACTION_SALT"):
         llm_updates["redaction_salt"] = salt
 
     if llm_updates:
         config.llm = config.llm.model_copy(update=llm_updates)
+
+    # Per-job enable overrides (see _JOB_ENABLE_ENV).
+    analysis_updates = {}
+    for env_name, attr in _JOB_ENABLE_ENV.items():
+        flag = _env_bool(env_name)
+        if flag is not None:
+            block = getattr(config.analysis, attr)
+            analysis_updates[attr] = block.model_copy(update={"enabled": flag})
+    if analysis_updates:
+        config.analysis = config.analysis.model_copy(update=analysis_updates)
+
     return config
 
 

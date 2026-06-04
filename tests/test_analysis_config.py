@@ -68,3 +68,21 @@ def test_environment_can_opt_out_of_cloud_prompt_redaction(tmp_path, monkeypatch
 def test_example_config_keeps_cloud_prompt_redaction_enabled():
     data = yaml.safe_load(Path("config.yaml.example").read_text())
     assert data["llm"]["redact_cloud_prompts"] is True
+
+
+def test_env_can_enable_recovery_job_without_a_config_file(tmp_path, monkeypatch):
+    # The remote deploy mounts config.yaml.example (every job off) and wipes any
+    # host config.yaml on redeploy, so .env is the deploy-survivable enable path.
+    monkeypatch.setenv("ANALYSIS_RECOVERY_ENABLED", "true")
+
+    config = load_config(tmp_path / "missing-config.yaml")
+
+    assert config.analysis.recovery.enabled is True
+    # Other jobs stay at their (disabled) defaults.
+    assert config.analysis.daily_briefing.enabled is False
+
+
+def test_env_job_enable_override_respects_falsey_values(tmp_path, monkeypatch):
+    monkeypatch.setenv("ANALYSIS_TREND_ANALYSIS_ENABLED", "0")
+    config = load_config(tmp_path / "missing-config.yaml")
+    assert config.analysis.trend_analysis.enabled is False
