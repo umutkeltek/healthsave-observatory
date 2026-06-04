@@ -103,6 +103,9 @@ include = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "e2e: end-to-end test against a live stack; skipped unless E2E_BASE_URL is set (see `make e2e`)",
+]
 # v2 layout: pytest adds these to sys.path so `import server`,
 # `import analysis`, `import contracts`, `import compat_v1`,
 # `import homeassistant_mqtt`, and
