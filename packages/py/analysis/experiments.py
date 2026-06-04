@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any
 
 from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
 
+from .statistical import experiment_readiness as readiness
 from .statistical import experiments as stats
 
 if TYPE_CHECKING:
@@ -41,6 +42,17 @@ log = logging.getLogger("healthsave.analysis")
 
 _RETROSPECTIVE_LOOKBACK_DAYS = 90
 _SERIES_LIMIT = 50_000
+
+build_phase_calendar = stats.build_phase_calendar
+progress = stats.progress
+
+
+def classify_candidate(metric_a: str, metric_b: str):
+    return readiness.classify_candidate(metric_a, metric_b)
+
+
+def metric_short(metric_id: str) -> str:
+    return readiness._short(metric_id)
 
 
 def _default_time_series() -> TimeSeriesQueryService:
@@ -183,8 +195,8 @@ class ExperimentRunner:
 
             summary = stats.summarize(
                 pc,
-                outcome_short=stats._short(experiment.outcome_metric_id),
-                period_phrase=f"high-{stats._short(experiment.lever_metric_id)} days",
+                outcome_short=metric_short(experiment.outcome_metric_id),
+                period_phrase=f"high-{metric_short(experiment.lever_metric_id)} days",
             )
             computed = ComputedExperimentResult(
                 kind="retrospective",
@@ -233,7 +245,7 @@ class ExperimentRunner:
             adherence = stats.adherence_from_lever(lever, calendar)
             summary = stats.summarize(
                 pc,
-                outcome_short=stats._short(experiment.outcome_metric_id),
+                outcome_short=metric_short(experiment.outcome_metric_id),
                 period_phrase="intervention blocks",
             )
             computed = ComputedExperimentResult(

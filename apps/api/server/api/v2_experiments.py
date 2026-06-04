@@ -14,10 +14,8 @@ behavioural lever actually moved the outcome:
 
 The first v2 *write* surface for experiments — it follows the ``v2_agents``
 precedent (repository write + ``session.commit()`` + 201). Discipline holds:
-storage access goes through repository ports, the statistics are the pure
-``analysis.statistical.experiments`` / ``experiment_readiness``, and the
-``ExperimentRunner`` composes read → stats → write. No LLM here — results are
-computed evidence.
+storage access goes through repository ports, and ``analysis.experiments`` owns
+the experiment domain flow. No LLM here — results are computed evidence.
 """
 
 from __future__ import annotations
@@ -27,9 +25,10 @@ from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
 
-from analysis.statistical.experiment_readiness import _short, classify_candidate
-from analysis.statistical.experiments import (
+from analysis.experiments import (
     build_phase_calendar,
+    classify_candidate,
+    metric_short,
     progress,
 )
 from contracts._base import V2Model
@@ -174,8 +173,8 @@ def _experiment_view(
         id=row.id,
         lever_metric_id=row.lever_metric_id,
         outcome_metric_id=row.outcome_metric_id,
-        lever=_short(row.lever_metric_id),
-        outcome=_short(row.outcome_metric_id),
+        lever=metric_short(row.lever_metric_id),
+        outcome=metric_short(row.outcome_metric_id),
         design=row.design,
         block_days=row.block_days,
         start_date=row.start_date,
@@ -288,7 +287,7 @@ async def create_experiment(
         raise HTTPException(
             status_code=422,
             detail=(
-                f"{_short(body.lever_metric_id)} isn't the controllable lever for this "
+                f"{metric_short(body.lever_metric_id)} isn't the controllable lever for this "
                 f"pair — {verdict.rationale}"
             ),
         )
