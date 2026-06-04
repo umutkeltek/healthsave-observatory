@@ -1,9 +1,9 @@
 """Tests for analysis.experiments.ExperimentRunner.
 
-Composes a real pure-stats run with a fake session + monkeypatched storage
-handles (``_sql`` / ``_experiments``) — no DB, no SQL. Verifies that the runner
-windows the series, picks the right analysis per kind, persists the right
-result, and completes the experiment when its window has elapsed.
+Composes a real pure-stats run with a fake session + injected storage ports —
+no DB, no SQL. Verifies that the runner windows the series, picks the right
+analysis per kind, persists the right result, supports dry-run analysis, and
+completes the experiment when its window has elapsed.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from uuid import UUID
 
-import analysis.experiments as runner_mod
 import pytest
 from analysis.experiments import ExperimentRunner
 
@@ -41,15 +40,21 @@ def _factory(session):
     return make
 
 
-class _StubSql:
-    """Returns canned daily-series rows per metric, ignoring the window bounds."""
+class _StubTimeSeries:
+    """Returns canned series points per metric, ignoring the window bounds."""
 
     def __init__(self, series_by_metric: dict[str, dict[date, float]]):
         self.series_by_metric = series_by_metric
+        self.calls: list[dict] = []
 
-    async def fetch_metric_daily_series(self, session, metric_id, start, end):
+    async def query_series(self, session, **kw):
+        self.calls.append(kw)
+        metric_id = kw["metric_id"]
         series = self.series_by_metric.get(metric_id, {})
-        return [SimpleNamespace(day=day, value=value) for day, value in series.items()]
+        return [
+            SimpleNamespace(t=datetime(day.year, day.month, day.day, tzinfo=UTC), value=value)
+            for day, value in series.items()
+        ]
 
 
 class _StubExperiments:
@@ -104,28 +109,31 @@ def _phase_series(
 
 
 @pytest.fixture
-def stubs(monkeypatch):
-    experiments = _StubExperiments()
+def make_runner():
+    def build(session, series_by_metric):
+        experiments = _StubExperiments()
+        runner = ExperimentRunner(
+            _factory(session),
+            time_series=_StubTimeSeries(series_by_metric),
+            experiment_repository=experiments,
+        )
+        return runner, experiments
 
-    def install(series_by_metric):
-        sql = _StubSql(series_by_metric)
-        monkeypatch.setattr(runner_mod, "_sql", lambda: sql)
-        monkeypatch.setattr(runner_mod, "_experiments", lambda: experiments)
-        return experiments
-
-    return install
+    return build
 
 
 @pytest.mark.asyncio
-async def test_run_controlled_completes_and_persists(stubs):
+async def test_run_controlled_completes_and_persists(make_runner):
     outcome = _phase_series(50.0, 60.0, "ABABAB", 2)  # B higher → increase
     lever = _phase_series(10.0, 30.0, "ABABAB", 2)  # strong separation → adherence
-    experiments = stubs({"vital.resting_heart_rate": outcome, "activity.steps": lever})
 
     session = _FakeSession()
+    runner, experiments = make_runner(
+        session, {"vital.resting_heart_rate": outcome, "activity.steps": lever}
+    )
     exp = _experiment()
     # as_of well past the 12-day window → complete.
-    await ExperimentRunner(_factory(session)).run_controlled(exp, as_of=date(2026, 2, 1))
+    await runner.run_controlled(exp, as_of=date(2026, 2, 1))
 
     assert session.committed
     assert len(experiments.results) == 1
@@ -139,31 +147,52 @@ async def test_run_controlled_completes_and_persists(stubs):
 
 
 @pytest.mark.asyncio
-async def test_run_controlled_midrun_does_not_complete(stubs):
+async def test_run_controlled_dry_run_returns_computed_result_without_persisting(make_runner):
     outcome = _phase_series(50.0, 60.0, "ABABAB", 2)
     lever = _phase_series(10.0, 30.0, "ABABAB", 2)
-    experiments = stubs({"vital.resting_heart_rate": outcome, "activity.steps": lever})
 
     session = _FakeSession()
+    runner, experiments = make_runner(
+        session, {"vital.resting_heart_rate": outcome, "activity.steps": lever}
+    )
+    result = await runner.run_controlled(_experiment(), as_of=date(2026, 2, 1), persist=False)
+
+    assert result.kind == "controlled"
+    assert result.direction == "increase"
+    assert result.structured_data["adherence"]["status"] == "strong"
+    assert session.committed is False
+    assert experiments.results == []
+    assert experiments.status_calls == []
+
+
+@pytest.mark.asyncio
+async def test_run_controlled_midrun_does_not_complete(make_runner):
+    outcome = _phase_series(50.0, 60.0, "ABABAB", 2)
+    lever = _phase_series(10.0, 30.0, "ABABAB", 2)
+
+    session = _FakeSession()
+    runner, experiments = make_runner(
+        session, {"vital.resting_heart_rate": outcome, "activity.steps": lever}
+    )
     exp = _experiment()
     # as_of inside the window (day 5 of 12) → not complete.
-    await ExperimentRunner(_factory(session)).run_controlled(exp, as_of=date(2026, 1, 6))
+    await runner.run_controlled(exp, as_of=date(2026, 1, 6))
 
     assert len(experiments.results) == 1
     assert experiments.status_calls == []  # still collecting
 
 
 @pytest.mark.asyncio
-async def test_run_retrospective_persists_observational(stubs):
+async def test_run_retrospective_persists_observational(make_runner):
     # lever rises across 10 days; outcome falls with it → observational decrease.
     lever = {START + timedelta(days=i): float(i) for i in range(10)}
     outcome = {START + timedelta(days=i): 100.0 - 2.0 * i for i in range(10)}
-    experiments = stubs({"vital.resting_heart_rate": outcome, "activity.steps": lever})
 
     session = _FakeSession()
-    result = await ExperimentRunner(_factory(session)).run_retrospective(
-        _experiment(), as_of=date(2026, 1, 15)
+    runner, experiments = make_runner(
+        session, {"vital.resting_heart_rate": outcome, "activity.steps": lever}
     )
+    result = await runner.run_retrospective(_experiment(), as_of=date(2026, 1, 15))
 
     assert result is not None and session.committed
     res = experiments.results[0]
@@ -174,16 +203,16 @@ async def test_run_retrospective_persists_observational(stubs):
 
 
 @pytest.mark.asyncio
-async def test_run_retrospective_skips_when_insufficient(stubs):
+async def test_run_retrospective_skips_when_insufficient(make_runner):
     # Only 3 overlapping days → below the median-split floor → nothing persisted.
     lever = {START + timedelta(days=i): float(i) for i in range(3)}
     outcome = {START + timedelta(days=i): float(i) for i in range(3)}
-    experiments = stubs({"vital.resting_heart_rate": outcome, "activity.steps": lever})
 
     session = _FakeSession()
-    result = await ExperimentRunner(_factory(session)).run_retrospective(
-        _experiment(), as_of=date(2026, 1, 15)
+    runner, experiments = make_runner(
+        session, {"vital.resting_heart_rate": outcome, "activity.steps": lever}
     )
+    result = await runner.run_retrospective(_experiment(), as_of=date(2026, 1, 15))
 
     assert result is None
     assert experiments.results == []
