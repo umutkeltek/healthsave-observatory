@@ -14,6 +14,7 @@ import logging
 from pydantic import BaseModel
 
 from ..egress import Destination, EgressPolicy, PayloadClass
+from ..redaction import RedactionPolicy
 from .prompts.base import SYSTEM_PROMPT
 from .safety import inject_disclaimer
 
@@ -62,6 +63,7 @@ class HealthLLMClient:
         """Store the :class:`~analysis.config.LLMConfig`; no LiteLLM calls here."""
         self.config = config
         self.egress_policy = EgressPolicy.from_config(config)
+        self.redaction_policy = RedactionPolicy.from_llm_config(config)
 
     async def generate_insight(self, prompt: str, *, insight_type: str) -> InsightResult:
         """Generate a narrative from ``prompt`` and return an :class:`InsightResult`.
@@ -79,12 +81,23 @@ class HealthLLMClient:
         Decision G) is enforced fail-closed: a cloud provider without an
         explicit opt-in raises :class:`~analysis.egress.EgressDenied`. The
         prompt is derived data (aggregates / findings), classified
-        ``PROMPT`` — raw observation rows are never sent here.
+        ``PROMPT`` — raw observation rows are never sent here. For a cloud
+        destination the prompt is additionally run through
+        :class:`~analysis.redaction.RedactionPolicy` (on by default) to strip
+        any residual identifiers; the local Ollama path is left untouched.
         """
         envelope = self.egress_policy.enforce(
             provider=self.config.provider, payload_class=PayloadClass.PROMPT
         )
         if envelope.destination is Destination.CLOUD:
+            # Content scrub before the prompt crosses the trust boundary. The
+            # local Ollama path is intentionally skipped — that data never left,
+            # so there is nothing to strip and the local model gets full fidelity.
+            if self.redaction_policy.enabled:
+                redacted = self.redaction_policy.apply(prompt)
+                if redacted.total:
+                    log.info("egress redaction: scrubbed %s before cloud send", redacted.summary())
+                prompt = redacted.text
             log.info(
                 "egress: %s prompt → cloud provider %r (opted in)",
                 envelope.payload_class.value,
