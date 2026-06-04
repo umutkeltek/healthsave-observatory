@@ -129,6 +129,11 @@ class FailingAppleHealthPlugin:
         raise RuntimeError("forced ingest failure")
 
 
+class FailingCanonicalRepository:
+    async def insert_many(self, session, observations):
+        raise RuntimeError("canonical write failed")
+
+
 @pytest.mark.asyncio
 async def test_status_endpoint_returns_flat_metric_objects():
     session = FakeSession()
@@ -773,6 +778,46 @@ async def test_batch_records_failed_sync_receipt_when_ingest_raises():
     assert receipt["sample_min_at"] == datetime(2026, 4, 10, 12, 0, 0, tzinfo=UTC)
     assert receipt["sample_max_at"] == datetime(2026, 4, 10, 12, 0, 0, tzinfo=UTC)
     assert "forced ingest failure" in receipt["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_batch_records_failed_sync_receipt_when_canonical_write_fails(monkeypatch):
+    import server.api.ingest as ingest_module
+
+    monkeypatch.setattr(ingest_module, "_canonical_repo", FailingCanonicalRepository())
+
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "heart_rate",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [
+                {
+                    "date": "2026-04-10T12:00:00+00:00",
+                    "qty": 72,
+                    "source": "Apple Watch Ultra",
+                }
+            ],
+        },
+        headers={
+            "Idempotency-Key": "canonical-failed-001",
+            "X-HealthSave-Sync-Run-ID": "run-canonical-failed",
+            "X-HealthSave-Batch-ID": "canonical-failed-001",
+            "X-HealthSave-Payload-Hash": "sha256:canonical-failed-payload",
+            "X-HealthSave-Metric": "heart_rate",
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="canonical write failed"):
+        await server.apple_batch(request, session)
+
+    receipt = session.insert_params_for("healthsave_sync_receipts")
+    assert session.rolled_back is True
+    assert receipt is not None
+    assert receipt["status"] == "failed"
+    assert receipt["records_accepted"] == 0
+    assert "canonical write failed" in receipt["error_message"]
 
 
 class ReceiptIdempotencyConflictSession(FakeSession):

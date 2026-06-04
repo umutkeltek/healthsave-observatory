@@ -240,6 +240,30 @@ async def apple_batch(
         records_rejected = _optional_int(result.get("rejected")) or 0
         records_deduped_in_batch = _optional_int(result.get("deduped_in_batch"))
         storage_result_level = str(result.get("storage_result_level") or "accepted_only")
+
+        await _write_canonical_observations(
+            session, metric=metric, samples=samples, owner_id=owner_id, raw_log_id=raw_log_id
+        )
+        if audit and raw_log_id is not None:
+            await audit.mark_processed(session, raw_log_id)
+        await _record_sync_receipt(
+            session,
+            request=request,
+            metric=metric,
+            batch_index=batch_idx,
+            total_batches=total,
+            status="processed",
+            records_received=len(samples),
+            records_accepted=count,
+            records_skipped=records_rejected,
+            records_inserted_new=records_inserted_new,
+            records_deduped_existing=records_deduped_existing,
+            storage_result_level=storage_result_level,
+            sample_min_at=sample_min_at,
+            sample_max_at=sample_max_at,
+            raw_log_id=raw_log_id,
+        )
+        await session.commit()
     except Exception as exc:
         try:
             RAW_LOG_ORPHANED.labels(metric=metric).inc()
@@ -260,30 +284,6 @@ async def apple_batch(
         )
         log.exception("ingest loop failed for %s; raw_log_id=%s left orphaned", metric, raw_log_id)
         raise
-
-    if audit and raw_log_id is not None:
-        await audit.mark_processed(session, raw_log_id)
-    await _record_sync_receipt(
-        session,
-        request=request,
-        metric=metric,
-        batch_index=batch_idx,
-        total_batches=total,
-        status="processed",
-        records_received=len(samples),
-        records_accepted=count,
-        records_skipped=records_rejected,
-        records_inserted_new=records_inserted_new,
-        records_deduped_existing=records_deduped_existing,
-        storage_result_level=storage_result_level,
-        sample_min_at=sample_min_at,
-        sample_max_at=sample_max_at,
-        raw_log_id=raw_log_id,
-    )
-    await session.commit()
-    await _dual_write_canonical(
-        session, metric=metric, samples=samples, owner_id=owner_id, raw_log_id=raw_log_id
-    )
     _observe_ingest_metrics(metric=metric, rows=count, started_at=started_at)
     log.info("Ingested %d records for %s (batch %d/%d)", count, metric, batch_idx + 1, total)
     _schedule_anomaly_check_if_enabled(request, background_tasks, count)
@@ -306,7 +306,7 @@ async def apple_batch(
     )
 
 
-async def _dual_write_canonical(
+async def _write_canonical_observations(
     session: AsyncSession,
     *,
     metric: str,
@@ -314,44 +314,25 @@ async def _dual_write_canonical(
     owner_id: Any,
     raw_log_id: int | None,
 ) -> None:
-    """Best-effort v2 dual-write into canonical_observations (Decision C).
-
-    Runs AFTER the v1 commit, in its own transaction, fully guarded: a
-    canonical-side failure is logged + counted and NEVER affects the locked v1
-    ingest path or its response. The v1 per-metric tables stay the live source
-    of truth until v2 cuts over; this mirrors each batch into the canonical
-    store the read API + LLM narrator consume.
-    """
-    try:
-        provenance = Provenance(
-            source_plugin_id=_APPLE_PLUGIN_ID,
-            sdk_version=str(SDK_VERSION),
-            captured_at=datetime.now(UTC),
-            raw_payload_ref=str(raw_log_id) if raw_log_id is not None else None,
-        )
-        result = normalize_apple_batch(
-            {"metric": metric, "samples": samples},
-            source_id=APPLE_HEALTHKIT_SOURCE_ID,
-            provenance=provenance,
-            owner_id=owner_id,
-        )
-        if result.observations:
-            await _canonical_repo.insert_many(session, result.observations)
-            await session.commit()
-        if result.accepted:
-            CANONICAL_DUAL_WRITE.labels(metric=metric, result="ok").inc(result.accepted)
-        if result.rejected:
-            CANONICAL_DUAL_WRITE.labels(metric=metric, result="rejected").inc(result.rejected)
-    except Exception as exc:
-        try:
-            await session.rollback()
-        except Exception:  # pragma: no cover - rollback is itself best-effort
-            log.debug("canonical dual-write rollback failed for %s", metric)
-        log.warning("canonical dual-write failed for %s (v1 path unaffected): %s", metric, exc)
-        try:
-            CANONICAL_DUAL_WRITE.labels(metric=metric, result="error").inc()
-        except Exception:  # pragma: no cover - metrics optional
-            log.debug("failed to record CANONICAL_DUAL_WRITE error for %s", metric)
+    """Write v2 canonical observations inside the caller's ingest transaction."""
+    provenance = Provenance(
+        source_plugin_id=_APPLE_PLUGIN_ID,
+        sdk_version=str(SDK_VERSION),
+        captured_at=datetime.now(UTC),
+        raw_payload_ref=str(raw_log_id) if raw_log_id is not None else None,
+    )
+    result = normalize_apple_batch(
+        {"metric": metric, "samples": samples},
+        source_id=APPLE_HEALTHKIT_SOURCE_ID,
+        provenance=provenance,
+        owner_id=owner_id,
+    )
+    if result.observations:
+        await _canonical_repo.insert_many(session, result.observations)
+    if result.accepted:
+        CANONICAL_DUAL_WRITE.labels(metric=metric, result="ok").inc(result.accepted)
+    if result.rejected:
+        CANONICAL_DUAL_WRITE.labels(metric=metric, result="rejected").inc(result.rejected)
 
 
 def _resolve_storage(request: Request) -> IngestStorage:

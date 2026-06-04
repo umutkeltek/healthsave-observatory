@@ -1,10 +1,10 @@
-"""/api/apple/batch -> canonical_observations dual-write (best-effort, guarded)."""
+"""/api/apple/batch -> canonical_observations in-transaction write."""
 
 from __future__ import annotations
 
 import pytest
 from contracts._base import DEFAULT_OWNER_ID
-from server.api.ingest import _dual_write_canonical
+from server.api.ingest import _write_canonical_observations
 
 _HR_SAMPLES = [
     {"date": "2026-05-28T08:00:00Z", "qty": 61, "source": "Apple Watch"},
@@ -43,12 +43,12 @@ class _FailSession:
 
 
 @pytest.mark.asyncio
-async def test_dual_write_persists_mapped_observations() -> None:
+async def test_canonical_write_persists_mapped_observations_without_committing() -> None:
     session = _OkSession()
-    await _dual_write_canonical(
+    await _write_canonical_observations(
         session, metric="heart_rate", samples=_HR_SAMPLES, owner_id=DEFAULT_OWNER_ID, raw_log_id=7
     )
-    assert session.committed == 1
+    assert session.committed == 0
     assert len(session.calls) == 1
     _, params = session.calls[0]
     assert len(params) == 2
@@ -56,23 +56,23 @@ async def test_dual_write_persists_mapped_observations() -> None:
 
 
 @pytest.mark.asyncio
-async def test_dual_write_failure_never_propagates() -> None:
+async def test_canonical_write_failure_propagates_for_atomic_ingest() -> None:
     session = _FailSession()
-    # A canonical-side failure must NOT raise — the v1 path already committed.
-    await _dual_write_canonical(
-        session,
-        metric="heart_rate",
-        samples=_HR_SAMPLES,
-        owner_id=DEFAULT_OWNER_ID,
-        raw_log_id=None,
-    )
-    assert session.rolled_back == 1
+    with pytest.raises(RuntimeError, match="db down"):
+        await _write_canonical_observations(
+            session,
+            metric="heart_rate",
+            samples=_HR_SAMPLES,
+            owner_id=DEFAULT_OWNER_ID,
+            raw_log_id=None,
+        )
+    assert session.rolled_back == 0
 
 
 @pytest.mark.asyncio
 async def test_dual_write_unmapped_metric_is_a_noop() -> None:
     session = _OkSession()
-    await _dual_write_canonical(
+    await _write_canonical_observations(
         session,
         metric="not_a_real_metric",
         samples=[{"date": "2026-05-28T08:00:00Z", "qty": 1}],
