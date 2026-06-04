@@ -64,6 +64,9 @@ async def privacy(request: Request) -> dict:
         # True only when data actually crosses the boundary: a cloud provider
         # AND the explicit opt-in. A cloud provider without opt-in sends nothing.
         "cloud_active": not is_local and policy.allow_cloud,
+        # Whether prompts are scrubbed of identifiers before a cloud send. Only
+        # takes effect on the cloud path; the local model is never redacted.
+        "cloud_prompt_redaction": bool(getattr(llm, "redact_cloud_prompts", True)),
         "raw_observations_leave_host": raw_leaves,
         "egress": egress,
     }

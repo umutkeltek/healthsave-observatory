@@ -69,3 +69,14 @@ async def test_cloud_optin_lets_derived_leave_but_never_raw():
     for derived in ("findings", "aggregates", "evidence", "prompt"):
         assert classes[derived]["allowed"] is True
         assert classes[derived]["leaves_host"] is True
+
+
+@pytest.mark.asyncio
+async def test_posture_reports_cloud_prompt_redaction():
+    on = await privacy(_request({"provider": "openai", "allow_cloud_egress": True}))
+    assert on["cloud_prompt_redaction"] is True  # default-on
+
+    off = await privacy(
+        _request({"provider": "openai", "allow_cloud_egress": True, "redact_cloud_prompts": False})
+    )
+    assert off["cloud_prompt_redaction"] is False
