@@ -88,6 +88,8 @@ The briefing isn't "feed everything to ChatGPT and hope". It's a **two-brain sys
 
 This split is deliberate: the math stays deterministic and auditable; the LLM only handles the part where natural language actually helps. No cloud, no per-query cost, no data leaving your network.
 
+**Going cloud is opt-in, and redacted.** By default nothing leaves your network. If you deliberately point Brain 2 at a cloud model (`allow_cloud_egress: true`), a default-deny egress gate still guarantees raw rows never leave - only derived findings and the assembled prompt cross the boundary, and that prompt is first scrubbed on-device of any identifiers (emails, phone numbers, opaque IDs, names) via `redact_cloud_prompts` (on by default). The local Ollama path is never redacted, because that data never left.
+
 What's included in the MVP:
 
 - Daily HR / HRV summary
