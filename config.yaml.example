@@ -38,6 +38,12 @@ analysis:
     cron: "0 10 1 * *"         # 1st of month at 10:00 AM
     period_days: 90
 
+  recovery:
+    enabled: false
+    cron: "0 6 * * *"          # Every day at 6:00 AM, ahead of the briefing
+    lookback_days: 1
+    baseline_days: 30          # Open Recovery Score (no LLM) — supplement §3
+
 llm:
   # Local-first default. No data leaves the Docker network unless you
   # change this to a cloud provider and supply an api_key.

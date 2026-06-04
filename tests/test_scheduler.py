@@ -108,6 +108,24 @@ def test_scheduler_registers_weekly_summary_when_explicitly_enabled(monkeypatch)
     assert instance.jobs[0]["trigger"] == {"cron": "0 8 * * 1"}
 
 
+def test_scheduler_registers_recovery_check_when_explicitly_enabled(monkeypatch):
+    fake_scheduler = _install_fake_apscheduler(monkeypatch)
+    config = AnalysisConfig.model_validate(
+        {"analysis": {"recovery": {"enabled": True, "cron": "0 6 * * *"}}}
+    )
+    engine = type("Engine", (), {"run_recovery_check": AsyncMock()})()
+
+    scheduler = AnalysisScheduler(engine, config)
+    scheduler.start()
+
+    instance = fake_scheduler.instances[0]
+    assert instance.started is True
+    assert len(instance.jobs) == 1
+    assert instance.jobs[0]["id"] == "recovery_check"
+    assert instance.jobs[0]["func"] == engine.run_recovery_check
+    assert instance.jobs[0]["trigger"] == {"cron": "0 6 * * *"}
+
+
 def test_scheduler_does_not_start_when_all_jobs_disabled(monkeypatch):
     fake_scheduler = _install_fake_apscheduler(monkeypatch)
     scheduler = AnalysisScheduler(type("Engine", (), {})(), AnalysisConfig())

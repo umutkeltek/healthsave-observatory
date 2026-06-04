@@ -30,6 +30,7 @@ from .llm.prompts.weekly_summary import WEEKLY_SUMMARY_PROMPT_TEMPLATE
 from .statistical.aggregator import DataAggregator
 from .statistical.anomaly import AnomalyDetector
 from .statistical.correlations import CorrelationAnalyzer
+from .statistical.recovery import RECOVERY_INPUT_METRICS, recovery_finding_data
 from .statistical.trends import TrendAnalyzer
 from .types import Anomaly, Finding, Insight
 
@@ -370,6 +371,47 @@ class AnalysisEngine:
             await _sql().mark_run_completed(session, run_id)
             await session.commit()
             return findings
+
+    async def run_recovery_check(self) -> int | None:
+        return await self._run_job_with_metrics("recovery_check", self._run_recovery_check_impl)
+
+    async def _run_recovery_check_impl(self) -> int | None:
+        """Compute today's Recovery Score and persist it as a single finding.
+
+        Brain-1 only: summarizes the recovery-input metrics over the daily window
+        and maps them through the open composite (``statistical.recovery`` →
+        ``statistical.scoring``). No LLM. Persists one ``recovery_score`` finding
+        — the shape the v2 read API and the web hero already consume
+        (``structured_data.score``). Returns the run id on completion, or
+        ``None`` when no real recovery signal was present: the run is marked
+        skipped rather than emitting a fabricated score.
+        """
+        async with (
+            self.session_factory() as session,
+            self._run_context(session, "recovery_check") as run_id,
+        ):
+            summary = await self.aggregator.summarize_period(
+                period="daily", days=1, metrics=RECOVERY_INPUT_METRICS
+            )
+            data = recovery_finding_data(summary.metrics)
+            if data is None:
+                await _sql().mark_run_skipped(session, run_id)
+                await session.commit()
+                return None
+
+            await self._insert_finding(
+                session,
+                run_id=run_id,
+                finding=Finding(
+                    finding_type="recovery_score",
+                    metric="recovery",
+                    severity="info",
+                    structured_data=data,
+                ),
+            )
+            await _sql().mark_run_completed(session, run_id)
+            await session.commit()
+            return run_id
 
     async def _fetch_metric_daily_series(self, metric_id: str, days: int) -> dict[date, float]:
         """Daily-series fetcher injected into :class:`CorrelationAnalyzer`.

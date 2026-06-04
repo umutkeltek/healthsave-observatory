@@ -118,27 +118,49 @@ async def list_findings(
 
 
 class TriggerBody(BaseModel):
-    """v2 trigger request — extensible by ``type`` (correlation_analysis today)."""
+    """v2 trigger request — extensible by ``type`` (correlation_analysis,
+    recovery_check)."""
 
     type: str = "correlation_analysis"
 
 
 @router.post("/trigger")
 async def trigger(request: Request, body: TriggerBody | None = None) -> dict:
-    """Run an analysis job on demand. Currently supports ``correlation_analysis``."""
-    body = body or TriggerBody()
-    if body.type != "correlation_analysis":
-        raise HTTPException(status_code=400, detail=f"Unsupported type: {body.type}")
-    if not request.app.state.analysis_config.analysis.correlation_analysis.enabled:
-        raise HTTPException(status_code=409, detail="correlation_analysis is disabled")
+    """Run an analysis job on demand.
 
-    findings = await _record_trigger_run(
-        request,
-        job_kind="correlation_analysis",
-        coro=request.app.state.analysis_engine.run_correlation_analysis(),
-    )
-    return {
-        "status": "completed" if findings else "skipped",
-        "run_type": "correlation_analysis",
-        "count": len(findings),
-    }
+    Supports ``correlation_analysis`` and ``recovery_check``. Each checks its
+    config block is enabled, runs the Brain-1 engine job inline through the
+    pipeline_runs ledger, and reports completed vs skipped.
+    """
+    body = body or TriggerBody()
+    analysis = request.app.state.analysis_config.analysis
+
+    if body.type == "correlation_analysis":
+        if not analysis.correlation_analysis.enabled:
+            raise HTTPException(status_code=409, detail="correlation_analysis is disabled")
+        findings = await _record_trigger_run(
+            request,
+            job_kind="correlation_analysis",
+            coro=request.app.state.analysis_engine.run_correlation_analysis(),
+        )
+        return {
+            "status": "completed" if findings else "skipped",
+            "run_type": "correlation_analysis",
+            "count": len(findings),
+        }
+
+    if body.type == "recovery_check":
+        if not analysis.recovery.enabled:
+            raise HTTPException(status_code=409, detail="recovery is disabled")
+        run_id = await _record_trigger_run(
+            request,
+            job_kind="recovery_check",
+            coro=request.app.state.analysis_engine.run_recovery_check(),
+        )
+        return {
+            "status": "completed" if run_id is not None else "skipped",
+            "run_type": "recovery_check",
+            "run_id": run_id,
+        }
+
+    raise HTTPException(status_code=400, detail=f"Unsupported type: {body.type}")

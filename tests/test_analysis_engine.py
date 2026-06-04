@@ -561,6 +561,58 @@ async def test_run_correlation_analysis_skips_when_no_correlations():
 
 
 @pytest.mark.asyncio
+async def test_run_recovery_check_persists_recovery_score_finding_without_llm():
+    """Recovery check maps the daily summary to one recovery_score finding."""
+    session = _FakeSession(run_queue=[8500, 8501])  # run_id=8500, finding_id=8501
+    summary = PeriodSummary(
+        period="daily",
+        metrics={
+            "vital.hrv_sdnn": {
+                "avg": 60.0,
+                "baseline_avg": 50.0,
+                "delta_pct_vs_baseline": 20.0,
+                "sample_count": 1,
+            },
+            "vital.resting_heart_rate": {
+                "avg": 48.0,
+                "baseline_avg": 52.0,
+                "delta_pct_vs_baseline": -7.7,
+                "sample_count": 1,
+            },
+        },
+    )
+    engine = _make_engine(session, summary, AsyncMock())
+
+    run_id = await engine.run_recovery_check()
+
+    assert run_id == 8500
+    run_inserts = session.all_insert_params_for("analysis_runs")
+    assert run_inserts[0]["run_type"] == "recovery_check"
+    finding_inserts = session.all_insert_params_for("analysis_findings")
+    assert len(finding_inserts) == 1
+    assert finding_inserts[0]["finding_type"] == "recovery_score"
+    assert finding_inserts[0]["metric"] == "recovery"
+    assert '"score":' in finding_inserts[0]["structured_data"]
+    updates = session.all_update_statements()
+    assert any("status = 'completed'" in sql for sql, _ in updates)
+    engine.llm_client.generate_insight.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_run_recovery_check_skips_when_no_signal_present():
+    """No usable recovery signal → skipped run, no fabricated score persisted."""
+    session = _FakeSession(run_queue=[8600])
+    engine = _make_engine(session, PeriodSummary(period="daily", metrics={}), AsyncMock())
+
+    run_id = await engine.run_recovery_check()
+
+    assert run_id is None
+    assert session.all_insert_params_for("analysis_findings") == []
+    updates = session.all_update_statements()
+    assert any("status = 'skipped'" in sql for sql, _ in updates)
+
+
+@pytest.mark.asyncio
 async def test_fetch_metric_daily_series_maps_rows_to_day_value_and_skips_nulls(monkeypatch):
     """The injected fetcher turns canonical daily rows into a {day: value} map,
     dropping rows missing a day or value."""
