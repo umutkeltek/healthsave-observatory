@@ -50,3 +50,35 @@ jobs:
 
       - name: Build Docker image
         run: docker build -t health-data-hub-ci .
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Boot ephemeral stack
+        run: docker compose -p hdh-e2e up -d --build db migrate api
+
+      - name: Wait for api readiness
+        run: |
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:8000/ready >/dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          echo "api did not become ready" >&2
+          docker compose -p hdh-e2e logs api >&2 || true
+          exit 1
+
+      - name: Run e2e
+        run: E2E_BASE_URL=http://localhost:8000 pytest -m e2e -q tests/e2e
+
+      - name: Teardown
+        if: always()
+        run: docker compose -p hdh-e2e down -v

@@ -1,4 +1,4 @@
-.PHONY: help regen-lock check-lock regen-v2-schemas check-v2-schemas regen-ts-client check-ts-client typecheck-ts test lint format doctor compose-up compose-down
+.PHONY: help regen-lock check-lock regen-v2-schemas check-v2-schemas regen-ts-client check-ts-client typecheck-ts test e2e lint format doctor compose-up compose-down
 
 help:
 	@echo "Targets:"
@@ -10,6 +10,7 @@ help:
 	@echo "  check-ts-client    Verify TS client generated files match committed (no drift)"
 	@echo "  typecheck-ts       Run tsc --noEmit on the api-client package"
 	@echo "  test               Run the full pytest suite"
+	@echo "  e2e                Boot an ephemeral compose stack and run the e2e suite"
 	@echo "  lint               ruff check + ruff format --check"
 	@echo "  format             ruff format (writes)"
 	@echo "  doctor             Run post-install stack health checks"
@@ -55,6 +56,17 @@ typecheck-ts:
 
 test:
 	@python3 -m pytest -q
+
+# Black-box end-to-end: boot an isolated compose stack (own project + volume),
+# replay the golden iOS batches through it, assert v1 + v2 read surfaces, then
+# tear it down. Self-cleaning; preserves the pytest exit code.
+e2e:
+	@echo "Booting ephemeral e2e stack (project hdh-e2e)..."
+	@docker compose -p hdh-e2e up -d --build db migrate api
+	@echo "Waiting for api readiness..."
+	@for i in $$(seq 1 60); do curl -fsS http://localhost:8000/ready >/dev/null 2>&1 && break || sleep 2; done
+	@E2E_BASE_URL=http://localhost:8000 python3 -m pytest -m e2e -q tests/e2e; rc=$$?; \
+		docker compose -p hdh-e2e down -v >/dev/null 2>&1; exit $$rc
 
 lint:
 	@python3 -m ruff format --check .
