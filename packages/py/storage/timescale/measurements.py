@@ -79,7 +79,7 @@ def _bump_rejected(metric: str, reason: str) -> None:
     don't load the FastAPI app.
     """
     try:
-        from server.api.metrics import INGEST_REJECTED
+        from observability.metrics import INGEST_REJECTED
 
         INGEST_REJECTED.labels(metric=metric, reason=reason).inc()
     except Exception:  # pragma: no cover - metrics import optional

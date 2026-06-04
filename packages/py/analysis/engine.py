@@ -436,8 +436,8 @@ class AnalysisEngine:
     # ──────────────────────────────────────────────────────────────
 
     async def _run_job_with_metrics(self, job: str, runner: Callable[[], Awaitable[_T]]) -> _T:
-        # Lazy import: server.api.metrics → server.main → analysis.engine would cycle.
-        from server.api.metrics import AI_BRIEFING_RUNS
+        # Lazy import keeps analysis usable when prometheus_client is absent.
+        from observability.metrics import AI_BRIEFING_RUNS
 
         try:
             result = await runner()
