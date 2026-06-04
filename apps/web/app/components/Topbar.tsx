@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 import { ThemeToggle } from "./ThemeToggle";
 
 const TITLES: Record<string, { title: string; sub: string }> = {
-  "/": { title: "Overview", sub: "Your data, interpreted — not just charted." },
+  "/": { title: "Today", sub: "Your body, interpreted — with proof." },
+  "/demo": { title: "Today", sub: "A believable 30-day story — demo data." },
   "/experiments": { title: "Experiments", sub: "Run, measure, and act on what to try next." },
   "/evidence": { title: "Evidence", sub: "What the engine found — computed, not guessed." },
   "/data": { title: "Data", sub: "Coverage, freshness, and every metric." },

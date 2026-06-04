@@ -1,0 +1,85 @@
+// The signature primitive: a recent trace drawn against the user's own baseline
+// band, with anomaly pins where the value left the expected range. Reused in the
+// hero, metric cards, and the README screenshot. SVG (band + median + trace) is
+// stretched edge-to-edge; anomaly pins are HTML overlays so they stay perfectly
+// round regardless of width.
+
+type Props = {
+  values: number[];
+  band?: [number, number]; // expected range (value units); defaults to P25–P75
+  anomalies?: number[]; // indices into `values` to pin
+  height?: number; // plot height in px
+  axis?: [string, string]; // left / right captions
+};
+
+function quantile(sorted: number[], q: number): number {
+  const pos = (sorted.length - 1) * q;
+  const base = Math.floor(pos);
+  const rest = pos - base;
+  const next = sorted[base + 1];
+  return next !== undefined ? sorted[base] + rest * (next - sorted[base]) : sorted[base];
+}
+
+export function BaselineRibbon({ values, band, anomalies = [], height = 76, axis }: Props) {
+  if (values.length < 2) return null;
+
+  const sorted = [...values].sort((a, b) => a - b);
+  const lo = band ? band[0] : quantile(sorted, 0.25);
+  const hi = band ? band[1] : quantile(sorted, 0.75);
+  const min = Math.min(...values, lo);
+  const max = Math.max(...values, hi);
+  const span = max - min || 1;
+
+  const W = 1000;
+  const H = 100;
+  const padY = 12;
+  const x = (i: number) => (i / (values.length - 1)) * W;
+  const y = (v: number) => padY + (H - 2 * padY) * (1 - (v - min) / span);
+
+  const trace = values
+    .map((v, i) => `${i === 0 ? "M" : "L"} ${x(i).toFixed(1)} ${y(v).toFixed(1)}`)
+    .join(" ");
+  const bandTop = y(hi);
+  const bandBot = y(lo);
+  const mid = y((lo + hi) / 2);
+
+  return (
+    <div className="ribbon-wrap">
+      <div className="ribbon-plot" style={{ height }}>
+        <svg
+          className="ribbon"
+          viewBox={`0 0 ${W} ${H}`}
+          preserveAspectRatio="none"
+          role="img"
+          aria-label="Recent trace against your personal baseline range"
+        >
+          <rect
+            className="ribbon-band"
+            x="0"
+            y={bandTop}
+            width={W}
+            height={Math.max(2, bandBot - bandTop)}
+          />
+          <line className="ribbon-band-edge" x1="0" y1={bandTop} x2={W} y2={bandTop} vectorEffect="non-scaling-stroke" />
+          <line className="ribbon-band-edge" x1="0" y1={bandBot} x2={W} y2={bandBot} vectorEffect="non-scaling-stroke" />
+          <line className="ribbon-median" x1="0" y1={mid} x2={W} y2={mid} vectorEffect="non-scaling-stroke" />
+          <path className="ribbon-trace" d={trace} vectorEffect="non-scaling-stroke" />
+        </svg>
+        {anomalies.map((i) => (
+          <span
+            key={i}
+            className="ribbon-pin"
+            style={{ left: `${(i / (values.length - 1)) * 100}%`, top: `${(y(values[i]) / H) * 100}%` }}
+            aria-hidden
+          />
+        ))}
+      </div>
+      {axis && (
+        <div className="ribbon-axis">
+          <span>{axis[0]}</span>
+          <span>{axis[1]}</span>
+        </div>
+      )}
+    </div>
+  );
+}
