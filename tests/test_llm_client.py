@@ -135,6 +135,60 @@ async def test_generate_insight_allows_cloud_when_opted_in(monkeypatch):
     assert "not medical advice" in result.narrative.lower()
 
 
+@pytest.mark.asyncio
+async def test_cloud_prompt_is_redacted_before_send(monkeypatch):
+    """A cloud-bound prompt is scrubbed of identifiers before it leaves the host."""
+    acompletion = AsyncMock(return_value=_fake_response("Cloud narrative."))
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(
+        LLMConfig(provider="openai", model="gpt-4o-mini", allow_cloud_egress=True)
+    )
+    await client.generate_insight(
+        "owner contact jane.doe@example.com summary follows",
+        insight_type="daily_briefing",
+    )
+
+    sent = acompletion.await_args.kwargs["messages"][1]["content"]
+    assert "jane.doe@example.com" not in sent
+    assert "[EMAIL]" in sent
+
+
+@pytest.mark.asyncio
+async def test_local_prompt_is_never_redacted(monkeypatch):
+    """The local Ollama path keeps full fidelity — data never crossed the boundary."""
+    acompletion = AsyncMock(return_value=_fake_response("Local narrative."))
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(LLMConfig(provider="ollama", model="llama3.1:8b"))
+    original = "owner contact jane.doe@example.com summary follows"
+    await client.generate_insight(original, insight_type="daily_briefing")
+
+    sent = acompletion.await_args.kwargs["messages"][1]["content"]
+    assert sent == original  # untouched
+
+
+@pytest.mark.asyncio
+async def test_cloud_redaction_can_be_disabled(monkeypatch):
+    """Opting out of redaction sends the raw prompt (explicit choice)."""
+    acompletion = AsyncMock(return_value=_fake_response("Cloud narrative."))
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(
+        LLMConfig(
+            provider="openai",
+            model="gpt-4o-mini",
+            allow_cloud_egress=True,
+            redact_cloud_prompts=False,
+        )
+    )
+    original = "contact jane.doe@example.com"
+    await client.generate_insight(original, insight_type="daily_briefing")
+
+    sent = acompletion.await_args.kwargs["messages"][1]["content"]
+    assert sent == original
+
+
 def test_litellm_is_not_imported_at_module_scope():
     """Regression guard for ISC-A5 + D6: litellm must stay a deferred import.
 
