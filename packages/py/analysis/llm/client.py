@@ -13,7 +13,7 @@ import logging
 
 from pydantic import BaseModel
 
-from ..egress import Destination, EgressPolicy, PayloadClass
+from ..egress import Destination, EgressGate, EgressPolicy, PayloadClass
 from ..redaction import RedactionPolicy
 from .prompts.base import SYSTEM_PROMPT
 from .safety import inject_disclaimer
@@ -64,6 +64,7 @@ class HealthLLMClient:
         self.config = config
         self.egress_policy = EgressPolicy.from_config(config)
         self.redaction_policy = RedactionPolicy.from_llm_config(config)
+        self.egress_gate = EgressGate(self.egress_policy, self.redaction_policy)
 
     async def generate_insight(self, prompt: str, *, insight_type: str) -> InsightResult:
         """Generate a narrative from ``prompt`` and return an :class:`InsightResult`.
@@ -86,18 +87,19 @@ class HealthLLMClient:
         :class:`~analysis.redaction.RedactionPolicy` (on by default) to strip
         any residual identifiers; the local Ollama path is left untouched.
         """
-        envelope = self.egress_policy.enforce(
-            provider=self.config.provider, payload_class=PayloadClass.PROMPT
+        prepared = self.egress_gate.prepare(
+            prompt,
+            provider=self.config.provider,
+            payload_class=PayloadClass.PROMPT,
         )
+        prompt = prepared.payload
+        envelope = prepared.envelope
         if envelope.destination is Destination.CLOUD:
-            # Content scrub before the prompt crosses the trust boundary. The
-            # local Ollama path is intentionally skipped — that data never left,
-            # so there is nothing to strip and the local model gets full fidelity.
-            if self.redaction_policy.enabled:
-                redacted = self.redaction_policy.apply(prompt)
-                if redacted.total:
-                    log.info("egress redaction: scrubbed %s before cloud send", redacted.summary())
-                prompt = redacted.text
+            if prepared.redaction is not None and prepared.redaction.total:
+                log.info(
+                    "egress redaction: scrubbed %s before cloud send",
+                    prepared.redaction.summary(),
+                )
             log.info(
                 "egress: %s prompt → cloud provider %r (opted in)",
                 envelope.payload_class.value,
