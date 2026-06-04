@@ -14,10 +14,10 @@ behavioural lever actually moved the outcome:
 
 The first v2 *write* surface for experiments — it follows the ``v2_agents``
 precedent (repository write + ``session.commit()`` + 201). Discipline holds:
-SQL stays in ``storage.timescale.experiments``, the statistics are the pure
+storage access goes through repository ports, the statistics are the pure
 ``analysis.statistical.experiments`` / ``experiment_readiness``, and the
-``ExperimentRunner`` (``analysis.experiments``) composes read → stats → write.
-No LLM here — results are computed evidence.
+``ExperimentRunner`` composes read → stats → write. No LLM here — results are
+computed evidence.
 """
 
 from __future__ import annotations
@@ -36,9 +36,8 @@ from contracts._base import V2Model
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from storage.timescale import briefings
-from storage.timescale import experiments as experiments_storage
-from storage.timescale.experiments import ExperimentResultRow, ExperimentRow
+from storage.defaults import briefing_repository, experiment_repository
+from storage.ports import BriefingRepository, ExperimentRepository
 
 from .deps import get_session, verify_api_key
 
@@ -48,6 +47,8 @@ router = APIRouter(prefix="/api/v2/experiments", dependencies=[Depends(verify_ap
 
 _CANDIDATES_LIMIT = 200
 _STATUSES = frozenset({"collecting", "completed", "abandoned"})
+_BRIEFING_REPO: BriefingRepository = briefing_repository()
+_EXPERIMENT_REPO: ExperimentRepository = experiment_repository()
 
 
 def _make_runner():
@@ -140,7 +141,7 @@ class ExperimentListResponse(V2Model):
 # ──────────────────────────────────────────────────────────────────────
 
 
-def _result_view(row: ExperimentResultRow) -> ResultView:
+def _result_view(row: Any) -> ResultView:
     """Storage result row → wire view, flattening the structured_data payload."""
     outcome = row.structured_data.get("outcome", {}) if row.structured_data else {}
     return ResultView(
@@ -163,8 +164,8 @@ def _result_view(row: ExperimentResultRow) -> ResultView:
 
 
 def _experiment_view(
-    row: ExperimentRow,
-    results: dict[str, ExperimentResultRow],
+    row: Any,
+    results: dict[str, Any],
     today: date,
 ) -> ExperimentView:
     calendar = build_phase_calendar(row.start_date, row.block_days, row.design)
@@ -218,7 +219,7 @@ async def list_candidates(session: AsyncSession = Depends(get_session)) -> dict:
     promote into an experiment. Deduped to one row per metric pair (the strongest
     seen), since the same pair recurs across correlation runs.
     """
-    findings = await briefings.fetch_correlations(session, limit=_CANDIDATES_LIMIT)
+    findings = await _BRIEFING_REPO.fetch_correlations(session, limit=_CANDIDATES_LIMIT)
 
     # Dedupe by unordered pair, keeping the strongest |coefficient|.
     strongest: dict[frozenset[str], Any] = {}
@@ -293,7 +294,7 @@ async def create_experiment(
         )
 
     start = body.start_date or _today()
-    row = await experiments_storage.create_experiment(
+    row = await _EXPERIMENT_REPO.create_experiment(
         session,
         lever_metric_id=body.lever_metric_id,
         outcome_metric_id=body.outcome_metric_id,
@@ -310,7 +311,7 @@ async def create_experiment(
     except Exception:  # pragma: no cover - defensive; creation must still succeed
         _log.warning("retrospective preview failed for experiment %s; continuing", row.id)
 
-    results = await experiments_storage.latest_results_by_kind(session, experiment_id=row.id)
+    results = await _EXPERIMENT_REPO.latest_results_by_kind(session, experiment_id=row.id)
     return _experiment_view(row, results, _today())
 
 
@@ -323,11 +324,11 @@ async def list_experiments(
     if status is not None and status not in _STATUSES:
         raise HTTPException(status_code=422, detail=f"unknown status: {status!r}")
 
-    rows = await experiments_storage.list_experiments(session, status=status)
+    rows = await _EXPERIMENT_REPO.list_experiments(session, status=status)
     today = _today()
     views: list[ExperimentView] = []
     for row in rows:
-        results = await experiments_storage.latest_results_by_kind(session, experiment_id=row.id)
+        results = await _EXPERIMENT_REPO.latest_results_by_kind(session, experiment_id=row.id)
         views.append(_experiment_view(row, results, today))
     return ExperimentListResponse(experiments=views, count=len(views))
 
@@ -338,10 +339,10 @@ async def get_experiment(
     session: AsyncSession = Depends(get_session),
 ) -> ExperimentView:
     """One experiment: definition + phase calendar + progress + latest results."""
-    row = await experiments_storage.get_experiment(session, experiment_id=experiment_id)
+    row = await _EXPERIMENT_REPO.get_experiment(session, experiment_id=experiment_id)
     if row is None:
         raise HTTPException(status_code=404, detail="experiment not found")
-    results = await experiments_storage.latest_results_by_kind(session, experiment_id=row.id)
+    results = await _EXPERIMENT_REPO.latest_results_by_kind(session, experiment_id=row.id)
     return _experiment_view(row, results, _today())
 
 
@@ -354,15 +355,15 @@ async def analyze_experiment(
 
     Completes the experiment automatically once its window has fully elapsed.
     """
-    row = await experiments_storage.get_experiment(session, experiment_id=experiment_id)
+    row = await _EXPERIMENT_REPO.get_experiment(session, experiment_id=experiment_id)
     if row is None:
         raise HTTPException(status_code=404, detail="experiment not found")
 
     await _make_runner().run_controlled(row, as_of=_today())
 
     # Re-read: status may have flipped to completed and a new result landed.
-    row = await experiments_storage.get_experiment(session, experiment_id=experiment_id)
-    results = await experiments_storage.latest_results_by_kind(session, experiment_id=experiment_id)
+    row = await _EXPERIMENT_REPO.get_experiment(session, experiment_id=experiment_id)
+    results = await _EXPERIMENT_REPO.latest_results_by_kind(session, experiment_id=experiment_id)
     return _experiment_view(row, results, _today())
 
 
@@ -372,13 +373,13 @@ async def abandon_experiment(
     session: AsyncSession = Depends(get_session),
 ) -> ExperimentView:
     """Stop an experiment (status → abandoned)."""
-    row = await experiments_storage.set_status(
+    row = await _EXPERIMENT_REPO.set_status(
         session, experiment_id=experiment_id, status="abandoned"
     )
     if row is None:
         raise HTTPException(status_code=404, detail="experiment not found")
     await session.commit()
-    results = await experiments_storage.latest_results_by_kind(session, experiment_id=experiment_id)
+    results = await _EXPERIMENT_REPO.latest_results_by_kind(session, experiment_id=experiment_id)
     return _experiment_view(row, results, _today())
 
 

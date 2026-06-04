@@ -1,10 +1,10 @@
 """Tests for the /api/v2/experiments surface.
 
 FakeSession discipline — no live DB. The candidates route reads correlation
-findings via briefings.fetch_correlations (real SQL over the fake session); the
-lifecycle routes (create/list/detail/analyze/abandon) are tested by stubbing the
-storage repo + the ExperimentRunner so the route logic — validation, view
-shaping, status handling, 404/422 — is exercised without a DB.
+findings via the briefing repository; the lifecycle routes
+(create/list/detail/analyze/abandon) are tested by stubbing the storage repo +
+the ExperimentRunner so the route logic — validation, view shaping, status
+handling, 404/422 — is exercised without a DB.
 """
 
 from __future__ import annotations
@@ -189,7 +189,7 @@ def _result_row(kind="controlled", **overrides) -> ExperimentResultRow:
 
 
 class _StubStore:
-    """Configurable stand-in for storage.timescale.experiments (records calls)."""
+    """Configurable stand-in for ExperimentRepository (records calls)."""
 
     def __init__(self, *, created=None, got=..., listing=None, set_result=..., results=None):
         self._created = created
@@ -240,7 +240,7 @@ def wire(monkeypatch):
 
     def install(store: _StubStore) -> _StubRunner:
         runner = _StubRunner()
-        monkeypatch.setattr(v2x, "experiments_storage", store)
+        monkeypatch.setattr(v2x, "_EXPERIMENT_REPO", store)
         monkeypatch.setattr(v2x, "_make_runner", lambda: runner)
         return runner
 

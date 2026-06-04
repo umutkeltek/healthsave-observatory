@@ -192,6 +192,7 @@ def test_migrated_v2_routes_depend_on_ports_not_timescale_adapters() -> None:
     interface.
     """
     migrated = {
+        "apps/api/server/api/v2_experiments.py",
         "apps/api/server/api/v2_metrics.py",
         "apps/api/server/api/v2_insights.py",
         "apps/api/server/api/v2_agents.py",
