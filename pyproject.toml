@@ -94,6 +94,7 @@ include = [
     "homeassistant_mqtt*",
     "storage*",
     "normalization*",
+    "replay*",
     "worker*",
     "agents*",
     "plugin_sdk*",
