@@ -1,9 +1,6 @@
-"""Prometheus metrics endpoint."""
+"""Shared observability primitives for API, worker, and package code."""
 
-from __future__ import annotations
-
-from fastapi import APIRouter, Response
-from observability.metrics import (
+from .metrics import (
     AI_BRIEFING_RUNS,
     CANONICAL_DUAL_WRITE,
     INGEST_BATCHES,
@@ -16,9 +13,6 @@ from observability.metrics import (
     STATUS_QUERY_FAILURES,
     reset_metrics,
 )
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-
-router = APIRouter()
 
 __all__ = [
     "AI_BRIEFING_RUNS",
@@ -31,12 +25,5 @@ __all__ = [
     "PIPELINE_RUNS_LEDGER_FAILURES",
     "RAW_LOG_ORPHANED",
     "STATUS_QUERY_FAILURES",
-    "prometheus_metrics",
     "reset_metrics",
-    "router",
 ]
-
-
-@router.get("/metrics")
-async def prometheus_metrics() -> Response:
-    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)

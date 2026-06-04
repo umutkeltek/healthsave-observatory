@@ -46,7 +46,7 @@ log = logging.getLogger("healthsave.worker.listener")
 # listener to keep module import cheap when prometheus_client is
 # disabled or absent from the worker image.
 def _ledger_listener_failures():
-    from server.api.metrics import LEDGER_LISTENER_FAILURES
+    from observability.metrics import LEDGER_LISTENER_FAILURES
 
     return LEDGER_LISTENER_FAILURES
 

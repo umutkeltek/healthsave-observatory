@@ -64,7 +64,7 @@ def make_whoop_poll(session_factory: Any) -> Callable[[], Awaitable[None]]:
     async def _run() -> None:
         import httpx
         from plugin_sdk import load_manifest
-        from server.ingestion.storage import PostgresIngestStorage
+        from storage.timescale.ingest import PostgresIngestStorage
 
         from plugins.sources.whoop import WhoopSource
 
@@ -139,7 +139,7 @@ def make_amazfit_poll(session_factory: Any) -> Callable[[], Awaitable[None]]:
     async def _run() -> None:
         import httpx
         from plugin_sdk import load_manifest
-        from server.ingestion.storage import PostgresIngestStorage
+        from storage.timescale.ingest import PostgresIngestStorage
 
         from plugins.sources.amazfit import AmazfitSource
 
