@@ -93,12 +93,22 @@ export function loadGrid(): Promise<(MetricSeries | null)[]> {
 
 // Recent values per readiness metric, for the inline row sparklines. Best-effort
 // — a metric with no series just renders without one.
+//
+// Only the most-populated metrics get a sparkline: fetching a 30d series for
+// EVERY metric is an N+1 storm that dominates home-page load at real scale
+// (dozens of metrics x a series query each). The rest of the rows render
+// gracefully without a sparkline.
+const READINESS_SPARKLINE_LIMIT = 8;
+
 export async function loadReadinessSparklines(
   readiness: Readiness | null,
 ): Promise<Record<string, number[]>> {
   if (!readiness) return {};
+  const top = [...readiness.metrics]
+    .sort((a, b) => (b.observation_count ?? 0) - (a.observation_count ?? 0))
+    .slice(0, READINESS_SPARKLINE_LIMIT);
   const entries = await Promise.all(
-    readiness.metrics.map(async (metric) => {
+    top.map(async (metric) => {
       const series = await safeSeries(metric.metric_id, "30d");
       const values = series
         ? series.points.map((p) => p.value).filter((v): v is number => v !== null)
