@@ -1,4 +1,4 @@
-"""Experiment runtime — composes time-series reads, pure ABAB stats, and persistence.
+"""Experiment runtime — composes time-series ports, pure ABAB stats, and persistence.
 
 Brain-1 orchestration for the n-of-1 engine: pull an experiment's outcome (and
 lever) daily series from the canonical store, run the pure
@@ -17,35 +17,42 @@ Two entry points, one per result ``kind``:
   run is honestly recorded as ``insufficient``), and flips the experiment to
   ``completed`` once its window has fully elapsed.
 
-Storage is reached through lazy imports (``_sql`` / ``_experiments``) to dodge
-the analysis↔storage↔server import cycle, exactly like :mod:`analysis.engine`.
+Storage is supplied through ports. Production construction uses
+``storage.defaults``; tests can inject in-memory fakes or run with
+``persist=False`` to exercise the full analysis without writing results.
 """
 
 from __future__ import annotations
 
 import logging
+import statistics
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
 
 from .statistical import experiments as stats
+
+if TYPE_CHECKING:
+    from storage.ports import ExperimentRepository, TimeSeriesQueryService
 
 log = logging.getLogger("healthsave.analysis")
 
 _RETROSPECTIVE_LOOKBACK_DAYS = 90
+_SERIES_LIMIT = 50_000
 
 
-def _sql():
-    """Lazy handle for ``storage.timescale.analysis`` (cycle-avoidance, see module docstring)."""
-    from storage.timescale import analysis as analysis_sql
+def _default_time_series() -> TimeSeriesQueryService:
+    from storage.defaults import time_series_query_service
 
-    return analysis_sql
+    return time_series_query_service()
 
 
-def _experiments():
-    """Lazy handle for ``storage.timescale.experiments``."""
-    from storage.timescale import experiments as experiments_storage
+def _default_experiment_repository() -> ExperimentRepository:
+    from storage.defaults import experiment_repository
 
-    return experiments_storage
+    return experiment_repository()
 
 
 def _midnight(d: date) -> datetime:
@@ -81,25 +88,73 @@ def _adherence_dict(a: stats.AdherenceCheck) -> dict[str, Any]:
     }
 
 
+@dataclass(frozen=True, slots=True)
+class ComputedExperimentResult:
+    """A computed experiment result before optional persistence."""
+
+    kind: str
+    direction: str | None
+    diff: float | None
+    effect_size: float | None
+    p_value: float | None
+    inference: str | None
+    summary: str | None
+    structured_data: dict[str, Any]
+
+
 class ExperimentRunner:
     """Orchestrates one experiment's analysis against the canonical store.
 
     Stateless apart from the session factory; safe to construct per request.
     """
 
-    def __init__(self, session_factory) -> None:
+    def __init__(
+        self,
+        session_factory,
+        *,
+        time_series: TimeSeriesQueryService | None = None,
+        experiment_repository: ExperimentRepository | None = None,
+    ) -> None:
         self.session_factory = session_factory
+        self.time_series = time_series or _default_time_series()
+        self.experiment_repository = experiment_repository or _default_experiment_repository()
 
     async def _series(
         self, session, metric_id: str, start: datetime, end: datetime
     ) -> dict[date, float]:
-        """``{day: daily_mean}`` for a metric over ``[start, end)`` from the canonical store."""
-        rows = await _sql().fetch_metric_daily_series(session, metric_id, start, end)
-        return {
-            row.day: float(row.value)
-            for row in rows
-            if getattr(row, "day", None) is not None and getattr(row, "value", None) is not None
-        }
+        """``{day: daily_mean}`` for a metric over ``[start, end)`` via the time-series port."""
+        rows = await self.time_series.query_series(
+            session,
+            owner_id=DEFAULT_OWNER_ID,
+            workspace_id=DEFAULT_WORKSPACE_ID,
+            metric_id=metric_id,
+            start=start,
+            end=end,
+            limit=_SERIES_LIMIT,
+        )
+        values_by_day: dict[date, list[float]] = {}
+        for row in rows:
+            value = getattr(row, "value", None)
+            t = getattr(row, "t", None)
+            if value is None or t is None:
+                continue
+            day = t.date() if isinstance(t, datetime) else t
+            values_by_day.setdefault(day, []).append(float(value))
+        return {day: statistics.fmean(values) for day, values in values_by_day.items()}
+
+    async def _persist_result(self, session, experiment_id, result: ComputedExperimentResult):
+        return await self.experiment_repository.insert_result(
+            session,
+            experiment_id=experiment_id,
+            kind=result.kind,
+            direction=result.direction,
+            diff=result.diff,
+            effect_size=result.effect_size,
+            p_value=result.p_value,
+            inference=result.inference,
+            summary=result.summary,
+            structured_data=result.structured_data,
+        )
 
     async def run_retrospective(
         self,
@@ -107,6 +162,7 @@ class ExperimentRunner:
         *,
         as_of: date,
         lookback_days: int = _RETROSPECTIVE_LOOKBACK_DAYS,
+        persist: bool = True,
     ):
         """Observational read over trailing history (lever median split).
 
@@ -130,9 +186,7 @@ class ExperimentRunner:
                 outcome_short=stats._short(experiment.outcome_metric_id),
                 period_phrase=f"high-{stats._short(experiment.lever_metric_id)} days",
             )
-            result = await _experiments().insert_result(
-                session,
-                experiment_id=experiment.id,
+            computed = ComputedExperimentResult(
                 kind="retrospective",
                 direction=pc.direction,
                 diff=pc.diff,
@@ -146,10 +200,14 @@ class ExperimentRunner:
                     "method": "lever_median_split",
                 },
             )
+            if not persist:
+                return computed
+
+            result = await self._persist_result(session, experiment.id, computed)
             await session.commit()
             return result
 
-    async def run_controlled(self, experiment, *, as_of: date):
+    async def run_controlled(self, experiment, *, as_of: date, persist: bool = True):
         """Controlled ABAB result over the experiment window + a lever adherence read.
 
         Always persists a ``controlled`` result (a thin/early run records
@@ -178,9 +236,7 @@ class ExperimentRunner:
                 outcome_short=stats._short(experiment.outcome_metric_id),
                 period_phrase="intervention blocks",
             )
-            result = await _experiments().insert_result(
-                session,
-                experiment_id=experiment.id,
+            computed = ComputedExperimentResult(
                 kind="controlled",
                 direction=pc.direction,
                 diff=pc.diff,
@@ -196,8 +252,12 @@ class ExperimentRunner:
                     "block_days": experiment.block_days,
                 },
             )
+            if not persist:
+                return computed
+
+            result = await self._persist_result(session, experiment.id, computed)
             if prog.is_complete and experiment.status == "collecting":
-                await _experiments().set_status(
+                await self.experiment_repository.set_status(
                     session, experiment_id=experiment.id, status="completed"
                 )
             await session.commit()
