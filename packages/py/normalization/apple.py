@@ -100,14 +100,25 @@ def _map_code(metric: MetricDefinition, raw: Any) -> str | None:
     """Resolve a raw categorical value to a canonical code.
 
     Accepts either a source-vocabulary value (mapped via value_map) or a value
-    that is already a canonical code (e.g. iOS sends short ``"core"`` directly).
+    that is already a canonical code. Matching is **case-insensitive**: Apple
+    HealthKit emits capitalized sleep stages (``"Core"``/``"Deep"``/``"REM"``)
+    while the ontology codes are lowercase, and a case-sensitive lookup silently
+    rejected every real sleep sample (``unmappable_code``) — a data-loss bug.
+    Exact matches are tried first so any intentionally case-distinct mapping wins.
     """
     raw_str = str(raw)
+    folded = raw_str.casefold()
     for mapping in metric.source_mappings:
-        if mapping.source == "apple_healthkit" and raw_str in mapping.value_map:
+        if mapping.source != "apple_healthkit":
+            continue
+        if raw_str in mapping.value_map:
             return mapping.value_map[raw_str]
-    if any(code.code == raw_str for code in metric.allowed_codes):
-        return raw_str
+        for key, code in mapping.value_map.items():
+            if key.casefold() == folded:
+                return code
+    for code in metric.allowed_codes:
+        if code.code.casefold() == folded:
+            return code.code
     return None
 
 
