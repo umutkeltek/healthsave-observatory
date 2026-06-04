@@ -1,10 +1,9 @@
 """Unit tests for :class:`analysis.statistical.anomaly.AnomalyDetector`.
 
-Follows the Phase 1/1.5 ``FakeSession`` discipline - no live DB. Each
-test queues a sequence of pre-canned rowsets keyed by the order in
-which the detector executes its SQL queries (HR obs → HR baseline →
-HRV obs → HRV baseline → workouts). Severity tiering, context
-filtering, and the data-sufficiency gate all exercise here.
+Follows the fake-data-source discipline - no live DB. Each test queues
+pre-canned observation/workout batches behind the detector's injected read
+interface. Severity tiering, context filtering, and the data-sufficiency gate
+all exercise here.
 """
 
 from __future__ import annotations
@@ -26,52 +25,84 @@ class _Row(SimpleNamespace):
     """Lightweight row stub - attribute access mimics SQLAlchemy ``Row``."""
 
 
-class _Result:
-    def __init__(self, rows):
-        self._rows = list(rows)
-
-    def fetchall(self):
-        return list(self._rows)
-
-    def __iter__(self):
-        return iter(self._rows)
-
-
-class _FakeSession:
-    """Queues batches of rows, one batch per ``execute`` call."""
-
-    def __init__(self, batches):
-        self._batches = list(batches)
-        self.calls: list[tuple[str, dict]] = []
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-    async def execute(self, statement, params=None):
-        sql = " ".join(str(statement).split())
-        self.calls.append((sql, params or {}))
-        rows = self._batches.pop(0) if self._batches else []
-        return _Result(rows)
+def _observations(rows):
+    observations = []
+    for row in rows:
+        if isinstance(row, tuple):
+            observations.append(row)
+            continue
+        observed_at = getattr(row, "bucket", getattr(row, "time", None))
+        observations.append((observed_at, row.value))
+    return observations
 
 
-def _session_factory(batches):
-    """Build a callable that returns a prepared FakeSession instance."""
-    session = _FakeSession(batches)
+def _workouts(rows):
+    workouts = []
+    for row in rows:
+        if isinstance(row, dict):
+            workouts.append(row)
+            continue
+        workouts.append({"start": row.start_time, "end": row.end_time})
+    return workouts
 
-    def factory():
-        return session
 
-    factory.session = session
-    return factory
+class _AnomalyDataSource:
+    def __init__(self, *, hr=None, hrv=None, workouts=None):
+        self._hr_batches = list(hr or [])
+        self._hrv_batches = list(hrv or [])
+        self._workout_batches = list(workouts or [])
+        self.hr_calls: list[tuple[datetime, datetime]] = []
+        self.hrv_calls: list[tuple[datetime, datetime]] = []
+        self.workout_calls: list[tuple[datetime, datetime]] = []
+
+    async def fetch_hr_observations(self, start, end):
+        self.hr_calls.append((start, end))
+        rows = self._hr_batches.pop(0) if self._hr_batches else []
+        return _observations(rows)
+
+    async def fetch_hrv_observations(self, start, end):
+        self.hrv_calls.append((start, end))
+        rows = self._hrv_batches.pop(0) if self._hrv_batches else []
+        return _observations(rows)
+
+    async def fetch_workouts(self, start, end):
+        self.workout_calls.append((start, end))
+        rows = self._workout_batches.pop(0) if self._workout_batches else []
+        return _workouts(rows)
 
 
 def _config(sensitivity: str = "normal") -> AnalysisConfig:
     return AnalysisConfig.model_validate(
         {"analysis": {"anomaly_detection": {"enabled": True, "sensitivity": sensitivity}}}
     )
+
+
+@pytest.mark.asyncio
+async def test_detect_uses_injected_data_source_without_session():
+    obs_time = datetime(2025, 1, 15, 12, 0, tzinfo=UTC)
+    baseline = [(obs_time - timedelta(days=i + 1), 65.0 + (i % 3) * 0.5) for i in range(30)]
+
+    class Source:
+        def __init__(self):
+            self.hr_calls: list[tuple[datetime, datetime]] = []
+
+        async def fetch_hr_observations(self, start, end):
+            self.hr_calls.append((start, end))
+            return [(obs_time, 120.0)] if len(self.hr_calls) == 1 else baseline
+
+        async def fetch_hrv_observations(self, start, end):
+            return []
+
+        async def fetch_workouts(self, start, end):
+            return []
+
+    source = Source()
+
+    anomalies = await AnomalyDetector(source, _config("normal")).detect(lookback_days=1)
+
+    assert len(anomalies) == 1
+    assert anomalies[0].metric == "heart_rate"
+    assert len(source.hr_calls) == 2
 
 
 # ──────────────────────────────────────────────────────────────
@@ -92,10 +123,10 @@ async def test_detect_flags_heart_rate_spike_with_normal_sensitivity():
         for d in range(30)
     ]
 
-    # HRV obs empty, HRV baseline empty, workouts empty.
-    session_factory = _session_factory([hr_obs, baseline, [], [], []])
+    # HRV obs empty, workouts empty.
+    source = _AnomalyDataSource(hr=[hr_obs, baseline])
 
-    detector = AnomalyDetector(session_factory, _config("normal"))
+    detector = AnomalyDetector(source, _config("normal"))
     anomalies = await detector.detect(lookback_days=1)
 
     assert len(anomalies) == 1
@@ -133,8 +164,8 @@ async def test_detect_tiers_severity_info_watch_alert_for_normal_sensitivity():
         _Row(bucket=obs_time - timedelta(hours=2), value=130.0),  # z ≈ 3.61 → alert
     ]
 
-    session_factory = _session_factory([hr_obs, baseline, [], [], []])
-    detector = AnomalyDetector(session_factory, _config("normal"))
+    source = _AnomalyDataSource(hr=[hr_obs, baseline])
+    detector = AnomalyDetector(source, _config("normal"))
     anomalies = await detector.detect(lookback_days=1)
 
     severities = sorted(a.severity for a in anomalies)
@@ -155,8 +186,8 @@ async def test_detect_low_sensitivity_raises_floor_to_2_5_sigma():
     ]
     # z ≈ 2.17 observation - above 2.0 floor, below 2.5 floor; suppressed at low sensitivity.
     hr_obs = [_Row(bucket=obs_time, value=118.0)]
-    session_factory = _session_factory([hr_obs, baseline, [], [], []])
-    detector = AnomalyDetector(session_factory, _config("low"))
+    source = _AnomalyDataSource(hr=[hr_obs, baseline])
+    detector = AnomalyDetector(source, _config("low"))
     anomalies = await detector.detect(lookback_days=1)
     assert anomalies == []
 
@@ -170,8 +201,8 @@ async def test_detect_high_sensitivity_lowers_floor_to_1_5_sigma():
     ]
     # z ≈ 1.6 - suppressed at normal but surfaces at high.
     hr_obs = [_Row(bucket=obs_time, value=116.0)]
-    session_factory = _session_factory([hr_obs, baseline, [], [], []])
-    detector = AnomalyDetector(session_factory, _config("high"))
+    source = _AnomalyDataSource(hr=[hr_obs, baseline])
+    detector = AnomalyDetector(source, _config("high"))
     anomalies = await detector.detect(lookback_days=1)
     assert len(anomalies) == 1
     assert anomalies[0].severity == "info"
@@ -191,8 +222,8 @@ async def test_detect_skips_when_baseline_has_too_few_observations():
         _Row(bucket=obs_time - timedelta(hours=i + 1), value=65.0) for i in range(5)
     ]  # only 5 rows
 
-    session_factory = _session_factory([hr_obs, baseline, [], [], []])
-    detector = AnomalyDetector(session_factory, _config("normal"))
+    source = _AnomalyDataSource(hr=[hr_obs, baseline])
+    detector = AnomalyDetector(source, _config("normal"))
     anomalies = await detector.detect(lookback_days=1)
     assert anomalies == []
 
@@ -207,8 +238,8 @@ async def test_detect_skips_when_baseline_has_too_few_distinct_days():
         for i in range(14)
     ]
 
-    session_factory = _session_factory([hr_obs, baseline, [], [], []])
-    detector = AnomalyDetector(session_factory, _config("normal"))
+    source = _AnomalyDataSource(hr=[hr_obs, baseline])
+    detector = AnomalyDetector(source, _config("normal"))
     anomalies = await detector.detect(lookback_days=1)
     assert anomalies == []
 
@@ -217,14 +248,14 @@ async def test_detect_skips_when_baseline_has_too_few_distinct_days():
 async def test_detect_can_scan_a_recent_rolling_window_instead_of_previous_midnight():
     """Ad-hoc anomaly checks need a fresh window ending at the supplied timestamp."""
     now = datetime(2026, 4, 19, 15, 30, tzinfo=UTC)
-    session_factory = _session_factory([[], [], [], [], []])
-    detector = AnomalyDetector(session_factory, _config("normal"))
+    source = _AnomalyDataSource(hr=[[]])
+    detector = AnomalyDetector(source, _config("normal"))
 
     await detector.detect(lookback_days=1, end_at=now)
 
-    _, params = session_factory.session.calls[0]
-    assert params["end"] == now
-    assert params["start"] == now - timedelta(days=1)
+    start, end = source.hr_calls[0]
+    assert end == now
+    assert start == now - timedelta(days=1)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -243,9 +274,9 @@ async def test_detect_flags_hrv_drop_as_anomaly():
     # Observation: huge drop to 10 ms.
     hrv_obs = [_Row(time=obs_time, value=10.0)]
 
-    # HR obs empty, HR baseline empty (so no HR detector run).
-    session_factory = _session_factory([[], [], hrv_obs, baseline, []])
-    detector = AnomalyDetector(session_factory, _config("normal"))
+    # HR obs empty, HR baseline empty (so no HR baseline fetch).
+    source = _AnomalyDataSource(hr=[[]], hrv=[hrv_obs, baseline])
+    detector = AnomalyDetector(source, _config("normal"))
     anomalies = await detector.detect(lookback_days=1)
 
     assert len(anomalies) == 1
@@ -273,10 +304,9 @@ async def test_context_filter_drops_heart_rate_spike_during_workout():
         )
     ]
 
-    # Query order: HR obs → HR baseline → HRV obs → workouts (HRV baseline
-    # is skipped when HRV obs is empty).
-    session_factory = _session_factory([hr_obs, baseline, [], workout])
-    detector = AnomalyDetector(session_factory, _config("normal"))
+    # HRV baseline is skipped when HRV obs is empty.
+    source = _AnomalyDataSource(hr=[hr_obs, baseline], hrv=[[]], workouts=[workout])
+    detector = AnomalyDetector(source, _config("normal"))
     anomalies = await detector.detect(lookback_days=1)
 
     # HR-up during workout → dropped
@@ -294,8 +324,8 @@ async def test_context_filter_drops_heart_rate_dip_during_sleep_window():
     ]
 
     # No workouts needed - sleep-window rule runs on the anomaly timestamp alone.
-    session_factory = _session_factory([hr_obs, baseline, [], [], []])
-    detector = AnomalyDetector(session_factory, _config("normal"))
+    source = _AnomalyDataSource(hr=[hr_obs, baseline], hrv=[[]])
+    detector = AnomalyDetector(source, _config("normal"))
     anomalies = await detector.detect(lookback_days=1)
     assert anomalies == []
 
@@ -316,8 +346,8 @@ async def test_context_filter_downgrades_hrv_drop_shortly_after_workout():
         )
     ]
 
-    session_factory = _session_factory([[], [], hrv_obs, baseline, workout])
-    detector = AnomalyDetector(session_factory, _config("normal"))
+    source = _AnomalyDataSource(hr=[[]], hrv=[hrv_obs, baseline], workouts=[workout])
+    detector = AnomalyDetector(source, _config("normal"))
     anomalies = await detector.detect(lookback_days=1)
 
     assert len(anomalies) == 1
@@ -335,7 +365,7 @@ async def test_context_filter_downgrades_hrv_drop_shortly_after_workout():
 
 @pytest.mark.asyncio
 async def test_detect_returns_empty_when_no_observations_or_baseline():
-    session_factory = _session_factory([[], [], [], [], []])
-    detector = AnomalyDetector(session_factory, _config("normal"))
+    source = _AnomalyDataSource(hr=[[]], hrv=[[]])
+    detector = AnomalyDetector(source, _config("normal"))
     anomalies = await detector.detect(lookback_days=1)
     assert anomalies == []
