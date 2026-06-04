@@ -218,6 +218,11 @@ async def apple_batch(
     # try/except so the loader inherits the same observability
     # guarantee — operators alert on RAW_LOG_ORPHANED{metric}.
     try:
+        # Canonical observations are the success gate; per-metric tables are a
+        # downstream projection in the same transaction.
+        await _write_canonical_observations(
+            session, metric=metric, samples=samples, owner_id=owner_id, raw_log_id=raw_log_id
+        )
         result = await plugin.ingest(
             {
                 "storage": storage,
@@ -240,10 +245,6 @@ async def apple_batch(
         records_rejected = _optional_int(result.get("rejected")) or 0
         records_deduped_in_batch = _optional_int(result.get("deduped_in_batch"))
         storage_result_level = str(result.get("storage_result_level") or "accepted_only")
-
-        await _write_canonical_observations(
-            session, metric=metric, samples=samples, owner_id=owner_id, raw_log_id=raw_log_id
-        )
         if audit and raw_log_id is not None:
             await audit.mark_processed(session, raw_log_id)
         await _record_sync_receipt(

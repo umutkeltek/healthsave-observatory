@@ -470,6 +470,36 @@ async def test_batch_records_healthsave_sync_receipt_headers():
 
 
 @pytest.mark.asyncio
+async def test_batch_writes_canonical_before_per_metric_projection():
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "heart_rate",
+            "samples": [
+                {
+                    "date": "2026-04-10T12:00:00+00:00",
+                    "qty": 72,
+                    "source": "Apple Watch Ultra",
+                }
+            ],
+        }
+    )
+
+    result = await server.apple_batch(request, session)
+
+    assert result["records"] == 1
+    canonical_index = next(
+        index
+        for index, (sql, _) in enumerate(session.calls)
+        if "INSERT INTO canonical_observations" in sql
+    )
+    projection_index = next(
+        index for index, (sql, _) in enumerate(session.calls) if "INSERT INTO heart_rate" in sql
+    )
+    assert canonical_index < projection_index
+
+
+@pytest.mark.asyncio
 async def test_batch_receipt_reports_inserted_new_and_existing_row_counts():
     session = StorageBreakdownSession(insert_flags=[True, False])
     request = FakeRequest(
@@ -818,6 +848,7 @@ async def test_batch_records_failed_sync_receipt_when_canonical_write_fails(monk
     assert receipt["status"] == "failed"
     assert receipt["records_accepted"] == 0
     assert "canonical write failed" in receipt["error_message"]
+    assert session.insert_params_for("heart_rate") is None
 
 
 class ReceiptIdempotencyConflictSession(FakeSession):
