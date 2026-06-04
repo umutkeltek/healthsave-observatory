@@ -1,9 +1,9 @@
 """Unit tests for :class:`analysis.statistical.aggregator.DataAggregator`.
 
-FakeSession discipline — no live DB. The aggregator reads the canonical store
-via ``summarize_metric_window`` (one window query per metric, plus a baseline
-query when the window has data), so each test queues ``_Row`` results in that
-order and asserts the generic per-metric summary shape + delta math.
+Fake fetcher discipline — no live DB. The aggregator receives
+``summarize_metric_window`` (one window fetch per metric, plus a baseline fetch
+when the window has data), so each test queues rows in that order and asserts
+the generic per-metric summary shape + delta math.
 """
 
 from __future__ import annotations
@@ -18,66 +18,57 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from analysis.statistical.aggregator import _DEFAULT_SUMMARY_METRICS, DataAggregator  # noqa: E402
 
 
-class _Row:
-    """Row stub mimicking SQLAlchemy's ``Row`` attribute access."""
-
-    def __init__(self, avg_v, min_v, max_v, count_v):
-        self.avg_v = avg_v
-        self.min_v = min_v
-        self.max_v = max_v
-        self.count_v = count_v
+def _row(avg_v, min_v, max_v, count_v):
+    return {"avg": avg_v, "min": min_v, "max": max_v, "count": count_v}
 
 
-def _empty() -> _Row:
-    return _Row(avg_v=None, min_v=None, max_v=None, count_v=0)
+def _empty():
+    return _row(avg_v=None, min_v=None, max_v=None, count_v=0)
 
 
-class _Result:
-    def __init__(self, row):
-        self._row = row
+class _WindowSummarizer:
+    def __init__(self, rows):
+        self._queue = list(rows)
+        self.calls: list[tuple[str, object, object]] = []
 
-    def fetchone(self):
-        return self._row
-
-
-class _FakeSession:
-    """Async context manager + async execute that returns queued rows."""
-
-    def __init__(self, queue):
-        self._queue = list(queue)
-        self.calls: list[tuple[str, dict]] = []
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-    async def execute(self, statement, params=None):
-        sql = " ".join(str(statement).split())
-        self.calls.append((sql, params or {}))
-        row = self._queue.pop(0) if self._queue else _empty()
-        return _Result(row)
+    async def __call__(self, metric_id, start, end):
+        self.calls.append((metric_id, start, end))
+        return self._queue.pop(0) if self._queue else _empty()
 
 
-def _session_factory(rows):
-    session = _FakeSession(rows)
+@pytest.mark.asyncio
+async def test_summarize_period_uses_injected_fetcher_without_session():
+    calls: list[tuple[str, object, object]] = []
+    rows = {
+        "vital.heart_rate": [
+            {"avg": 65.0, "min": 55, "max": 120, "count": 24},
+            {"avg": 62.0, "min": 50, "max": 140, "count": 720},
+        ]
+    }
 
-    def factory():
-        return session
+    async def summarize_metric_window(metric_id, start, end):
+        calls.append((metric_id, start, end))
+        return rows[metric_id].pop(0)
 
-    factory.session = session  # expose for assertions
-    return factory
+    summary = await DataAggregator(summarize_metric_window).summarize_period(
+        "daily", 1, metrics=["vital.heart_rate"]
+    )
+
+    hr = summary.metrics["vital.heart_rate"]
+    assert hr["avg"] == 65.0
+    assert hr["baseline_avg"] == 62.0
+    assert hr["delta_pct_vs_baseline"] == pytest.approx(4.8387, rel=1e-3)
+    assert [call[0] for call in calls] == ["vital.heart_rate", "vital.heart_rate"]
 
 
 @pytest.mark.asyncio
 async def test_summarize_period_computes_delta_vs_baseline():
     # One metric: window row then baseline row.
-    window = _Row(avg_v=65.0, min_v=55, max_v=120, count_v=24)
-    baseline = _Row(avg_v=62.0, min_v=50, max_v=140, count_v=720)
-    factory = _session_factory([window, baseline])
+    window = _row(avg_v=65.0, min_v=55, max_v=120, count_v=24)
+    baseline = _row(avg_v=62.0, min_v=50, max_v=140, count_v=720)
+    summarize_metric_window = _WindowSummarizer([window, baseline])
 
-    summary = await DataAggregator(factory).summarize_period(
+    summary = await DataAggregator(summarize_metric_window).summarize_period(
         "daily", 1, metrics=["vital.heart_rate"]
     )
 
@@ -89,25 +80,21 @@ async def test_summarize_period_computes_delta_vs_baseline():
     assert hr["baseline_avg"] == 62.0
     assert hr["delta_pct_vs_baseline"] == pytest.approx(4.8387, rel=1e-3)
     assert summary.period == "daily"
-
-    # Reads the canonical store, scoped by metric_id.
-    sql, params = factory.session.calls[0]
-    assert "FROM canonical_observations" in sql
-    assert params["metric_id"] == "vital.heart_rate"
+    assert summarize_metric_window.calls[0][0] == "vital.heart_rate"
 
 
 @pytest.mark.asyncio
 async def test_summarize_period_omits_metrics_with_no_window_data():
     # HR empty (1 query, no baseline) → skipped; steps has data (window+baseline).
-    factory = _session_factory(
+    summarize_metric_window = _WindowSummarizer(
         [
             _empty(),  # vital.heart_rate window — no data
-            _Row(avg_v=8200.0, min_v=0, max_v=900, count_v=14),  # activity.steps window
-            _Row(avg_v=7000.0, min_v=0, max_v=1200, count_v=400),  # activity.steps baseline
+            _row(avg_v=8200.0, min_v=0, max_v=900, count_v=14),  # activity.steps window
+            _row(avg_v=7000.0, min_v=0, max_v=1200, count_v=400),  # activity.steps baseline
         ]
     )
 
-    summary = await DataAggregator(factory).summarize_period(
+    summary = await DataAggregator(summarize_metric_window).summarize_period(
         "daily", 1, metrics=["vital.heart_rate", "activity.steps"]
     )
 
@@ -119,11 +106,11 @@ async def test_summarize_period_omits_metrics_with_no_window_data():
 
 @pytest.mark.asyncio
 async def test_summarize_period_handles_missing_baseline():
-    window = _Row(avg_v=70.0, min_v=58, max_v=110, count_v=24)
+    window = _row(avg_v=70.0, min_v=58, max_v=110, count_v=24)
     baseline = _empty()  # fresh install — no baseline window
-    factory = _session_factory([window, baseline])
+    summarize_metric_window = _WindowSummarizer([window, baseline])
 
-    summary = await DataAggregator(factory).summarize_period(
+    summary = await DataAggregator(summarize_metric_window).summarize_period(
         "daily", 1, metrics=["vital.heart_rate"]
     )
 
@@ -135,9 +122,9 @@ async def test_summarize_period_handles_missing_baseline():
 
 @pytest.mark.asyncio
 async def test_summarize_period_returns_empty_when_no_metric_has_data():
-    factory = _session_factory([_empty(), _empty()])
+    summarize_metric_window = _WindowSummarizer([_empty(), _empty()])
 
-    summary = await DataAggregator(factory).summarize_period(
+    summary = await DataAggregator(summarize_metric_window).summarize_period(
         "daily", 1, metrics=["vital.heart_rate", "activity.steps"]
     )
 
@@ -149,11 +136,11 @@ async def test_summarize_period_returns_empty_when_no_metric_has_data():
 async def test_summarize_period_defaults_to_the_curated_metric_set():
     # No metrics arg → the default list is queried. All empty → one window
     # query per default metric (no baselines), and no metrics survive.
-    factory = _session_factory([])  # every execute yields an empty row
+    summarize_metric_window = _WindowSummarizer([])  # every fetch yields an empty row
 
-    summary = await DataAggregator(factory).summarize_period("weekly", 7)
+    summary = await DataAggregator(summarize_metric_window).summarize_period("weekly", 7)
 
     assert summary.metrics == {}
-    queried = {params["metric_id"] for _, params in factory.session.calls}
+    queried = {call[0] for call in summarize_metric_window.calls}
     assert queried == set(_DEFAULT_SUMMARY_METRICS)
-    assert len(factory.session.calls) == len(_DEFAULT_SUMMARY_METRICS)
+    assert len(summarize_metric_window.calls) == len(_DEFAULT_SUMMARY_METRICS)
