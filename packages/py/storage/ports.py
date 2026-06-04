@@ -265,6 +265,27 @@ class TimeSeriesQueryService(Protocol):
 
 
 @runtime_checkable
+class ReadinessRepository(Protocol):
+    """Read-side coverage for the v2 data-readiness surface."""
+
+    async def fetch_canonical_coverage(
+        self,
+        session: AsyncSession,
+        *,
+        owner_id: UUID = ...,
+        workspace_id: UUID = ...,
+    ) -> list[dict[str, Any]]: ...
+
+    async def fetch_canonical_sources(
+        self,
+        session: AsyncSession,
+        *,
+        owner_id: UUID = ...,
+        workspace_id: UUID = ...,
+    ) -> list[dict[str, Any]]: ...
+
+
+@runtime_checkable
 class AgentRepository(Protocol):
     """AgentRun ledger CRUD — six Phase 7-A tables behind one Protocol.
 
@@ -453,3 +474,20 @@ class ExperimentRepository(Protocol):
         *,
         experiment_id: UUID,
     ) -> dict[str, ExperimentResultRow]: ...
+
+
+@runtime_checkable
+class SyncReceiptRepository(Protocol):
+    """Operator-facing HealthSave sync receipt reads."""
+
+    async def latest_sync_run(self, session: Any) -> dict[str, Any]: ...
+
+    async def sync_run(self, session: Any, sync_run_id: str) -> dict[str, Any]: ...
+
+    async def sync_coverage(self, session: Any) -> dict[str, Any]: ...
+
+    async def sync_anomalies(
+        self,
+        session: Any,
+        lookback_minutes: int = 15,
+    ) -> dict[str, Any]: ...
