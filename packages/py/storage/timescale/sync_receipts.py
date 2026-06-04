@@ -632,3 +632,26 @@ async def sync_anomalies(session: AsyncSession, lookback_minutes: int = 15) -> d
         },
         "anomalies": anomalies,
     }
+
+
+class TimescaleSyncReceiptRepository:
+    """Timescale-backed :class:`storage.ports.SyncReceiptRepository`."""
+
+    async def latest_sync_run(self, session: AsyncSession) -> dict[str, Any]:
+        return await latest_sync_run(session)
+
+    async def sync_run(self, session: AsyncSession, sync_run_id: str) -> dict[str, Any]:
+        return await sync_run(session, sync_run_id)
+
+    async def sync_coverage(self, session: AsyncSession) -> dict[str, Any]:
+        return await sync_coverage(session)
+
+    async def sync_anomalies(
+        self,
+        session: AsyncSession,
+        lookback_minutes: int = 15,
+    ) -> dict[str, Any]:
+        return await sync_anomalies(session, lookback_minutes)
+
+
+default_repository = TimescaleSyncReceiptRepository()

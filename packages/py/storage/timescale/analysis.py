@@ -670,3 +670,28 @@ async def fetch_canonical_sources(
         }
         for row in _fetchall(result)
     ]
+
+
+class TimescaleReadinessRepository:
+    """TimescaleDB-backed :class:`storage.ports.ReadinessRepository`."""
+
+    async def fetch_canonical_coverage(
+        self,
+        session,
+        *,
+        owner_id: UUID = DEFAULT_OWNER_ID,
+        workspace_id: UUID = DEFAULT_WORKSPACE_ID,
+    ) -> list[dict[str, Any]]:
+        return await fetch_canonical_coverage(session, owner_id=owner_id, workspace_id=workspace_id)
+
+    async def fetch_canonical_sources(
+        self,
+        session,
+        *,
+        owner_id: UUID = DEFAULT_OWNER_ID,
+        workspace_id: UUID = DEFAULT_WORKSPACE_ID,
+    ) -> list[dict[str, Any]]:
+        return await fetch_canonical_sources(session, owner_id=owner_id, workspace_id=workspace_id)
+
+
+default_readiness_repository = TimescaleReadinessRepository()

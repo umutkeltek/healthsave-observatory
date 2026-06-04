@@ -26,7 +26,9 @@ from storage.ports import (
     BriefingRepository,
     IngestStorage,
     MeasurementRepository,
+    ReadinessRepository,
     RunRepository,
+    SyncReceiptRepository,
     TimeSeriesQueryService,
 )
 from storage.timescale.briefings import (
@@ -580,3 +582,30 @@ async def test_in_memory_timeseries_query_filters_window_and_metric() -> None:
     )
 
     assert [p.value for p in got] == [60.0, 62.0]
+
+
+# ──────────────────────────────────────────────────────────────
+#  Route read repositories (readiness + sync receipts)
+# ──────────────────────────────────────────────────────────────
+
+
+def test_timescale_readiness_repo_satisfies_protocol() -> None:
+    from storage.timescale.analysis import (
+        TimescaleReadinessRepository,
+        default_readiness_repository,
+    )
+
+    assert isinstance(default_readiness_repository, ReadinessRepository)
+    assert isinstance(TimescaleReadinessRepository(), ReadinessRepository)
+
+
+def test_timescale_sync_receipt_repo_satisfies_protocol() -> None:
+    from storage.timescale.sync_receipts import (
+        TimescaleSyncReceiptRepository,
+    )
+    from storage.timescale.sync_receipts import (
+        default_repository as sync_receipt_default_repository,
+    )
+
+    assert isinstance(sync_receipt_default_repository, SyncReceiptRepository)
+    assert isinstance(TimescaleSyncReceiptRepository(), SyncReceiptRepository)

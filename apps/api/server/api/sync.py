@@ -10,12 +10,14 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from storage.timescale import sync_receipts
+from storage.defaults import sync_receipt_repository
+from storage.ports import SyncReceiptRepository
 
 from . import deps
 from .deps import get_session, verify_api_key
 
 router = APIRouter()
+_SYNC_RECEIPTS: SyncReceiptRepository = sync_receipt_repository()
 
 
 @router.get("/api/v2/setup/diagnostics")
@@ -50,25 +52,25 @@ async def setup_diagnostics() -> dict:
 async def latest_sync_run(session: Any = Depends(get_session)) -> dict:
     """Summarize the most recently observed HealthSave sync run."""
 
-    return await sync_receipts.latest_sync_run(session)
+    return await _SYNC_RECEIPTS.latest_sync_run(session)
 
 
 @router.get("/api/v2/sync/runs/{sync_run_id}", dependencies=[Depends(verify_api_key)])
 async def sync_run(sync_run_id: str, session: Any = Depends(get_session)) -> dict:
     """Return the delivery receipt summary for one HealthSave sync run."""
 
-    return await sync_receipts.sync_run(session, sync_run_id)
+    return await _SYNC_RECEIPTS.sync_run(session, sync_run_id)
 
 
 @router.get("/api/v2/sync/coverage", dependencies=[Depends(verify_api_key)])
 async def sync_coverage(session: Any = Depends(get_session)) -> dict:
     """Return metric-level receipt and destination sample coverage."""
 
-    return await sync_receipts.sync_coverage(session)
+    return await _SYNC_RECEIPTS.sync_coverage(session)
 
 
 @router.get("/api/v2/sync/anomalies", dependencies=[Depends(verify_api_key)])
 async def sync_anomalies(session: Any = Depends(get_session)) -> dict:
     """Detect suspicious sync behavior visible from server receipts."""
 
-    return await sync_receipts.sync_anomalies(session)
+    return await _SYNC_RECEIPTS.sync_anomalies(session)

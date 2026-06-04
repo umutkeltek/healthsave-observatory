@@ -10,8 +10,8 @@ Apple HealthKit can't sync while the device is locked, so coverage is genuinely
 uncertain and should be the headline, not a hidden footnote.
 
 Additive v2 read — no v1 surface touched. The SQL lives in
-``storage.timescale.analysis`` (the storage zone); this route only assembles +
-grades, and the grading is the pure ``analysis.statistical.gates`` engine.
+the storage adapter; this route only assembles + grades, and the grading is the
+pure ``analysis.statistical.gates`` engine.
 """
 
 from __future__ import annotations
@@ -24,11 +24,13 @@ from analysis.types import DataSummary
 from contracts.ontology import get_metric
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from storage.timescale import analysis as analysis_sql
+from storage.defaults import readiness_repository
+from storage.ports import ReadinessRepository
 
 from .deps import get_session, verify_api_key
 
 router = APIRouter(prefix="/api/v2", dependencies=[Depends(verify_api_key)])
+_READINESS_REPO: ReadinessRepository = readiness_repository()
 
 # The gates a single metric's coverage can actually evaluate: total
 # observations + distinct days. correlation/recovery need cross-metric or
@@ -66,8 +68,8 @@ def _grade(summary: DataSummary) -> dict[str, Any]:
 @router.get("/readiness")
 async def readiness(session: AsyncSession = Depends(get_session)) -> dict:
     """Per-metric coverage + analyzability, plus source attribution and freshness."""
-    coverage = await analysis_sql.fetch_canonical_coverage(session)
-    sources = await analysis_sql.fetch_canonical_sources(session)
+    coverage = await _READINESS_REPO.fetch_canonical_coverage(session)
+    sources = await _READINESS_REPO.fetch_canonical_sources(session)
 
     metrics: list[dict[str, Any]] = []
     last_observation_at: datetime | None = None
