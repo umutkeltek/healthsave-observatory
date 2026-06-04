@@ -15,6 +15,14 @@ EXTERNAL_DB_HOST="${HEALTH_DATA_HUB_DB_HOST:-postgres.example.internal}"
 EXTERNAL_DB_PORT="${HEALTH_DATA_HUB_DB_PORT:-5432}"
 EXTERNAL_DB_NAME="${HEALTH_DATA_HUB_DB_NAME:-healthsave}"
 EXTERNAL_DB_USER="${HEALTH_DATA_HUB_DB_USER:-healthsave}"
+# Only rewrite the external DB connection keys in the remote .env when the
+# operator explicitly provided them. A plain redeploy (mode=external, no DB_*
+# vars) must preserve the existing .env config instead of clobbering it with the
+# placeholder defaults above.
+DB_HOST_PROVIDED="${HEALTH_DATA_HUB_DB_HOST:+yes}"
+DB_PORT_PROVIDED="${HEALTH_DATA_HUB_DB_PORT:+yes}"
+DB_NAME_PROVIDED="${HEALTH_DATA_HUB_DB_NAME:+yes}"
+DB_USER_PROVIDED="${HEALTH_DATA_HUB_DB_USER:+yes}"
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -111,10 +119,10 @@ set_env_key HEALTH_DATA_HUB_GRAFANA_PORT \"$GRAFANA_PORT\"
 set_env_key HEALTH_DATA_HUB_DB_PUBLISH_PORT \"$DB_PUBLISH_PORT\"
 set_env_key HEALTH_DATA_HUB_DATABASE_MODE \"$DATABASE_MODE\"
 if [ \"$DATABASE_MODE\" = \"external\" ]; then
-  set_env_key HEALTH_DATA_HUB_DB_HOST \"$EXTERNAL_DB_HOST\"
-  set_env_key HEALTH_DATA_HUB_DB_PORT \"$EXTERNAL_DB_PORT\"
-  set_env_key HEALTH_DATA_HUB_DB_NAME \"$EXTERNAL_DB_NAME\"
-  set_env_key HEALTH_DATA_HUB_DB_USER \"$EXTERNAL_DB_USER\"
+  if [ -n \"$DB_HOST_PROVIDED\" ]; then set_env_key HEALTH_DATA_HUB_DB_HOST \"$EXTERNAL_DB_HOST\"; fi
+  if [ -n \"$DB_PORT_PROVIDED\" ]; then set_env_key HEALTH_DATA_HUB_DB_PORT \"$EXTERNAL_DB_PORT\"; fi
+  if [ -n \"$DB_NAME_PROVIDED\" ]; then set_env_key HEALTH_DATA_HUB_DB_NAME \"$EXTERNAL_DB_NAME\"; fi
+  if [ -n \"$DB_USER_PROVIDED\" ]; then set_env_key HEALTH_DATA_HUB_DB_USER \"$EXTERNAL_DB_USER\"; fi
 fi
 find \"$REMOTE_DIR\" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 cp -a \"$REMOTE_TMP\"/. \"$REMOTE_DIR\"/
