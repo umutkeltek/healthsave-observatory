@@ -3,7 +3,10 @@
   "batch_index": 0,
   "total_batches": 1,
   "samples": [
-    { "date": "2026-05-28T09:00:00Z", "qty": 420, "unit": "count", "source": "iPhone" },
-    { "date": "2026-05-28T10:00:00Z", "qty": 1180, "unit": "count", "source": "Apple Watch" }
+    {
+      "date": "2026-04-10T00:00:00.000Z",
+      "qty": 8432,
+      "source": "HealthKit Statistics"
+    }
   ]
 }

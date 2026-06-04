@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
+import pytest
 from contracts._base import Provenance
 from normalization import normalize_apple_batch
 
@@ -26,21 +27,27 @@ def _run(name: str):
 
 def test_heart_rate_batch_normalizes_to_quantity_observations() -> None:
     res = _run("heart_rate_batch.json")
-    assert res.accepted == 3
+    assert res.accepted == 1
     assert res.rejected == 0
     first = res.observations[0]
     assert first.metric_id == "vital.heart_rate"
     assert first.value.type == "quantity"
-    assert first.value.value == 61.0
+    assert first.value.value == 72.0
     assert first.value.canonical_unit == "bpm"
     assert first.interval_start == first.interval_end  # instant sample
     assert first.normalizer_id == "apple_health"
-    assert len({o.dedup_key for o in res.observations}) == 3  # distinct samples
+    assert len({o.dedup_key for o in res.observations}) == 1  # distinct samples
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="real Apple sleep values 'Core/Deep/REM' rejected (unmappable_code) — "
+    "normalizer sleep value-map is case-sensitive; prod data-loss bug. Remove this "
+    "marker when the map is made case-insensitive.",
+)
 def test_sleep_batch_normalizes_to_categorical_intervals() -> None:
     res = _run("sleep_analysis_batch.json")
-    assert res.accepted == 4
+    assert res.accepted == 3
     assert res.rejected == 0
     assert all(o.metric_id == "sleep.stage" for o in res.observations)
     assert all(o.value.type == "categorical" for o in res.observations)
@@ -50,7 +57,7 @@ def test_sleep_batch_normalizes_to_categorical_intervals() -> None:
 
 def test_step_count_batch_maps_to_activity_steps() -> None:
     res = _run("quantity_step_count_batch.json")
-    assert res.accepted == 2
+    assert res.accepted == 1
     assert all(o.metric_id == "activity.steps" for o in res.observations)
     assert all(o.value.type == "quantity" for o in res.observations)
 

@@ -4,12 +4,14 @@
   "total_batches": 1,
   "samples": [
     {
-      "startDate": "2026-05-28T18:00:00Z",
-      "endDate": "2026-05-28T18:32:00Z",
-      "duration": 1920,
-      "workout_type": "running",
-      "total_energy": 312.5,
-      "total_distance": 5020,
+      "name": "Running",
+      "start": "2026-04-10T06:10:00.000Z",
+      "end": "2026-04-10T06:55:00.000Z",
+      "duration": 2700,
+      "activeEnergy": 410,
+      "distance": 7200,
+      "avgHeartRate": 142,
+      "maxHeartRate": 176,
       "source": "Apple Watch"
     }
   ]
