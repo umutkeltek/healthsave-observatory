@@ -71,6 +71,29 @@ _TREND_METRICS = ("heart_rate", "hrv")
 _T = TypeVar("_T")
 
 
+class _TimescaleAnomalyDataSource:
+    """Timescale-backed read adapter injected into :class:`AnomalyDetector`."""
+
+    def __init__(self, session_factory) -> None:
+        self._session_factory = session_factory
+
+    async def fetch_hr_observations(
+        self, start: datetime, end: datetime
+    ) -> list[tuple[datetime, float]]:
+        async with self._session_factory() as session:
+            return await _sql().fetch_hr_observations(session, start, end)
+
+    async def fetch_hrv_observations(
+        self, start: datetime, end: datetime
+    ) -> list[tuple[datetime, float]]:
+        async with self._session_factory() as session:
+            return await _sql().fetch_hrv_observations(session, start, end)
+
+    async def fetch_workouts(self, start: datetime, end: datetime) -> list[dict[str, datetime]]:
+        async with self._session_factory() as session:
+            return await _sql().fetch_workouts(session, start, end)
+
+
 class AnalysisEngine:
     """Top-level orchestrator.
 
@@ -86,7 +109,9 @@ class AnalysisEngine:
         self.config = config
         self.llm_client = llm_client
         self.aggregator = DataAggregator(self._summarize_metric_window)
-        self.anomaly_detector = AnomalyDetector(session_factory, config)
+        self.anomaly_detector = AnomalyDetector(
+            _TimescaleAnomalyDataSource(session_factory), config
+        )
         self.trend_analyzer = TrendAnalyzer(self._fetch_trend_daily_values)
         self.correlation_analyzer = CorrelationAnalyzer(self._fetch_metric_daily_series)
 

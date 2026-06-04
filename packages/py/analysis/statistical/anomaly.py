@@ -26,18 +26,15 @@ The detector never raises from SQL errors - the engine wraps its
 call-site in best-effort logic so a missing ``hrv`` row or an empty
 workouts table can't fail the daily briefing.
 
-Phase 5F lifted the SQL out of this module into
-``storage.timescale.analysis``. Statistical machinery and context
-filtering stay here; data access is delegated through the lazy
-``_sql()`` handle (see :func:`analysis.engine._sql` for the cycle
-background).
+Statistical machinery and context filtering stay here; callers inject the
+storage-backed observation/workout reads.
 """
 
 from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING
 
 from ..types import Anomaly, DataSummary, Sensitivity, Severity
 from .baselines import compute_baseline
@@ -45,14 +42,24 @@ from .gates import check_sufficiency
 
 log = logging.getLogger("healthsave.analysis")
 
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+    from typing import Protocol
 
-def _sql():
-    """Lazy import handle for ``storage.timescale.analysis`` — see
-    :func:`analysis.engine._sql` for the cycle background.
-    """
-    from storage.timescale import analysis as analysis_sql
+    ObservationFetcher = Callable[[datetime, datetime], Awaitable[list[tuple[datetime, float]]]]
 
-    return analysis_sql
+    class AnomalyDataSource(Protocol):
+        async def fetch_hr_observations(
+            self, start: datetime, end: datetime
+        ) -> list[tuple[datetime, float]]: ...
+
+        async def fetch_hrv_observations(
+            self, start: datetime, end: datetime
+        ) -> list[tuple[datetime, float]]: ...
+
+        async def fetch_workouts(
+            self, start: datetime, end: datetime
+        ) -> list[dict[str, datetime]]: ...
 
 
 # Sensitivity → z-score floor (below this, nothing is flagged).
@@ -95,7 +102,7 @@ def _severity_for(z: float, threshold: float) -> Severity | None:
 class AnomalyDetector:
     """Detect statistically significant deviations from personal baseline."""
 
-    def __init__(self, session_factory, config) -> None:
+    def __init__(self, data_source: AnomalyDataSource, config) -> None:
         """Store collaborators.
 
         ``config`` is the full :class:`~analysis.config.AnalysisConfig`.
@@ -103,7 +110,7 @@ class AnomalyDetector:
         the z-score floor and ``config.analysis.daily_briefing.baseline_days``
         for the rolling-baseline window length.
         """
-        self.session_factory = session_factory
+        self.data_source = data_source
         self.config = config
 
     @property
@@ -133,37 +140,32 @@ class AnomalyDetector:
         baseline_start = start - timedelta(days=self._baseline_days)
         threshold = self._threshold
 
-        async with self.session_factory() as session:
-            hr = await self._zscore_anomalies(
-                session,
-                metric="heart_rate",
-                fetcher=_sql().fetch_hr_observations,
-                window_start=start,
-                window_end=end,
-                baseline_start=baseline_start,
-                threshold=threshold,
-            )
-            hrv = await self._zscore_anomalies(
-                session,
-                metric="hrv",
-                fetcher=_sql().fetch_hrv_observations,
-                window_start=start,
-                window_end=end,
-                baseline_start=baseline_start,
-                threshold=threshold,
-            )
-            raw = hr + hrv
-            if not raw:
-                return []
-            filtered = await self._filter_context(session, raw)
-        return filtered
+        hr = await self._zscore_anomalies(
+            metric="heart_rate",
+            fetcher=self.data_source.fetch_hr_observations,
+            window_start=start,
+            window_end=end,
+            baseline_start=baseline_start,
+            threshold=threshold,
+        )
+        hrv = await self._zscore_anomalies(
+            metric="hrv",
+            fetcher=self.data_source.fetch_hrv_observations,
+            window_start=start,
+            window_end=end,
+            baseline_start=baseline_start,
+            threshold=threshold,
+        )
+        raw = hr + hrv
+        if not raw:
+            return []
+        return await self._filter_context(raw)
 
     async def _zscore_anomalies(
         self,
-        session,
         *,
         metric: str,
-        fetcher,
+        fetcher: ObservationFetcher,
         window_start: datetime,
         window_end: datetime,
         baseline_start: datetime,
@@ -172,14 +174,14 @@ class AnomalyDetector:
         """Shared z-score loop for a single metric.
 
         ``fetcher`` is an async callable returning ``[(timestamp, value), ...]``
-        for a given window; HR and HRV differ only in which table they
-        hit, so the z-score machinery is identical.
+        for a given window; HR and HRV differ only in which storage adapter
+        fetcher is injected, so the z-score machinery is identical.
         """
-        observations = await fetcher(session, window_start, window_end)
+        observations = await fetcher(window_start, window_end)
         if not observations:
             return []
 
-        baseline_samples = await fetcher(session, baseline_start, window_start)
+        baseline_samples = await fetcher(baseline_start, window_start)
         if not self._has_sufficient_baseline(baseline_samples):
             return []
 
@@ -213,7 +215,7 @@ class AnomalyDetector:
     #  Context filter
     # ──────────────────────────────────────────────────────────────
 
-    async def _filter_context(self, session, anomalies: list[Anomaly]) -> list[Anomaly]:
+    async def _filter_context(self, anomalies: list[Anomaly]) -> list[Anomaly]:
         """Drop or downgrade anomalies with an obvious physiological cause.
 
         * HR spike during a logged workout → drop.
@@ -226,7 +228,7 @@ class AnomalyDetector:
 
         min_t = min(times) - _POST_WORKOUT_WINDOW
         max_t = max(times)
-        workouts = await _sql().fetch_workouts(session, min_t, max_t)
+        workouts = await self.data_source.fetch_workouts(min_t, max_t)
 
         kept: list[Anomaly] = []
         for anomaly in anomalies:
@@ -286,22 +288,3 @@ class AnomalyDetector:
         """True when ``when`` falls in the nightly sleep window."""
         hour = when.hour
         return hour >= _SLEEP_START_HOUR or hour < _SLEEP_END_HOUR
-
-    @staticmethod
-    def _fetchall(result) -> list[Any]:
-        """Materialise a SQLAlchemy result set into a list (test-friendly).
-
-        Real ``sqlalchemy.engine.Result`` supports ``.fetchall()``. Some
-        test fakes only expose iteration - so we fall back to ``list(result)``
-        when ``fetchall`` is absent. Kept here as a public helper for
-        callers that build their own fetchers; the lifted SQL functions
-        in ``storage.timescale.analysis`` use the shared private copy.
-        """
-        fetchall = getattr(result, "fetchall", None)
-        if callable(fetchall):
-            rows = fetchall()
-            return list(rows) if rows is not None else []
-        try:
-            return list(result)
-        except TypeError:
-            return []
