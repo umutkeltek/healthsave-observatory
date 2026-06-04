@@ -46,3 +46,25 @@ def test_example_config_ships_with_daily_briefing_disabled_until_setup_enables_i
 
     assert data["analysis"]["daily_briefing"]["enabled"] is False
     assert data["analysis"]["anomaly_detection"]["enabled"] is False
+
+
+def test_cloud_prompt_redaction_defaults_on(tmp_path):
+    # Safe by construction: the opt-in cloud tier scrubs prompts unless told not to.
+    config = load_config(tmp_path / "missing-config.yaml")
+    assert config.llm.redact_cloud_prompts is True
+    assert config.llm.redaction_salt == ""
+
+
+def test_environment_can_opt_out_of_cloud_prompt_redaction(tmp_path, monkeypatch):
+    monkeypatch.setenv("LLM_REDACT_CLOUD_PROMPTS", "false")
+    monkeypatch.setenv("LLM_REDACTION_SALT", "pepper")
+
+    config = load_config(tmp_path / "missing-config.yaml")
+
+    assert config.llm.redact_cloud_prompts is False
+    assert config.llm.redaction_salt == "pepper"
+
+
+def test_example_config_keeps_cloud_prompt_redaction_enabled():
+    data = yaml.safe_load(Path("config.yaml.example").read_text())
+    assert data["llm"]["redact_cloud_prompts"] is True
