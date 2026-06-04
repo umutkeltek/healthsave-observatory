@@ -8,7 +8,7 @@ LLM-failure re-raise paths.
 from __future__ import annotations
 
 import sys
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -635,6 +635,35 @@ async def test_fetch_metric_daily_series_maps_rows_to_day_value_and_skips_nulls(
     series = await engine._fetch_metric_daily_series("vital.hrv_sdnn", days=90)
 
     assert series == {d1: 55.0, d2: 58.0}
+
+
+@pytest.mark.asyncio
+async def test_fetch_trend_daily_values_falls_back_to_raw_heart_rate(monkeypatch):
+    """The engine adapter owns storage-specific HR hourly/raw fallback."""
+    import storage.timescale.analysis as analysis_sql
+
+    calls: list[str] = []
+    raw_rows = [_Row(day=date(2026, 5, 1), value=72.0, sample_count=24)]
+
+    async def fake_hourly(session, start, end):
+        calls.append("hourly")
+        return []
+
+    async def fake_raw(session, start, end):
+        calls.append("raw")
+        return raw_rows
+
+    monkeypatch.setattr(analysis_sql, "fetch_heart_rate_daily_from_hourly", fake_hourly)
+    monkeypatch.setattr(analysis_sql, "fetch_heart_rate_daily_from_raw", fake_raw)
+
+    engine = _make_plain_engine(_FakeSession(run_queue=[]))
+    start = datetime(2026, 5, 1, tzinfo=UTC)
+    end = datetime(2026, 6, 1, tzinfo=UTC)
+
+    rows = await engine._fetch_trend_daily_values("heart_rate", start, end)
+
+    assert rows == raw_rows
+    assert calls == ["hourly", "raw"]
 
 
 @pytest.mark.asyncio
