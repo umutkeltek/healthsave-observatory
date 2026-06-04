@@ -220,7 +220,7 @@ async def apple_batch(
     try:
         # Canonical observations are the success gate; per-metric tables are a
         # downstream projection in the same transaction.
-        await _write_canonical_observations(
+        canonical_result = await _write_canonical_observations(
             session, metric=metric, samples=samples, owner_id=owner_id, raw_log_id=raw_log_id
         )
         result = await plugin.ingest(
@@ -231,6 +231,7 @@ async def apple_batch(
                 "first_device_name": first_device_name,
                 "metric": metric,
                 "samples": samples,
+                "canonical_observations": canonical_result.observations,
                 "owner_id": owner_id,
             }
         )
@@ -314,7 +315,7 @@ async def _write_canonical_observations(
     samples: list[dict[str, Any]],
     owner_id: Any,
     raw_log_id: int | None,
-) -> None:
+) -> Any:
     """Write v2 canonical observations inside the caller's ingest transaction."""
     provenance = Provenance(
         source_plugin_id=_APPLE_PLUGIN_ID,
@@ -334,6 +335,7 @@ async def _write_canonical_observations(
         CANONICAL_DUAL_WRITE.labels(metric=metric, result="ok").inc(result.accepted)
     if result.rejected:
         CANONICAL_DUAL_WRITE.labels(metric=metric, result="rejected").inc(result.rejected)
+    return result
 
 
 def _resolve_storage(request: Request) -> IngestStorage:

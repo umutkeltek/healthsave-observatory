@@ -84,6 +84,10 @@ class AppleHealthSource(Source):
 
         Optional:
 
+          * ``canonical_observations`` (list[Observation]) — observations the
+            route already normalized and wrote before invoking the projection
+            path. Present for HealthSave Apple batches; ignored by this
+            transitional raw-sample projection wrapper.
           * ``owner_id`` (UUID) — defaults to ``DEFAULT_OWNER_ID``
             (the single-user sentinel that v1 + v2 share). The route
             resolves this from the ``X-User-Id`` header before calling
