@@ -248,7 +248,8 @@ async def test_route_delegates_apple_batch_through_plugin_loader():
     Protocol injection that preserves Phase 5C backend-swap),
     ``session``, ``device_id`` (pre-resolved by the route for the
     audit row), ``first_device_name`` (so the plugin reuses the
-    pre-resolved id), ``metric``, ``samples``, and ``owner_id``.
+    pre-resolved id), ``metric``, ``samples``, canonical observations,
+    and ``owner_id``.
     """
     storage = _RecordingStorage()
     plugin = _RecordingPlugin(accepted=2)
@@ -277,6 +278,8 @@ async def test_route_delegates_apple_batch_through_plugin_loader():
     assert payload["session"] is session
     assert payload["metric"] == "heart_rate"
     assert payload["samples"] == samples
+    assert len(payload["canonical_observations"]) == 2
+    assert {obs.metric_id for obs in payload["canonical_observations"]} == {"vital.heart_rate"}
     assert payload["first_device_name"] == "Apple Watch"
     assert payload["device_id"] == 1  # _RecordingStorage returns 1
     # owner_id is the default sentinel when no X-User-Id header is present.
