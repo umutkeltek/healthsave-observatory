@@ -47,6 +47,12 @@ llm:
   api_key: ""                   # Left empty for ollama; set for cloud providers
   temperature: 0.3
   max_tokens: 1000
+  # When a cloud provider is used (with allow_cloud_egress: true), the assembled
+  # narration prompt is scrubbed of identifiers — emails, phone numbers, opaque
+  # IDs, names — before it leaves the host. The local Ollama path is never
+  # redacted. Leave on unless you have a specific reason to disable it.
+  redact_cloud_prompts: true
+  # redaction_salt: ""          # set to pseudonymize the same value consistently
   # Optional fallback list, tried in order if the primary provider fails.
   fallback: []
   # Example cloud fallback (uncomment + set api_key in secrets):

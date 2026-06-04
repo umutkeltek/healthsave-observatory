@@ -83,6 +83,13 @@ class LLMConfig(BaseModel):
     # provider also needs this explicit opt-in before any derived data leaves
     # the host. Local Ollama is unaffected. Raw observations never leave.
     allow_cloud_egress: bool = False
+    # Content redaction (analysis/redaction.py). When a prompt is allowed out to
+    # a CLOUD provider, scrub identifiers (emails, phones, IDs, names) from it
+    # first. Default-on so the opt-in cloud tier is safe by construction; the
+    # local Ollama path is never redacted. ``redaction_salt`` only affects the
+    # optional hashed-token method (stable pseudonyms across prompts).
+    redact_cloud_prompts: bool = True
+    redaction_salt: str = ""
 
 
 class MQTTConfig(BaseModel):
@@ -128,6 +135,10 @@ def _with_environment_overrides(config: AnalysisConfig) -> AnalysisConfig:
         llm_updates["api_key"] = api_key
     if (raw := os.getenv("LLM_ALLOW_CLOUD_EGRESS")) is not None:
         llm_updates["allow_cloud_egress"] = raw.strip().lower() in {"1", "true", "yes", "on"}
+    if (raw := os.getenv("LLM_REDACT_CLOUD_PROMPTS")) is not None:
+        llm_updates["redact_cloud_prompts"] = raw.strip().lower() in {"1", "true", "yes", "on"}
+    if salt := os.getenv("LLM_REDACTION_SALT"):
+        llm_updates["redaction_salt"] = salt
 
     if llm_updates:
         config.llm = config.llm.model_copy(update=llm_updates)
