@@ -50,6 +50,7 @@ from .api import (
     v2_readiness,
     v2_sources,
 )
+from .api.deps import warn_if_auth_disabled
 from .api.ingest import _load_apple_health_plugin
 from .db.session import async_session, engine
 from .ingestion.registry import resolve_from_env
@@ -88,6 +89,7 @@ def _assert_lifespan_state(a: FastAPI) -> None:
 @asynccontextmanager
 async def lifespan(a: FastAPI):
     log.info("HealthSave server starting")
+    warn_if_auth_disabled()
     config_path = Path(os.getenv("ANALYSIS_CONFIG", "/app/config.yaml"))
     analysis_config = load_config(config_path)
     llm_client = HealthLLMClient(analysis_config.llm)
