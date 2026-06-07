@@ -20,10 +20,11 @@ stays stable. Pair with a Grafana alert on
 
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..ingestion.owner import OWNER_HEADER, resolve_owner_id
 from .deps import get_session, verify_api_key
 from .metrics import STATUS_QUERY_FAILURES
 
@@ -33,8 +34,14 @@ router = APIRouter()
 
 
 @router.get("/api/apple/status", dependencies=[Depends(verify_api_key)])
-async def apple_status(session: AsyncSession = Depends(get_session)):
+async def apple_status(request: Request, session: AsyncSession = Depends(get_session)):
     """Return record counts so the iOS app knows what's synced."""
+    # SECURITY-002: counts are owner-scoped to the resolving owner (the default
+    # owner unless ALLOW_MULTI_USER is on) so the endpoint can no longer report
+    # another owner's data. The wire shape (and OpenAPI description) is unchanged,
+    # and a single-user install (all rows under DEFAULT_OWNER_ID) returns exactly
+    # the same numbers. `request: Request` is excluded from the OpenAPI schema.
+    owner_id = resolve_owner_id(request.headers.get(OWNER_HEADER))
     queries = {
         "heart_rate": "SELECT count(*), min(time), max(time) FROM heart_rate",
         "hrv": "SELECT count(*), min(time), max(time) FROM hrv",
@@ -44,10 +51,12 @@ async def apple_status(session: AsyncSession = Depends(get_session)):
         "workouts": "SELECT count(*), min(start_time), max(start_time) FROM workouts",
         "quantity_samples": "SELECT count(*), min(time), max(time) FROM quantity_samples",
     }
+    params = {"owner_id": str(owner_id)}
     status = {}
-    for metric, sql in queries.items():
+    for metric, base_sql in queries.items():
+        sql = f"{base_sql} WHERE owner_id = :owner_id"
         try:
-            result = await session.execute(text(sql))
+            result = await session.execute(text(sql), params)
             row = result.fetchone()
             status[metric] = {
                 "count": row[0] or 0,
