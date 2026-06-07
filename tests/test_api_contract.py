@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy.exc import DataError, IntegrityError, InterfaceError, OperationalError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -129,9 +130,65 @@ class FailingAppleHealthPlugin:
         raise RuntimeError("forced ingest failure")
 
 
+class RaisingPlugin:
+    def __init__(self, exc):
+        self._exc = exc
+
+    async def ingest(self, payload):
+        raise self._exc
+
+
 class FailingCanonicalRepository:
     async def insert_many(self, session, observations):
         raise RuntimeError("canonical write failed")
+
+
+def _request_with_raising_plugin(exc: Exception) -> FakeRequest:
+    request = FakeRequest(
+        {
+            "metric": "heart_rate",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [
+                {
+                    "date": "2026-04-10T12:00:00+00:00",
+                    "qty": 72,
+                    "source": "Apple Watch Ultra",
+                }
+            ],
+        },
+        headers={
+            "Idempotency-Key": "batch-failed-001",
+            "X-HealthSave-Sync-Run-ID": "run-failed",
+            "X-HealthSave-Batch-ID": "batch-failed-001",
+            "X-HealthSave-Payload-Hash": "sha256:failed-payload",
+            "X-HealthSave-Metric": "heart_rate",
+            "X-HealthSave-Batch-Index": "0",
+            "X-HealthSave-Total-Batches": "1",
+            "X-HealthSave-Sample-Min-Time": "2026-04-10T12:00:00.000Z",
+            "X-HealthSave-Sample-Max-Time": "2026-04-10T12:00:00.000Z",
+        },
+    )
+    request.app = type(
+        "App",
+        (),
+        {
+            "state": type(
+                "State",
+                (),
+                {"apple_health_plugin": RaisingPlugin(exc)},
+            )()
+        },
+    )()
+    return request
+
+
+def _assert_failed_receipt(session: FakeSession) -> dict:
+    receipt = session.insert_params_for("healthsave_sync_receipts")
+    assert session.rolled_back is True
+    assert receipt is not None
+    assert receipt["status"] == "failed"
+    return receipt
 
 
 @pytest.mark.asyncio
@@ -808,6 +865,113 @@ async def test_batch_records_failed_sync_receipt_when_ingest_raises():
     assert receipt["sample_min_at"] == datetime(2026, 4, 10, 12, 0, 0, tzinfo=UTC)
     assert receipt["sample_max_at"] == datetime(2026, 4, 10, 12, 0, 0, tzinfo=UTC)
     assert "forced ingest failure" in receipt["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_batch_returns_422_for_overflow_error_and_records_failed_receipt():
+    session = FakeSession()
+    request = _request_with_raising_plugin(OverflowError("int too large"))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await server.apple_batch(request, session)
+
+    receipt = _assert_failed_receipt(session)
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["status"] == "rejected"
+    assert exc_info.value.detail["error_code"] == "unprocessable_samples"
+    assert "int too large" in exc_info.value.detail["message"]
+    assert receipt["sync_run_id"] == "run-failed"
+    assert receipt["batch_id"] == "batch-failed-001"
+    assert receipt["records_received"] == 1
+    assert receipt["records_accepted"] == 0
+    assert "int too large" in receipt["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_batch_returns_422_for_data_error_and_records_failed_receipt():
+    session = FakeSession()
+    request = _request_with_raising_plugin(
+        DataError("INSERT ...", {}, Exception("numeric value out of range"))
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await server.apple_batch(request, session)
+
+    receipt = _assert_failed_receipt(session)
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["error_code"] == "unprocessable_samples"
+    assert "numeric value out of range" in exc_info.value.detail["message"]
+    assert receipt["records_received"] == 1
+    assert receipt["records_accepted"] == 0
+    assert "numeric value out of range" in receipt["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_batch_returns_422_for_integrity_error_and_records_failed_receipt():
+    session = FakeSession()
+    request = _request_with_raising_plugin(
+        IntegrityError("INSERT ...", {}, Exception("null value in column"))
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await server.apple_batch(request, session)
+
+    receipt = _assert_failed_receipt(session)
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["error_code"] == "unprocessable_samples"
+    assert "null value in column" in exc_info.value.detail["message"]
+    assert receipt["records_received"] == 1
+    assert receipt["records_accepted"] == 0
+    assert "null value in column" in receipt["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_batch_returns_422_for_value_error_and_records_failed_receipt():
+    session = FakeSession()
+    request = _request_with_raising_plugin(ValueError("bad date"))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await server.apple_batch(request, session)
+
+    receipt = _assert_failed_receipt(session)
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["error_code"] == "unprocessable_samples"
+    assert exc_info.value.detail["message"] == "bad date"
+    assert receipt["records_received"] == 1
+    assert receipt["records_accepted"] == 0
+    assert receipt["error_message"] == "bad date"
+
+
+@pytest.mark.asyncio
+async def test_batch_reraises_operational_error_and_records_failed_receipt():
+    session = FakeSession()
+    request = _request_with_raising_plugin(
+        OperationalError("INSERT ...", {}, Exception("connection reset"))
+    )
+
+    with pytest.raises(OperationalError, match="connection reset"):
+        await server.apple_batch(request, session)
+
+    receipt = _assert_failed_receipt(session)
+    assert receipt["records_received"] == 1
+    assert receipt["records_accepted"] == 0
+    assert "connection reset" in receipt["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_batch_reraises_interface_error_and_records_failed_receipt():
+    session = FakeSession()
+    request = _request_with_raising_plugin(
+        InterfaceError("INSERT ...", {}, Exception("driver disconnected"))
+    )
+
+    with pytest.raises(InterfaceError, match="driver disconnected"):
+        await server.apple_batch(request, session)
+
+    receipt = _assert_failed_receipt(session)
+    assert receipt["records_received"] == 1
+    assert receipt["records_accepted"] == 0
+    assert "driver disconnected" in receipt["error_message"]
 
 
 @pytest.mark.asyncio

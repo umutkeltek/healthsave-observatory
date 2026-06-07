@@ -1,13 +1,17 @@
 """Primitive sample-level parsers shared by every ingestion path."""
 
+import math
 from datetime import date, datetime
 
 
 def to_float(value) -> float | None:
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        result = float(value)
+    except (TypeError, ValueError, OverflowError):
         return None
+    if not math.isfinite(result):
+        return None
+    return result
 
 
 def to_int(value) -> int | None:
