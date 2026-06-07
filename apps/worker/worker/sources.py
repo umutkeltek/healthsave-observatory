@@ -42,15 +42,28 @@ WHOOP_DEFAULT_CRON = "*/30 * * * *"
 AMAZFIT_DEFAULT_CRON = "*/30 * * * *"
 
 
-def _whoop_plugin_yaml() -> Path:
-    """Locate the Whoop plugin manifest. The Docker image copies
-    ``plugins/sources/whoop/plugin.yaml`` to ``/app/plugins/...``;
-    repo-root checkouts find it at ``<repo>/plugins/sources/...``.
+def _plugin_yaml(slug: str) -> Path:
+    """Locate a source plugin manifest across layouts.
+
+    Repo checkout: ``apps/worker/worker/sources.py`` -> ``<repo>/plugins/...``.
+    Docker image: ``/app/worker/sources.py`` -> ``/app/plugins/...`` (the
+    Dockerfile flattens ``apps/worker/worker/`` to ``/app/worker/`` and
+    ``plugins/`` to ``/app/plugins/``). Walking up to the first ancestor that
+    actually contains the manifest avoids hard-coding a depth that differs
+    between the two layouts (the old ``parents[3]`` raised IndexError in the
+    container, so the poll never found its manifest).
     """
     here = Path(__file__).resolve()
-    # apps/worker/worker/sources.py -> repo root
-    repo_root = here.parents[3]
-    return repo_root / "plugins" / "sources" / "whoop" / "plugin.yaml"
+    rel = Path("plugins") / "sources" / slug / "plugin.yaml"
+    for ancestor in here.parents:
+        candidate = ancestor / rel
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(f"plugin manifest not found for source {slug!r}: {rel}")
+
+
+def _whoop_plugin_yaml() -> Path:
+    return _plugin_yaml("whoop")
 
 
 def make_whoop_poll(session_factory: Any) -> Callable[[], Awaitable[None]]:
@@ -122,9 +135,7 @@ def register_whoop_poll(
 
 def _amazfit_plugin_yaml() -> Path:
     """Locate the Amazfit plugin manifest. Same layout as Whoop."""
-    here = Path(__file__).resolve()
-    repo_root = here.parents[3]
-    return repo_root / "plugins" / "sources" / "amazfit" / "plugin.yaml"
+    return _plugin_yaml("amazfit")
 
 
 def make_amazfit_poll(session_factory: Any) -> Callable[[], Awaitable[None]]:
