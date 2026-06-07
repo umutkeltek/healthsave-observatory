@@ -12,6 +12,7 @@ emits:
   - measurement.workouts
   - measurement.recovery
   - measurement.strain
+  - measurement.body_measurement
 permissions:
   network: true
   secrets:

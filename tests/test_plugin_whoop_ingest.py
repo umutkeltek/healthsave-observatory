@@ -32,6 +32,7 @@ from plugin_sdk import load_manifest  # noqa: E402
 
 from plugins.sources.whoop import PROVIDER, WhoopSource  # noqa: E402
 from plugins.sources.whoop.fetch import (  # noqa: E402
+    PATH_BODY,
     PATH_CYCLE,
     PATH_RECOVERY,
     PATH_SLEEP,
@@ -176,6 +177,7 @@ _RECOVERY_RECORDS = [
             "hrv_rmssd_milli": 64.3,
             "spo2_percentage": 97.0,
             "skin_temp_celsius": 35.2,
+            "user_calibrating": True,
         },
     }
 ]
@@ -189,9 +191,16 @@ _SLEEP_RECORDS = [
             "stage_summary": {
                 "total_in_bed_time_milli": 27_000_000,
                 "total_awake_time_milli": 1_800_000,
+                "total_light_sleep_time_milli": 3_600_000,
+                "total_slow_wave_sleep_time_milli": 3_600_000,
+                "total_rem_sleep_time_milli": 3_600_000,
+                "disturbance_count": 4,
             },
             "sleep_efficiency_percentage": 96.5,
             "respiratory_rate": 16.8,
+            "sleep_performance_percentage": 91.0,
+            "sleep_consistency_percentage": 88.0,
+            "sleep_needed": {"need_from_sleep_debt_milli": 1_800_000},
         },
     }
 ]
@@ -206,6 +215,14 @@ _WORKOUT_RECORDS = [
             "average_heart_rate": 145,
             "max_heart_rate": 178,
             "kilojoule": 1500.0,
+            "altitude_gain_meter": 123.4,
+            "zone_durations": {
+                "zone_one_milli": 600_000,
+                "zone_two_milli": 600_000,
+                "zone_three_milli": 600_000,
+                "zone_four_milli": 600_000,
+                "zone_five_milli": 600_000,
+            },
         },
     }
 ]
@@ -214,9 +231,14 @@ _CYCLE_RECORDS = [
         "id": 1,
         "created_at": "2026-05-22T08:00:00Z",
         "score_state": "SCORED",
-        "score": {"strain": 8.5, "average_heart_rate": 75},
+        "score": {"strain": 8.5, "average_heart_rate": 75, "kilojoule": 1000.0},
     }
 ]
+_BODY_RECORD = {
+    "height_meter": 1.78,
+    "weight_kilogram": 75.0,
+    "max_heart_rate": 195,
+}
 
 
 def _default_get_responses(
@@ -225,6 +247,7 @@ def _default_get_responses(
     sleep=None,
     workout=None,
     cycle=None,
+    body=None,
 ) -> dict[str, _Response]:
     return {
         PATH_RECOVERY: _Response(
@@ -235,6 +258,7 @@ def _default_get_responses(
             200, {"records": workout if workout is not None else _WORKOUT_RECORDS}
         ),
         PATH_CYCLE: _Response(200, {"records": cycle if cycle is not None else _CYCLE_RECORDS}),
+        PATH_BODY: _Response(200, body if body is not None else _BODY_RECORD),
     }
 
 
@@ -276,6 +300,7 @@ async def test_ingest_happy_path_with_fresh_token():
     assert any(PATH_SLEEP in u for u in paths_hit)
     assert any(PATH_WORKOUT in u for u in paths_hit)
     assert any(PATH_CYCLE in u for u in paths_hit)
+    assert any(PATH_BODY in u for u in paths_hit)
 
     # All ingest_metric calls share the Whoop device_id.
     assert {c.device_id for c in storage.ingest_calls} == {1}
@@ -285,6 +310,9 @@ async def test_ingest_happy_path_with_fresh_token():
     assert "blood_oxygen" in written_metrics
     assert "workouts" in written_metrics
     assert "strain" in written_metrics
+    assert "height_meters" in written_metrics
+    assert "weight_kg" in written_metrics
+    assert "recovery_calibrating" in written_metrics
 
 
 @pytest.mark.asyncio
@@ -396,7 +424,13 @@ async def test_ingest_with_empty_data_returns_zero():
     storage = _RecordingStorage()
     token_store = _TokenStore(initial_token=_fresh_token())
     http = _HttpClient(
-        get_responses=_default_get_responses(recovery=[], sleep=[], workout=[], cycle=[])
+        get_responses=_default_get_responses(
+            recovery=[],
+            sleep=[],
+            workout=[],
+            cycle=[],
+            body={},
+        )
     )
     plugin = WhoopSource(load_manifest(PLUGIN_DIR / "plugin.yaml"))
 
