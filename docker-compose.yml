@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: healthsave
       POSTGRES_USER: healthsave
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set (see .env.example)}
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
@@ -25,7 +25,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:-changeme}@db:5432/healthsave
+      DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:?DB_PASSWORD must be set (see .env.example)}@db:5432/healthsave
 
   api:
     build: .
@@ -36,7 +36,7 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:-changeme}@db:5432/healthsave
+      DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:?DB_PASSWORD must be set (see .env.example)}@db:5432/healthsave
       API_KEY: ${API_KEY:-}
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
@@ -84,7 +84,7 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:-changeme}@db:5432/healthsave
+      DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:?DB_PASSWORD must be set (see .env.example)}@db:5432/healthsave
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
@@ -128,7 +128,7 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:-changeme}@db:5432/healthsave
+      DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:?DB_PASSWORD must be set (see .env.example)}@db:5432/healthsave
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
@@ -179,7 +179,7 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: ${HA_MQTT_DATABASE_URL:-postgresql+asyncpg://healthsave:${DB_PASSWORD:-changeme}@db:5432/healthsave}
+      DATABASE_URL: ${HA_MQTT_DATABASE_URL:-postgresql+asyncpg://healthsave:${DB_PASSWORD:?DB_PASSWORD must be set (see .env.example)}@db:5432/healthsave}
       HA_MQTT_ENABLED: ${HA_MQTT_ENABLED:-false}
       HA_MQTT_BROKER: ${HA_MQTT_BROKER:-mqtt}
       HA_MQTT_PORT: ${HA_MQTT_PORT:-1883}
@@ -201,15 +201,17 @@ services:
       db:
         condition: service_healthy
     environment:
-      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set (see .env.example)}
       HDH_GRAFANA_DATASOURCE_URL: ${HDH_GRAFANA_DATASOURCE_URL:-db:5432}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-changeme}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set (see .env.example)}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
-      - "3000:3000"
+      # SECURITY-005: bind Grafana to loopback by default (it exposes the full
+      # PHI dashboard). Set GRAFANA_BIND=0.0.0.0 to publish it on the LAN.
+      - "${GRAFANA_BIND:-127.0.0.1}:3000:3000"
 
 volumes:
   db_data:

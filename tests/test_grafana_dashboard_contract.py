@@ -81,7 +81,9 @@ def test_grafana_service_receives_db_password_for_datasource_provisioning():
     compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text())
     grafana_env = compose["services"]["grafana"]["environment"]
 
-    assert grafana_env["DB_PASSWORD"] == "${DB_PASSWORD:-changeme}"
+    # SECURITY-005: the password is now required (no `changeme` default).
+    expected = "${DB_PASSWORD:?DB_PASSWORD must be set (see .env.example)}"
+    assert grafana_env["DB_PASSWORD"] == expected
 
 
 def test_whoop_dashboards_use_the_normalized_public_metric_paths():
