@@ -1,7 +1,8 @@
-.PHONY: help regen-lock check-lock regen-v2-schemas check-v2-schemas regen-ts-client check-ts-client typecheck-ts test e2e lint format doctor compose-up compose-down
+.PHONY: help setup regen-lock check-lock regen-v2-schemas check-v2-schemas regen-ts-client check-ts-client typecheck-ts test e2e lint format doctor compose-up compose-down
 
 help:
 	@echo "Targets:"
+	@echo "  setup              One-command install: generate .env + config, then bring the stack up"
 	@echo "  regen-lock         Regenerate contracts/openapi/v1.locked.json (Docker, pinned deps)"
 	@echo "  check-lock         Verify v1 OpenAPI lock matches the live app (no drift)"
 	@echo "  regen-v2-schemas   Regenerate contracts/json-schema/*.json from contracts package (Docker)"
@@ -78,6 +79,9 @@ format:
 
 doctor:
 	@./setup.sh doctor
+
+setup:
+	@./setup.sh
 
 compose-up:
 	@docker compose up -d

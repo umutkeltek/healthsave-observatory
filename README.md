@@ -262,8 +262,13 @@ This starts:
 - **FastAPI** on port 8000
 - **Grafana** on port 3000 (default login: admin / your GRAFANA_PASSWORD)
 
-The database port is bound to `127.0.0.1` by default so it is available for
-local tooling without being exposed on your LAN.
+`./setup.sh` is the easier path — it generates the passwords for you. On the
+manual path, set `DB_PASSWORD` and `GRAFANA_PASSWORD` in `.env` first (compose
+requires them, so the project never ships guessable defaults).
+
+The database port and Grafana are bound to `127.0.0.1` by default, so they are
+available for local tooling without being exposed on your LAN. To reach Grafana
+from another device, set `GRAFANA_BIND=0.0.0.0` in `.env`.
 
 To opt into Ollama manually, copy `docker-compose.override.yml.example` to `docker-compose.override.yml`, copy `config.yaml.example` to `config.yaml`, set `analysis.daily_briefing.enabled` and `analysis.anomaly_detection.enabled` to `true`, and set `OLLAMA_MODEL` in `.env` to the tag you want.
 
