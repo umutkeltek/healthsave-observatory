@@ -12,6 +12,7 @@ from storage.timescale.homeassistant import TimescaleHealthSnapshotRepository
 
 from .bridge import (
     HomeAssistantMQTTConfig,
+    MQTTMessage,
     build_availability_message,
     build_discovery_messages,
     build_legacy_availability_messages,
@@ -65,15 +66,33 @@ async def run() -> None:
         return
 
     repository = TimescaleHealthSnapshotRepository()
-    publisher = PahoMQTTPublisher(bridge_config.mqtt)
-    publisher.connect()
     publish_configs = bridge_config.publish_configs
-    for config in publish_configs:
-        specs = sensor_specs_for_config(config)
-        publisher.publish_many(
-            [build_availability_message(config)] + build_legacy_availability_messages(config)
+
+    def session_messages() -> list[MQTTMessage]:
+        """Availability(online) + discovery to (re)assert on every connect.
+
+        Pure (config-only), so it is safe to call from paho's network thread in
+        the on_connect callback. State messages are intentionally *not* here:
+        they need a DB snapshot and flow on the periodic ``publish_once`` cycle
+        (and stay retained on the broker across reconnects).
+        """
+
+        messages: list[MQTTMessage] = []
+        for config in publish_configs:
+            specs = sensor_specs_for_config(config)
+            messages.append(build_availability_message(config))
+            messages.extend(build_legacy_availability_messages(config))
+            messages.extend(build_discovery_messages(config, specs))
+        return messages
+
+    publisher = PahoMQTTPublisher(bridge_config.mqtt, on_connect_messages=session_messages)
+    publisher.connect()
+    if not publisher.wait_until_connected(timeout=10.0):
+        log.warning(
+            "MQTT broker %s:%s not reachable yet; bridge will keep retrying in the background",
+            bridge_config.mqtt.broker,
+            bridge_config.mqtt.port,
         )
-        publisher.publish_many(build_discovery_messages(config, specs))
     log.info(
         "Home Assistant MQTT bridge publishing to broker=%s port=%s prefixes=%s",
         bridge_config.mqtt.broker,
