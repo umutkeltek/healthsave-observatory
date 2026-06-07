@@ -16,9 +16,7 @@ _API_MD = Path(__file__).resolve().parents[1] / "API.md"
 def _mounted_v2_paths() -> set[str]:
     from server.main import app
 
-    return {
-        p for r in app.routes if (p := getattr(r, "path", "") or "").startswith("/api/v2")
-    }
+    return {p for r in app.routes if (p := getattr(r, "path", "") or "").startswith("/api/v2")}
 
 
 def test_every_mounted_v2_route_is_documented_in_api_md():
