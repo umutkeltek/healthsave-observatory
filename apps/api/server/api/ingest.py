@@ -24,7 +24,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from normalization import normalize_apple_batch
 from plugin_sdk import SDK_VERSION
 from pydantic import ValidationError
-from sqlalchemy.exc import DataError, IntegrityError, InterfaceError, OperationalError
+from sqlalchemy.exc import InterfaceError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.defaults import observation_repository
 from storage.timescale.sync_receipts import (
@@ -55,7 +55,22 @@ from .metrics import (
 # HealthSave source; production adapter selection lives behind storage.defaults.
 APPLE_HEALTHKIT_SOURCE_ID = UUID("a9b1e7e0-0000-4000-8000-000000000001")
 _APPLE_PLUGIN_ID = "apple-health-healthsave"
-_DETERMINISTIC_WRITE_ERRORS = (OverflowError, ValueError, DataError, IntegrityError)
+# CONTRACT-001: classify ingest write failures by transient-vs-deterministic,
+# NOT by an allow-list of deterministic types. The frozen iOS client retries any
+# 5xx forever, so a deterministic 500 (e.g. a ProgrammingError from schema drift,
+# or an ON CONFLICT key with no matching unique index, or a KeyError/TypeError in
+# the write loop) head-of-line-blocks that metric's sync indefinitely. We
+# therefore re-raise ONLY genuinely transient infra errors as 5xx; EVERY other
+# failure is deterministic and returns 422, so the client retires the poison
+# batch and recovers it via (idempotent) Backfill. Default-to-422 is the safe
+# default here: a misclassified-transient 422 is recoverable via Backfill, while
+# a misclassified-deterministic 500 wedges the metric forever.
+_TRANSIENT_WRITE_ERRORS = (
+    OperationalError,  # DB disconnect / deadlock / lock timeout / admin shutdown
+    InterfaceError,  # connection-interface failure
+    TimeoutError,  # builtin; asyncio.TimeoutError aliases this on 3.11+
+    ConnectionError,  # builtin connection failures (reset/broken-pipe/refused)
+)
 _canonical_repo = observation_repository()
 
 if TYPE_CHECKING:
@@ -290,18 +305,22 @@ async def apple_batch(
             error_message=str(exc),
         )
         log.exception("ingest loop failed for %s; raw_log_id=%s left orphaned", metric, raw_log_id)
-        if isinstance(exc, (OperationalError, InterfaceError)):
+        # Already-classified HTTP errors pass through unchanged.
+        if isinstance(exc, HTTPException):
             raise
-        if isinstance(exc, _DETERMINISTIC_WRITE_ERRORS):
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "status": "rejected",
-                    "error_code": "unprocessable_samples",
-                    "message": str(exc)[:500],
-                },
-            ) from exc
-        raise
+        # Transient infra errors are retry-worthy → 5xx (client retries).
+        if isinstance(exc, _TRANSIENT_WRITE_ERRORS):
+            raise
+        # Everything else is deterministic: a retry fails identically. Return 422
+        # so the frozen client retires the batch instead of wedging on a 5xx.
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "status": "rejected",
+                "error_code": "unprocessable_samples",
+                "message": str(exc)[:500],
+            },
+        ) from exc
     _observe_ingest_metrics(metric=metric, rows=count, started_at=started_at)
     log.info("Ingested %d records for %s (batch %d/%d)", count, metric, batch_idx + 1, total)
     _schedule_anomaly_check_if_enabled(request, background_tasks, count)
