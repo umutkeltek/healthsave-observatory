@@ -1118,6 +1118,40 @@ async def test_batch_rejects_oversized_sample_array_with_422(monkeypatch):
     assert session.committed is False
 
 
+@pytest.mark.asyncio
+async def test_batch_succeeds_when_receipt_write_fails_after_ingest(monkeypatch, caplog):
+    """CONTRACT-002: a sync-receipt write failure must NOT roll back a landed
+    ingest or turn it into a 5xx/422. The data is committed first; the receipt is
+    best-effort, and its failure is logged (and countered) without affecting the
+    response the iOS client receives."""
+    import server.api.ingest as ingest_module
+
+    async def _boom(*args, **kwargs):
+        raise RuntimeError("receipt insert failed")
+
+    monkeypatch.setattr(ingest_module, "_record_sync_receipt", _boom)
+
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "heart_rate",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [{"date": "2026-04-10T12:00:00+00:00", "qty": 72, "source": "Apple Watch"}],
+        },
+        headers={"X-HealthSave-Metric": "heart_rate"},
+    )
+
+    with caplog.at_level("ERROR", logger="healthsave"):
+        result = await server.apple_batch(request, session)
+
+    # Ingest succeeded — a delivery-receipt response, not an exception.
+    assert result["records"] == 1
+    # Data was committed before the receipt failure.
+    assert session.committed is True
+    assert "sync receipt write failed" in caplog.text.lower()
+
+
 class ReceiptIdempotencyConflictSession(FakeSession):
     async def execute(self, statement, params=None):
         sql = " ".join(str(statement).split())

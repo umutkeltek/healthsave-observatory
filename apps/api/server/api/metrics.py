@@ -14,6 +14,7 @@ from observability.metrics import (
     PIPELINE_RUNS_LEDGER_FAILURES,
     RAW_LOG_ORPHANED,
     STATUS_QUERY_FAILURES,
+    SYNC_RECEIPT_WRITE_FAILURES,
     reset_metrics,
 )
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
@@ -31,6 +32,7 @@ __all__ = [
     "PIPELINE_RUNS_LEDGER_FAILURES",
     "RAW_LOG_ORPHANED",
     "STATUS_QUERY_FAILURES",
+    "SYNC_RECEIPT_WRITE_FAILURES",
     "prometheus_metrics",
     "reset_metrics",
     "router",

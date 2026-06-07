@@ -67,6 +67,14 @@ CANONICAL_DUAL_WRITE = Counter(
     "path and its response untouched (Decision C migration bridge).",
     ["metric", "result"],
 )
+SYNC_RECEIPT_WRITE_FAILURES = Counter(
+    "hdh_sync_receipt_write_failures",
+    "Delivery-receipt writes that failed AFTER a successful ingest commit "
+    "(CONTRACT-002). The health data IS persisted; only the /api/v2/sync receipt "
+    "row is missing. Non-zero means sync-history accounting is incomplete for "
+    "that metric even though ingestion succeeded.",
+    ["metric"],
+)
 
 
 def reset_metrics() -> None:
@@ -81,6 +89,7 @@ def reset_metrics() -> None:
     _reset_metric_children(PIPELINE_RUNS_LEDGER_FAILURES)
     _reset_metric_children(LEDGER_LISTENER_FAILURES)
     _reset_metric_children(CANONICAL_DUAL_WRITE)
+    _reset_metric_children(SYNC_RECEIPT_WRITE_FAILURES)
 
 
 def _reset_metric_children(metric: MetricWrapperBase) -> None:
