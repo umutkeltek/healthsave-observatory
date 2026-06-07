@@ -198,6 +198,11 @@ CREATE TABLE healthsave_sync_receipts (
         CHECK (status IN ('processed', 'empty', 'failed')),
     records_received    INTEGER NOT NULL DEFAULT 0,
     records_accepted    INTEGER NOT NULL DEFAULT 0,
+    -- DOMAIN-002: records_skipped == genuine validation REJECTIONS only. It is
+    -- NOT aggregation rollup (sleep stages -> sessions) and NOT in-batch dedupe.
+    -- Deriving it as (received - accepted) once reported ~95% of a healthy sleep
+    -- sync as "skipped" -- see tests/test_honest_sync_accounting.py before
+    -- changing the semantics (the wire field is records_rejected).
     records_skipped     INTEGER NOT NULL DEFAULT 0,
     records_inserted_new INTEGER,
     records_deduped_existing INTEGER,
