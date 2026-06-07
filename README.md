@@ -122,9 +122,10 @@ What's included in the MVP:
 - HR / HRV anomaly detection against your rolling baseline
 - HR / HRV trend detection over a configurable 30-day window
 - Workout recovery hints when HR or HRV deviates from baseline
+- Weekly summaries and cross-metric correlation analysis
 - A `POST /api/insights/trigger` endpoint for running briefings or trend checks on demand
 
-What's *not* yet included (and on the roadmap): goal-tracking, anomaly alerting via Home Assistant, multi-person households, correlation analysis, weekly summaries.
+What's *not* yet included (and on the roadmap): goal-tracking, anomaly alerting via Home Assistant, multi-person households.
 
 ## Your first insight
 

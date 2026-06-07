@@ -5,8 +5,9 @@ detector, persists each anomaly as an ``analysis_findings`` row, and
 feeds a formatted anomaly bullet list into the prompt. A lightweight
 sibling, ``run_anomaly_check``, runs the same detector on a 30-minute
 cron without touching the LLM. Phase 2b adds trend analysis as another
-structured Brain-1-only run. Weekly summaries and correlations still
-raise ``NotImplementedError`` pointing at Phase 2b.
+structured Brain-1-only run, plus weekly summaries
+(``run_weekly_summary``) and cross-metric correlation analysis
+(``run_correlation_analysis``) as scheduled runs.
 
 Phase 5F lifted every SQL statement out of this module into
 ``storage.timescale.analysis``. The orchestrator below now composes
