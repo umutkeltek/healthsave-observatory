@@ -100,17 +100,21 @@ class _FakeSession:
         steps_rows: list[tuple] | None = None,
         sleep_rows: list[tuple] | None = None,
         quantity_values: dict[str, Any] | None = None,
+        source_model: str | None = "HealthSave",
     ) -> None:
         self._hr = hr_rows or []
         self._hrv = hrv_rows or []
         self._steps = steps_rows or []
         self._sleep = sleep_rows or []
         self._quantity_values = quantity_values or {}
+        self._source_model = source_model
         self.executed_queries: list[str] = []
 
     async def execute(self, statement, params: dict[str, Any] | None = None) -> _FakeResult:
         sql = str(statement)
         self.executed_queries.append(sql)
+        if "WITH recent_sources" in sql:
+            return _FakeResult([(self._source_model,)] if self._source_model is not None else [])
         if "FROM quantity_samples" in sql:
             if params and (metric_name := params.get("metric_name")) in self._quantity_values:
                 return _FakeResult([(self._quantity_values[metric_name],)])
@@ -130,8 +134,6 @@ class _FakeSession:
             return _FakeResult([])
         if "FROM blood_oxygen" in sql:
             return _FakeResult([])
-        if "FROM devices" in sql:
-            return _FakeResult([("HealthSave",)])
         raise AssertionError(f"unexpected SQL: {sql}")
 
 
@@ -325,3 +327,35 @@ async def test_fetch_snapshot_uses_quantity_samples_for_whoop_provider_aggregate
     assert snapshot.resting_heart_rate == 57
     assert snapshot.sleep_efficiency == 91.4
     assert snapshot.strain == 10.6
+
+
+@pytest.mark.asyncio
+async def test_fetch_snapshot_requires_recent_aggregate_heart_rate() -> None:
+    """The aggregate HA heart-rate sensor should not relabel stale rows as live.
+
+    The bridge republishes snapshots every minute, so the aggregate HR query needs
+    its own freshness gate. Otherwise Home Assistant sees a fresh MQTT event whose
+    value came from days-old wearable data.
+    """
+
+    session = _FakeSession(hr_rows=[])
+    repo = TimescaleHealthSnapshotRepository()
+
+    snapshot = await repo.fetch_snapshot(session)
+
+    assert snapshot.heart_rate is None
+    assert any(
+        "WHERE time > now() - interval '6 hours'" in query for query in session.executed_queries
+    )
+
+
+@pytest.mark.asyncio
+async def test_fetch_snapshot_uses_recent_source_labels_not_registered_devices() -> None:
+    session = _FakeSession(source_model="Apple Watch + WHOOP + Amazfit / Zepp")
+    repo = TimescaleHealthSnapshotRepository()
+
+    snapshot = await repo.fetch_snapshot(session)
+
+    assert snapshot.source_model == "Apple Watch + WHOOP + Amazfit / Zepp"
+    assert any("WITH recent_sources" in query for query in session.executed_queries)
+    assert not any("FROM devices" in query for query in session.executed_queries)

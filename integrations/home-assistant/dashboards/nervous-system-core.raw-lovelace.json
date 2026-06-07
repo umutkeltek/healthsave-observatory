@@ -1,0 +1,975 @@
+{
+  "title": "Vitals",
+  "views": [
+    {
+      "title": "Nervous-System Core",
+      "path": "vitals",
+      "icon": "mdi:brain",
+      "type": "custom:grid-layout",
+      "layout": {
+        "grid-template-columns": "repeat(12, minmax(0, 1fr))",
+        "grid-template-rows": "285px 205px 205px 260px",
+        "grid-template-areas": "\n              \"hero hero hero hero load load load load room room room room\"\n              \"hrvTile hrvTile heartTile heartTile orb orb orb orb hrvChart hrvChart hrvChart hrvChart\"\n              \"restingTile restingTile oxygenTile oxygenTile orb orb orb orb hrvChart hrvChart hrvChart hrvChart\"\n              \"sleepTile sleepTile sleepTile sleepTile signal signal signal signal log log log log\"\n            ",
+        "gap": "14px",
+        "grid-gap": "14px",
+        "margin": "20px 24px 32px 24px",
+        "align-items": "stretch",
+        "mediaquery": {
+          "(max-width: 1100px)": {
+            "grid-template-columns": "repeat(6, minmax(0, 1fr))",
+            "grid-template-rows": "auto",
+            "grid-template-areas": "\n                  \"hero hero hero hero hero hero\"\n                  \"load load load room room room\"\n                  \"hrvTile hrvTile heartTile heartTile restingTile restingTile\"\n                  \"oxygenTile oxygenTile sleepTile sleepTile sleepTile sleepTile\"\n                  \"orb orb orb hrvChart hrvChart hrvChart\"\n                  \"signal signal signal log log log\"\n                "
+          },
+          "(max-width: 720px)": {
+            "grid-template-columns": "1fr",
+            "grid-template-areas": "\n                  \"hero\"\n                  \"load\"\n                  \"room\"\n                  \"hrvTile\"\n                  \"heartTile\"\n                  \"restingTile\"\n                  \"oxygenTile\"\n                  \"sleepTile\"\n                  \"orb\"\n                  \"hrvChart\"\n                  \"signal\"\n                  \"log\"\n                "
+          }
+        }
+      },
+      "cards": [
+        {
+          "type": "custom:button-card",
+          "entity": "sensor.room_health_state",
+          "show_name": false,
+          "show_state": false,
+          "show_icon": false,
+          "tap_action": {
+            "action": "none"
+          },
+          "hold_action": {
+            "action": "none"
+          },
+          "triggers_update": [
+            "sensor.room_health_state",
+            "input_text.room_health_reason",
+            "sensor.nervous_load",
+            "sensor.healthsave_hrv",
+            "sensor.healthsave_hrv_7d_avg",
+            "sensor.healthsave_heart_rate",
+            "input_select.lighting_mode"
+          ],
+          "styles": {
+            "card": [
+              "background: radial-gradient(circle at 88% 38%, rgba(var(--accent-rgb),.42), rgba(var(--accent-rgb),.08) 24%, transparent 45%), linear-gradient(145deg, rgba(24,24,22,.98), rgba(7,7,8,.99))",
+              "border: 1px solid rgba(255,255,255,.08)",
+              "border-left: 4px solid rgba(var(--accent-rgb),.75)",
+              "border-radius: 28px",
+              "box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 24px 70px rgba(0,0,0,.58)",
+              "padding: 26px 30px",
+              "height: calc(100% - 14px)",
+              "margin: 7px",
+              "box-sizing: border-box",
+              "min-height: 250px",
+              "overflow: hidden",
+              "position: relative",
+              "--accent: #f97316",
+              "--accent-rgb: 249,115,22"
+            ],
+            "grid": [
+              "grid-template-areas: \"hero\"",
+              "align-items: center",
+              "justify-items: stretch"
+            ],
+            "custom_fields": {
+              "hero": [
+                "grid-area: hero"
+              ]
+            }
+          },
+          "state": [
+            {
+              "value": "Overloaded",
+              "styles": {
+                "card": [
+                  "--accent: #f38ba8",
+                  "--accent-rgb: 243,139,168",
+                  "--pulse-speed: 4.6s"
+                ]
+              }
+            },
+            {
+              "value": "Balanced",
+              "styles": {
+                "card": [
+                  "--accent: #f97316",
+                  "--accent-rgb: 249,115,22",
+                  "--pulse-speed: 7.5s"
+                ]
+              }
+            },
+            {
+              "value": "Calm",
+              "styles": {
+                "card": [
+                  "--accent: #94e2d5",
+                  "--accent-rgb: 148,226,213",
+                  "--pulse-speed: 9s"
+                ]
+              }
+            },
+            {
+              "value": "Recovery",
+              "styles": {
+                "card": [
+                  "--accent: #89b4fa",
+                  "--accent-rgb: 137,180,250",
+                  "--pulse-speed: 8s"
+                ]
+              }
+            },
+            {
+              "value": "Normal",
+              "styles": {
+                "card": [
+                  "--accent: #f97316",
+                  "--accent-rgb: 249,115,22",
+                  "--pulse-speed: 7.5s"
+                ]
+              }
+            }
+          ],
+          "custom_fields": {
+            "hero": "[[[\nfunction clean(value) {\n  const text = value == null ? '' : String(value);\n  return ['unknown', 'unavailable', 'none', ''].includes(text.toLowerCase()) ? '' : text;\n}\nfunction ageText(value) {\n  const stamp = value ? new Date(value) : null;\n  if (!stamp || Number.isNaN(stamp.getTime())) return '';\n  const seconds = Math.max(0, Math.round((Date.now() - stamp.getTime()) / 1000));\n  if (seconds < 90) return 'published just now';\n  const minutes = Math.round(seconds / 60);\n  if (minutes < 90) return 'published ' + minutes + 'm ago';\n  const hours = Math.round(minutes / 60);\n  return 'published ' + hours + 'h ago';\n}\nconst roomObj = states['sensor.room_health_state'];\nconst mqttRoomObj = states['sensor.healthsave_room_health_state'];\nlet rawState = clean(roomObj && roomObj.state) || clean(mqttRoomObj && mqttRoomObj.state) || 'Balanced';\nif (rawState.toLowerCase && rawState.toLowerCase() === 'normal') rawState = 'Balanced';\nconst state = rawState;\nconst reasonRaw = states['input_text.room_health_reason'] ? states['input_text.room_health_reason'].state : 'Watching the room and body state.';\nconst reason = reasonRaw.replace(/HealthTrack metrics/gi, 'Wearable metrics');\nconst hrvState = states['sensor.healthsave_hrv'] ? Number(states['sensor.healthsave_hrv'].state) : NaN;\nconst baseState = states['sensor.healthsave_hrv_7d_avg'] ? Number(states['sensor.healthsave_hrv_7d_avg'].state) : NaN;\nconst loadState = states['sensor.nervous_load'] ? Number(states['sensor.nervous_load'].state) : NaN;\nconst computedLoad = Number.isFinite(hrvState) && Number.isFinite(baseState) && baseState > 0\n  ? Math.max(0, Math.round((100 * (baseState - hrvState)) / baseState))\n  : NaN;\nconst loadNumber = Number.isFinite(loadState) ? Math.round(loadState) : computedLoad;\nconst load = Number.isFinite(loadNumber) ? loadNumber + '%' : '--';\nconst hrvText = Number.isFinite(hrvState) && Number.isFinite(baseState) && baseState > 0\n  ? Math.round((hrvState / baseState) * 100) + '% of baseline'\n  : 'baseline pending';\nconst hrRaw = clean(states['sensor.healthsave_heart_rate'] && states['sensor.healthsave_heart_rate'].state);\nconst hrPill = hrRaw\n  ? '<span><b>' + hrRaw + '</b> bpm recent HR</span>'\n  : '<span><b>pending</b> HR sample</span>';\nconst mode = states['input_select.lighting_mode'] ? states['input_select.lighting_mode'].state : 'Adaptive';\nconst sourceObj = states['sensor.healthsave_source_model'];\nconst source = clean(sourceObj && sourceObj.state) || 'source pending';\nconst observedObj = states['sensor.healthsave_snapshot_observed_at'] || states['sensor.healthsave_observed_at'];\nconst sync = ageText(clean(observedObj && observedObj.state)) || ageText(states['sensor.healthsave_heart_rate'] && states['sensor.healthsave_heart_rate'].last_updated) || 'publish pending';\nconst today = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date());\nreturn '<div class=\"hero\">' +\n  '<div class=\"topline\"><span class=\"sun-dot\">+</span><span>' + today + '</span><span>' + sync + '</span><span>' + source + '</span></div>' +\n  '<div class=\"title\">Good night, body.</div>' +\n  '<div class=\"subtitle\">' + state + ' room state</div>' +\n  '<div class=\"reason\">' + reason + '</div>' +\n  '<div class=\"pills\">' +\n    '<span><b>' + load + '</b> nervous load</span>' +\n    '<span><b>' + hrvText + '</b></span>' +\n    hrPill +\n    '<span><b>' + mode + '</b> room mode</span>' +\n    '<span class=\"manual\">manual wins</span>' +\n  '</div>' +\n'</div>';\n]]]"
+          },
+          "card_mod": {
+            "style": "ha-card { background: radial-gradient(circle at 96% 10%, rgba(249,115,22,.22), transparent 32%), linear-gradient(145deg, rgba(20,20,18,.98), rgba(6,6,7,.99)) !important; text-align: left !important; } .hero { position: relative; z-index: 1; text-align: left; } .hero::after { content: ''; position: absolute; inset: -52px -42px auto auto; width: 280px; height: 280px; border-radius: 50%; background: radial-gradient(circle, rgba(var(--accent-rgb),.22), transparent 68%); filter: blur(18px); z-index: -1; } .topline { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; color: rgba(242,233,220,.62); font-size: 11px; font-weight: 720; text-transform: uppercase; letter-spacing: .04em; } .sun-dot { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: #fff7ed; background: linear-gradient(135deg, #fb923c, #ea580c); box-shadow: 0 0 20px rgba(249,115,22,.46); font-weight: 800; } .title { color: #fffaf2; font-size: 40px; font-weight: 780; line-height: 1.02; margin-top: 20px; letter-spacing: 0; } .subtitle { color: var(--accent); font-size: 16px; font-weight: 760; margin-top: 8px; } .reason { color: rgba(242,233,220,.74); font-size: 14px; line-height: 1.38; max-width: 620px; margin-top: 15px; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; } .pills { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; } .pills span { color: rgba(255,250,242,.84); background: rgba(255,255,255,.055); border: 1px solid rgba(255,255,255,.08); border-radius: 999px; padding: 8px 11px; font-size: 12px; } .pills b { color: var(--accent); font-weight: 760; } .pills .manual { color: #140a02; background: linear-gradient(135deg, #fb923c, #ea580c); border-color: transparent; font-weight: 760; }"
+          },
+          "view_layout": {
+            "grid-area": "hero"
+          }
+        },
+        {
+          "type": "custom:apexcharts-card",
+          "graph_span": "24h",
+          "span": {
+            "end": "minute"
+          },
+          "update_interval": "60s",
+          "header": {
+            "show": true,
+            "title": "Nervous load over 24h",
+            "show_states": true,
+            "colorize_states": true
+          },
+          "yaxis": [
+            {
+              "min": 0,
+              "max": 100,
+              "decimals": 0
+            }
+          ],
+          "apex_config": {
+            "chart": {
+              "height": 188,
+              "background": "transparent",
+              "foreColor": "#f2e9dc",
+              "parentHeightOffset": 0,
+              "toolbar": {
+                "show": false
+              }
+            },
+            "theme": {
+              "mode": "dark"
+            },
+            "grid": {
+              "show": true,
+              "borderColor": "rgba(255,255,255,.07)",
+              "strokeDashArray": 0,
+              "xaxis": {
+                "lines": {
+                  "show": false
+                }
+              }
+            },
+            "fill": {
+              "type": "gradient",
+              "gradient": {
+                "shadeIntensity": 0,
+                "opacityFrom": 0.58,
+                "opacityTo": 0.02,
+                "stops": [
+                  0,
+                  100
+                ]
+              }
+            },
+            "stroke": {
+              "width": 4,
+              "curve": "smooth"
+            },
+            "dataLabels": {
+              "enabled": false
+            },
+            "legend": {
+              "show": false
+            },
+            "tooltip": {
+              "theme": "dark"
+            }
+          },
+          "series": [
+            {
+              "entity": "sensor.nervous_load",
+              "name": "load",
+              "type": "area",
+              "color": "#fb923c",
+              "group_by": {
+                "func": "last",
+                "duration": "15min"
+              }
+            }
+          ],
+          "card_mod": {
+            "style": ":host { display: block; height: calc(100% - 14px); margin: 7px; box-sizing: border-box; } ha-card { height: 100%; position: relative; background: linear-gradient(145deg, rgba(22,22,20,.98), rgba(7,7,8,.99)); border: 1px solid rgba(255,255,255,.08); border-radius: 22px; box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 18px 42px rgba(0,0,0,.58); overflow: hidden; } ha-card::before { content: ''; position: absolute; inset: 1px; border-radius: 21px; border: 1px solid rgba(255,255,255,.035); pointer-events: none; }"
+          },
+          "view_layout": {
+            "grid-area": "load"
+          }
+        },
+        {
+          "type": "custom:button-card",
+          "show_name": false,
+          "show_state": false,
+          "show_icon": false,
+          "tap_action": {
+            "action": "none"
+          },
+          "hold_action": {
+            "action": "none"
+          },
+          "triggers_update": [
+            "input_select.lighting_mode",
+            "sensor.room_activity_target_mode",
+            "sensor.adaptive_color_temp",
+            "input_number.lighting_mode_brightness_percent",
+            "input_boolean.health_adaptive_enabled",
+            "sensor.healthsave_source_model"
+          ],
+          "styles": {
+            "card": [
+              {
+                "background": "radial-gradient(circle at 88% 12%, rgba(249,115,22,.24), transparent 38%), linear-gradient(145deg, rgba(20,20,18,.98), rgba(6,6,7,.99))"
+              },
+              {
+                "border-radius": "22px"
+              },
+              {
+                "box-shadow": "inset 0 1px 0 rgba(255,255,255,.08), 0 18px 42px rgba(0,0,0,.58)"
+              },
+              {
+                "height": "calc(100% - 14px)"
+              },
+              {
+                "margin": "7px"
+              },
+              {
+                "padding": "0"
+              },
+              {
+                "box-sizing": "border-box"
+              },
+              {
+                "min-height": "250px"
+              },
+              {
+                "overflow": "hidden"
+              },
+              {
+                "position": "relative"
+              }
+            ],
+            "grid": [
+              {
+                "grid-template-areas": "\"room\""
+              },
+              {
+                "grid-template-columns": "1fr"
+              },
+              {
+                "grid-template-rows": "1fr"
+              },
+              {
+                "align-items": "stretch"
+              },
+              {
+                "justify-items": "stretch"
+              },
+              {
+                "width": "100%"
+              },
+              {
+                "height": "100%"
+              }
+            ],
+            "custom_fields": {
+              "room": [
+                {
+                  "grid-area": "room"
+                },
+                {
+                  "align-self": "stretch"
+                },
+                {
+                  "justify-self": "stretch"
+                },
+                {
+                  "display": "block"
+                },
+                {
+                  "width": "100%"
+                },
+                {
+                  "height": "100%"
+                },
+                {
+                  "min-width": "0"
+                },
+                {
+                  "box-sizing": "border-box"
+                },
+                {
+                  "text-align": "left"
+                }
+              ]
+            }
+          },
+          "custom_fields": {
+            "room": "[[[\nfunction clean(value) {\n  const text = value == null ? '' : String(value);\n  return ['unknown', 'unavailable', 'none', ''].includes(text.toLowerCase()) ? '' : text;\n}\nconst mode = clean(states['input_select.lighting_mode'] && states['input_select.lighting_mode'].state) || 'Cafe Amber';\nconst target = clean(states['sensor.room_activity_target_mode'] && states['sensor.room_activity_target_mode'].state) || 'Desk Halo';\nconst tempRaw = states['sensor.adaptive_color_temp'] ? Number(states['sensor.adaptive_color_temp'].state) : NaN;\nconst temp = Number.isFinite(tempRaw) ? Math.round(tempRaw) + 'K' : '2700K';\nconst brightRaw = states['input_number.lighting_mode_brightness_percent'] ? Number(states['input_number.lighting_mode_brightness_percent'].state) : NaN;\nconst brightness = Number.isFinite(brightRaw) ? Math.round(brightRaw) : 100;\nconst enabled = states['input_boolean.health_adaptive_enabled'] && states['input_boolean.health_adaptive_enabled'].state === 'on';\nconst source = clean(states['sensor.healthsave_source_model'] && states['sensor.healthsave_source_model'].state) || 'local health feed';\nconst panel = 'width:100%;height:100%;box-sizing:border-box;padding:24px 26px;display:grid;grid-template-rows:auto 1fr auto;gap:14px;color:#fffaf2;background:radial-gradient(circle at 88% 12%,rgba(249,115,22,.28),transparent 38%),linear-gradient(145deg,rgba(20,20,18,.98),rgba(6,6,7,.99));';\nconst head = 'display:flex;align-items:center;justify-content:space-between;gap:14px;';\nconst headLeft = 'display:flex;align-items:center;gap:9px;color:rgba(242,233,220,.76);font-size:13px;font-weight:780;';\nconst icon = 'width:24px;height:24px;border-radius:50%;display:inline-grid;place-items:center;background:linear-gradient(135deg,#fb923c,#ea580c);color:#140a02;font-size:14px;box-shadow:0 0 22px rgba(249,115,22,.45);';\nconst badge = 'color:#140a02;background:linear-gradient(135deg,#fb923c,#ea580c);border-radius:999px;padding:7px 12px;font-size:10px;line-height:1;letter-spacing:.12em;text-transform:uppercase;font-weight:820;white-space:nowrap;';\nconst body = 'min-height:0;display:grid;grid-template-columns:minmax(170px,.72fr) minmax(0,1fr);align-items:center;gap:26px;';\nconst metric = 'color:#fb923c;font-size:48px;font-weight:850;line-height:.95;';\nconst metricCap = 'color:rgba(242,233,220,.54);font-size:10px;font-weight:820;letter-spacing:.26em;text-transform:uppercase;margin-top:8px;';\nconst metricSub = 'color:rgba(242,233,220,.72);font-size:12px;font-weight:740;margin-top:12px;';\nconst roomTitle = 'color:#fffaf2;font-size:38px;font-weight:820;line-height:1;';\nconst roomSub = 'color:rgba(242,233,220,.70);font-size:14px;margin-top:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';\nconst chips = 'display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;';\nconst chip = 'display:inline-flex;align-items:center;border-radius:999px;padding:8px 12px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.08);color:rgba(255,250,242,.86);font-size:11px;font-weight:720;';\nconst bar = 'width:100%;height:7px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:18px;';\nconst fill = 'display:block;width:' + Math.max(0, Math.min(100, brightness)) + '%;height:100%;border-radius:999px;background:linear-gradient(90deg,#fb923c,#fde68a);';\nconst foot = 'display:flex;align-items:center;justify-content:space-between;gap:12px;color:rgba(242,233,220,.58);font-size:11px;';\nreturn '<div style=\"' + panel + '\">' +\n  '<div style=\"' + head + '\"><span style=\"' + headLeft + '\"><span style=\"' + icon + '\">◐</span>Room response</span><b style=\"' + badge + '\">' + (enabled ? 'Adaptive on' : 'Manual layer') + '</b></div>' +\n  '<div style=\"' + body + '\">' +\n    '<div><div style=\"' + metric + '\">' + brightness + '%</div><div style=\"' + metricCap + '\">brightness</div><div style=\"' + metricSub + '\">' + (enabled ? 'health adaptive' : 'manual layer') + '</div></div>' +\n    '<div style=\"min-width:0;text-align:left;\"><div style=\"' + roomTitle + '\">' + mode + '</div><div style=\"' + roomSub + '\">' + target + ' · ' + temp + ' · ' + brightness + '%</div><div style=\"' + chips + '\"><span style=\"' + chip + '\">' + brightness + '% brightness</span><span style=\"' + chip + '\">' + (enabled ? 'health adaptive' : 'manual layer') + '</span></div><div style=\"' + bar + '\"><span style=\"' + fill + '\"></span></div></div>' +\n  '</div>' +\n  '<div style=\"' + foot + '\"><span>' + source + '</span><span>manual control wins</span></div>' +\n'</div>';\n]]]"
+          },
+          "card_mod": {
+            "style": "ha-card { padding: 0 !important; }"
+          },
+          "view_layout": {
+            "grid-area": "room"
+          }
+        },
+        {
+          "type": "custom:mini-graph-card",
+          "name": "HRV vs baseline",
+          "icon": "mdi:heart-flash",
+          "entities": [
+            {
+              "entity": "sensor.healthsave_hrv",
+              "name": "HRV",
+              "color": "#fb923c"
+            },
+            {
+              "entity": "sensor.healthsave_hrv_7d_avg",
+              "name": "7d baseline",
+              "color": "rgba(242,233,220,.42)",
+              "show_fill": false
+            }
+          ],
+          "hours_to_show": 24,
+          "points_per_hour": 4,
+          "line_width": 3,
+          "font_size": 76,
+          "font_size_header": 13,
+          "decimals": 1,
+          "height": 88,
+          "animate": true,
+          "show": {
+            "name": true,
+            "icon": true,
+            "state": true,
+            "extrema": true,
+            "fill": true,
+            "labels": false,
+            "points": false,
+            "legend": false
+          },
+          "color": "#fb923c",
+          "unit": "ms",
+          "card_mod": {
+            "style": ":host { display: block; height: calc(100% - 14px); margin: 7px; box-sizing: border-box; } ha-card { height: 100%; position: relative; background: linear-gradient(145deg, rgba(22,22,20,.96), rgba(8,8,9,.99)); border: 1px solid rgba(255,255,255,.08); border-radius: 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,.075), 0 12px 30px rgba(0,0,0,.44); overflow: hidden; } ha-card::before { content: ''; position: absolute; inset: 1px; border-radius: 17px; border: 1px solid rgba(255,255,255,.03); pointer-events: none; }"
+          },
+          "view_layout": {
+            "grid-area": "hrvTile"
+          }
+        },
+        {
+          "type": "custom:button-card",
+          "show_name": false,
+          "show_state": false,
+          "show_icon": false,
+          "tap_action": {
+            "action": "none"
+          },
+          "hold_action": {
+            "action": "none"
+          },
+          "triggers_update": [
+            "sensor.healthsave_heart_rate"
+          ],
+          "styles": {
+            "card": [
+              {
+                "background": "radial-gradient(circle at 85% 12%, rgba(243,139,168,.16), transparent 38%), linear-gradient(145deg, rgba(20,20,18,.98), rgba(6,6,7,.99))"
+              },
+              {
+                "border-radius": "22px"
+              },
+              {
+                "box-shadow": "inset 0 1px 0 rgba(255,255,255,.08), 0 18px 42px rgba(0,0,0,.58)"
+              },
+              {
+                "height": "calc(100% - 14px)"
+              },
+              {
+                "margin": "7px"
+              },
+              {
+                "padding": "0"
+              },
+              {
+                "box-sizing": "border-box"
+              },
+              {
+                "min-height": "190px"
+              },
+              {
+                "overflow": "hidden"
+              },
+              {
+                "position": "relative"
+              }
+            ],
+            "grid": [
+              {
+                "grid-template-areas": "\"heartRate\""
+              },
+              {
+                "grid-template-columns": "1fr"
+              },
+              {
+                "grid-template-rows": "1fr"
+              },
+              {
+                "align-items": "stretch"
+              },
+              {
+                "justify-items": "stretch"
+              },
+              {
+                "width": "100%"
+              },
+              {
+                "height": "100%"
+              }
+            ],
+            "custom_fields": {
+              "heartRate": [
+                {
+                  "grid-area": "heartRate"
+                },
+                {
+                  "align-self": "stretch"
+                },
+                {
+                  "justify-self": "stretch"
+                },
+                {
+                  "display": "block"
+                },
+                {
+                  "width": "100%"
+                },
+                {
+                  "height": "100%"
+                },
+                {
+                  "min-width": "0"
+                },
+                {
+                  "box-sizing": "border-box"
+                },
+                {
+                  "text-align": "left"
+                }
+              ]
+            }
+          },
+          "custom_fields": {
+            "heartRate": "[[[\nfunction clean(value) {\n  const text = value == null ? '' : String(value);\n  return ['unknown', 'unavailable', 'none', ''].includes(text.toLowerCase()) ? '' : text;\n}\nconst raw = clean(states['sensor.healthsave_heart_rate'] && states['sensor.healthsave_heart_rate'].state);\nconst value = raw || 'sample pending';\nconst unit = raw ? 'bpm' : '';\nconst caption = raw ? 'recent wearable sample' : 'no recent HR sample';\nconst accent = raw ? '#f38ba8' : '#b4befe';\nconst panel = 'width:100%;height:100%;box-sizing:border-box;padding:18px 20px;color:#fffaf2;background:radial-gradient(circle at 85% 12%,rgba(243,139,168,.16),transparent 38%),linear-gradient(145deg,rgba(20,20,18,.98),rgba(6,6,7,.99));display:grid;grid-template-rows:auto 1fr auto;gap:10px;';\nconst head = 'display:flex;align-items:center;justify-content:space-between;gap:12px;color:rgba(242,233,220,.66);font-size:14px;font-weight:760;';\nconst icon = 'display:inline-grid;place-items:center;width:31px;height:31px;border-radius:12px;background:rgba(243,139,168,.13);border:1px solid rgba(243,139,168,.26);color:#f6c4d4;font-size:12px;font-weight:820;';\nconst metric = 'align-self:center;color:#cdd2ef;font-size:' + (raw ? '30px' : '24px') + ';font-weight:420;line-height:1;';\nconst metricUnit = 'color:rgba(242,233,220,.62);font-size:15px;margin-left:4px;';\nconst meta = 'color:rgba(242,233,220,.66);font-size:12px;line-height:1.25;';\nconst rail = 'height:3px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden;';\nconst fill = 'display:block;width:' + (raw ? '72%' : '18%') + ';height:100%;border-radius:999px;background:' + accent + ';box-shadow:0 0 18px ' + accent + ';';\nreturn '<div style=\"' + panel + '\">' +\n  '<div style=\"' + head + '\"><span>Recent heart rate</span><span style=\"' + icon + '\">HR</span></div>' +\n  '<div style=\"' + metric + '\">' + value + (unit ? '<span style=\"' + metricUnit + '\">' + unit + '</span>' : '') + '</div>' +\n  '<div><div style=\"' + meta + '\">' + caption + '</div><div style=\"' + rail + '\"><span style=\"' + fill + '\"></span></div></div>' +\n'</div>';\n]]]"
+          },
+          "card_mod": {
+            "style": "ha-card { padding: 0 !important; }"
+          },
+          "view_layout": {
+            "grid-area": "heartTile"
+          }
+        },
+        {
+          "type": "custom:mini-graph-card",
+          "name": "Resting HR",
+          "icon": "mdi:heart",
+          "entities": [
+            {
+              "entity": "sensor.healthsave_resting_heart_rate",
+              "name": "Resting",
+              "color": "#89b4fa"
+            }
+          ],
+          "hours_to_show": 168,
+          "points_per_hour": 1,
+          "line_width": 3,
+          "font_size": 76,
+          "font_size_header": 13,
+          "decimals": 0,
+          "height": 88,
+          "animate": true,
+          "show": {
+            "name": true,
+            "icon": true,
+            "state": true,
+            "extrema": true,
+            "fill": true,
+            "labels": false,
+            "points": false,
+            "legend": false
+          },
+          "color": "#89b4fa",
+          "unit": "bpm",
+          "card_mod": {
+            "style": ":host { display: block; height: calc(100% - 14px); margin: 7px; box-sizing: border-box; } ha-card { height: 100%; position: relative; background: linear-gradient(145deg, rgba(22,22,20,.96), rgba(8,8,9,.99)); border: 1px solid rgba(255,255,255,.08); border-radius: 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,.075), 0 12px 30px rgba(0,0,0,.44); overflow: hidden; } ha-card::before { content: ''; position: absolute; inset: 1px; border-radius: 17px; border: 1px solid rgba(255,255,255,.03); pointer-events: none; }"
+          },
+          "view_layout": {
+            "grid-area": "restingTile"
+          }
+        },
+        {
+          "type": "custom:mini-graph-card",
+          "name": "Blood oxygen",
+          "icon": "mdi:water-percent",
+          "entities": [
+            {
+              "entity": "sensor.healthsave_blood_oxygen",
+              "name": "SpO2",
+              "color": "#94e2d5"
+            }
+          ],
+          "hours_to_show": 24,
+          "points_per_hour": 4,
+          "line_width": 3,
+          "font_size": 76,
+          "font_size_header": 13,
+          "decimals": 1,
+          "height": 88,
+          "animate": true,
+          "show": {
+            "name": true,
+            "icon": true,
+            "state": true,
+            "extrema": true,
+            "fill": true,
+            "labels": false,
+            "points": false,
+            "legend": false
+          },
+          "color": "#94e2d5",
+          "unit": "%",
+          "card_mod": {
+            "style": ":host { display: block; height: calc(100% - 14px); margin: 7px; box-sizing: border-box; } ha-card { height: 100%; position: relative; background: linear-gradient(145deg, rgba(22,22,20,.96), rgba(8,8,9,.99)); border: 1px solid rgba(255,255,255,.08); border-radius: 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,.075), 0 12px 30px rgba(0,0,0,.44); overflow: hidden; } ha-card::before { content: ''; position: absolute; inset: 1px; border-radius: 17px; border: 1px solid rgba(255,255,255,.03); pointer-events: none; }"
+          },
+          "view_layout": {
+            "grid-area": "oxygenTile"
+          }
+        },
+        {
+          "type": "custom:mini-graph-card",
+          "name": "Sleep + efficiency",
+          "icon": "mdi:sleep",
+          "entities": [
+            {
+              "entity": "sensor.healthsave_last_sleep_hours",
+              "name": "Sleep",
+              "color": "#b4befe",
+              "aggregate_func": "max"
+            },
+            {
+              "entity": "sensor.healthsave_sleep_efficiency",
+              "name": "Efficiency",
+              "color": "rgba(148,226,213,.62)",
+              "show_fill": false,
+              "y_axis": "secondary"
+            }
+          ],
+          "hours_to_show": 336,
+          "points_per_hour": 0.25,
+          "line_width": 3,
+          "font_size": 76,
+          "font_size_header": 13,
+          "decimals": 2,
+          "height": 88,
+          "animate": true,
+          "show": {
+            "name": true,
+            "icon": true,
+            "state": true,
+            "extrema": true,
+            "fill": true,
+            "labels": false,
+            "points": false,
+            "legend": false
+          },
+          "color": "#b4befe",
+          "unit": "h",
+          "card_mod": {
+            "style": ":host { display: block; height: calc(100% - 14px); margin: 7px; box-sizing: border-box; } ha-card { height: 100%; position: relative; background: linear-gradient(145deg, rgba(22,22,20,.96), rgba(8,8,9,.99)); border: 1px solid rgba(255,255,255,.08); border-radius: 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,.075), 0 12px 30px rgba(0,0,0,.44); overflow: hidden; } ha-card::before { content: ''; position: absolute; inset: 1px; border-radius: 17px; border: 1px solid rgba(255,255,255,.03); pointer-events: none; }"
+          },
+          "view_layout": {
+            "grid-area": "sleepTile"
+          }
+        },
+        {
+          "type": "custom:button-card",
+          "show_name": false,
+          "show_state": false,
+          "show_icon": false,
+          "tap_action": {
+            "action": "none"
+          },
+          "hold_action": {
+            "action": "none"
+          },
+          "triggers_update": [
+            "sensor.health_focus_readiness",
+            "sensor.nervous_load",
+            "sensor.room_health_state",
+            "sensor.healthsave_room_health_state",
+            "sensor.healthsave_hrv",
+            "sensor.healthsave_hrv_7d_avg",
+            "sensor.healthsave_heart_rate",
+            "binary_sensor.health_stress_elevated"
+          ],
+          "styles": {
+            "card": [
+              {
+                "background": "radial-gradient(circle at 68% 48%, rgba(249,115,22,.22), transparent 48%), linear-gradient(145deg, rgba(20,20,18,.98), rgba(6,6,7,.99))"
+              },
+              {
+                "border-radius": "22px"
+              },
+              {
+                "box-shadow": "inset 0 1px 0 rgba(255,255,255,.08), 0 18px 42px rgba(0,0,0,.58)"
+              },
+              {
+                "height": "calc(100% - 14px)"
+              },
+              {
+                "margin": "7px"
+              },
+              {
+                "padding": "0"
+              },
+              {
+                "box-sizing": "border-box"
+              },
+              {
+                "min-height": "420px"
+              },
+              {
+                "overflow": "hidden"
+              },
+              {
+                "position": "relative"
+              }
+            ],
+            "grid": [
+              {
+                "grid-template-areas": "\"readiness\""
+              },
+              {
+                "grid-template-columns": "1fr"
+              },
+              {
+                "grid-template-rows": "1fr"
+              },
+              {
+                "align-items": "stretch"
+              },
+              {
+                "justify-items": "stretch"
+              },
+              {
+                "width": "100%"
+              },
+              {
+                "height": "100%"
+              }
+            ],
+            "custom_fields": {
+              "readiness": [
+                {
+                  "grid-area": "readiness"
+                },
+                {
+                  "align-self": "stretch"
+                },
+                {
+                  "justify-self": "stretch"
+                },
+                {
+                  "display": "block"
+                },
+                {
+                  "width": "100%"
+                },
+                {
+                  "height": "100%"
+                },
+                {
+                  "min-width": "0"
+                },
+                {
+                  "box-sizing": "border-box"
+                },
+                {
+                  "text-align": "left"
+                }
+              ]
+            }
+          },
+          "custom_fields": {
+            "readiness": "[[[\nconst focusObj = states['sensor.health_focus_readiness'];\nconst focusVal = focusObj ? Number(focusObj.state) : NaN;\nconst loadObj = states['sensor.nervous_load'];\nconst loadVal = loadObj ? Number(loadObj.state) : NaN;\nconst focusFallback = Number.isFinite(loadVal) ? Math.max(0, Math.min(100, Math.round(100 - loadVal))) : NaN;\nconst focus = Number.isFinite(focusVal) ? Math.max(0, Math.min(100, Math.round(focusVal))) : focusFallback;\nconst focusDisplay = Number.isFinite(focus) ? focus : '--';\nfunction clean(value) {\n  const text = value == null ? '' : String(value);\n  return ['unknown', 'unavailable', 'none', ''].includes(text.toLowerCase()) ? '' : text;\n}\nconst roomObj = states['sensor.room_health_state'];\nconst mqttRoomObj = states['sensor.healthsave_room_health_state'];\nlet rawState = clean(roomObj && roomObj.state) || clean(mqttRoomObj && mqttRoomObj.state) || 'Balanced';\nif (rawState.toLowerCase && rawState.toLowerCase() === 'normal') rawState = 'Balanced';\nconst hrvState = states['sensor.healthsave_hrv'] ? Number(states['sensor.healthsave_hrv'].state) : NaN;\nconst baseState = states['sensor.healthsave_hrv_7d_avg'] ? Number(states['sensor.healthsave_hrv_7d_avg'].state) : NaN;\nconst computedLoad = Number.isFinite(hrvState) && Number.isFinite(baseState) && baseState > 0\n  ? Math.max(0, Math.round((100 * (baseState - hrvState)) / baseState))\n  : NaN;\nconst loadNumber = Number.isFinite(loadVal) ? Math.round(loadVal) : computedLoad;\nconst load = Number.isFinite(loadNumber) ? loadNumber + '%' : '--';\nconst baselineText = Number.isFinite(hrvState) && Number.isFinite(baseState) && baseState > 0\n  ? Math.round((hrvState / baseState) * 100) + '% baseline'\n  : 'baseline pending';\nconst hrText = clean(states['sensor.healthsave_heart_rate'] && states['sensor.healthsave_heart_rate'].state);\nconst stress = states['binary_sensor.health_stress_elevated'] && states['binary_sensor.health_stress_elevated'].state === 'on';\nconst panel = 'width:100%;height:100%;box-sizing:border-box;padding:24px 26px;display:grid;grid-template-rows:auto 1fr auto;gap:14px;color:#fffaf2;background:radial-gradient(circle at 68% 48%,rgba(249,115,22,.28),transparent 48%),linear-gradient(145deg,rgba(20,20,18,.98),rgba(6,6,7,.99));';\nconst head = 'display:flex;align-items:center;justify-content:space-between;gap:14px;';\nconst title = 'color:rgba(242,233,220,.80);font-size:13px;font-weight:760;';\nconst badge = 'color:#140a02;background:linear-gradient(135deg,#fb923c,#ea580c);border-radius:999px;padding:7px 12px;font-size:10px;line-height:1;letter-spacing:.12em;text-transform:uppercase;font-weight:820;white-space:nowrap;';\nconst body = 'min-height:0;display:grid;grid-template-columns:minmax(0,.86fr) minmax(220px,1fr);align-items:center;gap:22px;';\nconst loadStyle = 'color:#fb923c;font-size:50px;font-weight:840;line-height:.95;';\nconst kicker = 'color:rgba(242,233,220,.52);font-size:11px;font-weight:780;letter-spacing:.18em;text-transform:uppercase;margin-top:8px;';\nconst sub = 'color:rgba(242,233,220,.72);font-size:13px;line-height:1.35;margin-top:12px;max-width:220px;';\nconst miniGrid = 'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:17px;max-width:260px;';\nconst mini = 'background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:9px 10px;color:rgba(255,250,242,.84);font-size:11px;line-height:1.15;';\nconst miniB = 'display:block;color:#fffaf2;font-size:14px;font-weight:800;margin-bottom:3px;';\nconst orbShell = 'justify-self:center;width:218px;height:218px;border-radius:50%;display:grid;place-content:center;text-align:center;background:radial-gradient(circle at 38% 28%,rgba(255,255,255,.14),rgba(249,115,22,.24) 35%,#050505 76%);border:1px solid rgba(249,115,22,.42);box-shadow:0 0 80px rgba(249,115,22,.30),inset 0 1px 0 rgba(255,255,255,.10);';\nconst orbNum = 'color:#fffaf2;font-size:64px;font-weight:800;line-height:1;text-shadow:0 0 30px rgba(249,115,22,.70);';\nconst orbCap = 'color:rgba(242,233,220,.62);font-size:10px;letter-spacing:.30em;text-transform:uppercase;margin-top:8px;';\nconst foot = 'display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;';\nconst chip = 'display:inline-flex;align-items:center;border-radius:999px;padding:8px 12px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.08);color:rgba(255,250,242,.86);font-size:11px;font-weight:720;';\nconst chipHot = 'display:inline-flex;align-items:center;border-radius:999px;padding:8px 12px;background:linear-gradient(135deg,#fb923c,#ea580c);border:1px solid transparent;color:#140a02;font-size:11px;font-weight:820;';\nreturn '<div style=\"' + panel + '\">' +\n  '<div style=\"' + head + '\"><span style=\"' + title + '\">Readiness</span><b style=\"' + badge + '\">' + rawState + '</b></div>' +\n  '<div style=\"' + body + '\">' +\n    '<div style=\"min-width:0;\">' +\n      '<div style=\"' + loadStyle + '\">' + load + '</div>' +\n      '<div style=\"' + kicker + '\">nervous load</div>' +\n      '<div style=\"' + sub + '\">' + baselineText + ' · ' + (hrText ? hrText + ' bpm recent HR' : 'HR sample pending') + (stress ? ' · stress flag on' : '') + '</div>' +\n      '<div style=\"' + miniGrid + '\">' +\n        '<span style=\"' + mini + '\"><b style=\"' + miniB + '\">' + (Number.isFinite(hrvState) ? hrvState.toFixed(1) : '--') + ' ms</b>HRV</span>' +\n        '<span style=\"' + mini + '\"><b style=\"' + miniB + '\">' + (Number.isFinite(baseState) ? baseState.toFixed(1) : '--') + ' ms</b>7d baseline</span>' +\n      '</div>' +\n    '</div>' +\n    '<div style=\"' + orbShell + '\"><div><div style=\"' + orbNum + '\">' + focusDisplay + '</div><div style=\"' + orbCap + '\">readiness</div></div></div>' +\n  '</div>' +\n  '<div style=\"' + foot + '\"><span style=\"' + chip + '\">' + load + ' load</span><span style=\"' + chip + '\">' + baselineText + '</span><span style=\"' + chipHot + '\">manual wins</span></div>' +\n'</div>';\n]]]"
+          },
+          "card_mod": {
+            "style": "ha-card { padding: 0 !important; }"
+          },
+          "view_layout": {
+            "grid-area": "orb"
+          }
+        },
+        {
+          "type": "custom:apexcharts-card",
+          "graph_span": "7d",
+          "span": {
+            "end": "minute"
+          },
+          "update_interval": "5min",
+          "header": {
+            "show": true,
+            "title": "HRV against your 7-day baseline",
+            "show_states": true,
+            "colorize_states": true
+          },
+          "yaxis": [
+            {
+              "min": 0,
+              "decimals": 0
+            }
+          ],
+          "apex_config": {
+            "chart": {
+              "height": 300,
+              "background": "transparent",
+              "foreColor": "#f2e9dc",
+              "toolbar": {
+                "show": false
+              }
+            },
+            "theme": {
+              "mode": "dark"
+            },
+            "grid": {
+              "show": true,
+              "borderColor": "rgba(255,255,255,.07)",
+              "strokeDashArray": 0,
+              "xaxis": {
+                "lines": {
+                  "show": false
+                }
+              }
+            },
+            "fill": {
+              "type": "gradient",
+              "gradient": {
+                "shadeIntensity": 0,
+                "opacityFrom": 0.46,
+                "opacityTo": 0.02,
+                "stops": [
+                  0,
+                  100
+                ]
+              }
+            },
+            "stroke": {
+              "width": 3,
+              "curve": "smooth"
+            },
+            "dataLabels": {
+              "enabled": false
+            },
+            "legend": {
+              "show": true,
+              "labels": {
+                "colors": "#f2e9dc"
+              }
+            },
+            "tooltip": {
+              "theme": "dark"
+            }
+          },
+          "series": [
+            {
+              "entity": "sensor.healthsave_hrv",
+              "name": "HRV",
+              "type": "area",
+              "color": "#fb923c",
+              "group_by": {
+                "func": "avg",
+                "duration": "1h"
+              }
+            },
+            {
+              "entity": "sensor.healthsave_hrv_7d_avg",
+              "name": "7d baseline",
+              "type": "line",
+              "color": "rgba(242,233,220,.55)",
+              "group_by": {
+                "func": "avg",
+                "duration": "1h"
+              }
+            }
+          ],
+          "card_mod": {
+            "style": ":host { display: block; height: calc(100% - 14px); margin: 7px; box-sizing: border-box; } ha-card { height: 100%; position: relative; background: linear-gradient(145deg, rgba(22,22,20,.98), rgba(7,7,8,.99)); border: 1px solid rgba(255,255,255,.08); border-radius: 22px; box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 18px 42px rgba(0,0,0,.58); overflow: hidden; } ha-card::before { content: ''; position: absolute; inset: 1px; border-radius: 21px; border: 1px solid rgba(255,255,255,.035); pointer-events: none; }"
+          },
+          "view_layout": {
+            "grid-area": "hrvChart"
+          }
+        },
+        {
+          "type": "custom:button-card",
+          "show_name": false,
+          "show_state": false,
+          "show_icon": false,
+          "tap_action": {
+            "action": "none"
+          },
+          "hold_action": {
+            "action": "none"
+          },
+          "triggers_update": [
+            "sensor.nervous_load",
+            "sensor.healthsave_hrv",
+            "sensor.healthsave_hrv_7d_avg",
+            "sensor.healthsave_heart_rate",
+            "sensor.healthsave_resting_heart_rate",
+            "sensor.healthsave_last_sleep_hours",
+            "input_text.room_health_reason"
+          ],
+          "styles": {
+            "card": [
+              {
+                "background": "linear-gradient(145deg, rgba(22,22,20,.98), rgba(7,7,8,.99))"
+              },
+              {
+                "border": "1px solid rgba(255,255,255,.08)"
+              },
+              {
+                "border-radius": "22px"
+              },
+              {
+                "box-shadow": "inset 0 1px 0 rgba(255,255,255,.08), 0 18px 42px rgba(0,0,0,.54)"
+              },
+              {
+                "padding": "0"
+              },
+              {
+                "height": "calc(100% - 14px)"
+              },
+              {
+                "margin": "7px"
+              },
+              {
+                "box-sizing": "border-box"
+              },
+              {
+                "min-height": "240px"
+              }
+            ],
+            "grid": [
+              {
+                "grid-template-areas": "\"signal\""
+              },
+              {
+                "grid-template-columns": "1fr"
+              },
+              {
+                "grid-template-rows": "1fr"
+              },
+              {
+                "align-items": "stretch"
+              },
+              {
+                "justify-items": "stretch"
+              },
+              {
+                "width": "100%"
+              },
+              {
+                "height": "100%"
+              }
+            ],
+            "custom_fields": {
+              "signal": [
+                {
+                  "grid-area": "signal"
+                },
+                {
+                  "align-self": "stretch"
+                },
+                {
+                  "justify-self": "stretch"
+                },
+                {
+                  "display": "block"
+                },
+                {
+                  "width": "100%"
+                },
+                {
+                  "height": "100%"
+                },
+                {
+                  "min-width": "0"
+                },
+                {
+                  "box-sizing": "border-box"
+                }
+              ]
+            }
+          },
+          "custom_fields": {
+            "signal": "[[[\nfunction clean(value) {\n  const text = value == null ? '' : String(value);\n  return ['unknown', 'unavailable', 'none', ''].includes(text.toLowerCase()) ? '' : text;\n}\nconst hrv = states['sensor.healthsave_hrv'] ? Number(states['sensor.healthsave_hrv'].state) : NaN;\nconst base = states['sensor.healthsave_hrv_7d_avg'] ? Number(states['sensor.healthsave_hrv_7d_avg'].state) : NaN;\nconst loadObj = states['sensor.nervous_load'];\nconst loadState = loadObj ? Number(loadObj.state) : NaN;\nconst loadCalc = Number.isFinite(hrv) && Number.isFinite(base) && base > 0 ? Math.max(0, Math.round((100 * (base - hrv)) / base)) : NaN;\nconst load = Number.isFinite(loadState) ? Math.round(loadState) : loadCalc;\nconst hr = clean(states['sensor.healthsave_heart_rate'] && states['sensor.healthsave_heart_rate'].state) || 'pending';\nconst rhr = states['sensor.healthsave_resting_heart_rate'] ? states['sensor.healthsave_resting_heart_rate'].state : '--';\nconst sleep = states['sensor.healthsave_last_sleep_hours'] ? states['sensor.healthsave_last_sleep_hours'].state : '--';\nconst reasonRaw = states['input_text.room_health_reason'] ? states['input_text.room_health_reason'].state : 'Waiting for automation reason.';\nconst reason = reasonRaw.replace(/HealthTrack metrics/gi, 'Wearable metrics');\nconst formula = Number.isFinite(hrv) && Number.isFinite(base) && Number.isFinite(load)\n  ? '(' + base.toFixed(1) + ' - ' + hrv.toFixed(1) + ') / ' + base.toFixed(1) + ' = ' + load + '%'\n  : 'waiting for HRV + baseline';\nreturn '<div class=\"signal-card\">' +\n  '<div class=\"kicker\">signal math</div>' +\n  '<div class=\"big\">' + (Number.isFinite(load) ? load + '%' : '--') + '</div>' +\n  '<div class=\"caption\">nervous load = HRV below personal 7-day baseline</div>' +\n  '<div class=\"formula\">' + formula + '</div>' +\n  '<div class=\"signal-grid\">' +\n    '<span><b>' + hr + '</b><small>recent HR</small></span>' +\n    '<span><b>' + rhr + '</b><small>resting HR</small></span>' +\n    '<span><b>' + sleep + 'h</b><small>sleep</small></span>' +\n  '</div>' +\n  '<div class=\"reason-line\">' + reason + '</div>' +\n  '<div class=\"note\">Derived HA signal, not a medical score.</div>' +\n'</div>';\n]]]"
+          },
+          "card_mod": {
+            "style": "ha-card { background: linear-gradient(145deg, rgba(20,20,18,.98), rgba(6,6,7,.99)) !important; text-align: left !important; } .signal-card { width: 100%; height: 100%; padding: 20px; box-sizing: border-box; color: #fffaf2; display: flex; flex-direction: column; overflow: hidden; text-align: left; } .kicker { color: rgba(242,233,220,.56); text-transform: uppercase; letter-spacing: .16em; font-size: 10px; font-weight: 760; } .big { color: #fb923c; font-size: 42px; font-weight: 820; line-height: .95; margin-top: 7px; } .caption { color: rgba(242,233,220,.72); font-size: 12px; line-height: 1.25; margin-top: 7px; } .formula { color: rgba(255,250,242,.84); background: rgba(255,255,255,.055); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 8px 9px; margin-top: 10px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .signal-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-top: 10px; } .signal-grid span { background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.07); border-radius: 13px; padding: 8px 7px; min-width: 0; text-align: center; } .signal-grid b { display: block; color: #fffaf2; font-size: 14px; } .signal-grid small { display: block; color: rgba(242,233,220,.52); font-size: 9px; margin-top: 3px; white-space: nowrap; } .reason-line { color: rgba(242,233,220,.68); font-size: 11px; line-height: 1.3; margin-top: 10px; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; } .note { color: rgba(242,233,220,.46); font-size: 10px; margin-top: auto; padding-top: 8px; }"
+          },
+          "view_layout": {
+            "grid-area": "signal"
+          }
+        },
+        {
+          "type": "logbook",
+          "title": "Decision log",
+          "hours_to_show": 24,
+          "entities": [
+            "sensor.room_health_state",
+            "input_text.room_health_reason",
+            "input_select.lighting_mode",
+            "input_boolean.health_adaptive_enabled",
+            "binary_sensor.health_stress_elevated"
+          ],
+          "card_mod": {
+            "style": ":host { display: block; height: calc(100% - 14px); margin: 7px; box-sizing: border-box; } ha-card { height: 100%; position: relative; background: linear-gradient(145deg, rgba(22,22,20,.98), rgba(7,7,8,.99)); border: 1px solid rgba(255,255,255,.08); border-radius: 22px; box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 18px 42px rgba(0,0,0,.58); overflow: hidden; } ha-card::before { content: ''; position: absolute; inset: 1px; border-radius: 21px; border: 1px solid rgba(255,255,255,.035); pointer-events: none; } ha-card { border-radius: 24px; }"
+          },
+          "view_layout": {
+            "grid-area": "log"
+          }
+        }
+      ]
+    }
+  ]
+}

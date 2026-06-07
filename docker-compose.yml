@@ -179,7 +179,7 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:-changeme}@db:5432/healthsave
+      DATABASE_URL: ${HA_MQTT_DATABASE_URL:-postgresql+asyncpg://healthsave:${DB_PASSWORD:-changeme}@db:5432/healthsave}
       HA_MQTT_ENABLED: ${HA_MQTT_ENABLED:-false}
       HA_MQTT_BROKER: ${HA_MQTT_BROKER:-mqtt}
       HA_MQTT_PORT: ${HA_MQTT_PORT:-1883}

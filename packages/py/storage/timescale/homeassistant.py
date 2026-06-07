@@ -44,6 +44,7 @@ class TimescaleHealthSnapshotRepository:
                         """
                         SELECT bpm
                         FROM heart_rate
+                        WHERE time > now() - interval '6 hours'
                         ORDER BY time DESC
                         LIMIT 1
                         """
@@ -196,10 +197,46 @@ class TimescaleHealthSnapshotRepository:
             await session.execute(
                 text(
                     """
-                    SELECT COALESCE(d.device_model, d.device_type, 'HealthSave')
-                    FROM devices d
-                    ORDER BY d.registered_at DESC
-                    LIMIT 1
+                    WITH recent_sources AS (
+                        SELECT source_id, max(time) AS observed_at
+                        FROM hrv
+                        WHERE time >= now() - interval '7 days'
+                        GROUP BY source_id
+                        UNION ALL
+                        SELECT source_id, max(time) AS observed_at
+                        FROM blood_oxygen
+                        WHERE time >= now() - interval '7 days'
+                        GROUP BY source_id
+                        UNION ALL
+                        SELECT source_id, max(start_time) AS observed_at
+                        FROM sleep_sessions
+                        WHERE start_time >= now() - interval '7 days'
+                        GROUP BY source_id
+                        UNION ALL
+                        SELECT source_id, max(date::timestamptz) AS observed_at
+                        FROM daily_activity
+                        WHERE date >= current_date - interval '7 days'
+                        GROUP BY source_id
+                    ),
+                    ranked AS (
+                        SELECT
+                            CASE
+                                WHEN lower(source_id) LIKE '%apple%watch%' THEN 'Apple Watch'
+                                WHEN lower(source_id) LIKE '%whoop%' THEN 'WHOOP'
+                                WHEN lower(source_id) LIKE '%zepp%'
+                                  OR lower(source_id) LIKE '%amazfit%' THEN 'Amazfit / Zepp'
+                                ELSE source_id
+                            END AS label,
+                            max(observed_at) AS observed_at
+                        FROM recent_sources
+                        WHERE source_id IS NOT NULL
+                          AND btrim(source_id) <> ''
+                        GROUP BY label
+                        ORDER BY observed_at DESC
+                        LIMIT 3
+                    )
+                    SELECT string_agg(label, ' + ' ORDER BY observed_at DESC)
+                    FROM ranked
                     """
                 )
             )

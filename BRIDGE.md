@@ -57,7 +57,7 @@ Things people actually trip on. Worth reading before `./setup.sh`.
 - Long-term storage for 120+ HealthKit metrics in TimescaleDB hypertables
 - Six auto-provisioned Grafana dashboards: HealthSave Overview, Activity & Movement, Heart, Sleep, Insights, and Workouts
 - An optional two-brain AI briefing: a deterministic statistical engine flags interesting signals, a local LLM turns them into a short morning narrative
-- A working Home Assistant example package in `integrations/home-assistant/` (SQL sensors + automations)
+- Working Home Assistant examples in `integrations/home-assistant/`: MQTT dashboard, helper package, room-response automation, and the older direct-SQL package
 - Garmin Connect and Samsung/Huawei Health Sync importers in `scripts/import_garmin.py` and `scripts/import_samsung.py`
 - A pluggable storage backend interface — implement the `IngestStorage` protocol if you'd rather store in InfluxDB, ClickHouse, DuckDB, or MQTT only. The first community implementation, [health-data-to-mqtt](https://github.com/bietiekay/health-data-to-mqtt), already does this.
 
@@ -67,6 +67,7 @@ Things people actually trip on. Worth reading before `./setup.sh`.
 - **HealthSave on the App Store:** https://apps.apple.com/app/id6759843047
 - **API contract:** [API.md](API.md)
 - **README (full reference + troubleshooting):** [README.md](README.md)
+- **Home Assistant examples:** [integrations/home-assistant/README.md](integrations/home-assistant/README.md)
 
 ## What this isn't
 
