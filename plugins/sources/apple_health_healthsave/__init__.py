@@ -1,6 +1,6 @@
 """Apple Health (HealthSave bridge) — first first-party Source plugin.
 
-The HealthSave iOS app (App Store ID 6759843047) calls
+The HealthSave iOS app calls
 ``POST /api/apple/batch`` with HealthKit-shaped payloads. As of
 Phase 6.1 the route handler in ``apps/api/server/api/ingest.py``
 delegates the per-device write loop to this plugin via the SDK
@@ -36,7 +36,8 @@ from server.ingestion.parsers import group_samples_by_device
 from storage.results import IngestWriteResult, coerce_ingest_result
 
 if TYPE_CHECKING:
-    from storage.ports import IngestStorage
+    from contracts.observation import Observation
+    from storage.ports import IngestStorage, MeasurementProjectionRepository
 
 log = logging.getLogger("healthsave.plugins.apple_health_healthsave")
 
@@ -86,8 +87,11 @@ class AppleHealthSource(Source):
 
           * ``canonical_observations`` (list[Observation]) — observations the
             route already normalized and wrote before invoking the projection
-            path. Present for HealthSave Apple batches; ignored by this
-            transitional raw-sample projection wrapper.
+            path. Present for HealthSave Apple batches.
+          * ``projection`` (:class:`storage.ports.MeasurementProjectionRepository`)
+            — optional per-metric projection adapter. When supplied with
+            canonical observations, the plugin projects from canonical truth
+            instead of replaying raw samples.
           * ``owner_id`` (UUID) — defaults to ``DEFAULT_OWNER_ID``
             (the single-user sentinel that v1 + v2 share). The route
             resolves this from the ``X-User-Id`` header before calling
@@ -95,6 +99,8 @@ class AppleHealthSource(Source):
             owner_id.
         """
         storage: IngestStorage = payload["storage"]
+        projection: MeasurementProjectionRepository | None = payload.get("projection")
+        canonical_observations: list[Observation] = payload.get("canonical_observations") or []
         session = payload["session"]
         device_id = payload["device_id"]
         first_device_name = payload.get("first_device_name")
@@ -104,6 +110,20 @@ class AppleHealthSource(Source):
 
         if not samples:
             return {"accepted": 0, "rejected": 0}
+
+        if projection is not None and canonical_observations:
+            written = await projection.project_observations(
+                session, device_id, metric, canonical_observations, owner_id
+            )
+            projected = coerce_ingest_result(written)
+            if (
+                projected.accepted
+                or projected.rejected
+                or projected.deduped_in_batch
+                or projected.inserted_new is not None
+                or projected.deduped_existing is not None
+            ):
+                return projected.to_plugin_result()
 
         sample_groups = group_samples_by_device(samples)
         summary = IngestWriteResult()

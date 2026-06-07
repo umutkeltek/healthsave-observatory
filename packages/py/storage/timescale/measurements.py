@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from json import dumps
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from server.ingestion.mappers import (
@@ -48,6 +49,11 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from storage.results import IngestWriteResult
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from contracts.observation import Observation
 
 
 def _sample_source(sample: dict) -> str | None:
@@ -713,6 +719,63 @@ async def ingest_sleep(
 _ingest_sleep = ingest_sleep
 
 
+def _quantity_sample_from_observation(obs: Observation) -> dict | None:
+    """Convert a canonical quantity observation to the v1 writer shape.
+
+    This is intentionally narrow. Non-quantity canonical records
+    (sleep stages, workouts, events) are projection gaps today, so the
+    plugin can fall back to the existing raw-sample writers that still
+    own those shapes.
+    """
+
+    value = getattr(obs, "value", None)
+    if getattr(value, "type", None) != "quantity":
+        return None
+
+    qty = getattr(value, "canonical_value", None)
+    if qty is None:
+        qty = getattr(value, "value", None)
+    if qty is None:
+        return None
+
+    unit = getattr(value, "canonical_unit", None) or getattr(value, "unit", None) or ""
+    provenance = getattr(obs, "provenance", None)
+    source = getattr(provenance, "source_plugin_id", None)
+    if not source:
+        source_id = getattr(obs, "source_id", None)
+        source = str(source_id) if source_id else None
+
+    return {
+        "date": obs.interval_start.isoformat(),
+        "qty": qty,
+        "unit": unit,
+        "source": source,
+    }
+
+
+class TimescaleMeasurementProjectionRepository:
+    """Project canonical observations into the v1 Timescale metric tables."""
+
+    async def project_observations(
+        self,
+        session: AsyncSession,
+        device_id: int | str,
+        metric: str,
+        observations: Iterable[Observation],
+        owner_id: UUID = DEFAULT_OWNER_ID,
+    ) -> IngestWriteResult:
+        samples = []
+        for obs in observations:
+            sample = _quantity_sample_from_observation(obs)
+            if sample is not None:
+                samples.append(sample)
+
+        if not samples:
+            return IngestWriteResult()
+
+        return await _ingest_metric(session, int(device_id), metric, samples, owner_id=owner_id)
+
+
 # ──────────────────────────────────────────────────────────────────
 #  Phase-5C MeasurementRepository class skeleton kept as a name —
 #  Phase 5F may attach methods (insert_heart_rate, insert_workout,
@@ -729,3 +792,4 @@ class TimescaleMeasurementRepository:
 
 
 default_repository = TimescaleMeasurementRepository()
+default_projection_repository = TimescaleMeasurementProjectionRepository()

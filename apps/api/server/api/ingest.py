@@ -58,6 +58,7 @@ _canonical_repo = observation_repository()
 
 if TYPE_CHECKING:
     from plugin_sdk import Source
+    from storage.ports import MeasurementProjectionRepository
 
 log = logging.getLogger("healthsave")
 
@@ -153,6 +154,7 @@ async def apple_batch(
 
     storage = _resolve_storage(request)
     audit = _resolve_audit_log(request)
+    projection = _resolve_measurement_projection(request)
 
     metric = payload.metric.strip() or "unknown"
     batch_idx = payload.batch_index
@@ -229,6 +231,7 @@ async def apple_batch(
                 "session": session,
                 "device_id": first_device_id,
                 "first_device_name": first_device_name,
+                "projection": projection,
                 "metric": metric,
                 "samples": samples,
                 "canonical_observations": canonical_result.observations,
@@ -362,6 +365,23 @@ def _resolve_audit_log(request: Request) -> AuditLog | None:
     if hasattr(state, "audit_log"):
         return state.audit_log
     return default_audit_log
+
+
+def _resolve_measurement_projection(request: Request) -> "MeasurementProjectionRepository | None":
+    """Read the canonical-to-v1 projection adapter from ``app.state``.
+
+    Tests inject a recording double. Production falls back to the
+    Timescale projection repository so canonical writes keep the
+    Home Assistant/Grafana-facing metric tables fresh.
+    """
+
+    state = getattr(getattr(request, "app", None), "state", None)
+    if state is not None:
+        return getattr(state, "measurement_projection", None)
+
+    from storage.timescale.measurements import default_projection_repository
+
+    return default_projection_repository
 
 
 def _header(headers: Any, name: str) -> str | None:

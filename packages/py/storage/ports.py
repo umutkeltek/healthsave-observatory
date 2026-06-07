@@ -14,6 +14,9 @@ Defined ports:
 - :class:`MeasurementRepository` (Phase 5C, skeleton) — placeholder
   Protocol that Phase 5D fills in as per-metric SQL migrates out of
   ``server.ingestion.handlers``.
+- :class:`MeasurementProjectionRepository` — projects canonical v2
+  observations back into the legacy per-metric Timescale tables that
+  dashboards and Home Assistant still read.
 - :class:`TimeSeriesQueryService` (Phase 5D) — read port for metric
   time-series, satisfied by
   ``storage.timescale.observations.CanonicalObservationRepository``. The
@@ -232,6 +235,27 @@ class MeasurementRepository(Protocol):
     real methods (``insert_heart_rate``, ``insert_workout``,
     ``fetch_series``, etc.) as their SQL migrates here.
     """
+
+
+@runtime_checkable
+class MeasurementProjectionRepository(Protocol):
+    """Project canonical observations into v1 measurement tables.
+
+    Canonical observations are the write-side source of truth for v2.
+    Until every dashboard, bridge, and analysis query reads directly
+    from ``canonical_observations``, this port keeps the legacy metric
+    tables fresh without asking source plugins to replay raw sample
+    shapes.
+    """
+
+    async def project_observations(
+        self,
+        session: AsyncSession,
+        device_id: int | str,
+        metric: str,
+        observations: Iterable[Observation],
+        owner_id: UUID,
+    ) -> IngestWriteResult: ...
 
 
 @runtime_checkable

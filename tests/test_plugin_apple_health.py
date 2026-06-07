@@ -140,6 +140,85 @@ async def test_apple_health_ingest_is_a_thin_wrapper_returns_zero_on_empty_paylo
     assert result == {"accepted": 0, "rejected": 0}
 
 
+@pytest.mark.asyncio
+async def test_apple_health_ingest_projects_from_canonical_observations_when_supplied():
+    """Canonical observations are the source for the per-metric projection path."""
+    from datetime import UTC, datetime
+
+    from contracts._base import DEFAULT_OWNER_ID, Provenance
+    from contracts.observation import Observation, build_dedup_key
+    from contracts.values import QuantityValue
+    from plugins.sources.apple_health_healthsave import AppleHealthSource
+    from storage.results import IngestWriteResult
+
+    observed_at = datetime(2026, 5, 11, 8, 0, tzinfo=UTC)
+    obs = Observation(
+        metric_id="vital.heart_rate",
+        value=QuantityValue(type="quantity", value=72, unit="bpm", canonical_value=72, canonical_unit="bpm"),
+        interval_start=observed_at,
+        interval_end=observed_at,
+        source_id="a9b1e7e0-0000-4000-8000-000000000001",
+        provenance=Provenance(
+            source_plugin_id="apple-health-healthsave",
+            sdk_version="test",
+            captured_at=observed_at,
+        ),
+        normalizer_id="apple_health",
+        normalizer_version="test",
+        dedup_key=build_dedup_key(
+            owner_id=DEFAULT_OWNER_ID,
+            workspace_id=DEFAULT_OWNER_ID,
+            source_id="a9b1e7e0-0000-4000-8000-000000000001",
+            metric_id="vital.heart_rate",
+            interval_start=observed_at,
+            interval_end=observed_at,
+            value_repr="72",
+        ),
+    )
+
+    class ExplodingStorage:
+        async def get_or_create_device(self, *args, **kwargs):  # pragma: no cover
+            raise AssertionError("raw storage path should not be used")
+
+        async def ingest_metric(self, *args, **kwargs):  # pragma: no cover
+            raise AssertionError("raw storage path should not be used")
+
+    class RecordingProjection:
+        def __init__(self):
+            self.calls = []
+
+        async def project_observations(self, session, device_id, metric, observations, owner_id):
+            self.calls.append((session, device_id, metric, observations, owner_id))
+            return IngestWriteResult(accepted=len(observations))
+
+    manifest = load_manifest(PLUGIN_DIR / "plugin.yaml")
+    plugin = AppleHealthSource(manifest)
+    projection = RecordingProjection()
+    session = object()
+
+    result = await plugin.ingest(
+        {
+            "storage": ExplodingStorage(),
+            "projection": projection,
+            "session": session,
+            "device_id": 1,
+            "metric": "heart_rate",
+            "samples": [{"date": observed_at.isoformat(), "qty": 72, "source": "Apple Watch"}],
+            "canonical_observations": [obs],
+            "owner_id": DEFAULT_OWNER_ID,
+        }
+    )
+
+    assert result["accepted"] == 1
+    assert len(projection.calls) == 1
+    call_session, device_id, metric, observations, owner_id = projection.calls[0]
+    assert call_session is session
+    assert device_id == 1
+    assert metric == "heart_rate"
+    assert observations == [obs]
+    assert owner_id == DEFAULT_OWNER_ID
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Registry-path integration test — addresses advisor concern that the
 # Phase 6 SDK is "decorative" (registered but no test exercises the

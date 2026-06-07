@@ -25,6 +25,7 @@ from storage.ports import (
     AuditLog,
     BriefingRepository,
     IngestStorage,
+    MeasurementProjectionRepository,
     MeasurementRepository,
     ReadinessRepository,
     RunRepository,
@@ -420,6 +421,90 @@ def test_measurement_repository_skeleton_satisfies_protocol() -> None:
 
     assert isinstance(default_repository, MeasurementRepository)
     assert isinstance(TimescaleMeasurementRepository(), MeasurementRepository)
+
+
+def test_timescale_measurement_projection_repository_satisfies_protocol() -> None:
+    from storage.timescale.measurements import (
+        TimescaleMeasurementProjectionRepository,
+        default_projection_repository,
+    )
+
+    assert isinstance(default_projection_repository, MeasurementProjectionRepository)
+    assert isinstance(TimescaleMeasurementProjectionRepository(), MeasurementProjectionRepository)
+
+
+@pytest.mark.asyncio
+async def test_timescale_measurement_projection_projects_quantity_observations() -> None:
+    from contracts._base import DEFAULT_OWNER_ID, Provenance
+    from contracts.observation import Observation, build_dedup_key
+    from contracts.values import QuantityValue
+    from storage.timescale.measurements import TimescaleMeasurementProjectionRepository
+
+    class _ProjectionResult:
+        def __init__(self, row: dict[str, object]) -> None:
+            self.row = row
+
+        def mappings(self):
+            return self
+
+        def first(self):
+            return self.row
+
+    class _ProjectionSession:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict]] = []
+
+        async def execute(self, statement, params=None):
+            sql = " ".join(str(statement).split())
+            self.calls.append((sql, params or {}))
+            return _ProjectionResult({"inserted_new": True})
+
+    observed_at = datetime(2026, 5, 11, 8, 0, tzinfo=UTC)
+    obs = Observation(
+        metric_id="vital.heart_rate",
+        value=QuantityValue(
+            type="quantity",
+            value=72,
+            unit="bpm",
+            canonical_value=72,
+            canonical_unit="bpm",
+        ),
+        interval_start=observed_at,
+        interval_end=observed_at,
+        source_id="a9b1e7e0-0000-4000-8000-000000000001",
+        provenance=Provenance(
+            source_plugin_id="apple-health-healthsave",
+            sdk_version="test",
+            captured_at=observed_at,
+        ),
+        normalizer_id="apple_health",
+        normalizer_version="test",
+        dedup_key=build_dedup_key(
+            owner_id=DEFAULT_OWNER_ID,
+            workspace_id=DEFAULT_OWNER_ID,
+            source_id="a9b1e7e0-0000-4000-8000-000000000001",
+            metric_id="vital.heart_rate",
+            interval_start=observed_at,
+            interval_end=observed_at,
+            value_repr="72",
+        ),
+    )
+
+    session = _ProjectionSession()
+    result = await TimescaleMeasurementProjectionRepository().project_observations(
+        session,
+        7,
+        "heart_rate",
+        [obs],
+        DEFAULT_OWNER_ID,
+    )
+
+    insert_params = next(params for sql, params in session.calls if "INSERT INTO heart_rate" in sql)
+    assert result.accepted == 1
+    assert insert_params["device_id"] == 7
+    assert insert_params["time"] == observed_at
+    assert insert_params["bpm"] == 72
+    assert insert_params["owner_id"] == str(DEFAULT_OWNER_ID)
 
 
 # ──────────────────────────────────────────────────────────────
