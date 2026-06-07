@@ -33,6 +33,21 @@ You point your iPhone at it. It stores everything from your Apple Watch (heart r
 
 The entire stack runs in Docker on a laptop, a NUC, a Mac mini, a Synology, or a beefy workstation - your choice. Nothing phones home.
 
+## Supported sources
+
+The ingest API is source-agnostic - the iOS app is just the most polished client, not the only one.
+
+| Source | How it connects | Status |
+|---|---|---|
+| **Apple Health** (Apple Watch, iPhone, and anything that writes to HealthKit - Oura, Garmin, Withings, etc.) | Push, via the [HealthSave](https://apps.apple.com/app/id6759843047) iOS app | Shipped |
+| **Whoop** | Direct poll plugin - OAuth to the Whoop developer API, no Apple device needed ([`plugins/sources/whoop`](plugins/sources/whoop)) | Shipped (early; bring your own Whoop developer credentials) |
+| **Amazfit / Zepp** | Direct poll plugin ([`plugins/sources/amazfit`](plugins/sources/amazfit)) | Shipped (early) |
+| **Garmin Connect** | CLI importer ([`scripts/import_garmin.py`](scripts/import_garmin.py)) | Shipped |
+| **Samsung / Huawei Health** | CLI importer, via the Health Sync app ([`scripts/import_samsung.py`](scripts/import_samsung.py)) | Shipped |
+| **Oura** | Via Apple Health today; a direct connector (modelled on Whoop's) is on the roadmap | Planned (direct) |
+
+Not on the list? Two paths: if it writes to Apple Health, the iOS bridge forwards it automatically; otherwise implement the `Source` / `IngestStorage` contract and poll it yourself - that's exactly how the Whoop and Amazfit plugins work.
+
 ## Quick start
 
 You need [Docker](https://www.docker.com/products/docker-desktop/) installed and running, plus a terminal. On Windows, run this inside WSL2 - `setup.sh` is a bash script.
