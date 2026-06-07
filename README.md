@@ -485,6 +485,11 @@ Direct SQL example files remain available for setups that prefer DB polling:
 - `integrations/home-assistant/healthsave-package.yaml`
 - `integrations/home-assistant/secrets.example.yaml`
 
+Shareable dashboard examples are in `integrations/home-assistant/`:
+- `integrations/home-assistant/README.md`
+- `integrations/home-assistant/nervous-system-core-package.yaml`
+- `integrations/home-assistant/dashboards/nervous-system-core.raw-lovelace.json`
+
 ### Community Backends
 
 The ingest API is intentionally simple so anyone can build a compatible backend for their own stack. The first community implementation is already live:

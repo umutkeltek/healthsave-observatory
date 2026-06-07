@@ -1,0 +1,193 @@
+# Home Assistant package for the Nervous-System Core example dashboard.
+#
+# Requirements:
+# - The Health Data Hub MQTT bridge is enabled.
+# - MQTT discovery has created the default sensor.healthsave_* entities.
+# - Replace light.your_room_light before enabling the example automation.
+
+input_boolean:
+  health_adaptive_enabled:
+    name: Health adaptive enabled
+    icon: mdi:lightbulb-auto
+
+input_number:
+  lighting_mode_brightness_percent:
+    name: Lighting mode brightness percent
+    min: 1
+    max: 100
+    step: 1
+    mode: slider
+    icon: mdi:brightness-6
+
+input_select:
+  lighting_mode:
+    name: Lighting mode
+    options:
+      - Adaptive
+      - Warm focus
+      - Recovery
+      - Manual
+    initial: Adaptive
+    icon: mdi:palette
+
+input_text:
+  room_health_reason:
+    name: Room health reason
+    max: 255
+    initial: Waiting for wearable context.
+
+template:
+  - sensor:
+      - name: Nervous Load
+        unique_id: hdh_nervous_load
+        unit_of_measurement: "%"
+        state_class: measurement
+        icon: mdi:pulse
+        state: >-
+          {% set hrv = states('sensor.healthsave_hrv') %}
+          {% set baseline = states('sensor.healthsave_hrv_7d_avg') %}
+          {% if is_number(hrv) and is_number(baseline) and baseline | float > 0 %}
+            {% set hrv_value = hrv | float %}
+            {% set baseline_value = baseline | float %}
+            {% set raw = ((baseline_value - hrv_value) / baseline_value * 100) %}
+            {{ [0, [100, raw] | min] | max | round(0) }}
+          {% else %}
+            unknown
+          {% endif %}
+
+      - name: Health Focus Readiness
+        unique_id: hdh_health_focus_readiness
+        unit_of_measurement: "%"
+        state_class: measurement
+        icon: mdi:brain
+        state: >-
+          {% set load = states('sensor.nervous_load') %}
+          {% set sleep = states('sensor.healthsave_last_sleep_hours') %}
+          {% set recovery = states('sensor.healthsave_recovery_score') %}
+          {% if is_number(load) %}
+            {% set base = 100 - (load | float) %}
+            {% set sleep_penalty = 8 if is_number(sleep) and sleep | float < 6 else 0 %}
+            {% set recovery_penalty = 10 if is_number(recovery) and recovery | float < 50 else 0 %}
+            {{ [0, [100, base - sleep_penalty - recovery_penalty] | min] | max | round(0) }}
+          {% else %}
+            unknown
+          {% endif %}
+
+      - name: Room Health State
+        unique_id: hdh_room_health_state
+        icon: mdi:home-heart
+        state: >-
+          {% set bridge = states('sensor.healthsave_room_health_state') %}
+          {% set load = states('sensor.nervous_load') %}
+          {% set recovery = states('sensor.healthsave_recovery_score') %}
+          {% if is_number(load) and load | float >= 55 %}
+            Overloaded
+          {% elif is_number(recovery) and recovery | float < 45 %}
+            Recovery
+          {% elif bridge | lower in ['normal', 'balanced'] %}
+            Balanced
+          {% elif bridge not in ['unknown', 'unavailable', 'none', ''] %}
+            {{ bridge | title }}
+          {% else %}
+            Balanced
+          {% endif %}
+
+      - name: Room Activity Target Mode
+        unique_id: hdh_room_activity_target_mode
+        icon: mdi:floor-lamp
+        state: >-
+          {% if states('sensor.room_health_state') == 'Overloaded' %}
+            Low stimulation
+          {% elif now().hour >= 22 or now().hour < 7 %}
+            Evening recovery
+          {% else %}
+            Desk halo
+          {% endif %}
+
+      - name: Adaptive Color Temp
+        unique_id: hdh_adaptive_color_temp
+        unit_of_measurement: K
+        state_class: measurement
+        icon: mdi:thermometer
+        state: >-
+          {% if states('sensor.room_health_state') in ['Overloaded', 'Recovery'] %}
+            2700
+          {% elif now().hour >= 22 or now().hour < 7 %}
+            2800
+          {% else %}
+            3200
+          {% endif %}
+
+  - binary_sensor:
+      - name: Health Stress Elevated
+        unique_id: hdh_health_stress_elevated
+        icon: mdi:heart-alert
+        state: >-
+          {% set load = states('sensor.nervous_load') %}
+          {% set recovery = states('sensor.healthsave_recovery_score') %}
+          {{ (is_number(load) and load | float >= 55) or
+             (is_number(recovery) and recovery | float < 45) }}
+
+automation:
+  - id: hdh_room_health_reason_sync
+    alias: Room health - Metadata sync
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id:
+          - sensor.room_health_state
+          - sensor.nervous_load
+          - sensor.healthsave_heart_rate
+          - sensor.healthsave_hrv
+          - sensor.healthsave_hrv_7d_avg
+          - sensor.healthsave_recovery_score
+    action:
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.room_health_reason
+        data:
+          value: >-
+            {% set load = states('sensor.nervous_load') %}
+            {% set hrv = states('sensor.healthsave_hrv') %}
+            {% set baseline = states('sensor.healthsave_hrv_7d_avg') %}
+            {% set hr = states('sensor.healthsave_heart_rate') %}
+            {% if states('sensor.room_health_state') == 'Overloaded' %}
+              Elevated nervous load suggests the room should reduce stimulation.
+            {% elif hr in ['unknown', 'unavailable', 'none', ''] %}
+              Wearable metrics are sparse or stale, so physiology-driven automations should stay idle.
+            {% else %}
+              Room state is balanced from {{ load }}% load, {{ hrv }} ms HRV, {{ baseline }} ms baseline, and {{ hr }} bpm recent HR.
+            {% endif %}
+
+  - id: hdh_room_response_reduce_stimulation
+    alias: Room response - reduce stimulation
+    initial_state: false
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: sensor.room_health_state
+        to: Overloaded
+        for:
+          minutes: 3
+    condition:
+      - condition: state
+        entity_id: input_boolean.health_adaptive_enabled
+        state: "on"
+    action:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.lighting_mode_brightness_percent
+        data:
+          value: 65
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.lighting_mode
+        data:
+          option: Recovery
+      # Replace this with your real room light before turning the automation on.
+      - service: light.turn_on
+        target:
+          entity_id: light.your_room_light
+        data:
+          brightness_pct: 65
+          color_temp_kelvin: 2700
