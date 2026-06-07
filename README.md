@@ -401,6 +401,8 @@ python scripts/import_samsung.py /path/to/health-sync-export \
 
 A curated starter dashboard set is included in `deploy/grafana/`, so a fresh `docker compose up -d` should bring Grafana up with the datasource and the supported dashboards already wired.
 
+> **Heads-up:** an insight-first web dashboard (the eventual Grafana replacement) is in active development under [`apps/web/`](apps/web/README.md). It's **pre-release and not part of the default stack yet** — Grafana remains the supported visualization surface today.
+
 Included files:
 - `deploy/grafana/provisioning/datasources/healthsave.yaml`
 - `deploy/grafana/provisioning/dashboards/default.yaml`
