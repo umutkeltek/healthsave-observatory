@@ -26,3 +26,14 @@ async def test_meta_exposes_separate_version_axes() -> None:
     # The iOS-locked contract axis must read v1 and must never be coupled to
     # the ontology axis (Decision H explicitly rejects that coupling).
     assert versions["api_contract"] == "v1"
+
+
+@pytest.mark.asyncio
+async def test_meta_normalizer_version_reflects_the_live_normalizer() -> None:
+    from normalization import NORMALIZER_VERSION
+
+    body = await v2_meta()
+    # PRODUCT-002: the canonical normalizer runs on every batch, so this axis
+    # must reflect the real version, not "0"/"no normalizer yet".
+    assert body["versions"]["normalizer"] == NORMALIZER_VERSION
+    assert body["versions"]["normalizer"] != "0"

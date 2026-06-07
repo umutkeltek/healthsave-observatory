@@ -19,6 +19,7 @@ under the established ``/api/v2/`` namespace alongside ``v2_agents`` and
 from __future__ import annotations
 
 from fastapi import APIRouter
+from normalization import NORMALIZER_VERSION as _CANONICAL_NORMALIZER_VERSION
 
 # Version axes — single source of truth until the ontology package (Phase 1)
 # owns ``ontology_version``. Kept here, not in v1, so the locked contract is
@@ -26,7 +27,11 @@ from fastapi import APIRouter
 API_CONTRACT_VERSION = "v1"
 V2_STATUS = "in-development"
 ONTOLOGY_VERSION = "2026.05.0-draft"
-NORMALIZER_VERSION = "0"  # no v2 canonical normalizer yet (Phase 1 introduces it)
+# PRODUCT-002: the canonical Apple→Observation normalizer DOES run on every
+# ``POST /api/apple/batch`` (it writes canonical_observations). Drive this axis
+# from the normalization package so the meta surface can't drift from the code
+# and claim "no normalizer yet" while one is live.
+NORMALIZER_VERSION = _CANONICAL_NORMALIZER_VERSION
 FUSION_POLICY_VERSION = "0"  # no fusion layer yet (Phase 5 introduces it)
 
 router = APIRouter(prefix="/api/v2")
