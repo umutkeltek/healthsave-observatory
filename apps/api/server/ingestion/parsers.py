@@ -1,7 +1,7 @@
 """Primitive sample-level parsers shared by every ingestion path."""
 
 import math
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 
 def to_float(value) -> float | None:
@@ -27,15 +27,23 @@ def normalize_blood_oxygen(value) -> float | None:
 
 
 def parse_ts(value: str | None) -> datetime | None:
-    """Parse ISO 8601 timestamp string to datetime. asyncpg needs real objects."""
+    """Parse ISO 8601 timestamp string to datetime. asyncpg needs real objects.
+
+    DATA-001: the wire contract is ISO 8601 with a trailing ``Z`` (UTC); if a
+    value arrives WITHOUT an offset we assume UTC and attach it, so a naive
+    datetime is never written into a TIMESTAMPTZ column (where Postgres would
+    otherwise interpret it against the session TimeZone and silently shift it).
+    No-op for the normal ``Z`` path, which is already tz-aware.
+    """
     if not value:
         return None
     try:
         # Handle Z suffix and various ISO formats
         s = value.replace("Z", "+00:00")
-        return datetime.fromisoformat(s)
+        parsed = datetime.fromisoformat(s)
     except (ValueError, TypeError):
         return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
 def parse_date(value: str | None) -> date | None:
