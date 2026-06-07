@@ -1152,6 +1152,65 @@ async def test_batch_succeeds_when_receipt_write_fails_after_ingest(monkeypatch,
     assert "sync receipt write failed" in caplog.text.lower()
 
 
+@pytest.mark.asyncio
+async def test_batch_flags_dual_write_divergence_when_canonical_writes_nothing(monkeypatch, caplog):
+    """RELIABILITY-001: if the canonical writer lands nothing while the v1
+    projection accepts rows (or vice versa), flag it — the consumer-facing table
+    may be silently stale while the batch reports success. Telemetry only; the
+    ingest still succeeds."""
+    import server.api.ingest as ingest_module
+
+    class _ZeroCanonical:
+        accepted = 0
+        rejected = 0
+        observations: list = []
+
+    async def _zero_canonical(*args, **kwargs):
+        return _ZeroCanonical()
+
+    monkeypatch.setattr(ingest_module, "_write_canonical_observations", _zero_canonical)
+
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "heart_rate",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [{"date": "2026-04-10T12:00:00+00:00", "qty": 72, "source": "Apple Watch"}],
+        },
+        headers={"X-HealthSave-Metric": "heart_rate"},
+    )
+
+    with caplog.at_level("WARNING", logger="healthsave"):
+        result = await server.apple_batch(request, session)
+
+    assert result["records"] == 1  # projection accepted; ingest still succeeds
+    assert "dual-write divergence" in caplog.text.lower()
+
+
+@pytest.mark.asyncio
+async def test_batch_does_not_flag_divergence_when_both_writers_land_rows(caplog):
+    """RELIABILITY-001: a normal batch (both writers land rows) must NOT flag
+    divergence — aggregation/dedupe count differences are legitimate, only
+    wrote-something vs wrote-nothing is flagged."""
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "heart_rate",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [{"date": "2026-04-10T12:00:00+00:00", "qty": 72, "source": "Apple Watch"}],
+        },
+        headers={"X-HealthSave-Metric": "heart_rate"},
+    )
+
+    with caplog.at_level("WARNING", logger="healthsave"):
+        result = await server.apple_batch(request, session)
+
+    assert result["records"] == 1
+    assert "dual-write divergence" not in caplog.text.lower()
+
+
 class ReceiptIdempotencyConflictSession(FakeSession):
     async def execute(self, statement, params=None):
         sql = " ".join(str(statement).split())
