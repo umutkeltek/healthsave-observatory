@@ -136,6 +136,20 @@ if [ \"$DATABASE_MODE\" = \"external\" ]; then
   if [ -n \"$DB_NAME_PROVIDED\" ]; then set_env_key HEALTH_DATA_HUB_DB_NAME \"$EXTERNAL_DB_NAME\"; fi
   if [ -n \"$DB_USER_PROVIDED\" ]; then set_env_key HEALTH_DATA_HUB_DB_USER \"$EXTERNAL_DB_USER\"; fi
 fi
+# SECURITY-005: docker-compose now hard-requires GRAFANA_PASSWORD + DB_PASSWORD
+# (\${VAR:?}). Self-heal a .env that predates secret generation so a redeploy
+# never breaks: backfill a MISSING GRAFANA_PASSWORD (safe — Grafana reads
+# GF_SECURITY_ADMIN_PASSWORD only at first init, so this never changes an
+# existing admin login), and never overwrite an existing one. DB_PASSWORD is NOT
+# auto-generated (external mode must match the real DB) — fail loudly if absent.
+if ! grep -q \"^GRAFANA_PASSWORD=\" \"$REMOTE_ENV_DIR/.env\"; then
+  printf \"GRAFANA_PASSWORD=%s\\n\" \"\$(openssl rand -hex 24)\" >> \"$REMOTE_ENV_DIR/.env\"
+  echo \"NOTE: backfilled a missing GRAFANA_PASSWORD into the remote .env (SECURITY-005).\" >&2
+fi
+if ! grep -q \"^DB_PASSWORD=\" \"$REMOTE_ENV_DIR/.env\"; then
+  echo \"FATAL: DB_PASSWORD missing from remote .env; compose now requires it and external mode must match the real database. Restore it before deploying.\" >&2
+  exit 1
+fi
 find \"$REMOTE_DIR\" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 cp -a \"$REMOTE_TMP\"/. \"$REMOTE_DIR\"/
 rm -rf \"$REMOTE_TMP\"
