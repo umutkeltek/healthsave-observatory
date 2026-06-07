@@ -1712,7 +1712,7 @@
     },
     "/api/v2/agents/proposals": {
       "get": {
-        "description": "List recent proposals.\n\nReads through :func:`storage.timescale.agents.fetch_recent_proposals`\n\u2014 the Phase 7-B repository owns the SQL (default newest-first via\nthe supplied ORDER BY). Per the Phase 5 storage-zone rule, the\nroute never composes its own query against ``action_proposals``.",
+        "description": "List recent proposals.\n\nReads through the agent repository. Per the Phase 5 storage-zone rule, the\nroute never composes its own query against ``action_proposals``.",
         "operationId": "list_proposals_api_v2_agents_proposals_get",
         "parameters": [
           {
@@ -1780,7 +1780,7 @@
     },
     "/api/v2/agents/proposals/{proposal_id}/decide": {
       "post": {
-        "description": "Record the operator's decision on one proposal.\n\nWrites a single row into ``action_decisions`` via\n:func:`storage.timescale.agents.decide_action`. The decision is\nappend-only \u2014 re-deciding (e.g. flipping a rejection to an\napproval) writes a new row, and downstream readers take the\nnewest. The supervisor / executor path that picks up an approved\nproposal is Phase 7-F territory; Phase 7-E only persists the\ndecision.\n\nErrors:\n\n  * ``404`` \u2014 no proposal with that id. We intentionally don't\n    leak whether the id is malformed-but-syntactically-valid vs.\n    truly absent; both surface as 404.",
+        "description": "Record the operator's decision on one proposal.\n\nWrites a single row into ``action_decisions`` via\n:class:`storage.ports.AgentRepository`. The decision is append-only \u2014\nre-deciding (e.g. flipping a rejection to an\napproval) writes a new row, and downstream readers take the\nnewest. The supervisor / executor path that picks up an approved\nproposal is Phase 7-F territory; Phase 7-E only persists the\ndecision.\n\nErrors:\n\n  * ``404`` \u2014 no proposal with that id. We intentionally don't\n    leak whether the id is malformed-but-syntactically-valid vs.\n    truly absent; both surface as 404.",
         "operationId": "decide_proposal_api_v2_agents_proposals__proposal_id__decide_post",
         "parameters": [
           {
