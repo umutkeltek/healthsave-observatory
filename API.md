@@ -614,6 +614,43 @@ Example response:
 }
 ```
 
+## v2 read API (evolving)
+
+> **Status: evolving — not a frozen contract.** Unlike the v1 ingest surface
+> above (byte-locked for the HealthSave iOS app), the `/api/v2/*` read plane is
+> under active development; request/response shapes may change between releases.
+> Treat it as pre-stable. **Auth:** routes marked `key` require the `X-API-Key`
+> header when `API_KEY` is set; routes marked `open` are intentionally
+> unauthenticated; the Whoop webhook authenticates via its HMAC signature, not
+> `X-API-Key`.
+
+| Endpoint | Method | Auth | Purpose |
+|----------|--------|------|---------|
+| `/api/v2/meta` | GET | open | v2 version axes (api_contract / ontology / normalizer / fusion_policy) |
+| `/api/v2/setup/diagnostics` | GET | open | self-describe the service so a misconfigured client (e.g. pointed at Grafana) detects it |
+| `/api/v2/metrics` | GET | open | list available canonical metrics |
+| `/api/v2/metrics/{metric_id}/series` | GET | key | time-series for one metric |
+| `/api/v2/insights/latest` | GET | key | latest daily-briefing + weekly-summary narratives |
+| `/api/v2/insights/correlations` | GET | key | recent cross-metric correlation findings |
+| `/api/v2/insights/findings` | GET | key | recent structured analysis findings |
+| `/api/v2/insights/trigger` | POST | key | run a briefing / trend / analysis job on demand |
+| `/api/v2/sync/runs/latest` | GET | key | latest sync-run summary |
+| `/api/v2/sync/runs/{sync_run_id}` | GET | key | per-run delivery-receipt summary |
+| `/api/v2/sync/coverage` | GET | key | per-metric receipt-vs-destination freshness |
+| `/api/v2/sync/anomalies` | GET | key | overlapping-sync-run + coverage anomalies |
+| `/api/v2/experiments` | GET, POST | key | list / create self-experiments |
+| `/api/v2/experiments/candidates` | GET | key | suggested experiments |
+| `/api/v2/experiments/{experiment_id}` | GET | key | one experiment |
+| `/api/v2/experiments/{experiment_id}/analyze` | POST | key | analyze an experiment's result |
+| `/api/v2/experiments/{experiment_id}/abandon` | POST | key | abandon an experiment |
+| `/api/v2/agents/proposals` | GET | key | pending agent action proposals |
+| `/api/v2/agents/proposals/{proposal_id}/decide` | POST | key | approve / reject a proposal |
+| `/api/v2/readiness` | GET | key | readiness / recovery summary |
+| `/api/v2/privacy` | GET | key | egress policy + audit (what derived data may leave the host) |
+| `/api/v2/export/metrics` | GET | key | list exportable metrics with counts + date ranges |
+| `/api/v2/export` | GET | key | export one metric (or `all`) as JSON or CSV |
+| `/api/v2/sources/whoop/webhook` | POST | HMAC | Whoop push webhook; authenticity via `X-WHOOP-Signature` |
+
 ## Compatibility Notes
 
 - Timestamp values should be ISO 8601 strings. A trailing `Z` is accepted.
