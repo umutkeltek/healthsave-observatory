@@ -61,6 +61,7 @@ _REQUIRED_STATE_ATTRS: tuple[str, ...] = (
     "session_factory",
     "storage",
     "audit_log",
+    "measurement_projection",
     "apple_health_plugin",
 )
 
@@ -100,6 +101,12 @@ async def lifespan(a: FastAPI):
     storage, audit_log = resolve_from_env()
     a.state.storage = storage
     a.state.audit_log = audit_log
+    if type(storage).__name__ == "PostgresIngestStorage":
+        from storage.timescale.measurements import default_projection_repository
+
+        a.state.measurement_projection = default_projection_repository
+    else:
+        a.state.measurement_projection = None
     log.info("storage backend resolved: %s", type(storage).__name__)
     # Phase 6.1: prime the Apple Health plugin at startup so a broken
     # plugins/ layout fails LOUD at boot rather than degrading the

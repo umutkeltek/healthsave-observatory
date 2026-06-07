@@ -21,6 +21,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import server  # noqa: E402
+from server.ingestion.owner import DEFAULT_OWNER_ID  # noqa: E402
 from server.ingestion.storage import (  # noqa: E402
     AuditLog,
     IngestStorage,
@@ -31,6 +32,9 @@ from server.ingestion.storage import (  # noqa: E402
 )
 
 from tests.test_api_contract import FakeRequest, FakeSession  # noqa: E402
+
+TEST_OWNER_ID = UUID("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")
+TEST_OWNER_HEADER = str(TEST_OWNER_ID)
 
 
 def test_postgres_ingest_storage_implements_protocol():
@@ -166,14 +170,14 @@ async def test_swappable_storage_receives_resolved_owner_id():
             "metric": "heart_rate",
             "samples": [{"date": "2026-04-10T12:00:00Z", "qty": 72, "source": "Apple Watch"}],
         },
-        headers={"x-user-id": "11111111-2222-3333-4444-555555555555"},
+        headers={"x-user-id": TEST_OWNER_HEADER},
     )
     request.app = _app_with({"storage": storage, "audit_log": None})
 
     await server.apple_batch(request, session)
 
     ingest_call = next(c for c in storage.calls if c[0] == "ingest")
-    assert UUID(ingest_call[3]) == UUID("11111111-2222-3333-4444-555555555555")
+    assert UUID(ingest_call[3]) == TEST_OWNER_ID
 
 
 def test_recording_backends_satisfy_their_protocols():
@@ -253,6 +257,7 @@ async def test_route_delegates_apple_batch_through_plugin_loader():
     """
     storage = _RecordingStorage()
     plugin = _RecordingPlugin(accepted=2)
+    projection = object()
     session = FakeSession()
     samples = [
         {"date": "2026-04-10T12:00:00Z", "qty": 72, "source": "Apple Watch"},
@@ -264,6 +269,7 @@ async def test_route_delegates_apple_batch_through_plugin_loader():
             "storage": storage,
             "audit_log": None,
             "apple_health_plugin": plugin,
+            "measurement_projection": projection,
         }
     )
 
@@ -275,6 +281,7 @@ async def test_route_delegates_apple_batch_through_plugin_loader():
 
     # Payload carries the Phase 6.1 contract keys.
     assert payload["storage"] is storage
+    assert payload["projection"] is projection
     assert payload["session"] is session
     assert payload["metric"] == "heart_rate"
     assert payload["samples"] == samples
@@ -283,7 +290,7 @@ async def test_route_delegates_apple_batch_through_plugin_loader():
     assert payload["first_device_name"] == "Apple Watch"
     assert payload["device_id"] == 1  # _RecordingStorage returns 1
     # owner_id is the default sentinel when no X-User-Id header is present.
-    assert payload["owner_id"] == UUID("00000000-0000-0000-0000-000000000001")
+    assert payload["owner_id"] == DEFAULT_OWNER_ID
 
     # The route only invoked storage for the first-device resolution
     # (the plugin handles the per-device loop in production).
@@ -337,7 +344,7 @@ async def test_route_propagates_resolved_owner_id_into_plugin_payload():
             "metric": "heart_rate",
             "samples": [{"date": "2026-04-10T12:00:00Z", "qty": 72, "source": "Apple Watch"}],
         },
-        headers={"x-user-id": "11111111-2222-3333-4444-555555555555"},
+        headers={"x-user-id": TEST_OWNER_HEADER},
     )
     request.app = _app_with(
         {
@@ -349,4 +356,4 @@ async def test_route_propagates_resolved_owner_id_into_plugin_payload():
 
     await server.apple_batch(request, session)
 
-    assert plugin.calls[0]["owner_id"] == UUID("11111111-2222-3333-4444-555555555555")
+    assert plugin.calls[0]["owner_id"] == TEST_OWNER_ID
