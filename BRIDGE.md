@@ -72,6 +72,6 @@ Things people actually trip on. Worth reading before `./setup.sh`.
 ## What this isn't
 
 - Not a cloud service. There is no umutkeltek-hosted server. You run it on your own hardware or you don't run it.
-- Not a subscription. The iOS app has a one-time Pro unlock; the backend is MIT.
+- Not a subscription. The iOS app has a one-time Pro unlock; the backend is source-available under the Elastic License 2.0.
 - Not a replacement for Apple Health. It's a place to *export to* and *build on top of*.
 - Not a medical device. The briefing engine is informational; no diagnostic claims are made anywhere in this stack.
