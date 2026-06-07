@@ -1,4 +1,4 @@
-"""Whoop developer API paginated fetch for cycle / recovery / sleep / workout.
+"""Whoop developer API fetch for cycle / recovery / sleep / workout / body.
 
 Each fetcher accepts an injected HTTP client (httpx.AsyncClient-shaped via
 :class:`HttpClient` Protocol) and returns the raw Whoop payload records.
@@ -15,9 +15,10 @@ Pagination model (matches Whoop v2):
   * Date range filtering is ``?start=<iso>&end=<iso>``; ISO with a
     trailing ``Z`` is what the Whoop docs show.
 
-The 4 fetcher functions are thin wrappers over :func:`paginated_get`
-so each Whoop resource has a single clear call site for tests + log
-correlation.
+The paginated fetcher functions are thin wrappers over
+:func:`paginated_get` so each Whoop resource has a single clear call
+site for tests + log correlation. Body measurement is a single-object
+resource, so it uses :func:`fetch_one`.
 """
 
 from __future__ import annotations
@@ -30,8 +31,9 @@ from . import API_BASE
 # Whoop v2 path constants — names match the API documentation so a
 # search for "/developer/v2/cycle" lands here. Whoop retired the v1 data
 # endpoints (they now 404), and the v2 record/score shapes are what
-# ``normalize.py`` already parses, so all four resources use v2.
+# ``normalize.py`` already parses, so all five resources use v2.
 PATH_CYCLE = "/developer/v2/cycle"
+PATH_BODY = "/developer/v2/user/measurement/body"
 PATH_RECOVERY = "/developer/v2/recovery"
 PATH_SLEEP = "/developer/v2/activity/sleep"
 PATH_WORKOUT = "/developer/v2/activity/workout"
@@ -144,6 +146,15 @@ async def fetch_recovery(
     return await paginated_get(
         http_client, access_token=access_token, path=PATH_RECOVERY, since=since
     )
+
+
+async def fetch_body_measurement(
+    http_client: HttpClient,
+    *,
+    access_token: str,
+) -> dict[str, Any]:
+    """User body measurement — single object: height_meter, weight_kilogram, max_heart_rate."""
+    return await fetch_one(http_client, access_token=access_token, path=PATH_BODY)
 
 
 async def fetch_sleep(

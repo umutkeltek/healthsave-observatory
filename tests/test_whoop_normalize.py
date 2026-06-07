@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "py"))
 
 from plugins.sources.whoop.normalize import (  # noqa: E402
     SOURCE_TAG,
+    normalize_body_measurement,
     normalize_cycles,
     normalize_recovery,
     normalize_sleep,
@@ -32,7 +33,24 @@ from plugins.sources.whoop.normalize import (  # noqa: E402
 )
 
 
-def test_normalize_recovery_emits_five_metrics_per_scored_item():
+def test_normalize_body_measurement_emits_current_samples():
+    out = normalize_body_measurement(
+        {"height_meter": 1.78, "weight_kilogram": 75.0, "max_heart_rate": 195}
+    )
+    assert out["height_meters"][0]["qty"] == 1.78
+    assert out["weight_kg"][0]["qty"] == 75.0
+    assert out["max_heart_rate"][0]["qty"] == 195.0
+    for metric in ("height_meters", "weight_kg", "max_heart_rate"):
+        assert out[metric][0]["source"] == SOURCE_TAG
+        assert out[metric][0]["date"]
+    assert normalize_body_measurement({}) == {
+        "height_meters": [],
+        "weight_kg": [],
+        "max_heart_rate": [],
+    }
+
+
+def test_normalize_recovery_emits_metrics_per_scored_item():
     out = normalize_recovery(
         [
             {
@@ -45,6 +63,7 @@ def test_normalize_recovery_emits_five_metrics_per_scored_item():
                     "hrv_rmssd_milli": 64.3,
                     "spo2_percentage": 97.0,
                     "skin_temp_celsius": 35.2,
+                    "user_calibrating": True,
                 },
             }
         ]
@@ -56,6 +75,7 @@ def test_normalize_recovery_emits_five_metrics_per_scored_item():
     assert out["body_temperature"][0]["qty"] == 35.2
     assert out["resting_heart_rate"][0]["qty"] == 58.0
     assert out["recovery_score"][0]["qty"] == 73.0
+    assert out["recovery_calibrating"][0]["qty"] == 1.0
     for samples in out.values():
         assert all(s["source"] == SOURCE_TAG for s in samples)
 
@@ -67,11 +87,12 @@ def test_normalize_recovery_skips_missing_fields_silently():
                 "cycle_id": 1,
                 "created_at": "2026-05-22T08:00:00Z",
                 "score_state": "SCORED",
-                "score": {"recovery_score": 73},
+                "score": {"recovery_score": 73, "user_calibrating": False},
             }
         ]
     )
     assert out["recovery_score"][0]["qty"] == 73.0
+    assert out["recovery_calibrating"][0]["qty"] == 0.0
     assert out["heart_rate_variability"] == []
     assert out["blood_oxygen"] == []
 
@@ -109,9 +130,16 @@ def test_normalize_sleep_emits_duration_efficiency_respiratory():
                     "stage_summary": {
                         "total_in_bed_time_milli": 27_000_000,  # 7.5 h
                         "total_awake_time_milli": 1_800_000,  # 0.5 h
+                        "total_light_sleep_time_milli": 3_600_000,
+                        "total_slow_wave_sleep_time_milli": 3_600_000,
+                        "total_rem_sleep_time_milli": 3_600_000,
+                        "disturbance_count": 4,
                     },
                     "sleep_efficiency_percentage": 96.5,
                     "respiratory_rate": 16.8,
+                    "sleep_performance_percentage": 91.0,
+                    "sleep_consistency_percentage": 88.0,
+                    "sleep_needed": {"need_from_sleep_debt_milli": 1_800_000},
                 },
             }
         ]
@@ -122,6 +150,14 @@ def test_normalize_sleep_emits_duration_efficiency_respiratory():
     assert out["sleep_duration_hours"][0]["date"] == "2026-05-22T08:00:00Z"
     assert out["sleep_efficiency_percentage"][0]["qty"] == 96.5
     assert out["sleep_respiratory_rate"][0]["qty"] == 16.8
+    assert out["sleep_performance_percentage"][0]["qty"] == 91.0
+    assert out["sleep_consistency_percentage"][0]["qty"] == 88.0
+    assert out["sleep_debt_minutes"][0]["qty"] == 30.0
+    assert out["sleep_light_hours"][0]["qty"] == 1.0
+    assert out["sleep_deep_hours"][0]["qty"] == 1.0
+    assert out["sleep_rem_hours"][0]["qty"] == 1.0
+    assert out["sleep_awake_hours"][0]["qty"] == 0.5
+    assert out["sleep_disturbances"][0]["qty"] == 4.0
 
 
 def test_normalize_sleep_handles_missing_stage_summary():
@@ -160,6 +196,14 @@ def test_normalize_workouts_matches_ios_emitted_shape():
                     "max_heart_rate": 178,
                     "kilojoule": 1500.0,
                     "distance_meter": 6500.0,
+                    "altitude_gain_meter": 123.4,
+                    "zone_durations": {
+                        "zone_one_milli": 600_000,
+                        "zone_two_milli": 600_000,
+                        "zone_three_milli": 600_000,
+                        "zone_four_milli": 600_000,
+                        "zone_five_milli": 600_000,
+                    },
                 },
             }
         ]
@@ -175,6 +219,12 @@ def test_normalize_workouts_matches_ios_emitted_shape():
     assert sample["activeEnergy"] == 358.51
     assert sample["distance"] == 6500.0
     assert sample["source"] == SOURCE_TAG
+    assert out["workout_altitude_gain_m"][0]["qty"] == 123.4
+    assert out["workout_zone_1_minutes"][0]["qty"] == 10.0
+    assert out["workout_zone_2_minutes"][0]["qty"] == 10.0
+    assert out["workout_zone_3_minutes"][0]["qty"] == 10.0
+    assert out["workout_zone_4_minutes"][0]["qty"] == 10.0
+    assert out["workout_zone_5_minutes"][0]["qty"] == 10.0
 
 
 def test_normalize_workouts_falls_back_for_unknown_sport_id():
@@ -217,6 +267,7 @@ def test_normalize_cycles_emits_strain_and_avg_heart_rate():
                 "score": {
                     "strain": 8.5,
                     "average_heart_rate": 75,
+                    "kilojoule": 1000.0,
                 },
             }
         ]
@@ -225,6 +276,7 @@ def test_normalize_cycles_emits_strain_and_avg_heart_rate():
     # Cycle-derived HR is tagged so it does not collide with workout HR.
     assert "(cycle avg)" in out["heart_rate"][0]["source"]
     assert out["heart_rate"][0]["qty"] == 75.0
+    assert out["cycle_calories"][0]["qty"] == 239.01
 
 
 def test_normalize_cycles_falls_back_to_start_when_no_created_at():
@@ -242,6 +294,7 @@ def test_normalize_cycles_falls_back_to_start_when_no_created_at():
 
 
 def test_all_normalizers_return_empty_lists_for_empty_input():
+    assert all(v == [] for v in normalize_body_measurement({}).values())
     assert all(v == [] for v in normalize_recovery([]).values())
     assert all(v == [] for v in normalize_sleep([]).values())
     assert normalize_workouts([])["workouts"] == []

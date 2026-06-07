@@ -16,9 +16,17 @@ Routing into Timescale tables — relies on the existing
     handler that consumes ``name`` / ``start`` / ``end`` / ``duration``
     / ``avgHeartRate`` / ``maxHeartRate`` / ``activeEnergy`` / ``distance``)
   * everything else (``resting_heart_rate``, ``recovery_score``,
-    ``strain``, ``sleep_duration_hours``, ``sleep_efficiency_percentage``,
-    ``sleep_respiratory_rate``) -> ``quantity_samples`` catch-all,
-    keyed on ``metric_name``.
+    ``recovery_calibrating``, ``strain``, ``cycle_calories``,
+    ``sleep_duration_hours``, ``sleep_efficiency_percentage``,
+    ``sleep_respiratory_rate``, ``sleep_performance_percentage``,
+    ``sleep_consistency_percentage``, ``sleep_debt_minutes``,
+    ``sleep_light_hours``, ``sleep_deep_hours``, ``sleep_rem_hours``,
+    ``sleep_awake_hours``, ``sleep_disturbances``,
+    ``workout_altitude_gain_m``, ``workout_zone_1_minutes``,
+    ``workout_zone_2_minutes``, ``workout_zone_3_minutes``,
+    ``workout_zone_4_minutes``, ``workout_zone_5_minutes``,
+    ``height_meters``, ``weight_kg``, ``max_heart_rate``) ->
+    ``quantity_samples`` catch-all, keyed on ``metric_name``.
 
 Why Whoop sleep does NOT populate ``sleep_sessions``: that table
 stores per-stage segments from HealthKit (start / end / stage value
@@ -35,7 +43,7 @@ from Apple Watch data.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 SOURCE_TAG = "Whoop"
@@ -117,9 +125,28 @@ def _kj_to_kcal(kj: float | None) -> float | None:
     return round(kj * 0.239006, 2)
 
 
+def normalize_body_measurement(item: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """Single Whoop body-measurement object -> current body quantity samples."""
+    out: dict[str, list[dict[str, Any]]] = {
+        "height_meters": [],
+        "weight_kg": [],
+        "max_heart_rate": [],
+    }
+    if not item:
+        return out
+    ts = datetime.now(UTC).isoformat()
+    if (h := item.get("height_meter")) is not None:
+        out["height_meters"].append({"date": ts, "qty": float(h), "source": SOURCE_TAG})
+    if (w := item.get("weight_kilogram")) is not None:
+        out["weight_kg"].append({"date": ts, "qty": float(w), "source": SOURCE_TAG})
+    if (mhr := item.get("max_heart_rate")) is not None:
+        out["max_heart_rate"].append({"date": ts, "qty": float(mhr), "source": SOURCE_TAG})
+    return out
+
+
 def normalize_recovery(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    """One Whoop recovery -> up to five quantity samples (HRV, SpO2,
-    skin temp, RHR, recovery score).
+    """One Whoop recovery -> quantity samples (HRV, SpO2, skin temp,
+    RHR, recovery score, calibrating flag).
     """
     out: dict[str, list[dict[str, Any]]] = {
         "heart_rate_variability": [],
@@ -127,6 +154,7 @@ def normalize_recovery(items: list[dict[str, Any]]) -> dict[str, list[dict[str, 
         "body_temperature": [],
         "resting_heart_rate": [],
         "recovery_score": [],
+        "recovery_calibrating": [],
     }
     for item in items:
         if not _is_scored(item):
@@ -148,6 +176,13 @@ def normalize_recovery(items: list[dict[str, Any]]) -> dict[str, list[dict[str, 
             out["resting_heart_rate"].append({"date": ts, "qty": float(rhr), "source": SOURCE_TAG})
         if (rs := score.get("recovery_score")) is not None:
             out["recovery_score"].append({"date": ts, "qty": float(rs), "source": SOURCE_TAG})
+        out["recovery_calibrating"].append(
+            {
+                "date": ts,
+                "qty": 1.0 if score.get("user_calibrating") else 0.0,
+                "source": SOURCE_TAG,
+            }
+        )
 
     return out
 
@@ -163,6 +198,14 @@ def normalize_sleep(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any
         "sleep_duration_hours": [],
         "sleep_efficiency_percentage": [],
         "sleep_respiratory_rate": [],
+        "sleep_performance_percentage": [],
+        "sleep_consistency_percentage": [],
+        "sleep_debt_minutes": [],
+        "sleep_light_hours": [],
+        "sleep_deep_hours": [],
+        "sleep_rem_hours": [],
+        "sleep_awake_hours": [],
+        "sleep_disturbances": [],
     }
     for item in items:
         if not _is_scored(item):
@@ -193,17 +236,62 @@ def normalize_sleep(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any
             out["sleep_respiratory_rate"].append(
                 {"date": end, "qty": float(rr), "source": SOURCE_TAG}
             )
+        if (perf := score.get("sleep_performance_percentage")) is not None:
+            out["sleep_performance_percentage"].append(
+                {"date": end, "qty": float(perf), "source": SOURCE_TAG}
+            )
+        if (consistency := score.get("sleep_consistency_percentage")) is not None:
+            out["sleep_consistency_percentage"].append(
+                {"date": end, "qty": float(consistency), "source": SOURCE_TAG}
+            )
+        if (
+            debt_ms := (score.get("sleep_needed") or {}).get("need_from_sleep_debt_milli")
+        ) is not None:
+            out["sleep_debt_minutes"].append(
+                {"date": end, "qty": float(round(debt_ms / 60000, 3)), "source": SOURCE_TAG}
+            )
+        if (light_ms := stage.get("total_light_sleep_time_milli")) is not None:
+            out["sleep_light_hours"].append(
+                {"date": end, "qty": float(round(light_ms / 3_600_000, 3)), "source": SOURCE_TAG}
+            )
+        if (deep_ms := stage.get("total_slow_wave_sleep_time_milli")) is not None:
+            out["sleep_deep_hours"].append(
+                {"date": end, "qty": float(round(deep_ms / 3_600_000, 3)), "source": SOURCE_TAG}
+            )
+        if (rem_ms := stage.get("total_rem_sleep_time_milli")) is not None:
+            out["sleep_rem_hours"].append(
+                {"date": end, "qty": float(round(rem_ms / 3_600_000, 3)), "source": SOURCE_TAG}
+            )
+        if (awake_stage_ms := stage.get("total_awake_time_milli")) is not None:
+            out["sleep_awake_hours"].append(
+                {
+                    "date": end,
+                    "qty": float(round(awake_stage_ms / 3_600_000, 3)),
+                    "source": SOURCE_TAG,
+                }
+            )
+        if (disturbances := stage.get("disturbance_count")) is not None:
+            out["sleep_disturbances"].append(
+                {"date": end, "qty": float(disturbances), "source": SOURCE_TAG}
+            )
 
     return out
 
 
 def normalize_workouts(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     """One Whoop workout -> one workouts-table sample dict matching the
-    iOS-emitted shape (``name``, ``start``, ``end``, ``duration``,
-    ``avgHeartRate``, ``maxHeartRate``, ``activeEnergy`` [kcal],
-    ``distance`` [meters]).
+    iOS-emitted shape plus quantity samples for altitude gain and
+    per-zone minutes.
     """
     samples: list[dict[str, Any]] = []
+    out: dict[str, list[dict[str, Any]]] = {
+        "workout_altitude_gain_m": [],
+        "workout_zone_1_minutes": [],
+        "workout_zone_2_minutes": [],
+        "workout_zone_3_minutes": [],
+        "workout_zone_4_minutes": [],
+        "workout_zone_5_minutes": [],
+    }
     for item in items:
         if not _is_scored(item):
             continue
@@ -229,21 +317,48 @@ def normalize_workouts(items: list[dict[str, Any]]) -> dict[str, list[dict[str, 
             sample["activeEnergy"] = kcal
         if (dist := score.get("distance_meter")) is not None:
             sample["distance"] = float(dist)
+        if (altitude := score.get("altitude_gain_meter")) is not None:
+            out["workout_altitude_gain_m"].append(
+                {"date": start, "qty": float(altitude), "source": SOURCE_TAG}
+            )
+
+        zones = score.get("zone_durations") or score.get("zone_duration") or {}
+        if (zone_1 := zones.get("zone_one_milli")) is not None:
+            out["workout_zone_1_minutes"].append(
+                {"date": start, "qty": float(round(zone_1 / 60000, 3)), "source": SOURCE_TAG}
+            )
+        if (zone_2 := zones.get("zone_two_milli")) is not None:
+            out["workout_zone_2_minutes"].append(
+                {"date": start, "qty": float(round(zone_2 / 60000, 3)), "source": SOURCE_TAG}
+            )
+        if (zone_3 := zones.get("zone_three_milli")) is not None:
+            out["workout_zone_3_minutes"].append(
+                {"date": start, "qty": float(round(zone_3 / 60000, 3)), "source": SOURCE_TAG}
+            )
+        if (zone_4 := zones.get("zone_four_milli")) is not None:
+            out["workout_zone_4_minutes"].append(
+                {"date": start, "qty": float(round(zone_4 / 60000, 3)), "source": SOURCE_TAG}
+            )
+        if (zone_5 := zones.get("zone_five_milli")) is not None:
+            out["workout_zone_5_minutes"].append(
+                {"date": start, "qty": float(round(zone_5 / 60000, 3)), "source": SOURCE_TAG}
+            )
 
         samples.append(sample)
 
-    return {"workouts": samples}
+    return {"workouts": samples, **out}
 
 
 def normalize_cycles(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    """One Whoop cycle -> daily strain (quantity_samples) + average HR
-    (heart_rate table, tagged source as ``Whoop (cycle avg)`` so it
-    does not collide with workout-derived HR samples at the same
-    timestamp).
+    """One Whoop cycle -> daily strain + calories (quantity_samples)
+    and average HR (heart_rate table, tagged source as
+    ``Whoop (cycle avg)`` so it does not collide with workout-derived
+    HR samples at the same timestamp).
     """
     out: dict[str, list[dict[str, Any]]] = {
         "strain": [],
         "heart_rate": [],
+        "cycle_calories": [],
     }
     for item in items:
         if not _is_scored(item):
@@ -258,5 +373,7 @@ def normalize_cycles(items: list[dict[str, Any]]) -> dict[str, list[dict[str, An
             out["heart_rate"].append(
                 {"date": ts, "qty": float(avg_hr), "source": f"{SOURCE_TAG} (cycle avg)"}
             )
+        if (cal := _kj_to_kcal(score.get("kilojoule"))) is not None:
+            out["cycle_calories"].append({"date": ts, "qty": float(cal), "source": SOURCE_TAG})
 
     return out

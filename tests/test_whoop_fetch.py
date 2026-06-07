@@ -26,11 +26,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "py"))
 
 from plugins.sources.whoop.fetch import (  # noqa: E402
+    PATH_BODY,
     PATH_CYCLE,
     PATH_RECOVERY,
     PATH_SLEEP,
     PATH_WORKOUT,
     WhoopFetchError,
+    fetch_body_measurement,
     fetch_cycles,
     fetch_recovery,
     fetch_sleep,
@@ -204,3 +206,27 @@ async def test_fetch_cycles_uses_cycle_path():
     )
     await fetch_cycles(client, access_token="AT")
     assert client.calls[0]["url"].endswith(PATH_CYCLE)
+
+
+@pytest.mark.asyncio
+async def test_fetch_body_measurement_uses_body_path_and_returns_single_object():
+    client = _RecordingHttpClient(
+        responses=[
+            _FakeResponse(
+                status_code=200,
+                payload={
+                    "height_meter": 1.78,
+                    "weight_kilogram": 75.0,
+                    "max_heart_rate": 195,
+                },
+            )
+        ]
+    )
+    record = await fetch_body_measurement(client, access_token="AT")
+    assert record == {
+        "height_meter": 1.78,
+        "weight_kilogram": 75.0,
+        "max_heart_rate": 195,
+    }
+    assert client.calls[0]["url"].endswith(PATH_BODY)
+    assert client.calls[0]["headers"]["Authorization"] == "Bearer AT"

@@ -1,4 +1,4 @@
-"""Whoop source plugin — poll-based ingest of recovery / sleep / workout / cycle data.
+"""Whoop source plugin — poll-based ingest of recovery / sleep / workout / cycle / body data.
 
 Each scheduled tick the worker calls :meth:`WhoopSource.ingest` with:
 
@@ -15,9 +15,9 @@ Each scheduled tick the worker calls :meth:`WhoopSource.ingest` with:
 
 ingest reads the stored token, refreshes if expired (atomically — Whoop
 invalidates the previous refresh_token on success), then fetches
-recovery / sleep / workouts / cycles via paginated_get, normalizes each
-into existing IngestStorage sample shapes, and writes via the injected
-``storage.ingest_metric`` Protocol method.
+recovery / sleep / workouts / cycles and body measurement, normalizes
+each into existing IngestStorage sample shapes, and writes via the
+injected ``storage.ingest_metric`` Protocol method.
 
 Failure modes:
 
@@ -141,12 +141,14 @@ class WhoopSource(Source):
         the storage layer bumps when it skips an invalid sample.
         """
         from .fetch import (
+            fetch_body_measurement,
             fetch_cycles,
             fetch_recovery,
             fetch_sleep,
             fetch_workouts,
         )
         from .normalize import (
+            normalize_body_measurement,
             normalize_cycles,
             normalize_recovery,
             normalize_sleep,
@@ -197,6 +199,7 @@ class WhoopSource(Source):
         cycle_items = await fetch_cycles(
             http_client, access_token=access_token, since=effective_since
         )
+        body_item = await fetch_body_measurement(http_client, access_token=access_token)
 
         # 5. Normalize each into per-metric sample lists.
         per_metric: dict[str, list[dict[str, Any]]] = {}
@@ -205,6 +208,7 @@ class WhoopSource(Source):
             normalize_sleep(sleep_items),
             normalize_workouts(workout_items),
             normalize_cycles(cycle_items),
+            normalize_body_measurement(body_item or {}),
         ):
             for metric, samples in normalized.items():
                 if samples:
