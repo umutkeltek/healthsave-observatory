@@ -148,13 +148,16 @@ async def test_apple_health_ingest_projects_from_canonical_observations_when_sup
     from contracts._base import DEFAULT_OWNER_ID, Provenance
     from contracts.observation import Observation, build_dedup_key
     from contracts.values import QuantityValue
-    from plugins.sources.apple_health_healthsave import AppleHealthSource
     from storage.results import IngestWriteResult
+
+    from plugins.sources.apple_health_healthsave import AppleHealthSource
 
     observed_at = datetime(2026, 5, 11, 8, 0, tzinfo=UTC)
     obs = Observation(
         metric_id="vital.heart_rate",
-        value=QuantityValue(type="quantity", value=72, unit="bpm", canonical_value=72, canonical_unit="bpm"),
+        value=QuantityValue(
+            type="quantity", value=72, unit="bpm", canonical_value=72, canonical_unit="bpm"
+        ),
         interval_start=observed_at,
         interval_end=observed_at,
         source_id="a9b1e7e0-0000-4000-8000-000000000001",
