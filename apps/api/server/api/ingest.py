@@ -24,6 +24,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from normalization import normalize_apple_batch
 from plugin_sdk import SDK_VERSION
 from pydantic import ValidationError
+from sqlalchemy.exc import DataError, IntegrityError, InterfaceError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.defaults import observation_repository
 from storage.timescale.sync_receipts import (
@@ -54,6 +55,7 @@ from .metrics import (
 # HealthSave source; production adapter selection lives behind storage.defaults.
 APPLE_HEALTHKIT_SOURCE_ID = UUID("a9b1e7e0-0000-4000-8000-000000000001")
 _APPLE_PLUGIN_ID = "apple-health-healthsave"
+_DETERMINISTIC_WRITE_ERRORS = (OverflowError, ValueError, DataError, IntegrityError)
 _canonical_repo = observation_repository()
 
 if TYPE_CHECKING:
@@ -288,6 +290,17 @@ async def apple_batch(
             error_message=str(exc),
         )
         log.exception("ingest loop failed for %s; raw_log_id=%s left orphaned", metric, raw_log_id)
+        if isinstance(exc, (OperationalError, InterfaceError)):
+            raise
+        if isinstance(exc, _DETERMINISTIC_WRITE_ERRORS):
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "status": "rejected",
+                    "error_code": "unprocessable_samples",
+                    "message": str(exc)[:500],
+                },
+            ) from exc
         raise
     _observe_ingest_metrics(metric=metric, rows=count, started_at=started_at)
     log.info("Ingested %d records for %s (batch %d/%d)", count, metric, batch_idx + 1, total)
