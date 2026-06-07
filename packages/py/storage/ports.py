@@ -323,6 +323,69 @@ class ReadinessRepository(Protocol):
 
 
 @runtime_checkable
+class ExportRepository(Protocol):
+    """Read-side metric export surface for additive ``/api/v2/export``.
+
+    This port exists so the route depends on a stable repository seam, not a
+    concrete Timescale adapter. Implementations own the whitelist from public
+    metric names to real tables/columns, must scope every read to the caller's
+    owner id, and must return plain Python data suitable for direct CSV/JSON
+    shaping. The caller owns the ``AsyncSession`` and transaction; export reads
+    never open or commit sessions themselves.
+    """
+
+    async def export_metric_rows(
+        self,
+        session: AsyncSession,
+        *,
+        metric: str,
+        owner_id: UUID = ...,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        limit: int | None = None,
+    ) -> tuple[list[str], list[tuple]]: ...
+
+    async def export_metric_json(
+        self,
+        session: AsyncSession,
+        *,
+        metric: str,
+        owner_id: UUID = ...,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        limit: int | None = None,
+    ) -> list[dict]: ...
+
+    async def export_metric_csv(
+        self,
+        session: AsyncSession,
+        *,
+        metric: str,
+        owner_id: UUID = ...,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        limit: int | None = None,
+    ) -> str: ...
+
+    async def list_available_metrics(
+        self,
+        session: AsyncSession,
+        *,
+        owner_id: UUID = ...,
+    ) -> list[dict]: ...
+
+    async def export_all_json(
+        self,
+        session: AsyncSession,
+        *,
+        owner_id: UUID = ...,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        limit: int | None = None,
+    ) -> dict[str, list[dict]]: ...
+
+
+@runtime_checkable
 class AgentRepository(Protocol):
     """AgentRun ledger CRUD — six Phase 7-A tables behind one Protocol.
 
