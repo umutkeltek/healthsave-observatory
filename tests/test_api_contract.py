@@ -1086,6 +1086,38 @@ async def test_batch_records_failed_sync_receipt_when_canonical_write_fails(monk
     assert session.insert_params_for("heart_rate") is None
 
 
+@pytest.mark.asyncio
+async def test_batch_rejects_oversized_sample_array_with_422(monkeypatch):
+    """SECURITY-004: a batch exceeding MAX_BATCH_SAMPLES is rejected 422
+    (batch_too_large) before any write, so an unbounded array cannot exhaust
+    memory or hold a DB connection. 422 is frozen-client-safe."""
+    import server.api.ingest as ingest_module
+
+    monkeypatch.setattr(ingest_module, "MAX_BATCH_SAMPLES", 2)
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "heart_rate",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [
+                {"date": "2026-04-10T12:00:00+00:00", "qty": 70, "source": "Apple Watch"},
+                {"date": "2026-04-10T12:01:00+00:00", "qty": 71, "source": "Apple Watch"},
+                {"date": "2026-04-10T12:02:00+00:00", "qty": 72, "source": "Apple Watch"},
+            ],
+        }
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await server.apple_batch(request, session)
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["error_code"] == "batch_too_large"
+    # Rejected before any write: no raw log, no commit.
+    assert session.insert_params_for("raw_ingestion_log") is None
+    assert session.committed is False
+
+
 class ReceiptIdempotencyConflictSession(FakeSession):
     async def execute(self, statement, params=None):
         sql = " ".join(str(statement).split())

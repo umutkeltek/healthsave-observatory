@@ -25,6 +25,11 @@ router = APIRouter(prefix="/api/v2", dependencies=[Depends(verify_api_key)])
 _EXPORT_REPO: ExportRepository = export_repository()
 log = logging.getLogger("healthsave.api.v2_export")
 
+# SECURITY-004 / PERF-02: hard ceiling on rows returned by a single export.
+# Enforced at runtime (not via Query(le=...)) so the v2 OpenAPI snapshot stays
+# byte-identical and no lock regeneration is needed.
+_MAX_EXPORT_LIMIT = 100_000
+
 
 @router.get("/export/metrics")
 async def list_export_metrics(
@@ -52,6 +57,10 @@ async def export_data(
     date_to = date_to if isinstance(date_to, date) else None
     days = days if isinstance(days, int) else None
     limit = limit if isinstance(limit, int) else None
+
+    # SECURITY-004 / PERF-02: never allow an unbounded export. None or a
+    # non-positive limit defaults to the cap; larger values are clamped down.
+    limit = _MAX_EXPORT_LIMIT if limit is None or limit <= 0 else min(limit, _MAX_EXPORT_LIMIT)
 
     if days and date_from is None:
         date_from = (datetime.now(UTC) - timedelta(days=days)).date()

@@ -138,6 +138,25 @@ async def handle_invalid_json(_: Request, exc: json.JSONDecodeError) -> JSONResp
     return JSONResponse(status_code=400, content={"detail": "invalid JSON body"})
 
 
+# SECURITY-004: reject oversized request bodies. This is a coarse in-app guard
+# (Content-Length based); the durable limit belongs at the reverse proxy /
+# gateway (e.g. nginx client_max_body_size). Keep both.
+MAX_REQUEST_BODY_BYTES = int(os.getenv("MAX_REQUEST_BODY_BYTES", str(16 * 1024 * 1024)))
+
+
+@app.middleware("http")
+async def limit_request_body_size(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            declared = int(content_length)
+        except ValueError:
+            return JSONResponse(status_code=400, content={"detail": "invalid Content-Length"})
+        if declared > MAX_REQUEST_BODY_BYTES:
+            return JSONResponse(status_code=413, content={"detail": "request body too large"})
+    return await call_next(request)
+
+
 app.include_router(health_routes.router)
 app.include_router(ingest.router)
 app.include_router(metrics.router)

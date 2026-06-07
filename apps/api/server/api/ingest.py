@@ -13,6 +13,7 @@ and the post-ingest anomaly trigger.
 
 import json
 import logging
+import os
 from datetime import UTC, datetime
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
@@ -72,6 +73,13 @@ _TRANSIENT_WRITE_ERRORS = (
     ConnectionError,  # builtin connection failures (reset/broken-pipe/refused)
 )
 _canonical_repo = observation_repository()
+
+# SECURITY-004: bound the number of samples in a single batch so an unbounded
+# array can't exhaust memory or hold a DB connection for an arbitrarily long
+# write loop. Over-limit is deterministic -> 422 (frozen-client-safe: the client
+# retires it and re-sends via the batch_index/total_batches chunking it already
+# supports). 50k is far above any legitimate HealthKit batch.
+MAX_BATCH_SAMPLES = int(os.getenv("MAX_BATCH_SAMPLES", "50000"))
 
 if TYPE_CHECKING:
     from plugin_sdk import Source
@@ -163,6 +171,19 @@ async def apple_batch(
         payload = BatchPayload.model_validate(raw_payload)
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+    if len(payload.samples) > MAX_BATCH_SAMPLES:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "status": "rejected",
+                "error_code": "batch_too_large",
+                "message": (
+                    f"batch has {len(payload.samples)} samples; max is "
+                    f"{MAX_BATCH_SAMPLES} per request"
+                ),
+            },
+        )
 
     try:
         owner_id = resolve_owner_id(request.headers.get(OWNER_HEADER))
