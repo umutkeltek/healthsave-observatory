@@ -9,7 +9,7 @@ source mappings, and the metric's value_type decides how each sample is shaped.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -84,9 +84,12 @@ def _parse_ts(value: Any) -> datetime | None:
     if not isinstance(value, str) or not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+    # DATA-001: assume UTC for offset-less inputs so canonical Observations never
+    # carry a naive interval_start/end (TIMESTAMPTZ). No-op for the normal Z path.
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
 def _first(sample: dict[str, Any], *keys: str) -> Any:
