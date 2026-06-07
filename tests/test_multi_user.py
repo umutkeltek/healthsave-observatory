@@ -17,6 +17,14 @@ from tests.test_api_contract import FakeRequest, FakeSession  # noqa: E402
 CUSTOM_OWNER = "11111111-2222-3333-4444-555555555555"
 
 
+@pytest.fixture(autouse=True)
+def _enable_multi_user(monkeypatch):
+    # SECURITY-002: X-User-Id is honored only when multi-user is explicitly
+    # enabled. This module exercises that opt-in feature, so turn it on; the
+    # default-off (spoof-closed) behaviour is covered by test_owner_resolution.py.
+    monkeypatch.setattr("server.ingestion.owner.ALLOW_MULTI_USER", True)
+
+
 def test_resolve_owner_id_returns_sentinel_when_header_missing():
     assert resolve_owner_id(None) == DEFAULT_OWNER_ID
     assert resolve_owner_id("") == DEFAULT_OWNER_ID

@@ -200,13 +200,34 @@ def _assert_failed_receipt(session: FakeSession) -> dict:
 @pytest.mark.asyncio
 async def test_status_endpoint_returns_flat_metric_objects():
     session = FakeSession()
+    request = FakeRequest({}, headers={})
 
-    result = await server.apple_status(session)
+    result = await server.apple_status(request, session)
 
     assert "status" not in result
     assert "counts" not in result
     assert result["heart_rate"] == {"count": 0, "oldest": None, "newest": None}
     assert result["sleep_sessions"] == {"count": 0, "oldest": None, "newest": None}
+
+
+@pytest.mark.asyncio
+async def test_status_is_owner_scoped_to_default_owner():
+    """SECURITY-002: status counts are filtered by owner_id so the endpoint can
+    no longer report another owner's data. Wire shape unchanged; a single-user
+    install (default owner) returns identical numbers."""
+    from server.ingestion.owner import DEFAULT_OWNER_ID
+
+    session = FakeSession()
+    request = FakeRequest({}, headers={})
+
+    result = await server.apple_status(request, session)
+
+    assert result["heart_rate"] == {"count": 0, "oldest": None, "newest": None}
+    scoped = [(sql, p) for sql, p in session.calls if "FROM heart_rate" in sql]
+    assert scoped, "expected a heart_rate status query"
+    sql, params = scoped[0]
+    assert "WHERE owner_id = :owner_id" in sql
+    assert params.get("owner_id") == str(DEFAULT_OWNER_ID)
 
 
 @pytest.mark.asyncio
@@ -1577,9 +1598,10 @@ async def test_invalid_quantity_values_are_skipped_without_failing_batch():
 @pytest.mark.asyncio
 async def test_status_logs_database_query_failures(caplog):
     session = FailingStatusSession()
+    request = FakeRequest({}, headers={})
 
     with caplog.at_level("WARNING", logger="healthsave"):
-        result = await server.apple_status(session)
+        result = await server.apple_status(request, session)
 
     assert result["heart_rate"] == {"count": 0, "oldest": None, "newest": None}
     assert "Status query failed for heart_rate" in caplog.text

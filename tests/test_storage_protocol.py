@@ -162,7 +162,9 @@ async def test_empty_batch_skips_audit_when_no_audit_backend():
 
 
 @pytest.mark.asyncio
-async def test_swappable_storage_receives_resolved_owner_id():
+async def test_swappable_storage_receives_resolved_owner_id(monkeypatch):
+    # SECURITY-002: X-User-Id is honored only when multi-user is enabled.
+    monkeypatch.setattr("server.ingestion.owner.ALLOW_MULTI_USER", True)
     storage = _RecordingStorage()
     session = FakeSession()
     request = FakeRequest(
@@ -330,12 +332,14 @@ async def test_route_resolves_plugin_once_across_two_requests_when_state_absent(
 
 
 @pytest.mark.asyncio
-async def test_route_propagates_resolved_owner_id_into_plugin_payload():
+async def test_route_propagates_resolved_owner_id_into_plugin_payload(monkeypatch):
     """X-User-Id resolution still happens in the route — it gets
     threaded into the plugin payload, not into the storage call shape
     directly. This pins that the v1 owner-id seam survives the
     delegation.
     """
+    # SECURITY-002: X-User-Id is honored only when multi-user is enabled.
+    monkeypatch.setattr("server.ingestion.owner.ALLOW_MULTI_USER", True)
     plugin = _RecordingPlugin(accepted=1)
     storage = _RecordingStorage()
     session = FakeSession()
