@@ -53,6 +53,13 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    env:
+      # SECURITY-005: docker-compose now REQUIRES these secrets (${VAR:?}), so
+      # the ephemeral e2e stack must provide throwaway values (compose
+      # interpolates the whole file at parse time, including services not booted
+      # here such as grafana/homeassistant-mqtt).
+      DB_PASSWORD: ci-e2e-password
+      GRAFANA_PASSWORD: ci-e2e-password
     steps:
       - uses: actions/checkout@v6
 
