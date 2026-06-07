@@ -7,7 +7,7 @@ Normalization into ``IngestStorage`` sample dicts lives in
 independently — the wire shape Whoop uses today may change without
 touching the storage-side row shapes, and vice versa.
 
-Pagination model (matches Whoop v1):
+Pagination model (matches Whoop v2):
 
   * Response: ``{"records": [...], "next_token": "<opaque>"}``.
   * ``next_token`` is absent / null on the last page.
@@ -27,12 +27,14 @@ from typing import Any, Protocol
 
 from . import API_BASE
 
-# Whoop v1 path constants — names match the API documentation so a
-# search for "/developer/v1/cycle" lands here.
-PATH_CYCLE = "/developer/v1/cycle"
-PATH_RECOVERY = "/developer/v1/recovery"
-PATH_SLEEP = "/developer/v1/activity/sleep"
-PATH_WORKOUT = "/developer/v1/activity/workout"
+# Whoop v2 path constants — names match the API documentation so a
+# search for "/developer/v2/cycle" lands here. Whoop retired the v1 data
+# endpoints (they now 404), and the v2 record/score shapes are what
+# ``normalize.py`` already parses, so all four resources use v2.
+PATH_CYCLE = "/developer/v2/cycle"
+PATH_RECOVERY = "/developer/v2/recovery"
+PATH_SLEEP = "/developer/v2/activity/sleep"
+PATH_WORKOUT = "/developer/v2/activity/workout"
 
 # Page size we ask Whoop for. The API caps at 25 today; we ask explicitly
 # so a future cap change does not silently shrink our fetch.
@@ -112,6 +114,24 @@ async def paginated_get(
         params["nextToken"] = next_token
 
     raise WhoopFetchError(f"GET {path} exceeded max_pages={max_pages} — refusing to loop further")
+
+
+async def fetch_one(
+    http_client: HttpClient,
+    *,
+    access_token: str,
+    path: str,
+) -> dict[str, Any]:
+    """GET a single Whoop resource by its fully-qualified path."""
+    headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
+    response = await http_client.get(f"{API_BASE}{path}", headers=headers)
+    if response.status_code != 200:
+        body = getattr(response, "text", "<no body>")
+        raise WhoopFetchError(f"GET {path} returned HTTP {response.status_code}: {body}")
+    try:
+        return response.json()
+    except Exception as e:
+        raise WhoopFetchError(f"GET {path} returned non-JSON body") from e
 
 
 async def fetch_recovery(
