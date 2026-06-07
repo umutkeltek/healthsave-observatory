@@ -50,6 +50,7 @@ from .metrics import (
     INGEST_DURATION,
     INGEST_ROWS,
     RAW_LOG_ORPHANED,
+    SYNC_RECEIPT_WRITE_FAILURES,
 )
 
 # v2 canonical write (Decision C). Stable source id for the Apple Health /
@@ -289,23 +290,9 @@ async def apple_batch(
         storage_result_level = str(result.get("storage_result_level") or "accepted_only")
         if audit and raw_log_id is not None:
             await audit.mark_processed(session, raw_log_id)
-        await _record_sync_receipt(
-            session,
-            request=request,
-            metric=metric,
-            batch_index=batch_idx,
-            total_batches=total,
-            status="processed",
-            records_received=len(samples),
-            records_accepted=count,
-            records_skipped=records_rejected,
-            records_inserted_new=records_inserted_new,
-            records_deduped_existing=records_deduped_existing,
-            storage_result_level=storage_result_level,
-            sample_min_at=sample_min_at,
-            sample_max_at=sample_max_at,
-            raw_log_id=raw_log_id,
-        )
+        # CONTRACT-002: commit the DATA (canonical + projection + mark_processed)
+        # here. The delivery receipt is written separately, best-effort, below —
+        # a receipt-write failure must never roll back a landed ingest.
         await session.commit()
     except Exception as exc:
         try:
@@ -342,6 +329,41 @@ async def apple_batch(
                 "message": str(exc)[:500],
             },
         ) from exc
+
+    # CONTRACT-002: the ingest above is durably committed. The delivery receipt is
+    # bookkeeping for the /api/v2/sync surface — a receipt-write failure must NOT
+    # roll back a good ingest or turn a landed batch into a 5xx/422 the client
+    # would retry/Backfill. Best-effort, mirroring _record_failed_sync_receipt.
+    try:
+        await _record_sync_receipt(
+            session,
+            request=request,
+            metric=metric,
+            batch_index=batch_idx,
+            total_batches=total,
+            status="processed",
+            records_received=len(samples),
+            records_accepted=count,
+            records_skipped=records_rejected,
+            records_inserted_new=records_inserted_new,
+            records_deduped_existing=records_deduped_existing,
+            storage_result_level=storage_result_level,
+            sample_min_at=sample_min_at,
+            sample_max_at=sample_max_at,
+            raw_log_id=raw_log_id,
+        )
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        log.exception(
+            "sync receipt write failed AFTER a successful ingest for %s "
+            "(data persisted; receipt row missing)",
+            metric,
+        )
+        try:
+            SYNC_RECEIPT_WRITE_FAILURES.labels(metric=metric).inc()
+        except Exception:  # pragma: no cover - metrics import optional
+            log.debug("failed to record SYNC_RECEIPT_WRITE_FAILURES{metric=%s}", metric)
     _observe_ingest_metrics(metric=metric, rows=count, started_at=started_at)
     log.info("Ingested %d records for %s (batch %d/%d)", count, metric, batch_idx + 1, total)
     _schedule_anomaly_check_if_enabled(request, background_tasks, count)
