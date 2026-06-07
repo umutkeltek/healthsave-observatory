@@ -11,6 +11,7 @@ from storage.ports import (
     AgentRepository,
     BriefingRepository,
     ExperimentRepository,
+    ExportRepository,
     ObservationRepository,
     ReadinessRepository,
     SyncReceiptRepository,
@@ -20,6 +21,7 @@ from storage.timescale.agents import default_repository as _agent_repository
 from storage.timescale.analysis import default_readiness_repository as _readiness_repository
 from storage.timescale.briefings import default_repository as _briefing_repository
 from storage.timescale.experiments import default_repository as _experiment_repository
+from storage.timescale.export import default_export_repository as _export_repository
 from storage.timescale.observations import CanonicalObservationRepository
 from storage.timescale.sync_receipts import default_repository as _sync_receipt_repository
 
@@ -32,6 +34,10 @@ def agent_repository() -> AgentRepository:
 
 def briefing_repository() -> BriefingRepository:
     return _briefing_repository
+
+
+def export_repository() -> ExportRepository:
+    return _export_repository
 
 
 def experiment_repository() -> ExperimentRepository:
@@ -57,6 +63,7 @@ def time_series_query_service() -> TimeSeriesQueryService:
 __all__ = [
     "agent_repository",
     "briefing_repository",
+    "export_repository",
     "experiment_repository",
     "observation_repository",
     "readiness_repository",

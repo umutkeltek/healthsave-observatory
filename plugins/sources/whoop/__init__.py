@@ -83,55 +83,31 @@ class WhoopSource(Source):
     async def setup(self, config: dict[str, Any]) -> None:
         log.info("whoop plugin setup complete")
 
-    async def ingest(self, payload: dict[str, Any]) -> dict[str, int]:
-        """Pull recent Whoop data and write it through the injected storage.
-
-        Returns ``{"accepted": N, "rejected": 0}``. Rejected is operator-
-        side via the existing ``INGEST_REJECTED`` Prometheus counter
-        the storage layer bumps when it skips an invalid sample.
-        """
-        from .fetch import (
-            fetch_cycles,
-            fetch_recovery,
-            fetch_sleep,
-            fetch_workouts,
-        )
-        from .normalize import (
-            normalize_cycles,
-            normalize_recovery,
-            normalize_sleep,
-            normalize_workouts,
-        )
+    async def _load_valid_token(
+        self,
+        payload: dict[str, Any],
+        *,
+        session: Any,
+        http_client: Any,
+        owner_id: Any,
+        token_store: Any,
+        oauth_config: Any,
+    ):
+        """Return a non-expired OAuthToken or None (no token stored)."""
         from .oauth import (
             WhoopClientConfig,
             WhoopOAuthError,
             refresh_access_token,
         )
 
-        storage = payload["storage"]
-        session = payload["session"]
-        http_client = payload["http_client"]
-        owner_id = payload.get("owner_id", DEFAULT_OWNER_ID)
-        since: datetime | None = payload.get("since")
-
-        token_store = payload.get("token_store")
-        if token_store is None:
-            from storage.timescale import oauth_tokens as token_store  # type: ignore[no-redef]
-
-        oauth_config: WhoopClientConfig | None = payload.get("oauth_config")
-
-        # 1. Load token. No token = nothing to do until operator authorizes.
         token = await token_store.get_token(session, provider=PROVIDER, owner_id=owner_id)
         if token is None:
-            log.warning("whoop: no stored token for owner=%s — skip poll", owner_id)
-            return {"accepted": 0, "rejected": 0}
+            return None
 
-        # 2. Refresh if expired (or close to it — see OAuthToken.is_expired leeway).
         if token.is_expired():
             if oauth_config is None:
                 oauth_config = WhoopClientConfig.from_env()
             if not token.refresh_token:
-                # Expired with no refresh token = unrecoverable; surface to operator.
                 msg = "whoop access token expired and no refresh_token stored"
                 await token_store.record_refresh_failure(
                     session, provider=PROVIDER, owner_id=owner_id, error_message=msg
@@ -154,6 +130,54 @@ class WhoopSource(Source):
                     error_message=str(e),
                 )
                 raise
+
+        return token
+
+    async def ingest(self, payload: dict[str, Any]) -> dict[str, int]:
+        """Pull recent Whoop data and write it through the injected storage.
+
+        Returns ``{"accepted": N, "rejected": 0}``. Rejected is operator-
+        side via the existing ``INGEST_REJECTED`` Prometheus counter
+        the storage layer bumps when it skips an invalid sample.
+        """
+        from .fetch import (
+            fetch_cycles,
+            fetch_recovery,
+            fetch_sleep,
+            fetch_workouts,
+        )
+        from .normalize import (
+            normalize_cycles,
+            normalize_recovery,
+            normalize_sleep,
+            normalize_workouts,
+        )
+        from .oauth import WhoopClientConfig
+
+        storage = payload["storage"]
+        session = payload["session"]
+        http_client = payload["http_client"]
+        owner_id = payload.get("owner_id", DEFAULT_OWNER_ID)
+        since: datetime | None = payload.get("since")
+
+        token_store = payload.get("token_store")
+        if token_store is None:
+            from storage.timescale import oauth_tokens as token_store  # type: ignore[no-redef]
+
+        oauth_config: WhoopClientConfig | None = payload.get("oauth_config")
+
+        # 1. Load token. No token = nothing to do until operator authorizes.
+        token = await self._load_valid_token(
+            payload,
+            session=session,
+            http_client=http_client,
+            owner_id=owner_id,
+            token_store=token_store,
+            oauth_config=oauth_config,
+        )
+        if token is None:
+            log.warning("whoop: no stored token for owner=%s — skip poll", owner_id)
+            return {"accepted": 0, "rejected": 0}
 
         # 3. Pick a cursor: explicit since= wins; otherwise default lookback.
         effective_since = since if since is not None else datetime.now(UTC) - DEFAULT_LOOKBACK
@@ -199,6 +223,82 @@ class WhoopSource(Source):
             accepted,
             len(per_metric),
             effective_since.isoformat(),
+        )
+        return {"accepted": accepted, "rejected": 0}
+
+    async def handle_webhook(self, payload: dict[str, Any]) -> dict[str, int]:
+        """Fetch + ingest the single Whoop resource referenced by a webhook event."""
+        from .fetch import (
+            PATH_RECOVERY,
+            PATH_SLEEP,
+            PATH_WORKOUT,
+            fetch_one,
+        )
+        from .normalize import (
+            normalize_recovery,
+            normalize_sleep,
+            normalize_workouts,
+        )
+        from .oauth import WhoopClientConfig
+
+        event = payload["event"]
+        event_type = event.get("type") if isinstance(event, dict) else None
+        resource_id = event.get("id") if isinstance(event, dict) else None
+        if not isinstance(event_type, str) or not resource_id:
+            raise ValueError("whoop webhook event missing type/id")
+
+        resolved_path: str | None = None
+        normalizer = None
+        if "recovery" in event_type:
+            resolved_path = f"{PATH_RECOVERY}/{resource_id}"
+            normalizer = normalize_recovery
+        elif "sleep" in event_type:
+            resolved_path = f"{PATH_SLEEP}/{resource_id}"
+            normalizer = normalize_sleep
+        elif "workout" in event_type:
+            resolved_path = f"{PATH_WORKOUT}/{resource_id}"
+            normalizer = normalize_workouts
+        else:
+            return {"accepted": 0, "rejected": 0}
+
+        storage = payload["storage"]
+        session = payload["session"]
+        http_client = payload["http_client"]
+        owner_id = payload.get("owner_id", DEFAULT_OWNER_ID)
+
+        token_store = payload.get("token_store")
+        if token_store is None:
+            from storage.timescale import oauth_tokens as token_store  # type: ignore[no-redef]
+
+        oauth_config: WhoopClientConfig | None = payload.get("oauth_config")
+        token = await self._load_valid_token(
+            payload,
+            session=session,
+            http_client=http_client,
+            owner_id=owner_id,
+            token_store=token_store,
+            oauth_config=oauth_config,
+        )
+        if token is None:
+            log.warning("whoop webhook: no stored token for owner=%s — skip event", owner_id)
+            return {"accepted": 0, "rejected": 0}
+
+        data = await fetch_one(http_client, access_token=token.access_token, path=resolved_path)
+        normalized = normalizer([data])
+        device_id = await storage.get_or_create_device(session, DEVICE_NAME)
+        accepted = 0
+        for metric, samples in normalized.items():
+            if samples:
+                accepted += await storage.ingest_metric(
+                    session, device_id, metric, samples, owner_id
+                )
+
+        log.info(
+            "whoop webhook complete owner=%s accepted=%d event_type=%s resource_id=%s",
+            owner_id,
+            accepted,
+            event_type,
+            resource_id,
         )
         return {"accepted": accepted, "rejected": 0}
 
