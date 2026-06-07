@@ -31,6 +31,17 @@ What it shows:
 - recent sleep, resting HR, SpO2, and source attribution
 - a conservative room response layer where manual control wins
 
+Included example automations:
+
+- `Room health - Metadata sync` keeps the dashboard reason text current
+- `Room response - reduce stimulation` can dim/warm the room when the derived
+  room state stays overloaded
+- `Room response - evening recovery after short sleep` can bias the evening
+  lighting warmer after a short sleep night
+
+The two room-response automations ship disabled by default. Edit
+`light.your_room_light`, review the thresholds, then enable them manually.
+
 Required custom cards:
 
 - `button-card`
@@ -63,7 +74,7 @@ Install those through HACS before importing the dashboard.
 5. Create a new dashboard, open the raw config editor, and paste the
    contents of `dashboards/nervous-system-core.raw-lovelace.json`.
 6. Edit `light.your_room_light` in the package before enabling the example
-   room response automation.
+   room response automations.
 
 ## Direct SQL example
 

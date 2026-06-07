@@ -191,3 +191,43 @@ automation:
         data:
           brightness_pct: 65
           color_temp_kelvin: 2700
+
+  - id: hdh_evening_recovery_after_short_sleep
+    alias: Room response - evening recovery after short sleep
+    initial_state: false
+    mode: single
+    trigger:
+      - platform: time
+        at: "20:30:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.health_adaptive_enabled
+        state: "on"
+      - condition: template
+        value_template: >-
+          {{ is_number(states('sensor.healthsave_last_sleep_hours')) and
+             states('sensor.healthsave_last_sleep_hours') | float < 6 }}
+    action:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.lighting_mode_brightness_percent
+        data:
+          value: 70
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.lighting_mode
+        data:
+          option: Recovery
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.room_health_reason
+        data:
+          value: >-
+            Short sleep last night; evening room response is biasing warmer and less stimulating.
+      # Replace this with your real room light before turning the automation on.
+      - service: light.turn_on
+        target:
+          entity_id: light.your_room_light
+        data:
+          brightness_pct: 70
+          color_temp_kelvin: 2700
