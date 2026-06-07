@@ -46,6 +46,7 @@ from ..ingestion.storage import (
 from .deps import get_session, verify_api_key
 from .metrics import (
     CANONICAL_DUAL_WRITE,
+    CANONICAL_REJECTED,
     DUAL_WRITE_DIVERGENCE,
     INGEST_BATCHES,
     INGEST_DURATION,
@@ -434,7 +435,21 @@ async def _write_canonical_observations(
         CANONICAL_DUAL_WRITE.labels(metric=metric, result="ok").inc(result.accepted)
     if result.rejected:
         CANONICAL_DUAL_WRITE.labels(metric=metric, result="rejected").inc(result.rejected)
+        # RELIABILITY-004: also record WHY, per reason, so a systematic mapping
+        # regression (e.g. a case-sensitive code lookup rejecting every sleep
+        # sample) is visible per metric+reason instead of a faceless scalar.
+        for rejection in result.rejections:
+            CANONICAL_REJECTED.labels(
+                metric=metric, reason=_rejection_reason_label(rejection.reason)
+            ).inc()
     return result
+
+
+def _rejection_reason_label(reason: str) -> str:
+    """Bound Prometheus label cardinality: keep the reason PREFIX only, so a
+    dynamic suffix like ``unmapped_metric:heart_rate`` collapses to
+    ``unmapped_metric``."""
+    return reason.split(":", 1)[0]
 
 
 def _resolve_storage(request: Request) -> IngestStorage:
