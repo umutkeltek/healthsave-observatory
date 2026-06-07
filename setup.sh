@@ -272,9 +272,18 @@ write_env_file() {
 DB_PASSWORD=${db_password}
 GRAFANA_PASSWORD=${grafana_password}
 
-# Optional: set an API key to require X-API-Key header on requests
-# Leave empty to allow unauthenticated access (fine if behind VPN/firewall)
+# Grafana exposes the full PHI dashboard. It binds to 127.0.0.1 (loopback) by
+# default; set GRAFANA_BIND=0.0.0.0 to reach it from other devices on your LAN.
+GRAFANA_BIND=127.0.0.1
+
+# Access control. API_KEY gates the API via the X-API-Key header; setup leaves
+# it as chosen above (empty = open access, and the server logs a loud warning at
+# startup). ALLOW_NO_AUTH=true acknowledges open mode silently. ALLOW_MULTI_USER
+# =true honors the X-User-Id header for per-owner data (default off = single
+# owner; leave off unless you run a trusted multi-user household).
 API_KEY=${api_key}
+ALLOW_NO_AUTH=
+ALLOW_MULTI_USER=
 
 # Optional image pins. Override only when deliberately upgrading.
 TIMESCALE_IMAGE=timescale/timescaledb:2.17.2-pg16

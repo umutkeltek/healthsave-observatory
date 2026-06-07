@@ -38,6 +38,9 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:?DB_PASSWORD must be set (see .env.example)}@db:5432/healthsave
       API_KEY: ${API_KEY:-}
+      # SECURITY-001/002: access-control flags read by the API process.
+      ALLOW_NO_AUTH: ${ALLOW_NO_AUTH:-}
+      ALLOW_MULTI_USER: ${ALLOW_MULTI_USER:-}
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
