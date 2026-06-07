@@ -76,6 +76,21 @@ Install those through HACS before importing the dashboard.
 6. Edit `light.your_room_light` in the package before enabling the example
    room response automations.
 
+## Quick configuration
+
+You only ever need to touch a few lines in `nervous-system-core-package.yaml`:
+
+| What | Where | Default |
+|---|---|---|
+| **Your room light** (required) | `light.your_room_light` - appears twice, one per `Room response` automation | placeholder |
+| **Enable the responses** | both `Room response - *` automations ship `initial_state: false`; turn the `Health adaptive enabled` toggle on, then enable them | off |
+| "Overloaded" cutoff | `nervous load >= 55` in the `Room Health State` / `Health Stress Elevated` templates | 55 |
+| Low-recovery cutoff | `recovery score < 45` in the same templates | 45 |
+| "Short sleep" definition | `last sleep < 6` in the evening-recovery automation | 6 h |
+| Brightness / colour temp | each automation's action `data:` (`brightness_pct`, `color_temp_kelvin`) | 65-70% / 2700 K |
+
+Everything else is derived automatically from the `sensor.healthsave_*` entities. Start with the automations disabled, watch the dashboard for a day, then enable once the room state matches how you actually feel.
+
 ## Direct SQL example
 
 `healthsave-package.yaml` is the older direct-SQL example. It is still useful

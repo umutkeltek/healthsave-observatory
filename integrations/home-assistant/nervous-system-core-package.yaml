@@ -1,9 +1,21 @@
 # Home Assistant package for the Nervous-System Core example dashboard.
 #
+# ── CONFIGURE THIS (only a few lines) ────────────────────────────────
+# 1. REQUIRED: replace `light.your_room_light` with your real light entity.
+#    It appears TWICE below (one per "Room response" automation) - change both.
+# 2. ENABLE: both "Room response - *" automations ship disabled
+#    (initial_state: false). Flip the "Health adaptive enabled" toggle on,
+#    then enable the automations once you trust them.
+# 3. OPTIONAL TUNING - thresholds are inline and labelled where they're used:
+#      - "Overloaded" cutoff ......... nervous load >= 55
+#      - low-recovery cutoff ......... recovery score < 45
+#      - "short sleep" definition .... last sleep < 6 hours
+#      - brightness / colour temps ... each automation's action `data:`
+# ─────────────────────────────────────────────────────────────────────
+#
 # Requirements:
 # - The Health Data Hub MQTT bridge is enabled.
 # - MQTT discovery has created the default sensor.healthsave_* entities.
-# - Replace light.your_room_light before enabling the example automation.
 
 input_boolean:
   health_adaptive_enabled:
