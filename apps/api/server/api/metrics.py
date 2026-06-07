@@ -6,6 +6,7 @@ from fastapi import APIRouter, Response
 from observability.metrics import (
     AI_BRIEFING_RUNS,
     CANONICAL_DUAL_WRITE,
+    CANONICAL_REJECTED,
     DUAL_WRITE_DIVERGENCE,
     INGEST_BATCHES,
     INGEST_DURATION,
@@ -25,6 +26,7 @@ router = APIRouter()
 __all__ = [
     "AI_BRIEFING_RUNS",
     "CANONICAL_DUAL_WRITE",
+    "CANONICAL_REJECTED",
     "DUAL_WRITE_DIVERGENCE",
     "INGEST_BATCHES",
     "INGEST_DURATION",

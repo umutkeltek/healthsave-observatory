@@ -85,6 +85,16 @@ DUAL_WRITE_DIVERGENCE = Counter(
     "silently stale while the batch reported success.",
     ["metric"],
 )
+CANONICAL_REJECTED = Counter(
+    "hdh_canonical_rejected",
+    "Per-reason canonical-normalizer rejections from /api/apple/batch "
+    "(RELIABILITY-004). Complements hdh_canonical_dual_write{result=rejected} "
+    "(a faceless scalar) with the WHY: reason is the rejection-reason PREFIX "
+    "(e.g. unmapped_metric, unmappable_code, missing_value, "
+    "missing_or_unparseable_time), so a systematic mapping regression is visible "
+    "per metric+reason. Dynamic suffixes are stripped to bound label cardinality.",
+    ["metric", "reason"],
+)
 
 
 def reset_metrics() -> None:
@@ -101,6 +111,7 @@ def reset_metrics() -> None:
     _reset_metric_children(CANONICAL_DUAL_WRITE)
     _reset_metric_children(SYNC_RECEIPT_WRITE_FAILURES)
     _reset_metric_children(DUAL_WRITE_DIVERGENCE)
+    _reset_metric_children(CANONICAL_REJECTED)
 
 
 def _reset_metric_children(metric: MetricWrapperBase) -> None:
