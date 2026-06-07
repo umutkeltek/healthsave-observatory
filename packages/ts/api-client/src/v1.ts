@@ -414,6 +414,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Data */
+        get: operations["export_data_api_v2_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/export/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Export Metrics */
+        get: operations["list_export_metrics_api_v2_export_metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/insights/correlations": {
         parameters: {
             query?: never;
@@ -623,6 +657,23 @@ export interface paths {
         get: operations["setup_diagnostics_api_v2_setup_diagnostics_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/sources/whoop/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Whoop Webhook */
+        post: operations["whoop_webhook_api_v2_sources_whoop_webhook_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1771,6 +1822,75 @@ export interface operations {
             };
         };
     };
+    export_data_api_v2_export_get: {
+        parameters: {
+            query: {
+                metric: string;
+                format?: string;
+                from?: string | null;
+                to?: string | null;
+                days?: number | null;
+                limit?: number | null;
+            };
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_export_metrics_api_v2_export_metrics_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_correlations_api_v2_insights_correlations_get: {
         parameters: {
             query?: {
@@ -2043,6 +2163,26 @@ export interface operations {
         };
     };
     setup_diagnostics_api_v2_setup_diagnostics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    whoop_webhook_api_v2_sources_whoop_webhook_post: {
         parameters: {
             query?: never;
             header?: never;
