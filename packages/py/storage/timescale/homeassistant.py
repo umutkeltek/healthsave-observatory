@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 
 from homeassistant_mqtt.snapshot import (
@@ -13,6 +14,28 @@ from homeassistant_mqtt.snapshot import (
 )
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+def _fresh_hours(name: str, default: int) -> int:
+    """Freshness window (hours) for an HA read-model query, overridable via env.
+
+    A health value older than the window reads as stale and the HA entity goes
+    unavailable — correct by default. Widen only if a source syncs less often
+    than the window and you'd rather surface the last value than 'unavailable'.
+    """
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        parsed = int(raw)
+    except ValueError:
+        return default
+    return parsed if parsed > 0 else default
+
+
+# Defaults preserve prior behavior (aggregate latest HR 6h, per-source HR 72h).
+_HR_FRESH_HOURS = _fresh_hours("HA_MQTT_HR_FRESH_HOURS", 6)
+_SOURCE_HR_FRESH_HOURS = _fresh_hours("HA_MQTT_SOURCE_HR_FRESH_HOURS", 72)
 
 
 class TimescaleHealthSnapshotRepository:
@@ -44,11 +67,12 @@ class TimescaleHealthSnapshotRepository:
                         """
                         SELECT bpm
                         FROM heart_rate
-                        WHERE time > now() - interval '6 hours'
+                        WHERE time > now() - make_interval(hours => :hrs)
                         ORDER BY time DESC
                         LIMIT 1
                         """
-                    )
+                    ),
+                    {"hrs": _HR_FRESH_HOURS},
                 )
             ).scalar_one_or_none()
         )
@@ -309,10 +333,11 @@ class TimescaleHealthSnapshotRepository:
                     """
                     SELECT DISTINCT ON (source_id) source_id, bpm
                     FROM heart_rate
-                    WHERE time > now() - interval '72 hours'
+                    WHERE time > now() - make_interval(hours => :hrs)
                     ORDER BY source_id, time DESC
                     """
-                )
+                ),
+                {"hrs": _SOURCE_HR_FRESH_HOURS},
             )
         ).all()
 
