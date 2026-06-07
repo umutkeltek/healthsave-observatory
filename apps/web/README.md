@@ -18,11 +18,17 @@ the `/api/*` rewrite (next.config.mjs) covers any client-side fetch.
 
 ## Status
 
-Walking skeleton: an insight-first Heart Rate card (latest + trend + sparkline)
-and a Sleep Stages hypnogram, both driven live by the v2 read API. Empty/no-data
-and backend-unreachable states are handled. Next: design-system polish, more
-verticals, and the AI narration cards once the local LLM layer lands.
+**Pre-release.** This dashboard is in active development and is **not part of the
+default `docker compose` stack yet** — run it manually (see Run above). It's the
+eventual insight-first replacement for Grafana; until it lands, Grafana stays the
+supported visualization surface.
+
+What's already here, all driven by the v2 read API: a Today/Recovery hero and a
+Baseline Ribbon, Heart Rate and Sleep cards, plus Evidence, Experiments,
+Privacy, Readiness, and Weekly Brief cards — across the home, evidence,
+experiments, privacy, data, and demo pages. Empty/no-data and
+backend-unreachable states are handled. Next: design-system polish, more
+verticals, and wiring the AI narration cards to the local LLM layer.
 
 > Visual verification (Interceptor) requires the full stack running (API +
-> TimescaleDB + some ingested data). This commit is verified at the
-> build/typecheck level only.
+> TimescaleDB + some ingested data); CI verifies it at the build/typecheck level.
