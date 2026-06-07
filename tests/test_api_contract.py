@@ -9,7 +9,13 @@ from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy.exc import DataError, IntegrityError, InterfaceError, OperationalError
+from sqlalchemy.exc import (
+    DataError,
+    IntegrityError,
+    InterfaceError,
+    OperationalError,
+    ProgrammingError,
+)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -847,9 +853,16 @@ async def test_batch_records_failed_sync_receipt_when_ingest_raises():
         },
     )()
 
-    with pytest.raises(RuntimeError, match="forced ingest failure"):
+    # CONTRACT-001: a plugin RuntimeError is deterministic (a retry fails
+    # identically), so it is now returned as 422 — NOT a 5xx the frozen iOS
+    # client would retry forever. The failed receipt is still recorded and the
+    # transaction rolled back before classification.
+    with pytest.raises(HTTPException) as exc_info:
         await server.apple_batch(request, session)
 
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["error_code"] == "unprocessable_samples"
+    assert "forced ingest failure" in exc_info.value.detail["message"]
     receipt = session.insert_params_for("healthsave_sync_receipts")
     assert session.rolled_back is True
     assert receipt is not None
@@ -975,6 +988,58 @@ async def test_batch_reraises_interface_error_and_records_failed_receipt():
 
 
 @pytest.mark.asyncio
+async def test_batch_returns_422_for_programming_error_not_500():
+    """CONTRACT-001 regression: a ProgrammingError (schema drift, or an ON
+    CONFLICT key with no matching unique index) is deterministic and was NOT in
+    the old allow-list, so it used to surface as HTTP 500 — which the frozen iOS
+    client retries forever, wedging the metric. It must now be a 422 so the
+    client retires the poison batch and recovers via Backfill."""
+    session = FakeSession()
+    request = _request_with_raising_plugin(
+        ProgrammingError("INSERT ...", {}, Exception('column "qty" does not exist'))
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await server.apple_batch(request, session)
+
+    receipt = _assert_failed_receipt(session)
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["error_code"] == "unprocessable_samples"
+    assert "does not exist" in exc_info.value.detail["message"]
+    assert receipt["records_accepted"] == 0
+
+
+@pytest.mark.asyncio
+async def test_batch_returns_422_for_unexpected_deterministic_error_not_500():
+    """CONTRACT-001 regression: the inverted policy DEFAULTS unknown errors to
+    422 (deterministic), not 5xx. A KeyError/TypeError-class bug in the write
+    path must not return a 5xx the frozen client would retry forever."""
+    session = FakeSession()
+    request = _request_with_raising_plugin(KeyError("inserted_new"))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await server.apple_batch(request, session)
+
+    _assert_failed_receipt(session)
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["error_code"] == "unprocessable_samples"
+
+
+@pytest.mark.asyncio
+async def test_batch_reraises_builtin_timeout_error_as_transient():
+    """CONTRACT-001: genuinely transient infra errors stay 5xx so the client
+    DOES retry. A builtin TimeoutError (== asyncio.TimeoutError) is transient
+    and must propagate, not be downgraded to a 422."""
+    session = FakeSession()
+    request = _request_with_raising_plugin(TimeoutError("statement timeout"))
+
+    with pytest.raises(TimeoutError, match="statement timeout"):
+        await server.apple_batch(request, session)
+
+    _assert_failed_receipt(session)
+
+
+@pytest.mark.asyncio
 async def test_batch_records_failed_sync_receipt_when_canonical_write_fails(monkeypatch):
     import server.api.ingest as ingest_module
 
@@ -1003,9 +1068,15 @@ async def test_batch_records_failed_sync_receipt_when_canonical_write_fails(monk
         },
     )
 
-    with pytest.raises(RuntimeError, match="canonical write failed"):
+    # CONTRACT-001: a canonical-write RuntimeError is deterministic → 422, not a
+    # 5xx the frozen iOS client would retry forever. Failed receipt still
+    # recorded; the per-metric projection must not have run.
+    with pytest.raises(HTTPException) as exc_info:
         await server.apple_batch(request, session)
 
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["error_code"] == "unprocessable_samples"
+    assert "canonical write failed" in exc_info.value.detail["message"]
     receipt = session.insert_params_for("healthsave_sync_receipts")
     assert session.rolled_back is True
     assert receipt is not None
