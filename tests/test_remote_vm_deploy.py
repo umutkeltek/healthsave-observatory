@@ -121,6 +121,17 @@ def test_remote_vm_deploy_script_recreates_grafana_after_replacing_remote_tree()
     assert "up -d --no-deps --force-recreate grafana" in script
 
 
+def test_remote_vm_deploy_script_self_heals_required_secrets():
+    """SECURITY-005: compose now hard-requires GRAFANA_PASSWORD + DB_PASSWORD.
+    A redeploy must backfill a missing GRAFANA_PASSWORD (so a .env predating
+    secret generation doesn't break), and fail loudly -- not cryptically -- on a
+    missing DB_PASSWORD."""
+    script = (ROOT / "deploy" / "remote-vm" / "deploy.sh").read_text()
+
+    assert "backfilled a missing GRAFANA_PASSWORD" in script
+    assert "DB_PASSWORD missing from remote .env" in script
+
+
 def test_remote_vm_readme_documents_external_database_mode():
     readme = (ROOT / "deploy" / "remote-vm" / "README.md").read_text()
 
