@@ -94,6 +94,17 @@ You can change the model later (see Troubleshooting).
 
 If you're on something smaller than 6 GB RAM (a Pi 4, an old NAS), `setup.sh` will recommend skipping AI entirely. The ingest pipeline still runs - you just won't get the morning narrative.
 
+## Running on Proxmox, a NAS, or a homelab box
+
+It's plain Docker Compose, so anything that runs Docker runs this. On Proxmox specifically:
+
+- **Easiest: a small VM.** Create a Debian 12 / Ubuntu 22.04+ VM, give it ~2 vCPU and 4 GB RAM (comfortable for ingest + TimescaleDB + Grafana), install Docker, then run `./setup.sh`. Add RAM - or pass through an NVIDIA GPU - only if you want the local AI briefing (see the table above for the RAM-to-model mapping).
+- **Container route: a Docker-capable LXC.** Works too, but Docker-in-LXC wants a privileged container (or `nesting=1` + `keyctl=1`) and is fiddlier than a VM. If you're unsure, use the VM.
+- **Storage.** TimescaleDB is the only stateful piece - point its Docker volume at a disk you back up. History grows slowly (roughly megabytes per month for one person), so it stays light.
+- **Reaching it from your phone.** HealthSave syncs to the VM/LXC's LAN IP on port 8000, not `localhost`; `./setup.sh doctor` prints the exact URL to paste into the app.
+
+Don't expose plain HTTP to the internet - if you need remote access, put it behind a reverse proxy (see [HTTPS / Reverse Proxy](#https--reverse-proxy)).
+
 ## How the AI analysis works
 
 The briefing isn't "feed everything to ChatGPT and hope". It's a **two-brain system**:
