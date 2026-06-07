@@ -46,6 +46,7 @@ from ..ingestion.storage import (
 from .deps import get_session, verify_api_key
 from .metrics import (
     CANONICAL_DUAL_WRITE,
+    DUAL_WRITE_DIVERGENCE,
     INGEST_BATCHES,
     INGEST_DURATION,
     INGEST_ROWS,
@@ -364,6 +365,26 @@ async def apple_batch(
             SYNC_RECEIPT_WRITE_FAILURES.labels(metric=metric).inc()
         except Exception:  # pragma: no cover - metrics import optional
             log.debug("failed to record SYNC_RECEIPT_WRITE_FAILURES{metric=%s}", metric)
+
+    # RELIABILITY-001: detect a silent dual-write divergence — the batch reported
+    # success but one of the two writers landed NOTHING. Aggregation (sleep stages
+    # -> one session) and in-batch dedupe make raw COUNTS differ legitimately, so
+    # we flag only the unambiguous case: exactly one side wrote rows and the other
+    # wrote zero (canonical mapped but the v1/Grafana/HA projection got nothing,
+    # or a metric written only via the legacy path with no canonical observation).
+    # Telemetry only — never affects the response.
+    canonical_accepted = int(getattr(canonical_result, "accepted", 0) or 0)
+    if (canonical_accepted > 0) != (count > 0):
+        log.warning(
+            "dual-write divergence for %s: canonical_accepted=%d projection_accepted=%d",
+            metric,
+            canonical_accepted,
+            count,
+        )
+        try:
+            DUAL_WRITE_DIVERGENCE.labels(metric=metric).inc()
+        except Exception:  # pragma: no cover - metrics import optional
+            log.debug("failed to record DUAL_WRITE_DIVERGENCE{metric=%s}", metric)
     _observe_ingest_metrics(metric=metric, rows=count, started_at=started_at)
     log.info("Ingested %d records for %s (batch %d/%d)", count, metric, batch_idx + 1, total)
     _schedule_anomaly_check_if_enabled(request, background_tasks, count)

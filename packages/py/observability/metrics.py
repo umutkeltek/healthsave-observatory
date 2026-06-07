@@ -75,6 +75,16 @@ SYNC_RECEIPT_WRITE_FAILURES = Counter(
     "that metric even though ingestion succeeded.",
     ["metric"],
 )
+DUAL_WRITE_DIVERGENCE = Counter(
+    "hdh_dual_write_divergence",
+    "Ingest batches where exactly ONE of the two writers landed rows "
+    "(RELIABILITY-001): the canonical observation write and the per-metric v1 "
+    "projection (what Grafana/Home Assistant read) disagreed on whether anything "
+    "was written. Aggregation/dedupe count differences are NOT flagged -- only "
+    "wrote-something vs wrote-nothing. Non-zero = a consumer-facing table may be "
+    "silently stale while the batch reported success.",
+    ["metric"],
+)
 
 
 def reset_metrics() -> None:
@@ -90,6 +100,7 @@ def reset_metrics() -> None:
     _reset_metric_children(LEDGER_LISTENER_FAILURES)
     _reset_metric_children(CANONICAL_DUAL_WRITE)
     _reset_metric_children(SYNC_RECEIPT_WRITE_FAILURES)
+    _reset_metric_children(DUAL_WRITE_DIVERGENCE)
 
 
 def _reset_metric_children(metric: MetricWrapperBase) -> None:
