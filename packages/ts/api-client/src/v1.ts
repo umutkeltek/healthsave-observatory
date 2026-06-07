@@ -251,9 +251,7 @@ export interface paths {
          * List Proposals
          * @description List recent proposals.
          *
-         *     Reads through :func:`storage.timescale.agents.fetch_recent_proposals`
-         *     — the Phase 7-B repository owns the SQL (default newest-first via
-         *     the supplied ORDER BY). Per the Phase 5 storage-zone rule, the
+         *     Reads through the agent repository. Per the Phase 5 storage-zone rule, the
          *     route never composes its own query against ``action_proposals``.
          */
         get: operations["list_proposals_api_v2_agents_proposals_get"];
@@ -279,8 +277,8 @@ export interface paths {
          * @description Record the operator's decision on one proposal.
          *
          *     Writes a single row into ``action_decisions`` via
-         *     :func:`storage.timescale.agents.decide_action`. The decision is
-         *     append-only — re-deciding (e.g. flipping a rejection to an
+         *     :class:`storage.ports.AgentRepository`. The decision is append-only —
+         *     re-deciding (e.g. flipping a rejection to an
          *     approval) writes a new row, and downstream readers take the
          *     newest. The supervisor / executor path that picks up an approved
          *     proposal is Phase 7-F territory; Phase 7-E only persists the
@@ -491,7 +489,11 @@ export interface paths {
         put?: never;
         /**
          * Trigger
-         * @description Run an analysis job on demand. Currently supports ``correlation_analysis``.
+         * @description Run an analysis job on demand.
+         *
+         *     Supports ``correlation_analysis`` and ``recovery_check``. Each checks its
+         *     config block is enabled, runs the Brain-1 engine job inline through the
+         *     pipeline_runs ledger, and reports completed vs skipped.
          */
         post: operations["trigger_api_v2_insights_trigger_post"];
         delete?: never;
@@ -1119,7 +1121,8 @@ export interface components {
         };
         /**
          * TriggerBody
-         * @description v2 trigger request — extensible by ``type`` (correlation_analysis today).
+         * @description v2 trigger request — extensible by ``type`` (correlation_analysis,
+         *     recovery_check).
          */
         TriggerBody: {
             /**
