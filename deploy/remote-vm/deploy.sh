@@ -23,6 +23,11 @@ DB_HOST_PROVIDED="${HEALTH_DATA_HUB_DB_HOST:+yes}"
 DB_PORT_PROVIDED="${HEALTH_DATA_HUB_DB_PORT:+yes}"
 DB_NAME_PROVIDED="${HEALTH_DATA_HUB_DB_NAME:+yes}"
 DB_USER_PROVIDED="${HEALTH_DATA_HUB_DB_USER:+yes}"
+# A redeploy must NEVER mint new secrets. If the remote .env is missing, the deploy
+# fails loudly instead of silently generating a fresh API_KEY/DB_PASSWORD — which on
+# 2026-06-07 rotated the live API key out from under the iOS device and stopped sync
+# (every POST /api/apple/batch -> 401). Only an explicit first-time bootstrap opts in.
+ALLOW_ENV_BOOTSTRAP="${HEALTH_DATA_HUB_ALLOW_ENV_BOOTSTRAP:-}"
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -82,6 +87,13 @@ git archive --format=tar "$COMMIT_SHA" \
 ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" "sudo bash -lc '
 set -euo pipefail
 if [ ! -f \"$REMOTE_ENV_DIR/.env\" ]; then
+  if [ \"$ALLOW_ENV_BOOTSTRAP\" != \"1\" ]; then
+    echo \"FATAL: no .env at $REMOTE_ENV_DIR/.env — refusing to mint new secrets on a redeploy.\" >&2
+    echo \"       A fresh API_KEY/DB_PASSWORD here would break iOS sync (401) and DB auth.\" >&2
+    echo \"       First-time install on a NEW host? re-run with HEALTH_DATA_HUB_ALLOW_ENV_BOOTSTRAP=1.\" >&2
+    echo \"       Existing host that lost its .env? restore it from backup — do NOT bootstrap.\" >&2
+    exit 1
+  fi
   DB_PASSWORD=\$(openssl rand -hex 24)
   API_KEY=\$(openssl rand -hex 24)
   GRAFANA_PASSWORD=\$(openssl rand -hex 24)
