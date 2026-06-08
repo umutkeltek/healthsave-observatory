@@ -69,9 +69,9 @@ the core (a CLA is what would let us sell commercial exceptions). Until then, DC
   as an independent `pip`/`npm` package later, give that directory its own build manifest
   (`pyproject.toml`); `packages/ts/api-client` already has its own `package.json`. This is a
   packaging step, not a directory move.
-- **Copyright holder.** The notices currently read `HealthSave`. Set this to your legal name or
-  entity (e.g. once an entity exists) across [`NOTICE`](./NOTICE) and the directory `LICENSE`
-  appendix lines.
+- **Copyright holder.** The notices read **`Umut Keltek`** (the individual rights-holder),
+  pending registration of a brand/entity — switch to the entity name once it exists, across
+  [`NOTICE`](./NOTICE) and the directory `LICENSE` appendix lines.
 
 ## Inventory of license files
 
