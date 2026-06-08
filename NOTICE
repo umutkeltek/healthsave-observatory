@@ -10,7 +10,7 @@ Licensing is split by layer (see LICENSING.md):
   - The product core (repository root and all other paths) is licensed under
     the Elastic License 2.0 (source-available).
 
-"HealthSave", "HealthSave Observatory", and "HealthSave Capture" are trademarks
+"HealthSave" and "HealthSave Observatory" are trademarks
 of the HealthSave project. Use of the marks is governed by TRADEMARK.md and is
 not granted by the source-code licenses.
 

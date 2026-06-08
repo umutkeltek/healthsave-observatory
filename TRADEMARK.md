@@ -8,7 +8,6 @@ licenses grant you, but you may not use our marks to pass your version off as ou
 
 - **HealthSave**
 - **HealthSave Observatory**
-- **HealthSave Capture**
 - Associated logos and wordmarks.
 
 (Asserted as common-law marks; ™ used accordingly. Registration may follow.)
