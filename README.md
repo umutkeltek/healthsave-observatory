@@ -10,7 +10,7 @@
 [![Download on the App Store](https://img.shields.io/badge/Download-App%20Store-0D96F6?logo=apple&logoColor=white)](https://apps.apple.com/app/id6759843047)
 
 > **Your whole body, in one place you own — and it actually tells you something.**
-> HealthSave Observatory is a **self-hosted private body observatory**. It captures your health data from *any* device, builds a longitudinal record you own, explains what's changing with evidence-linked findings and weekly **Body Briefs**, and exposes a private API your own scripts and agents can query — with **raw data that never leaves your hardware unless you choose to send it**.
+> HealthSave Observatory is a **self-hosted private body observatory**. It captures your health data from *any* device, builds a longitudinal record you own, explains what's changing with evidence-linked findings and **Body Briefs**, and exposes a private API your own scripts and tools can query — with **raw data that never leaves your hardware unless you choose to send it**.
 
 > **New here?** [BRIDGE.md](BRIDGE.md) is the one-page tour: pipeline diagram, who it's for, what's local vs self-hosted, setup gotchas. Read that first if 500 lines of README is too much.
 
@@ -22,15 +22,15 @@ It runs entirely on your hardware — a laptop, a NUC, a Mac mini, a Synology, a
 
 ## Just want the app?
 
-[**HealthSave Capture**](https://apps.apple.com/app/id6759843047) (the HealthSave iOS app) is the Apple Health bridge for your Observatory — and it also runs standalone: on-device Dashboard, Trends, and Export to CSV / JSON / PDF, no account, nothing in the cloud. Self-hosting the Observatory is what adds the longitudinal record you own, the dashboard, the Body Briefs, the routes to your other tools, and the private API.
+[**HealthSave**](https://apps.apple.com/app/id6759843047) (the HealthSave iOS app) is the Apple Health bridge for your Observatory — and it also runs standalone: on-device Dashboard, Trends, and Export to CSV / JSON / PDF, no account, nothing in the cloud. Self-hosting the Observatory is what adds the longitudinal record you own, the dashboard, the Body Briefs, the routes to your other tools, and the private API.
 
 ## What you get
 
-- **Universal capture.** Apple Health (via [HealthSave Capture](https://apps.apple.com/app/id6759843047)), Android Health Connect *(in progress)*, direct wearable connectors (Whoop, Amazfit / Zepp), file imports (Garmin, Samsung / Huawei Health), and any registered webhook — all normalized into one canonical, source-tagged record you can query with normal SQL.
+- **Universal capture.** Apple Health (via [HealthSave](https://apps.apple.com/app/id6759843047)), Android Health Connect *(in progress)*, direct wearable connectors (Whoop, Amazfit / Zepp), file imports (Garmin, Samsung / Huawei Health), and any registered webhook — all normalized into one canonical, source-tagged record you can query with normal SQL.
 - **A private Observatory dashboard.** *Today vs your personal baseline*, what changed, how complete the data is, and where each number came from. The web Observatory ([`apps/web/`](apps/web/README.md)) is the primary surface; Grafana ships as an optional power-user view.
-- **Evidence-linked findings & weekly Body Briefs.** Not "feed it to the cloud and hope." A deterministic statistical engine computes each finding — claim, baseline window, effect size, confidence, and what it *cannot* conclude — and a local LLM only narrates it. The **Body Brief** is the thing you come back for.
+- **Evidence-linked findings & Body Briefs.** Not "feed it to the cloud and hope" — a deterministic statistical engine computes the findings and a local LLM only narrates them. A two-brain briefing ships today; the productized weekly **Body Brief** with full finding cards (claim, baseline window, effect size, confidence, and what it *cannot* conclude) is in progress, and it's the thing meant to bring you back.
 - **Source provenance you can trust.** See which device and path produced each number — and when your Apple Watch and Whoop disagree about last night's sleep, see the *disagreement* instead of a fake single truth.
-- **Your own private health API + CLI.** Query your history from your scripts, notebooks, dashboards, or your own AI agents — locally, without handing your data to a third-party API vendor.
+- **Your own private health API.** Query your history from your scripts, notebooks, and dashboards over a typed read API — locally, without handing your data to a third-party API vendor. *(A `healthsave` CLI and a local MCP server, so your own AI agents can query your body data, are on the roadmap.)*
 - **Route it anywhere (optional).** Home Assistant, MQTT, Grafana, webhooks, exports — your data piped to your tools, behind a policy you control.
 - **A trust boundary you can audit.** Default-deny egress: raw observations never leave your host; cloud AI is opt-in and carries only derived, on-device-redacted findings.
 
@@ -42,13 +42,13 @@ The canonical ingest model is **source-agnostic** — Apple Health is the most p
 
 | Source | How it connects | Status |
 |---|---|---|
-| **Apple Health** (Apple Watch, iPhone, and anything that writes to HealthKit — Oura, Garmin, Withings, etc.) | Push, via the [HealthSave Capture](https://apps.apple.com/app/id6759843047) iOS app | Shipped |
+| **Apple Health** (Apple Watch, iPhone, and anything that writes to HealthKit — Oura, Garmin, Withings, etc.) | Push, via the [HealthSave](https://apps.apple.com/app/id6759843047) iOS app | Shipped |
 | **Whoop** | Direct poll plugin — OAuth to the Whoop API, no Apple device needed ([`plugins/sources/whoop`](plugins/sources/whoop)) | Shipped (early; bring your own Whoop developer credentials) |
 | **Amazfit / Zepp** | Direct poll plugin ([`plugins/sources/amazfit`](plugins/sources/amazfit)) | Shipped (early) |
 | **Garmin Connect** | CLI importer ([`scripts/import_garmin.py`](scripts/import_garmin.py)) | Shipped |
 | **Samsung / Huawei Health** | CLI importer, via the Health Sync app ([`scripts/import_samsung.py`](scripts/import_samsung.py)) | Shipped |
-| **Android Health Connect** | Native capture into the generic ingest API | In progress |
-| **Generic webhook / native API** | Any registered source posting canonical observations (HMAC-signed) | In progress |
+| **Android Health Connect** | Native capture into the generic ingest API | Planned |
+| **Generic webhook / native API** | Any registered source posting canonical observations (HMAC-signed) | Planned |
 | **Oura** | Via Apple Health today; a direct connector (modelled on Whoop's) is on the roadmap | Planned (direct) |
 
 Not on the list? If it writes to Apple Health, the iOS bridge forwards it automatically. Otherwise implement the `Source` plugin contract and poll it yourself — that's exactly how the Whoop and Amazfit plugins work — or post canonical observations to the generic ingest API.
@@ -208,14 +208,14 @@ Run `docker compose logs <service>` (e.g. `docker compose logs api`) to see why.
 
 ### Stack
 
-FastAPI + TimescaleDB at the core; a Next.js **Observatory** web app ([`apps/web/`](apps/web/README.md)) as the primary surface; Grafana as an optional power-user view; an optional **Ollama** sidecar for local narration. Python 3.12, async SQLAlchemy with asyncpg, ruff for lint+format, pytest for tests. Ingest (`/api/apple/batch`) is a frozen v1 contract; client-facing read/query surfaces evolve under `/api/v2/`.
+FastAPI + TimescaleDB at the core; a Next.js **Observatory** web app ([`apps/web/`](apps/web/README.md)) as the primary surface (being wired into the default stack); Grafana as the bundled dashboard today (an optional power-user view); an optional **Ollama** sidecar for local narration. Python 3.12, async SQLAlchemy with asyncpg, ruff for lint+format, pytest for tests. Ingest (`/api/apple/batch`) is a frozen v1 contract; client-facing read/query surfaces evolve under `/api/v2/`.
 
 ### Architecture
 
 ```
 CAPTURE (sources in)                        SURFACES & ROUTES (out)
 
-HealthSave Capture (Apple Health) ┐         ┌─► Observatory web app  (apps/web)
+HealthSave (Apple Health)         ┐         ┌─► Observatory web app  (apps/web)
 Android Health Connect *          │         │
 Whoop / Amazfit  (plugins)        ├─► FastAPI ─► TimescaleDB ─┼─► Grafana  (optional)
 Garmin / Samsung (importers)      │  (8000)     (canonical    │
