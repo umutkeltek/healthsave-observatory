@@ -1,5 +1,7 @@
 # HealthSave API Contract
 
+> This file is the **frozen v1 ingest contract** (the byte-stable surface the iOS app depends on). For a payload-level reference to **every** endpoint — v1 *and* v2 read/insights/identity, with request/response examples, auth, and who-calls-what — see [`API_REFERENCE.md`](API_REFERENCE.md).
+
 HealthSave expects the server URL to be the base URL only, for example
 `https://health.example.com`. The app appends the paths below.
 
