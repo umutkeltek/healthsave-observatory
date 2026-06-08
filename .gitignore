@@ -14,7 +14,8 @@ dist/
 # Local-only compose overrides (per-machine ports, etc.)
 docker-compose.override.yml
 
-# Internal planning and agent docs - not for the public repo
-docs/
+# Internal planning and agent docs - not for the public repo.
+# docs/ is now PUBLIC (tracked); internal docs live in docs_private/.
+docs_private/
 agents.md
 AGENTS.md
