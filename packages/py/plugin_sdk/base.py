@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Abstract base classes for the three plugin kinds.
 
 Phase 6 ships THREE kinds (parent ISA originally listed four including

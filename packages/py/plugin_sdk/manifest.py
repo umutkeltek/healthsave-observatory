@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Plugin manifest schema + semver compatibility helpers.
 
 The :class:`~contracts.plugins.PluginManifest` Pydantic model already

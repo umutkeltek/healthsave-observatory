@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Narrative primitives — LLM-generated content with structured evidence.
 
 The v2 dashboard renders briefings token-by-token via SSE; the

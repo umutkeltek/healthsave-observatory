@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Plugin registry — materializes discovered plugins into a JSON index.
 
 The registry file lives at ``plugins/.generated/plugin-registry.json``

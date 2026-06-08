@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """The canonical health observation — the record every v2 normalizer emits.
 
 Device-agnostic: the whole v2 stack keys on ``Observation``, not on per-source

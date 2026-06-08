@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Plugin loader — discover + version-check + import + instantiate.
 
 Phase 7-pre-min establishes a single canonical entry point for loading

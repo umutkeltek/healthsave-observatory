@@ -1,0 +1,19 @@
+HealthSave Observatory
+Copyright 2026 HealthSave
+
+This product includes software developed for the HealthSave Observatory project.
+
+Licensing is split by layer (see LICENSING.md):
+  - Protocol and client surface (contracts/, packages/py/contracts/,
+    packages/ts/api-client/, packages/py/plugin_sdk/) is licensed under the
+    Apache License, Version 2.0.
+  - The product core (repository root and all other paths) is licensed under
+    the Elastic License 2.0 (source-available).
+
+"HealthSave", "HealthSave Observatory", and "HealthSave Capture" are trademarks
+of the HealthSave project. Use of the marks is governed by TRADEMARK.md and is
+not granted by the source-code licenses.
+
+This NOTICE file is provided for attribution purposes in accordance with
+Section 4(d) of the Apache License, Version 2.0. Its contents are informational
+and do not modify any license.

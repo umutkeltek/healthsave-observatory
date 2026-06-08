@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """SDK version constant — the single source of truth for plugin
 compatibility checks.
 

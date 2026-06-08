@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tagged value shapes for canonical health observations."""
 
 from __future__ import annotations

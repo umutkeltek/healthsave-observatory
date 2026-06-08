@@ -2,6 +2,7 @@
   "name": "@hdh/api-client",
   "private": true,
   "version": "0.0.0",
+  "license": "Apache-2.0",
   "description": "Generated TypeScript types + thin client for the Health Data Hub API. v1 from contracts/openapi/v1.locked.json; v2 from contracts/json-schema/_bundle.json.",
   "type": "module",
   "main": "./src/index.ts",

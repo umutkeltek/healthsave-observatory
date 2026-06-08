@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Health-data primitives — the v2 ingest plane in types.
 
 Every measurement that lands in the system passes through this
