@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """v2 canonical contracts.
 
 The single source of truth for v2 wire shapes — Pydantic in Python,

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Runtime contracts for the Phase 7-C agent supervisor.
 
 Defines:

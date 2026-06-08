@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Plugin SDK error hierarchy.
 
 Every error the SDK raises subclasses :class:`PluginError`. Callers

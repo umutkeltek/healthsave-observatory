@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Plugin SDK — the contract every datahub plugin builds against.
 
 Phase 6 ships v0.1.0 with three plugin kinds (Source, Narrator,

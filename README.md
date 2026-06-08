@@ -1,4 +1,4 @@
-# Health Data Hub
+# HealthSave Observatory
 
 [![CI](https://github.com/umutkeltek/health-data-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/umutkeltek/health-data-hub/actions/workflows/ci.yml)
 [![License: Elastic 2.0](https://img.shields.io/badge/License-Elastic--2.0-005571.svg)](LICENSE)
@@ -9,44 +9,49 @@
 [![Ollama](https://img.shields.io/badge/Ollama-local%20LLM-000000.svg)](https://ollama.com/)
 [![Download on the App Store](https://img.shields.io/badge/Download-App%20Store-0D96F6?logo=apple&logoColor=white)](https://apps.apple.com/app/id6759843047)
 
-> **Self-hosted Apple Health server** - sync HealthKit data from your iPhone and Apple Watch into TimescaleDB, visualize it in Grafana, and get an AI-written daily briefing via a local Ollama model. Private. Local-first. Your data stays on your hardware.
+> **Your whole body, in one place you own — and it actually tells you something.**
+> HealthSave Observatory is a **self-hosted private body observatory**. It captures your health data from *any* device, builds a longitudinal record you own, explains what's changing with evidence-linked findings and weekly **Body Briefs**, and exposes a private API your own scripts and agents can query — with **raw data that never leaves your hardware unless you choose to send it**.
 
 > **New here?** [BRIDGE.md](BRIDGE.md) is the one-page tour: pipeline diagram, who it's for, what's local vs self-hosted, setup gotchas. Read that first if 500 lines of README is too much.
 
-**Keywords:** `apple-health` · `healthkit` · `self-hosted` · `quantified-self` · `timescaledb` · `grafana` · `fastapi` · `ollama` · `local-llm` · `home-assistant` · `docker` · `privacy` · `health-data` · `wearables`
+**Keywords:** `self-hosted health dashboard` · `private health observatory` · `apple-health` · `android-health-connect` · `healthkit` · `wearables` · `whoop` · `oura` · `garmin` · `hrv` · `quantified-self` · `biohacking` · `personal-health-api` · `mcp` · `home-assistant` · `timescaledb` · `fastapi` · `local-llm` · `privacy` · `docker`
 
-Your own server, on your own hardware, turning the health data your phone already collects into an AI-written daily briefing - no cloud, no subscription, no one else reading your numbers.
+Your health data is scattered across silos you don't control — Apple Health here, Whoop's cloud there, Oura's app, your scale's app. Each one shows you a few charts and keeps the data. **HealthSave Observatory pulls all of it into one private place that's yours** — queryable, routable, and finally able to answer the questions that matter: *what changed, compared to my own baseline, where did it come from, and what should I look at next?*
 
-You point your iPhone at it. It stores everything from your Apple Watch (heart rate, HRV, SpO2, sleep, workouts, steps, and more), graphs it in Grafana, and - if you turn it on - runs a small local AI model that writes you a short narrative every morning about how your body is actually doing.
+It runs entirely on your hardware — a laptop, a NUC, a Mac mini, a Synology, a Proxmox VM. No cloud, no subscription, no one else reading your numbers. **Apple Health is the easiest way in, but it is not the boundary:** Android Health Connect, direct wearable connectors, file imports, and webhooks all land in the same canonical record.
 
-## Don't want to self-host?
+## Just want the app?
 
-[HealthSave](https://apps.apple.com/app/id6759843047) is the iOS app side of this stack. It runs standalone — Dashboard, Trends, Export to CSV / JSON / PDF, all on-device. Self-hosting is only needed if you want long-term storage, Grafana dashboards, or AI briefings.
+[**HealthSave Capture**](https://apps.apple.com/app/id6759843047) (the HealthSave iOS app) is the Apple Health bridge for your Observatory — and it also runs standalone: on-device Dashboard, Trends, and Export to CSV / JSON / PDF, no account, nothing in the cloud. Self-hosting the Observatory is what adds the longitudinal record you own, the dashboard, the Body Briefs, the routes to your other tools, and the private API.
 
 ## What you get
 
-- A long-term store for every Apple Health metric your phone collects, queryable with normal SQL
-- A set of ready-made Grafana dashboards (heart, sleep, activity, workouts) that work the moment data starts flowing
-- An optional AI briefing system that turns numbers into plain English ("HRV trended down three days in a row, sleep was light last night, expect a low-energy morning")
-- A clean ingest API anyone can build against - the iOS app is one client, Garmin Connect exports and Samsung/Huawei Health Sync CSVs are others via [`scripts/import_garmin.py`](scripts/import_garmin.py) and [`scripts/import_samsung.py`](scripts/import_samsung.py)
-- Drop-in examples for piping selected metrics into Home Assistant for automations
+- **Universal capture.** Apple Health (via [HealthSave Capture](https://apps.apple.com/app/id6759843047)), Android Health Connect *(in progress)*, direct wearable connectors (Whoop, Amazfit / Zepp), file imports (Garmin, Samsung / Huawei Health), and any registered webhook — all normalized into one canonical, source-tagged record you can query with normal SQL.
+- **A private Observatory dashboard.** *Today vs your personal baseline*, what changed, how complete the data is, and where each number came from. The web Observatory ([`apps/web/`](apps/web/README.md)) is the primary surface; Grafana ships as an optional power-user view.
+- **Evidence-linked findings & weekly Body Briefs.** Not "feed it to the cloud and hope." A deterministic statistical engine computes each finding — claim, baseline window, effect size, confidence, and what it *cannot* conclude — and a local LLM only narrates it. The **Body Brief** is the thing you come back for.
+- **Source provenance you can trust.** See which device and path produced each number — and when your Apple Watch and Whoop disagree about last night's sleep, see the *disagreement* instead of a fake single truth.
+- **Your own private health API + CLI.** Query your history from your scripts, notebooks, dashboards, or your own AI agents — locally, without handing your data to a third-party API vendor.
+- **Route it anywhere (optional).** Home Assistant, MQTT, Grafana, webhooks, exports — your data piped to your tools, behind a policy you control.
+- **A trust boundary you can audit.** Default-deny egress: raw observations never leave your host; cloud AI is opt-in and carries only derived, on-device-redacted findings.
 
-The entire stack runs in Docker on a laptop, a NUC, a Mac mini, a Synology, or a beefy workstation - your choice. Nothing phones home.
+The entire stack runs in Docker on a laptop, a NUC, a Mac mini, a Synology, or a beefy workstation — your choice. Nothing phones home.
 
-## Supported sources
+## Capture sources
 
-The ingest API is source-agnostic - the iOS app is just the most polished client, not the only one.
+The canonical ingest model is **source-agnostic** — Apple Health is the most polished on-ramp, not the boundary. Every source resolves to the same **Source / Device / Stream** identity, so your dashboards and automations stay stable as you add devices.
 
 | Source | How it connects | Status |
 |---|---|---|
-| **Apple Health** (Apple Watch, iPhone, and anything that writes to HealthKit - Oura, Garmin, Withings, etc.) | Push, via the [HealthSave](https://apps.apple.com/app/id6759843047) iOS app | Shipped |
-| **Whoop** | Direct poll plugin - OAuth to the Whoop developer API, no Apple device needed ([`plugins/sources/whoop`](plugins/sources/whoop)) | Shipped (early; bring your own Whoop developer credentials) |
+| **Apple Health** (Apple Watch, iPhone, and anything that writes to HealthKit — Oura, Garmin, Withings, etc.) | Push, via the [HealthSave Capture](https://apps.apple.com/app/id6759843047) iOS app | Shipped |
+| **Whoop** | Direct poll plugin — OAuth to the Whoop API, no Apple device needed ([`plugins/sources/whoop`](plugins/sources/whoop)) | Shipped (early; bring your own Whoop developer credentials) |
 | **Amazfit / Zepp** | Direct poll plugin ([`plugins/sources/amazfit`](plugins/sources/amazfit)) | Shipped (early) |
 | **Garmin Connect** | CLI importer ([`scripts/import_garmin.py`](scripts/import_garmin.py)) | Shipped |
 | **Samsung / Huawei Health** | CLI importer, via the Health Sync app ([`scripts/import_samsung.py`](scripts/import_samsung.py)) | Shipped |
+| **Android Health Connect** | Native capture into the generic ingest API | In progress |
+| **Generic webhook / native API** | Any registered source posting canonical observations (HMAC-signed) | In progress |
 | **Oura** | Via Apple Health today; a direct connector (modelled on Whoop's) is on the roadmap | Planned (direct) |
 
-Not on the list? Two paths: if it writes to Apple Health, the iOS bridge forwards it automatically; otherwise implement the `Source` / `IngestStorage` contract and poll it yourself - that's exactly how the Whoop and Amazfit plugins work.
+Not on the list? If it writes to Apple Health, the iOS bridge forwards it automatically. Otherwise implement the `Source` plugin contract and poll it yourself — that's exactly how the Whoop and Amazfit plugins work — or post canonical observations to the generic ingest API.
 
 ## Quick start
 
@@ -203,37 +208,29 @@ Run `docker compose logs <service>` (e.g. `docker compose logs api`) to see why.
 
 ### Stack
 
-FastAPI + TimescaleDB + Grafana, plus an optional Ollama sidecar for the LLM. Python 3.12, async SQLAlchemy with asyncpg, ruff for lint+format, pytest for tests.
+FastAPI + TimescaleDB at the core; a Next.js **Observatory** web app ([`apps/web/`](apps/web/README.md)) as the primary surface; Grafana as an optional power-user view; an optional **Ollama** sidecar for local narration. Python 3.12, async SQLAlchemy with asyncpg, ruff for lint+format, pytest for tests. Ingest (`/api/apple/batch`) is a frozen v1 contract; client-facing read/query surfaces evolve under `/api/v2/`.
 
 ### Architecture
 
 ```
-iPhone (HealthSave app)
-    │
-    │  POST /api/apple/batch (JSON over HTTPS)
-    │
-    ▼
-FastAPI (port 8000)
-    │
-    │  INSERT ... ON CONFLICT DO UPDATE (idempotent)
-    │
-    ▼
-TimescaleDB (port 5432)
-    │
-    │  SQL queries + continuous aggregates
-    │
-    ├──────────────────────────────┐
-    ▼                              ▼
-Grafana (port 3000)        Analysis worker
-                                   │
-                                   │  findings (structured)
-                                   ▼
-                           Ollama (port 11434)
-                                   │
-                                   │  briefing (prose)
-                                   ▼
-                           /api/insights/latest
+CAPTURE (sources in)                        SURFACES & ROUTES (out)
+
+HealthSave Capture (Apple Health) ┐         ┌─► Observatory web app  (apps/web)
+Android Health Connect *          │         │
+Whoop / Amazfit  (plugins)        ├─► FastAPI ─► TimescaleDB ─┼─► Grafana  (optional)
+Garmin / Samsung (importers)      │  (8000)     (canonical    │
+Generic webhook / native API *    ┘             observations) ├─► Body Briefs
+                                                              │     stats engine → local LLM (Ollama)
+  v1 ingest  /api/apple/batch   (frozen contract)            │
+  v2 ingest  /api/v2/ingest/... (evolving)        *          ├─► Private API + CLI / your agents (/api/v2)
+                                                              │
+                                                              └─► Routes: Home Assistant · MQTT · webhook · export
+
+                                                                   (* in progress)
 ```
+
+The math stays deterministic and auditable; the LLM only narrates. Raw observations
+never cross the host boundary — see [Privacy & the egress boundary](#how-the-ai-analysis-works).
 
 ### What gets synced
 
@@ -401,7 +398,7 @@ python scripts/import_samsung.py /path/to/health-sync-export \
 
 A curated starter dashboard set is included in `deploy/grafana/`, so a fresh `docker compose up -d` should bring Grafana up with the datasource and the supported dashboards already wired.
 
-> **Heads-up:** an insight-first web dashboard (the eventual Grafana replacement) is in active development under [`apps/web/`](apps/web/README.md). It's **pre-release and not part of the default stack yet** — Grafana remains the supported visualization surface today.
+> **Heads-up:** the **HealthSave Observatory** web app under [`apps/web/`](apps/web/README.md) is the primary, insight-first surface and the direction of the project. Grafana is kept as an **optional power-user view** — it remains the dashboard bundled in the default `docker compose` stack while the Observatory web app is being wired into the default deployment.
 
 Included files:
 - `deploy/grafana/provisioning/datasources/healthsave.yaml`
@@ -704,10 +701,22 @@ WITH NO DATA;
 
 ### Roadmap
 
-This community release is intentionally small and focused on the ingestion pipeline plus the first slice of AI briefings.
+HealthSave Observatory is built in phases — from a release-grade core and a stable
+**Source / Device / Stream** identity, to the **Observatory** web surface, the weekly
+**Body Brief** loop, the **agent surface** (CLI + MCP + scoped tokens), universal capture
+(Android Health Connect + generic webhook), and a thin routing layer for Home Assistant /
+MQTT / webhook / export. Near-term focus areas:
 
-Next things to improve:
-- More dashboard polish and curation across recovery, workouts, and long-term trends
-- Goal tracking and trend-based alerts wired into Home Assistant
-- More comprehensive analysis windows (monthly / quarterly trends)
-- Production deployment notes for reverse proxy, auth, backups, and retention
+- Ship the Observatory web app as the default surface; keep Grafana as an optional view
+- Weekly evidence-linked Body Briefs and a first-class finding-card schema
+- A private CLI + local MCP server so your own agents can query your body data
+- Android Health Connect + a generic, HMAC-signed ingest envelope
+- Trend-based alerts and recovery-aware automations via Home Assistant
+
+## License
+
+The product core is **source-available** under the [Elastic License 2.0](LICENSE)
+(self-host freely; you may not offer it to third parties as a managed service). The
+protocol and client layer (`contracts/`, the API client, and the plugin SDK) is
+**Apache-2.0** so anything can speak the format. See [LICENSING.md](LICENSING.md) for
+the per-path map and [TRADEMARK.md](TRADEMARK.md) for the name policy.

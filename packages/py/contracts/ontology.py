@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Versioned metric ontology registry for canonical health observations.
 
 Full-catalog coverage: every quantity metric HealthSave ingests

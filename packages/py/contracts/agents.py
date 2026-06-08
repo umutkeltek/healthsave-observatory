@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Agent lifecycle primitives — the v2 autonomy plane in types.
 
 The shape here encodes the rule from the synthesis: agents propose

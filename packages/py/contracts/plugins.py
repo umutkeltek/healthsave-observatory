@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Plugin manifest — the contract every plugin declares.
 
 Loaded from ``plugins/<kind>/<id>/plugin.yaml`` (filesystem

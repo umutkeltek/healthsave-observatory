@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Foundation types shared by every v2 contract.
 
 - Identifier aliases — `OwnerId`, `WorkspaceId`, etc. — are UUIDs but

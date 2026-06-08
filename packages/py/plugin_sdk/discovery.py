@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Filesystem discovery — walk ``plugins/<kind>/<id>/plugin.yaml``.
 
 Convention over registry: the loader does not read a central index;

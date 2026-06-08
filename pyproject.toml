@@ -5,29 +5,33 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "health-data-hub"
 version = "1.0.0"
-description = "Self-hosted Apple Health server - HealthKit ingest into TimescaleDB, Grafana dashboards, and local LLM briefings via Ollama."
+description = "HealthSave Observatory - a self-hosted private body observatory: universal health-data capture (Apple Health, Android Health Connect, wearables, webhooks) into a canonical TimescaleDB record, with evidence-linked findings, weekly Body Briefs, a private API/CLI for your own agents, and a default-deny egress boundary."
 requires-python = ">=3.12,<3.14"
 license = { text = "Elastic-2.0" }
 readme = "README.md"
 keywords = [
-    "apple-health",
-    "healthkit",
-    "health-data",
-    "quantified-self",
+    "health-observatory",
     "self-hosted",
+    "apple-health",
+    "android-health-connect",
+    "healthkit",
+    "wearables",
+    "whoop",
+    "oura",
+    "garmin",
+    "hrv",
+    "quantified-self",
+    "biohacking",
+    "personal-health-api",
+    "mcp",
+    "home-assistant",
     "timescaledb",
     "postgresql",
-    "grafana",
     "fastapi",
-    "ollama",
     "local-llm",
-    "home-assistant",
-    "docker",
     "privacy",
-    "wearables",
-    "health-tracking",
+    "docker",
     "time-series",
-    "data-pipeline",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
