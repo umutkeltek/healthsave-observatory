@@ -7,8 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
-from contracts._base import Provenance
-from normalization import normalize_apple_batch
+from contracts._base import DEFAULT_OWNER_ID, Provenance
+from normalization import identity, normalize_apple_batch
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "apple_healthsave"
 _PROV = Provenance(
@@ -73,6 +73,36 @@ def test_sample_missing_time_is_rejected_not_dropped_silently() -> None:
     assert res.accepted == 0
     assert res.rejected == 1
     assert "time" in res.rejections[0].reason
+
+
+def test_observation_carries_stream_id_matching_registry() -> None:
+    # Each sample's origin must resolve to the same stream UUID the registry records,
+    # so canonical_observations.stream_id == source_device_streams.id for that emitter.
+    res = normalize_apple_batch(
+        {
+            "metric": "heart_rate",
+            "samples": [{"date": "2026-05-28T08:00:00Z", "qty": 72, "source": "Apple Watch"}],
+        },
+        source_id=_SOURCE,
+        provenance=_PROV,
+    )
+    assert res.accepted == 1
+    obs = res.observations[0]
+    expected = identity.resolve_apple_origin(DEFAULT_OWNER_ID, "Apple Watch").stream_id
+    assert obs.stream_id == expected
+
+
+def test_observation_without_source_gets_fallback_stream_id() -> None:
+    # No source key -> the same fallback the registry uses (sample_device_name -> "HealthSave").
+    res = normalize_apple_batch(
+        {"metric": "heart_rate", "samples": [{"date": "2026-05-28T08:00:00Z", "qty": 60}]},
+        source_id=_SOURCE,
+        provenance=_PROV,
+    )
+    assert res.accepted == 1
+    obs = res.observations[0]
+    expected = identity.resolve_apple_origin(DEFAULT_OWNER_ID, "HealthSave").stream_id
+    assert obs.stream_id == expected
 
 
 def test_unmapped_metric_rejects_every_sample() -> None:

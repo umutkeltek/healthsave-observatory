@@ -34,6 +34,7 @@ class Observation(WithOwnership):
     recorded_at: datetime | None = None
     source_id: SourceId
     device_id: DeviceId | None = None
+    stream_id: UUID | None = None
     raw_payload_id: UUID | None = None
     source_record_uid: str | None = None
     provenance: Provenance
