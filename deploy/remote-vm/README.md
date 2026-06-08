@@ -58,4 +58,7 @@ Important boundaries:
   you review topic prefixes; otherwise it may publish overlapping retained
   discovery/state topics.
 - Treat this as a reference deployment lane. For public internet exposure, put a
-  normal reverse proxy with TLS in front of the API and Grafana.
+  reverse proxy with TLS **and per-IP rate limiting** in front of the API and
+  Grafana. A ready-to-use nginx config + compose override lives in
+  [`../reverse-proxy/`](../reverse-proxy/) (SECURITY-004) — layer its override
+  **last** so it removes the direct API port publish and becomes the only ingress.
