@@ -289,6 +289,63 @@
         "title": "DecideResponse",
         "type": "object"
       },
+      "DeviceView": {
+        "properties": {
+          "device_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Label"
+          },
+          "first_seen_at": {
+            "format": "date-time",
+            "title": "First Seen At",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "title": "Last Seen At",
+            "type": "string"
+          },
+          "stream_count": {
+            "title": "Stream Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stream_count",
+          "first_seen_at",
+          "last_seen_at"
+        ],
+        "title": "DeviceView",
+        "type": "object"
+      },
+      "DevicesResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "devices": {
+            "items": {
+              "$ref": "#/components/schemas/DeviceView"
+            },
+            "title": "Devices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "devices"
+        ],
+        "title": "DevicesResponse",
+        "type": "object"
+      },
       "ExperimentListResponse": {
         "additionalProperties": false,
         "properties": {
@@ -955,6 +1012,137 @@
           }
         },
         "title": "RunsListResponse",
+        "type": "object"
+      },
+      "SourceView": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "first_seen_at": {
+            "format": "date-time",
+            "title": "First Seen At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "title": "Last Seen At",
+            "type": "string"
+          },
+          "plugin_id": {
+            "title": "Plugin Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "plugin_id",
+          "first_seen_at",
+          "last_seen_at"
+        ],
+        "title": "SourceView",
+        "type": "object"
+      },
+      "SourcesResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceView"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "sources"
+        ],
+        "title": "SourcesResponse",
+        "type": "object"
+      },
+      "StreamView": {
+        "properties": {
+          "device_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Label"
+          },
+          "first_seen_at": {
+            "format": "date-time",
+            "title": "First Seen At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "title": "Last Seen At",
+            "type": "string"
+          },
+          "origin_key": {
+            "title": "Origin Key",
+            "type": "string"
+          },
+          "source_plugin_id": {
+            "title": "Source Plugin Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source_plugin_id",
+          "origin_key",
+          "first_seen_at",
+          "last_seen_at"
+        ],
+        "title": "StreamView",
+        "type": "object"
+      },
+      "StreamsResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "streams": {
+            "items": {
+              "$ref": "#/components/schemas/StreamView"
+            },
+            "title": "Streams",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "streams"
+        ],
+        "title": "StreamsResponse",
         "type": "object"
       },
       "TrendResponse": {
@@ -1840,6 +2028,46 @@
         "tags": [
           "v2-agents"
         ]
+      }
+    },
+    "/api/v2/devices": {
+      "get": {
+        "operationId": "list_devices_api_v2_devices_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevicesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Devices"
       }
     },
     "/api/v2/experiments": {
@@ -2739,6 +2967,46 @@
         "summary": "Setup Diagnostics"
       }
     },
+    "/api/v2/sources": {
+      "get": {
+        "operationId": "list_sources_api_v2_sources_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourcesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Sources"
+      }
+    },
     "/api/v2/sources/whoop/webhook": {
       "post": {
         "operationId": "whoop_webhook_api_v2_sources_whoop_webhook_post",
@@ -2756,6 +3024,96 @@
           }
         },
         "summary": "Whoop Webhook"
+      }
+    },
+    "/api/v2/streams": {
+      "get": {
+        "operationId": "list_streams_api_v2_streams_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Streams"
+      }
+    },
+    "/api/v2/streams/{stream_id}": {
+      "get": {
+        "operationId": "get_stream_api_v2_streams__stream_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Stream"
       }
     },
     "/api/v2/sync/anomalies": {
