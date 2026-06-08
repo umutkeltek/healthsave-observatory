@@ -39,7 +39,11 @@ services:
       DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:?DB_PASSWORD must be set (see .env.example)}@db:5432/healthsave
       API_KEY: ${API_KEY:-}
       # SECURITY-001/002: access-control flags read by the API process.
-      ALLOW_NO_AUTH: ${ALLOW_NO_AUTH:-}
+      # ALLOW_NO_AUTH defaults to "true" here so a zero-config `docker compose up`
+      # demo serves without a key (with a loud startup warning). A real deploy
+      # mints an API_KEY (setup.sh / deploy/remote-vm/deploy.sh), which gates the
+      # surface regardless; raw non-compose runs inherit the app's default-deny (503).
+      ALLOW_NO_AUTH: ${ALLOW_NO_AUTH:-true}
       ALLOW_MULTI_USER: ${ALLOW_MULTI_USER:-}
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
