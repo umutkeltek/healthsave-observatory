@@ -77,6 +77,7 @@ def observation_columns(obs: Observation) -> dict[str, Any]:
         "recorded_at": obs.recorded_at,
         "source_id": str(obs.source_id),
         "device_id": str(obs.device_id) if obs.device_id else None,
+        "stream_id": str(obs.stream_id) if obs.stream_id else None,
         "raw_payload_id": str(obs.raw_payload_id) if obs.raw_payload_id else None,
         "source_record_uid": obs.source_record_uid,
         "confidence": obs.confidence,
@@ -107,14 +108,14 @@ _INSERT_SQL = text(
     INSERT INTO canonical_observations (
         id, owner_id, workspace_id, metric_id, ontology_version, value_type,
         numeric_value, canonical_unit, code, components, value_json,
-        interval_start, interval_end, recorded_at, source_id, device_id,
+        interval_start, interval_end, recorded_at, source_id, device_id, stream_id,
         raw_payload_id, source_record_uid, confidence, quality_flags, provenance,
         normalizer_id, normalizer_version, normalization_run_id, dedup_key
     ) VALUES (
         :id, :owner_id, :workspace_id, :metric_id, :ontology_version, :value_type,
         :numeric_value, :canonical_unit, :code, CAST(:components AS JSONB),
         CAST(:value_json AS JSONB), :interval_start, :interval_end, :recorded_at,
-        :source_id, :device_id, :raw_payload_id, :source_record_uid, :confidence,
+        :source_id, :device_id, :stream_id, :raw_payload_id, :source_record_uid, :confidence,
         :quality_flags, CAST(:provenance AS JSONB), :normalizer_id,
         :normalizer_version, :normalization_run_id, :dedup_key
     )

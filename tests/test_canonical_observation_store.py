@@ -61,6 +61,19 @@ def test_quantity_observation_flattens_to_numeric_column() -> None:
     assert json.loads(cols["provenance"])["source_plugin_id"] == "apple_health"
 
 
+def test_observation_columns_carries_stream_id() -> None:
+    sid = UUID("5fd4a041-f371-51be-8b1e-8d6275534c60")
+    obs = _quantity_obs()
+    obs.stream_id = sid
+    cols = observation_columns(obs)
+    assert cols["stream_id"] == str(sid)
+
+
+def test_observation_columns_stream_id_none_when_absent() -> None:
+    cols = observation_columns(_quantity_obs())
+    assert cols["stream_id"] is None
+
+
 def test_categorical_observation_flattens_to_code_column() -> None:
     cols = observation_columns(_categorical_obs())
     assert cols["value_type"] == "categorical"

@@ -18,6 +18,9 @@ from contracts.observation import Observation, build_dedup_key
 from contracts.ontology import REGISTRY, MetricDefinition
 from contracts.values import CodedValue, EventValue, ObservationValue, QuantityValue
 
+from . import identity
+from .parsers import sample_device_name
+
 NORMALIZER_ID = "apple_health"
 NORMALIZER_VERSION = "0.1.0"
 
@@ -199,6 +202,10 @@ def _normalize_sample(
         source_record_uid=source_record_uid,
         value_repr=value.model_dump_json(),
     )
+    # Resolve the per-sample stream identity from its origin. Use sample_device_name
+    # so the stream_id stored on the observation is byte-identical to the registry's
+    # source_device_streams.id for the same emitter (record_origins uses the same key).
+    stream = identity.resolve_apple_origin(owner_id, sample_device_name(sample))
     return Observation(
         owner_id=owner_id,
         workspace_id=workspace_id,
@@ -208,6 +215,7 @@ def _normalize_sample(
         interval_end=end,
         source_id=source_id,
         device_id=device_id,
+        stream_id=stream.stream_id,
         raw_payload_id=raw_payload_id,
         source_record_uid=str(source_record_uid) if source_record_uid else None,
         provenance=provenance,
