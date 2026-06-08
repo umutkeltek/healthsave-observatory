@@ -1,0 +1,36 @@
+# Opt-in reverse proxy for internet-facing deploys (SECURITY-004).
+#
+# Layer this AFTER the base compose to (a) add durable per-IP rate limiting and a
+# single TLS-capable entry point, and (b) stop publishing the API directly on the
+# host — the proxy becomes the only ingress; the API is reachable only on the
+# internal compose network.
+#
+#   docker compose -f docker-compose.yml \
+#                  -f deploy/reverse-proxy/docker-compose.proxy.override.yml up -d
+#
+# Relative paths resolve from the project directory (the repo root, where
+# docker-compose.yml lives). For the remote-vm flow, see deploy/reverse-proxy/README.md.
+
+services:
+  api:
+    # Remove host port publishing — only the proxy (same network) reaches the API.
+    ports: !override []
+
+  proxy:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+    volumes:
+      - ./deploy/reverse-proxy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # TLS (optional): mount your certs here and uncomment the :443 block in
+      # nginx.conf + the 443 port mapping below.
+      # - ./deploy/reverse-proxy/certs:/etc/nginx/certs:ro
+    ports:
+      - "${PROXY_HTTP_PORT:-80}:80"
+      # - "${PROXY_HTTPS_PORT:-443}:443"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
