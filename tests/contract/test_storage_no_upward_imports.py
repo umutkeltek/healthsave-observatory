@@ -31,10 +31,9 @@ def _imported_top_levels(path: Path) -> set[str]:
         if isinstance(node, ast.Import):
             for alias in node.names:
                 tops.add(alias.name.split(".")[0])
-        elif isinstance(node, ast.ImportFrom):
-            # Only absolute imports carry an upward-dependency risk.
-            if node.level == 0 and node.module:
-                tops.add(node.module.split(".")[0])
+        # Only absolute imports carry an upward-dependency risk.
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            tops.add(node.module.split(".")[0])
     return tops
 
 
