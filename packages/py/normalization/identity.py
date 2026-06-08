@@ -49,6 +49,11 @@ def stream_id(owner_id: UUID, plugin_id: str, origin_key: str) -> UUID:
     return uuid5(STREAM_NAMESPACE, f"{owner_id}:{plugin_id}:{origin_key}")
 
 
+def source_uuid(owner_id: UUID, plugin_id: str) -> UUID:
+    """Deterministic id for a Source (one integration per owner). Stable forever."""
+    return uuid5(STREAM_NAMESPACE, f"source:{owner_id}:{plugin_id}")
+
+
 @dataclass(frozen=True)
 class ResolvedStream:
     """The identity a raw sample resolves to."""

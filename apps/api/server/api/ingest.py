@@ -22,12 +22,13 @@ from uuid import UUID
 from compat_v1.models import BatchPayload
 from contracts._base import Provenance
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from normalization import normalize_apple_batch
+from normalization import identity, normalize_apple_batch
 from plugin_sdk import SDK_VERSION
 from pydantic import ValidationError
 from sqlalchemy.exc import InterfaceError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.defaults import observation_repository
+from storage.timescale import registry
 from storage.timescale.sync_receipts import (
     ReceiptIdempotencyConflict,
     _parse_time_value,
@@ -251,6 +252,21 @@ async def apple_batch(
     first_device_id = await storage.get_or_create_device(session, first_device_name)
     raw_log_id = await audit.log_raw(session, first_device_id, raw_payload) if audit else None
     await session.commit()
+
+    # R2 Track A: populate the Source/Device/Stream registry from this batch's
+    # origins. Post-commit + fail-soft — the batch is already durable, so a
+    # registry hiccup can never break ingest (the frozen v1 contract is untouched).
+    try:
+        await registry.record_origins(
+            session,
+            owner_id=owner_id,
+            plugin_id=identity.APPLE_HEALTHKIT_PLUGIN,
+            origins=[name for name, _ in sample_groups],
+        )
+        await session.commit()
+    except Exception:  # noqa: BLE001 - registry is best-effort, never fatal to ingest
+        log.warning("registry origin upsert failed (non-fatal)", exc_info=True)
+        await session.rollback()
 
     plugin = _resolve_apple_health_plugin(request)
 

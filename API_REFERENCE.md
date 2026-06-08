@@ -268,12 +268,27 @@ Inbound Whoop events. Verifies `base64(HMAC-SHA256(secret, ts + raw_body))` agai
 
 ---
 
-## 7. Coming in R2 — identity (Source / Device / Stream)
+## 7. Identity — Source / Device / Stream (v2, keyed) · caller: dashboard / HA setup
 
-New **typed** read endpoints (this is the half currently missing). Once built they appear here with full schemas:
-- `GET /api/v2/sources` — integrations data entered through (apple-healthkit-ios, whoop-oauth, …)
-- `GET /api/v2/devices` — physical emitters (Apple Watch, Whoop band, …)
-- `GET /api/v2/streams` · `GET /api/v2/streams/{stream_id}` — the join (device-via-integration), with **stable UUIDs** that Home Assistant keys on.
+The identity model, **typed** (R2). Populated as batches arrive (the ingest path upserts each batch's origins, fail-soft). Stream ids are **stable deterministic UUIDs** — Home Assistant keys entities on them.
+
+- `GET /api/v2/sources` — integrations data entered through.
+- `GET /api/v2/devices` — distinct emitters (derived from streams).
+- `GET /api/v2/streams` — the join "device via integration" (the same band via HealthKit vs a direct poll = two streams).
+- `GET /api/v2/streams/{stream_id}` — one stream (`404` if unknown).
+
+```json
+// GET /api/v2/sources
+{ "count": 1, "sources": [ { "id": "f0…", "plugin_id": "apple-healthkit-ios",
+    "display_name": "apple-healthkit-ios", "first_seen_at": "…", "last_seen_at": "…" } ] }
+// GET /api/v2/streams
+{ "count": 2, "streams": [ { "id": "9e…", "source_plugin_id": "apple-healthkit-ios",
+    "origin_key": "apple watch", "device_label": "Apple Watch",
+    "first_seen_at": "…", "last_seen_at": "…" } ] }
+// GET /api/v2/devices
+{ "count": 2, "devices": [ { "device_label": "Apple Watch", "stream_count": 1,
+    "first_seen_at": "…", "last_seen_at": "…" } ] }
+```
 
 ---
 
