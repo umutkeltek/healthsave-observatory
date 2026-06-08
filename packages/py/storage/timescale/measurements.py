@@ -5,23 +5,12 @@ and ``server.ingestion.sleep`` into this module. The original modules
 are now thin re-export shims so existing callers (registry, route,
 tests, the catch-all server package re-exports) keep working.
 
-Helpers (parsers, mappers, owner sentinels) stay in
-``server.ingestion`` because they're pure-Python domain logic with no
-data-access concern. Cross-package import here is acceptable —
-the cycle that bit Phase 5C is avoided by not routing through any
-``server.__init__`` re-export at module load time:
-
-  storage.timescale.measurements
-    → server.ingestion.mappers (sub-package import; runs server.__init__)
-       → server.api.ingest (re-export)
-         → ..ingestion.storage (shim re-exports from storage.timescale.ingest)
-           → storage.timescale.ingest (already loaded by the time we get here
-                                        because the timescale __init__
-                                        imports `ingest` BEFORE
-                                        `measurements`).
-
-Phase 5F may move the helpers themselves out of server.ingestion if a
-deeper cleanup is wanted; for v2.0 the shape is fine.
+ARCH-001: the pure helpers (parsers, mappers, owner sentinel) now live BELOW
+this layer — ``normalization.parsers`` / ``normalization.mappers`` and
+``contracts._base.DEFAULT_OWNER_ID`` — so storage no longer imports the API
+package (``server.*``). ``server.ingestion.{parsers,mappers}`` are thin
+re-export shims for the API layer + plugins. This also retires the old
+``server.__init__`` import-cycle workaround entirely.
 """
 
 from __future__ import annotations
@@ -31,13 +20,13 @@ from json import dumps
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from server.ingestion.mappers import (
+from contracts._base import DEFAULT_OWNER_ID
+from normalization.mappers import (
     ACTIVITY_FIELDS,
     DAILY_ACTIVITY_QUANTITY_FIELDS,
     DEDICATED_TABLES,
 )
-from server.ingestion.owner import DEFAULT_OWNER_ID
-from server.ingestion.parsers import (
+from normalization.parsers import (
     duration_ms_between,
     first_present,
     parse_date,
