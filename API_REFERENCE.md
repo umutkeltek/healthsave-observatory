@@ -102,7 +102,7 @@ The static metric catalog (no values → safe to expose).
 ```
 
 ### `GET /api/v2/metrics/{metric_id}/series` — keyed
-Time series for one canonical metric. **Query:** `range` (e.g. `7d`) or `start`/`end` (ISO). The local LLM narrator consumes this same contract.
+Time series for one canonical metric. **Query:** `range` (e.g. `7d`) or `start`/`end` (ISO). The dashboard reads this; the local LLM narrator is designed to consume the same contract.
 ```json
 { "metric": { "id": "vital.heart_rate", "display_name": "Heart Rate", "category": "vital",
               "value_type": "quantity", "canonical_unit": "count/min" },
@@ -282,7 +282,7 @@ New **typed** read endpoints (this is the half currently missing). Once built th
 | Caller | Endpoints |
 |---|---|
 | **HealthSave iOS app** | `POST /api/apple/batch`, `GET /api/apple/status`, `GET /api/health`, `GET /api/v2/setup/diagnostics`, `GET /api/v2/sync/*`, `GET /api/insights/*` |
-| **Home Assistant bridge** | `GET /api/v2/metrics/{id}/series`, (R3) `/api/v2/streams` |
+| **Home Assistant bridge** (`homeassistant_mqtt`) | **Does not call the API** — reads the DB directly via a storage repository and publishes to MQTT. (R3: will key HA entities on canonical stream UUIDs.) |
 | **Dashboard (apps/web "Private Observatory")** | `GET /api/v2/{meta,metrics,metrics/{id}/series,readiness,privacy,insights/*,sync/*,experiments,agents/proposals}` |
 | **Grafana** | direct DB (not the API) |
 | **Worker / scheduler** | internal (writes findings consumed via `/api/v2/insights/*`) |
