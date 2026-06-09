@@ -26,6 +26,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, TypeVar
 
+from .llm.client import HealthLLMClient
 from .llm.prompts.daily_briefing import DAILY_BRIEFING_PROMPT_TEMPLATE
 from .llm.prompts.weekly_summary import WEEKLY_SUMMARY_PROMPT_TEMPLATE
 from .statistical.aggregator import DataAggregator
@@ -116,6 +117,23 @@ class AnalysisEngine:
         self.trend_analyzer = TrendAnalyzer(self._fetch_trend_daily_values)
         self.correlation_analyzer = CorrelationAnalyzer(self._fetch_metric_daily_series)
 
+    async def _narrate(self, session, prompt: str, *, insight_type: str):
+        """Narrate ``prompt`` via the per-owner *effective* LLM config.
+
+        Phase 2b: each job re-resolves the narrator config from the DB
+        (``analysis.intelligence.resolve_llm_config``) so a UI edit applies
+        without a redeploy. When the owner is unconfigured / mode=off / the read
+        fails, the resolver returns the startup (env) config unchanged and we
+        reuse the prebuilt ``self.llm_client`` — identical to pre-2b behaviour.
+        Otherwise a fresh client is built for this job from the DB config
+        (construction is pure + cheap; litellm import stays deferred).
+        """
+        from .intelligence import resolve_llm_config
+
+        effective = await resolve_llm_config(session, base=self.config.llm)
+        client = self.llm_client if effective is self.config.llm else HealthLLMClient(effective)
+        return await client.generate_insight(prompt, insight_type=insight_type)
+
     async def run_daily_briefing(self) -> int | None:
         return await self._run_job_with_metrics("daily_briefing", self._run_daily_briefing_impl)
 
@@ -182,9 +200,7 @@ class AnalysisEngine:
                 minimum_required=1,
             )
 
-            insight_result = await self.llm_client.generate_insight(
-                prompt, insight_type="daily_briefing"
-            )
+            insight_result = await self._narrate(session, prompt, insight_type="daily_briefing")
 
             insight = Insight(
                 insight_type="daily_briefing",
@@ -298,9 +314,7 @@ class AnalysisEngine:
                 minimum_required=1,
             )
 
-            insight_result = await self.llm_client.generate_insight(
-                prompt, insight_type="weekly_summary"
-            )
+            insight_result = await self._narrate(session, prompt, insight_type="weekly_summary")
 
             await self._insert_insight(
                 session,
