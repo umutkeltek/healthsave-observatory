@@ -1473,3 +1473,382 @@ html {
   color: var(--faint);
   margin-top: 4px;
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   Data Provenance (Sources) — streams table, divergence logs, coverage
+   ───────────────────────────────────────────────────────────────────── */
+
+/* In-content title block — the honesty subtitle earns a prominent home. */
+.prov-intro {
+  margin: 2px 0 0;
+}
+.prov-intro h2 {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.prov-intro p {
+  margin: 9px 0 0;
+  max-width: 640px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.prov-grid {
+  margin-top: 22px;
+}
+.prov-main .section-label {
+  margin-top: 26px;
+}
+.prov-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.prov-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.prov-head h2 {
+  margin: 0;
+}
+
+/* Streams table — hairline rows, mono numerals, scrolls on narrow screens. */
+.prov-scroll {
+  overflow-x: auto;
+}
+table.prov {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+.prov thead th {
+  text-align: left;
+  padding: 0 14px 10px 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.prov tbody td {
+  padding: 13px 14px 13px 0;
+  border-top: 1px solid var(--line);
+  vertical-align: middle;
+}
+.prov tbody tr:hover td {
+  background: var(--hover);
+}
+.prov-src {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.prov-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.prov-origin {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.prov-hw {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.prov-id {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.prov-sync {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.prov-sync.stale {
+  color: var(--warn);
+}
+.prov-bar {
+  display: block;
+  width: 92px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--raise);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.prov-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+}
+.prov-bar-fill.warn {
+  background: var(--warn);
+}
+.prov-demo-note {
+  margin: 16px 0 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--faint);
+}
+
+/* Divergence logs — every reading kept; no synthetic consensus. */
+.div-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+.div-card {
+  padding: 16px 18px;
+}
+.div-warn {
+  border-left: 2px solid var(--warn);
+  background: rgba(232, 180, 95, 0.05);
+}
+.div-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.div-metric {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.div-ctx {
+  font-weight: 400;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+.badge.both-kept {
+  color: var(--signal);
+  background: var(--signal-weak);
+  border: 1px solid var(--signal-line);
+}
+.div-flag {
+  color: var(--warn);
+  font-size: 13px;
+}
+.div-readings {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 9px;
+  font-size: 13px;
+}
+.div-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  flex: 0 0 auto;
+}
+.div-reading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.div-sep {
+  color: var(--faint);
+  margin: 0 1px;
+}
+.div-rval {
+  font-family: var(--mono);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.div-note {
+  margin: 9px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+/* The Observatory's opinion on the disagreement — a quiet, grounded stance. */
+.div-stance {
+  margin: 9px 0 0;
+  padding-left: 11px;
+  border-left: 2px solid var(--accent-line);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.div-empty {
+  margin-top: 12px;
+}
+
+/* Coverage — share of streams synced recently; NOT a synthesized confidence. */
+.cov-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.cov-top h2 {
+  margin: 0;
+}
+/* Verdict chip — an opinion, reusing the hero's recovery-state palette. */
+.cov-state {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.cov-state.prime {
+  color: var(--up);
+  background: rgba(56, 217, 150, 0.12);
+  border: 1px solid rgba(56, 217, 150, 0.3);
+}
+.cov-state.steady {
+  color: var(--signal);
+  background: var(--signal-weak);
+  border: 1px solid var(--signal-line);
+}
+.cov-state.caution {
+  color: var(--warn);
+  background: rgba(232, 180, 95, 0.12);
+  border: 1px solid rgba(232, 180, 95, 0.32);
+}
+.cov-state.suppressed {
+  color: var(--down);
+  background: rgba(255, 107, 138, 0.1);
+  border: 1px solid rgba(255, 107, 138, 0.3);
+}
+.cov-verdict {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.cov-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cov-num {
+  font-family: var(--mono);
+  font-size: 36px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+.cov-pct {
+  font-size: 18px;
+  color: var(--muted);
+  margin-left: 3px;
+}
+.cov-sub {
+  font-size: 12px;
+  color: var(--faint);
+}
+.cov-list {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 13px;
+}
+.cov-row {
+  display: grid;
+  grid-template-columns: 1fr 72px max-content;
+  align-items: center;
+  gap: 12px;
+}
+.cov-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cov-name {
+  font-size: 12.5px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Confidence dot — a visible reliability tier per source (hover for the why). */
+.cov-conf {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  margin-right: 7px;
+  vertical-align: middle;
+}
+.cov-conf.high {
+  background: var(--signal);
+  box-shadow: 0 0 0 3px var(--signal-weak);
+}
+.cov-conf.medium {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-weak);
+}
+.cov-conf.low {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px rgba(232, 180, 95, 0.14);
+}
+.cov-conf-label {
+  color: var(--faint);
+}
+.cov-rel {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cov-track {
+  height: 7px;
+  border-radius: 999px;
+  background: var(--raise);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.cov-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+.cov-fill.ok {
+  background: var(--up);
+}
+.cov-fill.warn {
+  background: var(--warn);
+}
+.cov-val {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.vault-note p {
+  margin: 0;
+}

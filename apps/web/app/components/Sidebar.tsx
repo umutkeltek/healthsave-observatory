@@ -20,11 +20,20 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M5.2 9.5h5.6" />
     </>
   ),
-  evidence: (
+  findings: (
     <>
       <path d="M3 4h10" />
       <path d="M3 8h10" />
       <path d="M3 12h7" />
+    </>
+  ),
+  sources: (
+    <>
+      <circle cx="4" cy="8" r="1.7" />
+      <circle cx="12" cy="3.9" r="1.7" />
+      <circle cx="12" cy="12.1" r="1.7" />
+      <path d="M5.5 7.2 10.5 4.7" />
+      <path d="M5.5 8.8 10.5 11.3" />
     </>
   ),
   data: (
@@ -40,7 +49,8 @@ const ICONS: Record<string, ReactNode> = {
 const NAV = [
   { href: "/", label: "Today", icon: "overview" },
   { href: "/experiments", label: "Experiments", icon: "experiments" },
-  { href: "/evidence", label: "Evidence", icon: "evidence" },
+  { href: "/findings", label: "Findings", icon: "findings" },
+  { href: "/sources", label: "Sources", icon: "sources" },
   { href: "/data", label: "Data", icon: "data" },
   { href: "/privacy", label: "Privacy", icon: "privacy" },
 ] as const;

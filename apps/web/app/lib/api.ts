@@ -294,3 +294,47 @@ export function analyzeExperiment(id: string): Promise<Experiment> {
 export function abandonExperiment(id: string): Promise<Experiment> {
   return postJson<Experiment>(`/api/v2/experiments/${id}/abandon`, {});
 }
+
+// Identity — Source / Device / Stream provenance (R2). Mirrors
+// server/api/v2_identity.py. Streams join to sources on plugin_id; the
+// dashboard renders this as the provenance / chain-of-origin surface.
+
+export type SourceView = {
+  id: string;
+  plugin_id: string;
+  display_name: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+};
+
+export type StreamView = {
+  id: string;
+  source_plugin_id: string;
+  origin_key: string;
+  device_label: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+};
+
+export type DeviceView = {
+  device_label: string | null;
+  stream_count: number;
+  first_seen_at: string;
+  last_seen_at: string;
+};
+
+export type SourcesResponse = { count: number; sources: SourceView[] };
+export type StreamsResponse = { count: number; streams: StreamView[] };
+export type DevicesResponse = { count: number; devices: DeviceView[] };
+
+export function fetchSources(): Promise<SourcesResponse> {
+  return getJson<SourcesResponse>("/api/v2/sources");
+}
+
+export function fetchStreams(): Promise<StreamsResponse> {
+  return getJson<StreamsResponse>("/api/v2/streams");
+}
+
+export function fetchDevices(): Promise<DevicesResponse> {
+  return getJson<DevicesResponse>("/api/v2/devices");
+}

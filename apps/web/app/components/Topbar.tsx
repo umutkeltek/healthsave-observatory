@@ -8,7 +8,8 @@ const TITLES: Record<string, { title: string; sub: string }> = {
   "/": { title: "Today", sub: "Your body, interpreted — with proof." },
   "/demo": { title: "Today", sub: "A believable 30-day story — demo data." },
   "/experiments": { title: "Experiments", sub: "Run, measure, and act on what to try next." },
-  "/evidence": { title: "Evidence", sub: "What the engine found — computed, not guessed." },
+  "/findings": { title: "Findings", sub: "What the engine found — computed, not guessed." },
+  "/sources": { title: "Sources", sub: "Where your data comes from — origin and freshness." },
   "/data": { title: "Data", sub: "Coverage, freshness, and every metric." },
   "/privacy": { title: "Privacy", sub: "What leaves this host." },
 };
