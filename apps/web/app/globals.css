@@ -1852,3 +1852,101 @@ table.prov {
 .vault-note p {
   margin: 0;
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   Data view — filter bar (URL-state controls) + source distribution
+   ───────────────────────────────────────────────────────────────────── */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 20px 0 4px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.filter-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--faint);
+}
+.filter-select {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background-color: var(--raise);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 7px 28px 7px 10px;
+  min-width: 130px;
+  max-width: 220px;
+  cursor: pointer;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--faint) 50%),
+    linear-gradient(135deg, var(--faint) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 53%, calc(100% - 11px) 53%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.filter-select:hover {
+  border-color: var(--faint);
+}
+.filter-select option {
+  color: var(--ink);
+  background: var(--surface);
+}
+.filter-clear {
+  margin-left: auto;
+  align-self: flex-end;
+  padding: 7px 13px;
+  font-size: 13px;
+}
+.source-dist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.source-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+}
+.source-chip-name {
+  color: var(--ink);
+  font-weight: 500;
+}
+.source-chip-count {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 760px) {
+  .filter-field {
+    flex: 1 1 40%;
+  }
+  .filter-select {
+    min-width: 0;
+    width: 100%;
+    max-width: none;
+  }
+  .filter-clear {
+    margin-left: 0;
+  }
+}

@@ -9,6 +9,7 @@ import {
   fetchExperiments,
   fetchFindings,
   fetchLatest,
+  fetchMetrics,
   fetchPrivacy,
   fetchReadiness,
   fetchSeries,
@@ -17,6 +18,7 @@ import {
   type Finding,
   type InsightsLatest,
   type MetricSeries,
+  type MetricSummary,
   type Privacy,
   type Readiness,
   type SourceView,
@@ -38,6 +40,14 @@ export const GRID_METRICS: { id: string; title: string }[] = [
 export async function safeSeries(id: string, range = "7d"): Promise<MetricSeries | null> {
   try {
     return await fetchSeries(id, range);
+  } catch {
+    return null;
+  }
+}
+
+export async function safeMetrics(): Promise<MetricSummary[] | null> {
+  try {
+    return await fetchMetrics();
   } catch {
     return null;
   }
