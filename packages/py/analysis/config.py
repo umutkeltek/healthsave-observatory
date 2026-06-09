@@ -157,7 +157,12 @@ def _with_environment_overrides(config: AnalysisConfig) -> AnalysisConfig:
     llm_updates = {}
     if provider := os.getenv("LLM_PROVIDER"):
         llm_updates["provider"] = provider
-    if model := os.getenv("OLLAMA_MODEL") or os.getenv("LLM_MODEL"):
+    # LLM_MODEL is the explicit, provider-agnostic route (e.g.
+    # "deepseek/deepseek-chat", "openrouter/google/gemini-2.0-flash-001") and
+    # wins; OLLAMA_MODEL is the Ollama-specific alias kept for back-compat. A
+    # cloud provider must set LLM_MODEL — OLLAMA_MODEL's compose default
+    # ("llama3.1:8b") would otherwise silently pin every provider to that model.
+    if model := os.getenv("LLM_MODEL") or os.getenv("OLLAMA_MODEL"):
         llm_updates["model"] = model
     if base_url := os.getenv("LLM_BASE_URL"):
         llm_updates["base_url"] = base_url

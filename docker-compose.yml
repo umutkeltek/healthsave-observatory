@@ -49,6 +49,14 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
       LLM_API_KEY: ${LLM_API_KEY:-}
+      # Provider-agnostic model route + egress opt-in (analysis/config.py,
+      # egress.py). A cloud provider needs LLM_MODEL + LLM_ALLOW_CLOUD_EGRESS;
+      # both default safe (no model / cloud denied). config.yaml is wiped on
+      # redeploy, so .env is the deploy-survivable home for these.
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_ALLOW_CLOUD_EGRESS: ${LLM_ALLOW_CLOUD_EGRESS:-false}
+      LLM_REDACT_CLOUD_PROMPTS: ${LLM_REDACT_CLOUD_PROMPTS:-true}
+      LLM_REDACTION_SALT: ${LLM_REDACTION_SALT:-}
       HDH_TOKEN_ENC_KEY: ${HDH_TOKEN_ENC_KEY:-}
       WHOOP_CLIENT_ID: ${WHOOP_CLIENT_ID:-}
       WHOOP_CLIENT_SECRET: ${WHOOP_CLIENT_SECRET:-}
@@ -96,6 +104,14 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
       LLM_API_KEY: ${LLM_API_KEY:-}
+      # Provider-agnostic model route + egress opt-in (analysis/config.py,
+      # egress.py). A cloud provider needs LLM_MODEL + LLM_ALLOW_CLOUD_EGRESS;
+      # both default safe (no model / cloud denied). config.yaml is wiped on
+      # redeploy, so .env is the deploy-survivable home for these.
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_ALLOW_CLOUD_EGRESS: ${LLM_ALLOW_CLOUD_EGRESS:-false}
+      LLM_REDACT_CLOUD_PROMPTS: ${LLM_REDACT_CLOUD_PROMPTS:-true}
+      LLM_REDACTION_SALT: ${LLM_REDACTION_SALT:-}
       HDH_TOKEN_ENC_KEY: ${HDH_TOKEN_ENC_KEY:-}
       WHOOP_CLIENT_ID: ${WHOOP_CLIENT_ID:-}
       WHOOP_CLIENT_SECRET: ${WHOOP_CLIENT_SECRET:-}
@@ -140,6 +156,10 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
       LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_ALLOW_CLOUD_EGRESS: ${LLM_ALLOW_CLOUD_EGRESS:-false}
+      LLM_REDACT_CLOUD_PROMPTS: ${LLM_REDACT_CLOUD_PROMPTS:-true}
+      LLM_REDACTION_SALT: ${LLM_REDACTION_SALT:-}
     volumes:
       - ${ANALYSIS_CONFIG_FILE:-./config.yaml.example}:/app/config.yaml:ro
 
