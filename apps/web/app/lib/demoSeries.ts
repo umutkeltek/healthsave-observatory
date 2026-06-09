@@ -1,4 +1,4 @@
-import type { MetricSeries, SeriesPoint } from "./api";
+import type { MetricSeries, MetricSummary, SeriesPoint } from "./api";
 
 // A believable demo series for /compare so a fresh clone (no backend) renders
 // alive — parallel to DEMO_PROVENANCE. Two sources for the SAME metric (HRV),
@@ -24,6 +24,44 @@ function points(source: string, vals: number[]): SeriesPoint[] {
     stream_id: stream,
     confidence: null,
   }));
+}
+
+// A generic demo series for the Patterns panels (heatmap / weekday / zones /
+// table) so a fresh clone renders them alive for any selected metric. 14 days,
+// every 2h, with a daily rhythm (low overnight, midday peak) + a mild weekend
+// dip and two sources. Deterministic — no Date.now(). Clearly labelled as demo.
+export function demoPatternSeries(metric: MetricSummary): MetricSeries {
+  const base = Date.parse("2026-05-27T00:00:00Z");
+  const isHr = metric.id.includes("heart_rate") || metric.canonical_unit === "bpm";
+  const baseVal = isHr ? 78 : 50;
+  const amp = isHr ? 46 : 30;
+  const points: SeriesPoint[] = [];
+  for (let day = 0; day < 14; day += 1) {
+    for (let hour = 0; hour < 24; hour += 2) {
+      const ts = base + (day * 24 + hour) * 3_600_000;
+      const rhythm = Math.sin(((hour - 6) / 24) * Math.PI * 2); // peak ~14:00
+      const weekend = day % 7 >= 5 ? -0.35 : 0;
+      const wobble = ((day * 7 + hour) % 5) / 10 - 0.2;
+      const value = Math.round(baseVal + amp * (0.5 * rhythm + 0.5) + amp * (weekend + wobble) * 0.4);
+      const apple = (day + hour) % 3 !== 0;
+      points.push({
+        t: new Date(ts).toISOString(),
+        value: Math.max(0, value),
+        code: null,
+        unit: metric.canonical_unit ?? "",
+        source_id: apple ? "Apple Watch" : "Whoop",
+        stream_id: apple ? "demo-apple-watch" : "demo-whoop",
+        confidence: null,
+      });
+    }
+  }
+  return {
+    metric,
+    range: "14d",
+    start: new Date(base).toISOString(),
+    end: new Date(base + 14 * 24 * 3_600_000).toISOString(),
+    points,
+  };
 }
 
 export const DEMO_COMPARE_SERIES: MetricSeries = {

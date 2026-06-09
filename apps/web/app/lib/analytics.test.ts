@@ -10,6 +10,7 @@ import {
   hrZoneHistogram,
   periodSplit,
   topN,
+  weekHourPivot,
 } from "./analytics";
 import type { SeriesPoint } from "./api";
 
@@ -106,6 +107,18 @@ describe("dayOfWeekPivot", () => {
     const cells = dayOfWeekPivot([pt("2026-06-01T12:00:00Z", 100)]);
     expect(cells[0]).toEqual({ dow: 0, label: "Mon", value: 100, n: 1 });
     expect(cells[6].n).toBe(0);
+  });
+});
+
+describe("weekHourPivot", () => {
+  it("returns a 7×24 grid with stats in the right cells (UTC)", () => {
+    // 2026-06-01 is a Monday; 08:00 UTC.
+    const cells = weekHourPivot([pt("2026-06-01T08:00:00Z", 10), pt("2026-06-01T08:30:00Z", 20)]);
+    expect(cells.length).toBe(7 * 24);
+    const mon8 = cells.find((c) => c.dow === 0 && c.hour === 8);
+    expect(mon8).toEqual({ dow: 0, hour: 8, value: 15, n: 2 });
+    const empty = cells.find((c) => c.dow === 3 && c.hour === 3);
+    expect(empty?.value).toBeNull();
   });
 });
 
