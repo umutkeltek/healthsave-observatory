@@ -6,6 +6,7 @@ import { useMemo, useState, useTransition } from "react";
 import {
   applyIntelligenceAction,
   consentAction,
+  detectLocalAction,
   testConnectionAction,
 } from "../lib/actions";
 import type {
@@ -85,6 +86,7 @@ export function IntelligenceSettings({ initial }: { initial: IntelligenceView | 
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
   const [testErr, setTestErr] = useState<string | null>(null);
+  const [detectMsg, setDetectMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [consentChecked, setConsentChecked] = useState(false);
 
   const savedCloud = view.mode === "cloud" && view.primary !== null;
@@ -152,6 +154,33 @@ export function IntelligenceSettings({ initial }: { initial: IntelligenceView | 
       });
       if (result.ok && result.result) setTestResult(result.result);
       else setTestErr(result.error ?? "Test failed.");
+    });
+  }
+
+  function detect() {
+    setDetectMsg(null);
+    startTransition(async () => {
+      const result = await detectLocalAction();
+      if (!result.ok) {
+        setDetectMsg({ ok: false, text: result.error ?? "Detection failed." });
+        return;
+      }
+      const found = (result.candidates ?? []).find((c) => c.reachable);
+      if (!found) {
+        setDetectMsg({
+          ok: false,
+          text: "No local model found. Run deploy/local-ai/setup-local-ai.sh to install one.",
+        });
+        return;
+      }
+      setBaseUrl(found.url);
+      if (found.models.length > 0) setModel(found.models[0]);
+      setDetectMsg({
+        ok: true,
+        text: `Found Ollama at ${found.url}${
+          found.models.length ? ` · ${found.models.length} model(s)` : " (no models yet — pull one)"
+        }.`,
+      });
     });
   }
 
@@ -233,16 +262,31 @@ export function IntelligenceSettings({ initial }: { initial: IntelligenceView | 
           </label>
 
           {mode === "local" && (
-            <label className="field">
-              <span className="field-label">Base URL</span>
-              <input
-                className="field-input"
-                value={baseUrl}
-                onChange={(e) => setBaseUrl(e.target.value)}
-                placeholder={OLLAMA_DEFAULT_BASE}
-                spellCheck={false}
-              />
-            </label>
+            <>
+              <label className="field">
+                <span className="field-label">Base URL</span>
+                <input
+                  className="field-input"
+                  value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                  placeholder={OLLAMA_DEFAULT_BASE}
+                  spellCheck={false}
+                />
+                <span className="field-hint">
+                  Point at a model on your own machine. New here?{" "}
+                  <button type="button" className="intel-link" disabled={pending} onClick={detect}>
+                    Detect a local model
+                  </button>{" "}
+                  or run <code>deploy/local-ai/setup-local-ai.sh</code> to install one.
+                </span>
+              </label>
+              {detectMsg && (
+                <div className={`test-result ${detectMsg.ok ? "ok" : "bad"}`}>
+                  {detectMsg.ok ? "✓ " : "✗ "}
+                  {detectMsg.text}
+                </div>
+              )}
+            </>
           )}
 
           {mode === "cloud" && (

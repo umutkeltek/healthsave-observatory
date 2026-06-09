@@ -121,6 +121,41 @@ The egress trust-boundary posture (the moat, made inspectable).
                 "reason": "raw rows never cross the host boundary" } ] }
 ```
 
+### `GET /api/v2/intelligence` · `PUT /api/v2/intelligence` — keyed
+The LLM-narrator ("Intelligence") settings. `GET` returns the current posture with **no secrets** (only `key_last4`); `managed_by_env` is true when deploy-time env config is still the effective source. `PUT` applies `mode` (off/local/cloud) + the primary provider/model (+ optional write-only `api_key`) + the fallback chain. The server classifies each route's trust zone; `PUT` does **not** grant cloud egress (see `/consent`).
+```json
+// GET response
+{ "mode": "cloud", "managed_by_env": false, "env_provider": null,
+  "allow_cloud_egress": true, "redact_cloud_prompts": true, "revision": 3,
+  "consent": { "granted": true, "version": "2026-06", "at": "2026-06-09T00:00:00Z" },
+  "primary": { "id": 1, "provider": "deepseek", "model": "deepseek/deepseek-chat",
+               "destination": "cloud", "key_last4": "••••abcd", "enabled": true },
+  "fallback": [ { "priority": 0, "connection_id": 2, "provider": "openrouter",
+                  "model": "openrouter/openai/gpt-oss-120b:free", "destination": "cloud" } ] }
+// PUT body
+{ "mode": "cloud", "primary": { "provider": "deepseek", "model": "deepseek/deepseek-chat",
+  "api_key": "sk-…" }, "redact_cloud_prompts": true, "fallback": [] }
+```
+
+### `POST /api/v2/intelligence/consent` — keyed
+The separate consent step: grant or revoke the cloud-egress opt-in. `mode=cloud` alone never sends anything until consent is granted here (409 if granted before a cloud provider is configured).
+```json
+{ "granted": true, "consent_version": "2026-06", "consent_text_hash": null }
+```
+
+### `POST /api/v2/intelligence/test-connection` — keyed
+Verify a provider key works before consent — an SSRF-guarded one-token probe carrying no health data. Test a stored connection by `connection_id`, or an ad-hoc `{provider, model, base_url?, api_key?}`. Audited as `provider_healthcheck`.
+```json
+{ "ok": true, "destination": "cloud", "model": "deepseek/deepseek-chat", "latency_ms": 412, "error": null }
+```
+
+### `GET /api/v2/intelligence/detect-local` — keyed
+Probe the known local Ollama endpoints (the bundled sidecar / host) so the UI can auto-fill "Local". No egress, no health data.
+```json
+{ "candidates": [ { "url": "http://ollama:11434", "reachable": true, "models": ["llama3.1:8b"] },
+                  { "url": "http://host.docker.internal:11434", "reachable": false, "models": [] } ] }
+```
+
 ### `GET /api/v2/readiness` — keyed
 Per-metric data sufficiency (is there enough history to run anomaly/trend analysis). Drives the dashboard "what can I analyze yet" view.
 ```json

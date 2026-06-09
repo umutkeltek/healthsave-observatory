@@ -185,6 +185,36 @@ services:
     volumes:
       - ${ANALYSIS_CONFIG_FILE:-./config.yaml.example}:/app/config.yaml:ro
 
+  # Bundled local-AI sidecar — opt-in via the `local-ai` profile (ADR-0003 D8).
+  # The zero-config "easy local" path for non-technical self-hosters: bring it
+  # up and the api/worker reach a real narrator at http://ollama:11434 (the
+  # default LLM_BASE_URL above), so "Local" mode works without an external
+  # model server. Hardened:
+  #   * OLLAMA_NO_CLOUD=1 disables Ollama's cloud-model offload, so a route
+  #     classified "local" can NEVER silently proxy to ollama.com — the egress
+  #     boundary stays honest (a remote / Ollama-cloud route is already CLOUD
+  #     per ADR-0003 D1).
+  #   * NO host port published — reachable only on the internal compose network.
+  #   * NO Docker socket mounted (a privilege-escalation surface, D8).
+  # GPU: this base service is CPU-only (works on every host incl. macOS, where
+  # Docker has no GPU passthrough). On an NVIDIA Linux host, add a device
+  # reservation in a compose override. Model weights are pulled on setup, not
+  # baked into the image — see deploy/local-ai/setup-local-ai.sh.
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    profiles: ["local-ai"]
+    environment:
+      OLLAMA_NO_CLOUD: "1"
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   # Bundled MQTT broker — opt-in via the `mosquitto` profile so users
   # who already run their own broker (or a homelab Mosquitto) are not
   # forced into a duplicate one. Default posture is single-user LAN:
@@ -285,3 +315,4 @@ volumes:
   grafana_data:
   mqtt_data:
   mqtt_log:
+  ollama_models:
