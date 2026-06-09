@@ -446,8 +446,15 @@ export type TestConnectionResult = {
   error: string | null;
 };
 
+export type DetectCandidate = { url: string; reachable: boolean; models: string[] };
+export type DetectLocalResult = { candidates: DetectCandidate[] };
+
 export function fetchIntelligence(): Promise<IntelligenceView> {
   return getJson<IntelligenceView>("/api/v2/intelligence");
+}
+
+export function fetchDetectLocal(): Promise<DetectLocalResult> {
+  return getJson<DetectLocalResult>("/api/v2/intelligence/detect-local");
 }
 
 export function applyIntelligence(body: ApplyIntelligencePayload): Promise<IntelligenceView> {

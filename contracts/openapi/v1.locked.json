@@ -3205,6 +3205,48 @@
         "summary": "Post Consent"
       }
     },
+    "/api/v2/intelligence/detect-local": {
+      "get": {
+        "description": "Probe the known local Ollama endpoints so the UI can auto-fill \"Local\".\n\nReturns each candidate's reachability + installed models. No DB, no health\ndata, no egress (the targets are inside the trust boundary). Lets a\nnon-technical user click \"Detect\" instead of typing a base URL.",
+        "operationId": "detect_local_api_v2_intelligence_detect_local_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Detect Local Api V2 Intelligence Detect Local Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Detect Local"
+      }
+    },
     "/api/v2/intelligence/test-connection": {
       "post": {
         "description": "Probe a provider (SSRF-guarded, one token, no health data); audit it.",

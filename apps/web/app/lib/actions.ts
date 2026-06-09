@@ -13,6 +13,8 @@ import {
   type ApplyIntelligencePayload,
   type ConsentPayload,
   createExperiment,
+  type DetectCandidate,
+  fetchDetectLocal,
   postConsent,
   postTestConnection,
   type TestConnectionPayload,
@@ -96,5 +98,16 @@ export async function testConnectionAction(
     return { ok: true, result };
   } catch (error) {
     return failure(error, "Could not reach the provider.");
+  }
+}
+
+export type DetectActionResult = ActionResult & { candidates?: DetectCandidate[] };
+
+export async function detectLocalAction(): Promise<DetectActionResult> {
+  try {
+    const { candidates } = await fetchDetectLocal();
+    return { ok: true, candidates };
+  } catch (error) {
+    return failure(error, "Could not probe for a local model.");
   }
 }

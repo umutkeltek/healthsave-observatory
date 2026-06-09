@@ -416,3 +416,43 @@ async def test_test_connection_stored_records_result(repo, monkeypatch):
     assert out["ok"] is True
     assert repo.connections[0].last_test_status == "ok"
     assert "provider_healthcheck" in repo.audit
+
+
+# ── detect-local (Phase 4 easy-local discovery) ─────────────────────────
+
+
+async def test_probe_ollama_parses_models(monkeypatch):
+    import httpx
+
+    real_client = httpx.AsyncClient  # capture before patching to avoid recursion
+
+    def handler(request):
+        return httpx.Response(200, json={"models": [{"name": "llama3.1:8b"}, {"name": "qwen3"}]})
+
+    monkeypatch.setattr(
+        httpx, "AsyncClient", lambda **kw: real_client(transport=httpx.MockTransport(handler))
+    )
+    out = await mod._probe_ollama("http://ollama:11434")
+    assert out == {
+        "url": "http://ollama:11434",
+        "reachable": True,
+        "models": ["llama3.1:8b", "qwen3"],
+    }
+
+
+async def test_probe_ollama_unreachable_is_not_an_error():
+    # A refused connection is a normal "not reachable" answer, never a raise.
+    out = await mod._probe_ollama("http://127.0.0.1:1")
+    assert out["reachable"] is False
+    assert out["models"] == []
+
+
+async def test_detect_local_aggregates_known_endpoints(monkeypatch):
+    async def fake_probe(url):
+        return {"url": url, "reachable": url.endswith("ollama:11434"), "models": ["m"]}
+
+    monkeypatch.setattr(mod, "_probe_ollama", fake_probe)
+    out = await mod.detect_local()
+    urls = [c["url"] for c in out["candidates"]]
+    assert urls == list(mod._LOCAL_OLLAMA_URLS)
+    assert out["candidates"][0]["reachable"] is True  # the sidecar

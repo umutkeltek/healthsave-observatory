@@ -30,6 +30,7 @@ import logging
 import os
 from typing import Literal
 
+import httpx
 from analysis.config import LLMConfig
 from analysis.egress import Destination, EgressRoute, classify_destination
 from analysis.llm.client import HealthLLMClient
@@ -54,6 +55,26 @@ _repo = repo_module
 def _make_client(config: LLMConfig) -> HealthLLMClient:
     """Build a narrator client for a one-off healthcheck (test seam)."""
     return HealthLLMClient(config)
+
+
+# Known LOCAL Ollama endpoints to probe for the "easy local" path (ADR-0003 D8):
+# the bundled sidecar (compose `local-ai` profile) and an Ollama running on the
+# host machine. Both hostnames are inside the trust boundary (analysis.egress
+# _LOCAL_HOSTS), so probing them is not an egress; the list is hardcoded, so the
+# detect endpoint is not an SSRF surface.
+_LOCAL_OLLAMA_URLS = ("http://ollama:11434", "http://host.docker.internal:11434")
+
+
+async def _probe_ollama(url: str) -> dict:
+    """GET ``<url>/api/tags`` (short timeout); return reachability + model names."""
+    try:
+        async with httpx.AsyncClient(timeout=2.5) as client:
+            resp = await client.get(f"{url}/api/tags")
+            resp.raise_for_status()
+            models = [m.get("name") for m in resp.json().get("models", []) if m.get("name")]
+        return {"url": url, "reachable": True, "models": models}
+    except Exception:  # noqa: BLE001 - unreachable is a normal answer here
+        return {"url": url, "reachable": False, "models": []}
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -337,6 +358,20 @@ async def test_connection(
         "latency_ms": result.latency_ms,
         "error": result.error,
     }
+
+
+@router.get("/detect-local")
+async def detect_local() -> dict:
+    """Probe the known local Ollama endpoints so the UI can auto-fill "Local".
+
+    Returns each candidate's reachability + installed models. No DB, no health
+    data, no egress (the targets are inside the trust boundary). Lets a
+    non-technical user click "Detect" instead of typing a base URL.
+    """
+    import asyncio
+
+    candidates = await asyncio.gather(*[_probe_ollama(u) for u in _LOCAL_OLLAMA_URLS])
+    return {"candidates": list(candidates)}
 
 
 async def _stored_model(session: AsyncSession, connection_id: int) -> str:
