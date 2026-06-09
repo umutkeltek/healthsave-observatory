@@ -25,14 +25,32 @@ from .encryption import (
     encrypt,
     generate_key,
 )
+from .keyring import (
+    KEYRING_ENV,
+    LEGACY_KEY_VERSION,
+    Keyring,
+    SealedSecret,
+    active_key_version,
+    last4,
+    seal,
+    unseal,
+)
 from .tokens import DEFAULT_OWNER_ID, OAuthToken
 
 __all__ = [
     "DEFAULT_OWNER_ID",
     "ENV_KEY",
+    "KEYRING_ENV",
+    "LEGACY_KEY_VERSION",
+    "Keyring",
     "OAuthToken",
+    "SealedSecret",
     "TokenEncryptionError",
+    "active_key_version",
     "decrypt",
     "encrypt",
     "generate_key",
+    "last4",
+    "seal",
+    "unseal",
 ]
