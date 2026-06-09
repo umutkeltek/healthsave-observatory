@@ -12,10 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 _FINDINGS_DOC = (
-    Path(__file__).resolve().parents[1]
-    / "docs"
-    / "surfaces"
-    / "findings-and-body-briefs.md"
+    Path(__file__).resolve().parents[1] / "docs" / "surfaces" / "findings-and-body-briefs.md"
 )
 
 
@@ -25,8 +22,7 @@ def _roadmap_not_yet_line() -> str:
         if "not" in low and "yet" in low and "includ" in low:
             return low
     raise AssertionError(
-        "expected a 'not yet included' roadmap line in "
-        "docs/surfaces/findings-and-body-briefs.md"
+        "expected a 'not yet included' roadmap line in docs/surfaces/findings-and-body-briefs.md"
     )
 
 
