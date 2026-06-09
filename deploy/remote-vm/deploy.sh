@@ -7,6 +7,7 @@ REMOTE_ENV_DIR="${REMOTE_ENV_DIR:-/srv/localappdata/health-data-hub}"
 DEPLOY_REF="${DEPLOY_REF:-HEAD}"
 API_PORT="${API_PORT:-18080}"
 GRAFANA_PORT="${GRAFANA_PORT:-3300}"
+WEB_PORT="${WEB_PORT:-18090}"
 DB_PORT="${DB_PORT:-15432}"
 DB_PUBLISH_PORT="${HEALTH_DATA_HUB_DB_PUBLISH_PORT:-$DB_PORT}"
 PROJECT_NAME="${PROJECT_NAME:-health-data-hub}"
@@ -108,6 +109,7 @@ LLM_API_KEY=
 HA_MQTT_ENABLED=false
 HEALTH_DATA_HUB_API_PORT=$API_PORT
 HEALTH_DATA_HUB_GRAFANA_PORT=$GRAFANA_PORT
+HEALTH_DATA_HUB_WEB_PORT=$WEB_PORT
 HEALTH_DATA_HUB_DB_PUBLISH_PORT=$DB_PUBLISH_PORT
 HEALTH_DATA_HUB_DB_PORT=$EXTERNAL_DB_PORT
 HEALTH_DATA_HUB_DATABASE_MODE=$DATABASE_MODE
@@ -128,6 +130,7 @@ set_env_key() {
 }
 set_env_key HEALTH_DATA_HUB_API_PORT \"$API_PORT\"
 set_env_key HEALTH_DATA_HUB_GRAFANA_PORT \"$GRAFANA_PORT\"
+set_env_key HEALTH_DATA_HUB_WEB_PORT \"$WEB_PORT\"
 set_env_key HEALTH_DATA_HUB_DB_PUBLISH_PORT \"$DB_PUBLISH_PORT\"
 set_env_key HEALTH_DATA_HUB_DATABASE_MODE \"$DATABASE_MODE\"
 if [ \"$DATABASE_MODE\" = \"external\" ]; then
@@ -157,7 +160,7 @@ cd \"$REMOTE_DIR\"
 ln -sf \"$REMOTE_ENV_DIR/.env\" .env
 if [ \"$DATABASE_MODE\" = \"external\" ]; then
   cp deploy/remote-vm/docker-compose.external-db.override.yml docker-compose.remote-vm.override.yml
-  COMPOSE_TARGETS=\"migrate api worker grafana\"
+  COMPOSE_TARGETS=\"migrate api worker grafana web\"
 else
   cat > docker-compose.remote-vm.override.yml <<EOF
 services:
@@ -170,8 +173,11 @@ services:
   grafana:
     ports: !override
       - \"\${HEALTH_DATA_HUB_GRAFANA_PORT:-$GRAFANA_PORT}:3000\"
+  web:
+    ports: !override
+      - \"\${HEALTH_DATA_HUB_WEB_PORT:-$WEB_PORT}:4173\"
 EOF
-  COMPOSE_TARGETS=\"db migrate api worker grafana\"
+  COMPOSE_TARGETS=\"db migrate api worker grafana web\"
 fi
 docker compose --env-file \"$REMOTE_ENV_DIR/.env\" \
   -f docker-compose.yml \
@@ -195,6 +201,7 @@ DEPLOYED_AT=$DEPLOYED_AT
 REMOTE_DIR=$REMOTE_DIR
 API_PORT=$API_PORT
 GRAFANA_PORT=$GRAFANA_PORT
+WEB_PORT=$WEB_PORT
 DB_PORT=$DB_PORT
 DB_PUBLISH_PORT=$DB_PUBLISH_PORT
 DATABASE_MODE=$DATABASE_MODE
@@ -203,5 +210,6 @@ EOF
 
 echo "health-data-hub deployed to $REMOTE_HOST:$REMOTE_DIR"
 echo "commit: $COMMIT_SHA"
+echo "observatory (web): http://$REMOTE_HOST:$WEB_PORT"
 echo "api: http://$REMOTE_HOST:$API_PORT"
 echo "grafana: http://$REMOTE_HOST:$GRAFANA_PORT"
