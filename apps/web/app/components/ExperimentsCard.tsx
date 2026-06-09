@@ -200,7 +200,7 @@ export function ExperimentsCard({
     return (
       <article className="card experiments">
         <h2>What to Try Next</h2>
-        <p className="empty">Backend unreachable — start datahub and sync from HealthSave.</p>
+        <p className="empty">Backend unreachable — start HealthSave Observatory and sync from the app.</p>
       </article>
     );
   }

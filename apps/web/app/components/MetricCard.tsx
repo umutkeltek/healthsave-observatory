@@ -29,7 +29,7 @@ export function MetricCard({
     return (
       <article className="card">
         <h2>{fallbackTitle}</h2>
-        <p className="empty">Backend unreachable — start datahub and sync from HealthSave.</p>
+        <p className="empty">Backend unreachable — start HealthSave Observatory and sync from the app.</p>
       </article>
     );
   }

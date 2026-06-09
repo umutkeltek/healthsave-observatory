@@ -1,4 +1,4 @@
-# Upgrading Health Data Hub
+# Upgrading HealthSave Observatory
 
 How to update an existing install safely. The general procedure:
 

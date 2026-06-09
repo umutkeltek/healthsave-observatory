@@ -77,7 +77,7 @@ function EmptyToday() {
       <article className="hero">
         <div className="hero-eyebrow">Today</div>
         <p className="recovery-line" style={{ marginTop: 8 }}>
-          No data yet. datahub turns your Apple Health + wearable data into a daily, private
+          No data yet. HealthSave Observatory turns your Apple Health + wearable data into a daily, private
           briefing — but it needs a day or so of readings first.
         </p>
         <div className="exp-action">
@@ -118,7 +118,7 @@ export default async function Home() {
     return (
       <>
         <EmptyToday />
-        <footer className="foot">datahub · canonical observations · local-first</footer>
+        <footer className="foot">HealthSave Observatory · canonical observations · local-first</footer>
       </>
     );
   }
@@ -166,7 +166,7 @@ export default async function Home() {
         <ReadinessCard readiness={readiness} sparklines={sparklines} />
       </section>
 
-      <footer className="foot">datahub · canonical observations · local-first</footer>
+      <footer className="foot">HealthSave Observatory · canonical observations · local-first</footer>
     </>
   );
 }

@@ -109,7 +109,7 @@ export function EvidenceCard({ findings }: { findings: Finding[] | null }) {
     return (
       <article className="card evidence">
         <h2>Evidence</h2>
-        <p className="empty">Backend unreachable — start datahub and sync from HealthSave.</p>
+        <p className="empty">Backend unreachable — start HealthSave Observatory and sync from the app.</p>
       </article>
     );
   }

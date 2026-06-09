@@ -310,7 +310,7 @@ def _device_payload(config: HomeAssistantMQTTConfig) -> dict[str, Any]:
     return {
         "identifiers": [config.device_identifier],
         "manufacturer": "HealthSave",
-        "model": "HealthSave Data Hub MQTT Bridge",
+        "model": "HealthSave Observatory MQTT Bridge",
         "name": config.device_name,
     }
 
