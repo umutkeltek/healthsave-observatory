@@ -97,6 +97,10 @@ class LLMConfig(BaseModel):
     # optional hashed-token method (stable pseudonyms across prompts).
     redact_cloud_prompts: bool = True
     redaction_salt: str = ""
+    # Extra hosts the operator declares inside the trust boundary (e.g. a LAN
+    # Ollama at "nas.local"). Loopback + the bundled "ollama" sidecar are always
+    # local; this only widens it. Route-based classification — see egress.py.
+    trusted_local_hosts: list[str] = Field(default_factory=list)
 
 
 class MQTTConfig(BaseModel):
@@ -191,6 +195,10 @@ def _with_environment_overrides(config: AnalysisConfig) -> AnalysisConfig:
             entries.append(LLMFallbackEntry(provider=provider, model=model))
         if entries:
             llm_updates["fallback"] = entries
+    if hosts_raw := os.getenv("LLM_TRUSTED_LOCAL_HOSTS"):
+        hosts = [h.strip() for h in hosts_raw.split(",") if h.strip()]
+        if hosts:
+            llm_updates["trusted_local_hosts"] = hosts
 
     if llm_updates:
         config.llm = config.llm.model_copy(update=llm_updates)
