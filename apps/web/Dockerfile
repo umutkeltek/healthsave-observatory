@@ -23,6 +23,9 @@ COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 USER appuser
 EXPOSE 4173
+# Probe 127.0.0.1, not localhost: the standalone server binds IPv4 (HOSTNAME=0.0.0.0),
+# but on node:20-slim `localhost` resolves to IPv6 ::1 first, so the fetch hangs to
+# the timeout and the container is wrongly marked unhealthy while serving fine.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "fetch('http://localhost:4173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:4173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "server.js"]
