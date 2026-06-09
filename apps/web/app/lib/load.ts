@@ -8,6 +8,7 @@ import {
   fetchCandidates,
   fetchExperiments,
   fetchFindings,
+  fetchIntelligence,
   fetchLatest,
   fetchMetrics,
   fetchPrivacy,
@@ -17,6 +18,7 @@ import {
   fetchStreams,
   isNarratorOff,
   type Finding,
+  type IntelligenceView,
   type InsightsLatest,
   type MetricSeries,
   type MetricSummary,
@@ -97,6 +99,14 @@ export async function safeExperiments(): Promise<ExperimentList | null> {
 export async function safePrivacy(): Promise<Privacy | null> {
   try {
     return await fetchPrivacy();
+  } catch {
+    return null;
+  }
+}
+
+export async function safeIntelligence(): Promise<IntelligenceView | null> {
+  try {
+    return await fetchIntelligence();
   } catch {
     return null;
   }

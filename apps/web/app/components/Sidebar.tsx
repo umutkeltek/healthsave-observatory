@@ -54,6 +54,12 @@ const ICONS: Record<string, ReactNode> = {
     </>
   ),
   privacy: <path d="M8 2.2l4.5 1.8v3.6c0 2.8-1.9 4.7-4.5 5.6-2.6-.9-4.5-2.8-4.5-5.6V4z" />,
+  intelligence: (
+    <>
+      <path d="M8 1.8l1.5 3.2 3.2 1.5-3.2 1.5L8 11.2 6.5 8 3.3 6.5 6.5 5z" />
+      <path d="M12.5 10.5l.6 1.3 1.3.6-1.3.6-.6 1.3-.6-1.3-1.3-.6 1.3-.6z" />
+    </>
+  ),
 };
 
 const NAV = [
@@ -64,6 +70,7 @@ const NAV = [
   { href: "/data", label: "Data", icon: "data" },
   { href: "/compare", label: "Compare", icon: "compare" },
   { href: "/privacy", label: "Privacy", icon: "privacy" },
+  { href: "/intelligence", label: "Intelligence", icon: "intelligence" },
 ] as const;
 
 function NavIcon({ name }: { name: string }) {
