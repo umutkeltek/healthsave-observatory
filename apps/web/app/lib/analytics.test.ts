@@ -6,14 +6,20 @@ import {
   dayOfWeekPivot,
   distribution,
   groupBySource,
+  groupByStream,
   hrZoneHistogram,
   periodSplit,
   topN,
 } from "./analytics";
 import type { SeriesPoint } from "./api";
 
-function pt(t: string, value: number | null, source_id = "apple"): SeriesPoint {
-  return { t, value, code: null, unit: "count", source_id, stream_id: null, confidence: null };
+function pt(
+  t: string,
+  value: number | null,
+  source_id = "apple",
+  stream_id: string | null = null,
+): SeriesPoint {
+  return { t, value, code: null, unit: "count", source_id, stream_id, confidence: null };
 }
 
 describe("groupBySource", () => {
@@ -26,6 +32,21 @@ describe("groupBySource", () => {
   });
   it("handles empty input", () => {
     expect(groupBySource([]).size).toBe(0);
+  });
+});
+
+describe("groupByStream", () => {
+  it("groups by stream_id and drops null-stream points", () => {
+    const pts = [
+      pt("t1", 1, "apple", "watch"),
+      pt("t2", 2, "apple", "phone"),
+      pt("t3", 3, "apple", "watch"),
+      pt("t4", 4, "apple", null),
+    ];
+    const g = groupByStream(pts);
+    expect(g.size).toBe(2);
+    expect(g.get("watch")?.length).toBe(2);
+    expect(g.get("phone")?.length).toBe(1);
   });
 });
 
