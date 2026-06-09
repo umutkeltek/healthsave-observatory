@@ -1,4 +1,4 @@
-import type { Finding, Privacy, Readiness } from "./lib/api";
+import { type Finding, isNarratorOff, type Privacy, type Readiness } from "./lib/api";
 import { EvidenceCard } from "./components/EvidenceCard";
 import { ExperimentsCard } from "./components/ExperimentsCard";
 import { LocalVaultReceipt, type VaultStep } from "./components/LocalVaultReceipt";
@@ -62,11 +62,14 @@ function vaultSteps(privacy: Privacy | null, readiness: Readiness | null): Vault
   const provider = privacy?.provider ?? "ollama";
   const local = privacy?.is_local ?? true;
   const cloudActive = privacy?.cloud_active ?? false;
+  const narratorOff = isNarratorOff(privacy?.provider);
   return [
     { label: `${source} → ingest`, meta: agoLabel(readiness?.last_ingested_at) },
     { label: "TimescaleDB", meta: totalRows ? `${totalRows.toLocaleString()} rows` : "local store" },
     { label: "Statistical engine", meta: "deterministic" },
-    { label: `${provider} ${local ? "(local)" : "(cloud)"}`, meta: local ? "on-device" : "cloud" },
+    narratorOff
+      ? { label: "LLM narrator", meta: "off — none" }
+      : { label: `${provider} ${local ? "(local)" : "(cloud)"}`, meta: local ? "on-device" : "cloud" },
     { label: "Cloud egress", meta: cloudActive ? "active" : "blocked", blocked: !cloudActive },
   ];
 }

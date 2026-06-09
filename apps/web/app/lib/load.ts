@@ -15,6 +15,7 @@ import {
   fetchSeries,
   fetchSources,
   fetchStreams,
+  isNarratorOff,
   type Finding,
   type InsightsLatest,
   type MetricSeries,
@@ -151,6 +152,21 @@ export async function loadReadinessSparklines(
     }),
   );
   return Object.fromEntries(entries);
+}
+
+// The shell's egress-posture chip, derived from the same privacy read the
+// /privacy page uses. A narrator-off / no-egress host shows honestly as
+// "on-host · no egress" instead of being bucketed as cloud; `ok=false` only
+// when data *actually* leaves (a cloud provider with the opt-in active).
+export type PostureChip = { text: string; ok: boolean };
+
+export function postureChip(privacy: Privacy | null): PostureChip {
+  // Backend unreachable: assert nothing we can't verify — just "on-host".
+  if (!privacy) return { text: "on-host", ok: true };
+  if (isNarratorOff(privacy.provider)) return { text: "on-host · no egress", ok: true };
+  if (privacy.is_local) return { text: `local · ${privacy.provider}`, ok: true };
+  if (privacy.cloud_active) return { text: `cloud · ${privacy.provider}`, ok: false };
+  return { text: `cloud (off) · ${privacy.provider}`, ok: true };
 }
 
 // "2h ago" style relative label for the shell's sync status. Server-side only.

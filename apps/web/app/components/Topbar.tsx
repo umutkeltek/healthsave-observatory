@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 
+import type { PostureChip } from "../lib/load";
 import { ThemeToggle } from "./ThemeToggle";
 
 const TITLES: Record<string, { title: string; sub: string }> = {
@@ -16,13 +17,11 @@ const TITLES: Record<string, { title: string; sub: string }> = {
 };
 
 export function Topbar({
-  provider,
-  isLocal,
+  posture,
   synced,
   onMenu,
 }: {
-  provider: string;
-  isLocal: boolean;
+  posture: PostureChip;
   synced: string;
   onMenu?: () => void;
 }) {
@@ -40,9 +39,7 @@ export function Topbar({
         <p>{sub}</p>
       </div>
       <div className="topbar-status">
-        <span className="pill mono">
-          {provider} · {isLocal ? "local" : "cloud"}
-        </span>
+        <span className="pill mono">{posture.text}</span>
         <span className="pill mono">synced {synced}</span>
         <ThemeToggle />
       </div>

@@ -1,4 +1,4 @@
-import type { Privacy } from "../lib/api";
+import { isNarratorOff, type Privacy } from "../lib/api";
 
 const CLASS_LABELS: Record<string, string> = {
   raw_observations: "raw observations",
@@ -23,11 +23,14 @@ export function PrivacyCard({ privacy }: { privacy: Privacy | null }) {
   }
 
   const local = !privacy.cloud_active;
-  const detail = privacy.is_local
-    ? `Insights are generated locally by ${privacy.provider}. No health data is sent anywhere.`
-    : privacy.cloud_active
-      ? `Derived insights are sent to ${privacy.provider}. Raw health records never leave.`
-      : `${privacy.provider} is configured, but cloud egress is off — nothing leaves this host.`;
+  const narratorOff = isNarratorOff(privacy.provider);
+  const detail = narratorOff
+    ? "No LLM narrator is configured — findings are computed on-device by the statistical engine, and nothing leaves this host."
+    : privacy.is_local
+      ? `Insights are generated locally by ${privacy.provider}. No health data is sent anywhere.`
+      : privacy.cloud_active
+        ? `Derived insights are sent to ${privacy.provider}. Raw health records never leave.`
+        : `${privacy.provider} is configured, but cloud egress is off — nothing leaves this host.`;
 
   const leaving = privacy.egress.filter((e) => e.leaves_host).map((e) => label(e.payload_class));
 
@@ -36,7 +39,9 @@ export function PrivacyCard({ privacy }: { privacy: Privacy | null }) {
       <h2>What Leaves This Host</h2>
 
       <div className="readiness-head">
-        <span className="cand-hyp">{local ? "Local-only" : "Cloud narration on"}</span>
+        <span className="cand-hyp">
+          {narratorOff ? "On-host only" : local ? "Local-only" : "Cloud narration on"}
+        </span>
         <span className={`badge ${local ? "ready" : "waiting"}`}>
           {local ? "nothing leaves" : `→ ${privacy.provider}`}
         </span>

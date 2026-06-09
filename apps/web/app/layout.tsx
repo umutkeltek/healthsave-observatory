@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 import { Shell } from "./components/Shell";
 import "./globals.css";
-import { agoLabel, safePrivacy, safeReadiness } from "./lib/load";
+import { agoLabel, postureChip, safePrivacy, safeReadiness } from "./lib/load";
 
 const sans = Geist({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
 const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
@@ -18,8 +18,7 @@ export const metadata: Metadata = {
 // Best-effort: defaults keep the chrome sensible when the backend is unreachable.
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const [privacy, readiness] = await Promise.all([safePrivacy(), safeReadiness()]);
-  const provider = privacy?.provider ?? "ollama";
-  const isLocal = privacy?.is_local ?? true;
+  const posture = postureChip(privacy);
   const synced = agoLabel(readiness?.last_ingested_at ?? readiness?.last_observation_at ?? null);
 
   return (
@@ -34,7 +33,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         />
       </head>
       <body>
-        <Shell provider={provider} isLocal={isLocal} synced={synced}>
+        <Shell posture={posture} synced={synced}>
           {children}
         </Shell>
       </body>

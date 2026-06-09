@@ -3,19 +3,18 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 
+import type { PostureChip } from "../lib/load";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
 // Client shell so the sidebar can become a slide-over drawer on small screens.
 // On desktop it's a normal fixed sidebar; the menu button + scrim are CSS-hidden.
 export function Shell({
-  provider,
-  isLocal,
+  posture,
   synced,
   children,
 }: {
-  provider: string;
-  isLocal: boolean;
+  posture: PostureChip;
   synced: string;
   children: ReactNode;
 }) {
@@ -23,12 +22,7 @@ export function Shell({
 
   return (
     <div className={`app ${open ? "nav-open" : ""}`}>
-      <Sidebar
-        provider={provider}
-        isLocal={isLocal}
-        synced={synced}
-        onNavigate={() => setOpen(false)}
-      />
+      <Sidebar posture={posture} synced={synced} onNavigate={() => setOpen(false)} />
       <button
         type="button"
         className="nav-scrim"
@@ -37,12 +31,7 @@ export function Shell({
         onClick={() => setOpen(false)}
       />
       <div className="app-main">
-        <Topbar
-          provider={provider}
-          isLocal={isLocal}
-          synced={synced}
-          onMenu={() => setOpen((v) => !v)}
-        />
+        <Topbar posture={posture} synced={synced} onMenu={() => setOpen((v) => !v)} />
         <main className="content">{children}</main>
       </div>
     </div>
