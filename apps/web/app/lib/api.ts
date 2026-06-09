@@ -67,6 +67,31 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// Server-side PUT — mirrors postJson. Used by the Intelligence settings apply.
+async function putJson<T>(path: string, body: unknown): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (API_KEY) headers["X-API-Key"] = API_KEY;
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "PUT",
+    cache: "no-store",
+    headers,
+    body: JSON.stringify(body ?? {}),
+  });
+  if (!res.ok) {
+    let detail = `${path} -> ${res.status}`;
+    try {
+      const payload = (await res.json()) as { detail?: unknown };
+      if (payload?.detail) {
+        detail = typeof payload.detail === "string" ? payload.detail : JSON.stringify(payload.detail);
+      }
+    } catch {
+      // non-JSON error body — keep the status line
+    }
+    throw new Error(detail);
+  }
+  return res.json() as Promise<T>;
+}
+
 export function fetchMetrics(): Promise<MetricSummary[]> {
   return getJson<MetricSummary[]>("/api/v2/metrics");
 }
@@ -337,6 +362,105 @@ export type DeviceView = {
 export type SourcesResponse = { count: number; sources: SourceView[] };
 export type StreamsResponse = { count: number; streams: StreamView[] };
 export type DevicesResponse = { count: number; devices: DeviceView[] };
+
+// Intelligence (LLM narrator) settings — the write surface. Mirrors
+// server/api/v2_intelligence.py. Secrets are write-only: a key is sent in a
+// request body and NEVER returned (the view carries only key_last4).
+
+export type IntelMode = "off" | "local" | "cloud";
+
+export type ConnectionView = {
+  id: number;
+  provider: string;
+  display_name: string | null;
+  base_url: string | null;
+  destination: string; // "local" | "cloud"
+  enabled: boolean;
+  key_last4: string | null;
+  last_test_status: string | null;
+  last_test_at: string | null;
+  model?: string | null; // present on the primary view
+};
+
+export type FallbackView = {
+  priority: number;
+  connection_id: number;
+  provider: string | null;
+  model: string;
+  destination: string | null;
+};
+
+export type ConsentView = { granted: boolean; version: string | null; at: string | null };
+
+export type IntelligenceView = {
+  mode: IntelMode;
+  managed_by_env: boolean;
+  env_provider: string | null;
+  allow_cloud_egress: boolean;
+  redact_cloud_prompts: boolean;
+  revision: number;
+  consent: ConsentView;
+  primary: ConnectionView | null;
+  fallback: FallbackView[];
+};
+
+export type ConnectionInputPayload = {
+  provider: string;
+  model: string;
+  base_url?: string | null;
+  api_key?: string | null;
+  display_name?: string | null;
+};
+
+export type PrimaryInputPayload = ConnectionInputPayload & {
+  temperature?: number | null;
+  max_tokens?: number | null;
+};
+
+export type ApplyIntelligencePayload = {
+  mode: IntelMode;
+  primary?: PrimaryInputPayload | null;
+  fallback?: ConnectionInputPayload[] | null;
+  redact_cloud_prompts?: boolean | null;
+};
+
+export type ConsentPayload = {
+  granted: boolean;
+  consent_version?: string | null;
+  consent_text_hash?: string | null;
+};
+
+export type TestConnectionPayload = {
+  connection_id?: number | null;
+  provider?: string | null;
+  model?: string | null;
+  base_url?: string | null;
+  api_key?: string | null;
+};
+
+export type TestConnectionResult = {
+  ok: boolean;
+  destination: string;
+  model: string;
+  latency_ms: number | null;
+  error: string | null;
+};
+
+export function fetchIntelligence(): Promise<IntelligenceView> {
+  return getJson<IntelligenceView>("/api/v2/intelligence");
+}
+
+export function applyIntelligence(body: ApplyIntelligencePayload): Promise<IntelligenceView> {
+  return putJson<IntelligenceView>("/api/v2/intelligence", body);
+}
+
+export function postConsent(body: ConsentPayload): Promise<IntelligenceView> {
+  return postJson<IntelligenceView>("/api/v2/intelligence/consent", body);
+}
+
+export function postTestConnection(body: TestConnectionPayload): Promise<TestConnectionResult> {
+  return postJson<TestConnectionResult>("/api/v2/intelligence/test-connection", body);
+}
 
 export function fetchSources(): Promise<SourcesResponse> {
   return getJson<SourcesResponse>("/api/v2/sources");
