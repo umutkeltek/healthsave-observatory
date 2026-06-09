@@ -61,12 +61,21 @@ CREATE TABLE IF NOT EXISTS llm_connections (
 CREATE INDEX IF NOT EXISTS idx_llm_connections_owner
     ON llm_connections (owner_id);
 
--- The per-owner head row: the effective posture the resolver reads.
+-- The per-owner head row: the effective posture the resolver reads. The
+-- primary route is the connection in primary_connection_id PLUS the model +
+-- sampling params held inline here (primary_*), mirroring the runtime
+-- LLMConfig shape (one primary + an ordered fallback list). The fallback rows
+-- carry their own model/params in llm_fallback_routes; a NULL primary param
+-- means "use the code default" (temperature 0.3, max_tokens 1000).
 CREATE TABLE IF NOT EXISTS intelligence_settings (
     owner_id            UUID PRIMARY KEY DEFAULT '00000000-0000-0000-0000-000000000001',
     mode                TEXT NOT NULL DEFAULT 'off'
         CHECK (mode IN ('off', 'local', 'cloud')),
     primary_connection_id BIGINT REFERENCES llm_connections (id) ON DELETE SET NULL,
+    primary_model       TEXT,                             -- e.g. 'deepseek/deepseek-chat'
+    primary_temperature DOUBLE PRECISION,                 -- NULL → code default
+    primary_max_tokens  INTEGER,                          -- NULL → code default
+    primary_timeout_ms  INTEGER,                          -- NULL → code default
     allow_cloud_egress  BOOLEAN NOT NULL DEFAULT FALSE,   -- explicit opt-in (D4)
     redact_cloud_prompts BOOLEAN NOT NULL DEFAULT TRUE,
     revision            BIGINT NOT NULL DEFAULT 1,        -- settings_revision (D5)
