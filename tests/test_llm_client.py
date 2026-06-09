@@ -18,7 +18,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import analysis.llm.client as llm_client  # noqa: E402
-from analysis.config import LLMConfig  # noqa: E402
+from analysis.config import LLMConfig, LLMFallbackEntry  # noqa: E402
 from analysis.egress import Destination, EgressDenied  # noqa: E402
 
 
@@ -187,6 +187,73 @@ async def test_cloud_redaction_can_be_disabled(monkeypatch):
 
     sent = acompletion.await_args.kwargs["messages"][1]["content"]
     assert sent == original
+
+
+@pytest.mark.asyncio
+async def test_fallback_used_when_primary_fails(monkeypatch):
+    """Primary errors → the next candidate narrates; result comes from it."""
+    acompletion = AsyncMock(
+        side_effect=[ConnectionError("primary down"), _fake_response("Fallback narrative.")]
+    )
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(
+        LLMConfig(
+            provider="ollama",
+            model="llama3.1:8b",
+            fallback=[LLMFallbackEntry(provider="ollama", model="llama3.2:3b")],
+        )
+    )
+    result = await client.generate_insight("p", insight_type="daily_briefing")
+
+    assert acompletion.await_count == 2  # primary tried, then fallback
+    assert acompletion.await_args.kwargs["model"] == "ollama/llama3.2:3b"  # last = fallback
+    assert "not medical advice" in result.narrative.lower()
+
+
+@pytest.mark.asyncio
+async def test_fallback_reruns_egress_gate_cloud_denied_then_local(monkeypatch):
+    """Per-candidate egress check: a cloud primary with no opt-in is skipped
+    (never contacted), and a *local* fallback narrates instead."""
+    acompletion = AsyncMock(return_value=_fake_response("Local fallback narrative."))
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(
+        LLMConfig(
+            provider="openai",  # cloud, no opt-in → egress-denied
+            model="gpt-4o-mini",
+            allow_cloud_egress=False,
+            fallback=[LLMFallbackEntry(provider="ollama", model="llama3.2:3b")],
+        )
+    )
+    result = await client.generate_insight("derived findings", insight_type="daily_briefing")
+
+    # Cloud candidate was denied before any byte left; only the local one called out.
+    assert acompletion.await_count == 1
+    assert acompletion.await_args.kwargs["model"] == "ollama/llama3.2:3b"
+    assert "not medical advice" in result.narrative.lower()
+
+
+@pytest.mark.asyncio
+async def test_all_cloud_no_opt_in_raises_egress_denied(monkeypatch):
+    """If every candidate is egress-denied, the specific denial is surfaced
+    (not a generic failure) and nothing ever leaves the host."""
+    acompletion = AsyncMock(return_value=_fake_response("should not be reached"))
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(
+        LLMConfig(
+            provider="openai",
+            model="gpt-4o-mini",
+            allow_cloud_egress=False,
+            fallback=[LLMFallbackEntry(provider="anthropic", model="claude-3-5-sonnet")],
+        )
+    )
+    with pytest.raises(EgressDenied) as exc_info:
+        await client.generate_insight("derived findings", insight_type="daily_briefing")
+
+    assert acompletion.await_count == 0
+    assert exc_info.value.envelope.destination is Destination.CLOUD
 
 
 def test_litellm_is_not_imported_at_module_scope():

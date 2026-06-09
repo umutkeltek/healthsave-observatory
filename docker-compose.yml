@@ -57,6 +57,14 @@ services:
       LLM_ALLOW_CLOUD_EGRESS: ${LLM_ALLOW_CLOUD_EGRESS:-false}
       LLM_REDACT_CLOUD_PROMPTS: ${LLM_REDACT_CLOUD_PROMPTS:-true}
       LLM_REDACTION_SALT: ${LLM_REDACTION_SALT:-}
+      # Fallback chain (tried in order after the primary) + provider keys so
+      # litellm can auth each fallback. Phase 2 moves keys to the settings store.
+      LLM_FALLBACK: ${LLM_FALLBACK:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       HDH_TOKEN_ENC_KEY: ${HDH_TOKEN_ENC_KEY:-}
       WHOOP_CLIENT_ID: ${WHOOP_CLIENT_ID:-}
       WHOOP_CLIENT_SECRET: ${WHOOP_CLIENT_SECRET:-}
@@ -112,6 +120,14 @@ services:
       LLM_ALLOW_CLOUD_EGRESS: ${LLM_ALLOW_CLOUD_EGRESS:-false}
       LLM_REDACT_CLOUD_PROMPTS: ${LLM_REDACT_CLOUD_PROMPTS:-true}
       LLM_REDACTION_SALT: ${LLM_REDACTION_SALT:-}
+      # Fallback chain (tried in order after the primary) + provider keys so
+      # litellm can auth each fallback. Phase 2 moves keys to the settings store.
+      LLM_FALLBACK: ${LLM_FALLBACK:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       HDH_TOKEN_ENC_KEY: ${HDH_TOKEN_ENC_KEY:-}
       WHOOP_CLIENT_ID: ${WHOOP_CLIENT_ID:-}
       WHOOP_CLIENT_SECRET: ${WHOOP_CLIENT_SECRET:-}
@@ -160,6 +176,12 @@ services:
       LLM_ALLOW_CLOUD_EGRESS: ${LLM_ALLOW_CLOUD_EGRESS:-false}
       LLM_REDACT_CLOUD_PROMPTS: ${LLM_REDACT_CLOUD_PROMPTS:-true}
       LLM_REDACTION_SALT: ${LLM_REDACTION_SALT:-}
+      LLM_FALLBACK: ${LLM_FALLBACK:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     volumes:
       - ${ANALYSIS_CONFIG_FILE:-./config.yaml.example}:/app/config.yaml:ro
 

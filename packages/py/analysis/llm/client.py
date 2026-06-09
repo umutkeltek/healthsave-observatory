@@ -10,10 +10,11 @@ every touch of this module.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from ..egress import Destination, EgressGate, EgressPolicy, PayloadClass
+from ..egress import Destination, EgressDenied, EgressGate, EgressPolicy, PayloadClass
 from ..redaction import RedactionPolicy
 from .prompts.base import SYSTEM_PROMPT
 from .safety import inject_disclaimer
@@ -46,6 +47,22 @@ class InsightResult(BaseModel):
     insight_type: str
 
 
+@dataclass(frozen=True)
+class _Candidate:
+    """One narrator attempt: a provider + model (+ optional auth) to try.
+
+    The chain is ``[primary, *fallback]``. ``model`` is the bare tag for Ollama
+    (the ``ollama/`` prefix is re-added at call time) and the full litellm route
+    for cloud providers. Each candidate is re-checked against the egress gate
+    before any byte leaves, so a cloud fallback still needs the opt-in.
+    """
+
+    provider: str
+    model: str
+    api_key: str | None
+    base_url: str | None
+
+
 class HealthLLMClient:
     """Thin wrapper around LiteLLM with provider config + disclaimer enforcement."""
 
@@ -66,33 +83,85 @@ class HealthLLMClient:
         self.redaction_policy = RedactionPolicy.from_llm_config(config)
         self.egress_gate = EgressGate(self.egress_policy, self.redaction_policy)
 
-    async def generate_insight(self, prompt: str, *, insight_type: str) -> InsightResult:
-        """Generate a narrative from ``prompt`` and return an :class:`InsightResult`.
+    def _candidate_chain(self) -> list[_Candidate]:
+        """The ordered narrator attempts: configured primary, then each fallback.
 
-        The Ollama path prefixes the configured model with ``ollama/`` to
-        produce e.g. ``"ollama/llama3.1:8b"`` as required by LiteLLM.
-        Non-Ollama providers pass the model string through unchanged and
-        rely on ``config.api_key`` / environment variables for auth.
-
-        Any exception (timeout, connection error, provider error) is
-        wrapped in :class:`LLMUnavailableError` so upstream callers only
-        need to catch one type.
-
-        Before any byte leaves the host, the egress policy (ADR-0001
-        Decision G) is enforced fail-closed: a cloud provider without an
-        explicit opt-in raises :class:`~analysis.egress.EgressDenied`. The
-        prompt is derived data (aggregates / findings), classified
-        ``PROMPT`` — raw observation rows are never sent here. For a cloud
-        destination the prompt is additionally run through
-        :class:`~analysis.redaction.RedactionPolicy` (on by default) to strip
-        any residual identifiers; the local Ollama path is left untouched.
+        Fallbacks carry no explicit key here — litellm resolves provider keys
+        from the environment (e.g. ``OPENROUTER_API_KEY``). Phase 2 will pass
+        per-candidate keys from the settings store instead.
         """
+        chain = [
+            _Candidate(
+                provider=self.config.provider,
+                model=self.config.model,
+                api_key=self.config.api_key or None,
+                base_url=self.config.base_url,
+            )
+        ]
+        for entry in self.config.fallback:
+            chain.append(
+                _Candidate(
+                    provider=entry.provider,
+                    model=entry.model,
+                    api_key=getattr(entry, "api_key", None) or None,
+                    base_url=getattr(entry, "base_url", None) or self.config.base_url,
+                )
+            )
+        return chain
+
+    async def generate_insight(self, prompt: str, *, insight_type: str) -> InsightResult:
+        """Narrate ``prompt`` via the candidate chain (primary, then fallbacks).
+
+        Each candidate is tried in order, skipping to the next on an
+        :class:`~analysis.egress.EgressDenied` (e.g. a cloud fallback without the
+        opt-in — a *local* fallback would still pass) or an
+        :class:`LLMUnavailableError` (timeout / provider error). If every
+        candidate fails, a single :class:`LLMUnavailableError` summarises them.
+
+        Before any byte leaves, the egress policy (ADR-0001 Decision G) is
+        enforced fail-closed *per candidate*: the prompt is derived data
+        (classified ``PROMPT`` — raw rows are never sent here) and is redacted
+        for a cloud destination; the local Ollama path is left untouched.
+        """
+        chain = self._candidate_chain()
+        failures: list[str] = []
+        denials: list[EgressDenied] = []
+        for candidate in chain:
+            try:
+                return await self._narrate_once(prompt, candidate, insight_type=insight_type)
+            except EgressDenied as exc:
+                denials.append(exc)
+                failures.append(
+                    f"{candidate.provider}/{candidate.model}: egress denied ({exc.envelope.reason})"
+                )
+                log.warning(
+                    "narrator: egress denied for %s (%s); trying next candidate",
+                    candidate.model,
+                    exc.envelope.reason,
+                )
+            except LLMUnavailableError as exc:
+                failures.append(f"{candidate.provider}/{candidate.model}: {exc}")
+                log.warning("narrator: candidate %s failed (%s); trying next", candidate.model, exc)
+
+        # Every candidate was refused by the egress gate (e.g. all-cloud with no
+        # opt-in) → surface the specific "opt-in required" denial rather than a
+        # generic failure, preserving the single-provider contract.
+        if denials and len(denials) == len(failures):
+            raise denials[0]
+        raise LLMUnavailableError(
+            f"all {len(chain)} narrator candidate(s) failed: " + " | ".join(failures)
+        )
+
+    async def _narrate_once(
+        self, prompt: str, candidate: _Candidate, *, insight_type: str
+    ) -> InsightResult:
+        """One narration attempt against ``candidate`` — egress-gated + redacted."""
         prepared = self.egress_gate.prepare(
             prompt,
-            provider=self.config.provider,
+            provider=candidate.provider,
             payload_class=PayloadClass.PROMPT,
         )
-        prompt = prepared.payload
+        payload = prepared.payload
         envelope = prepared.envelope
         if envelope.destination is Destination.CLOUD:
             if prepared.redaction is not None and prepared.redaction.total:
@@ -103,20 +172,17 @@ class HealthLLMClient:
             log.info(
                 "egress: %s prompt → cloud provider %r (opted in)",
                 envelope.payload_class.value,
-                self.config.provider,
+                candidate.provider,
             )
 
         import litellm  # deferred import - keeps module-load light
 
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
+            {"role": "user", "content": payload},
         ]
 
-        if self.config.provider == "ollama":
-            model = f"ollama/{self.config.model}"
-        else:
-            model = self.config.model
+        model = f"ollama/{candidate.model}" if candidate.provider == "ollama" else candidate.model
 
         kwargs: dict = {
             "model": model,
@@ -125,10 +191,10 @@ class HealthLLMClient:
             "max_tokens": self.config.max_tokens,
             "timeout": 120,
         }
-        if self.config.provider == "ollama":
-            kwargs["api_base"] = self.config.base_url
-        if self.config.api_key:
-            kwargs["api_key"] = self.config.api_key
+        if candidate.provider == "ollama":
+            kwargs["api_base"] = candidate.base_url
+        if candidate.api_key:
+            kwargs["api_key"] = candidate.api_key
 
         try:
             response = await litellm.acompletion(**kwargs)

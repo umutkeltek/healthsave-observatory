@@ -174,6 +174,23 @@ def _with_environment_overrides(config: AnalysisConfig) -> AnalysisConfig:
         llm_updates["redact_cloud_prompts"] = flag
     if salt := os.getenv("LLM_REDACTION_SALT"):
         llm_updates["redaction_salt"] = salt
+    # LLM_FALLBACK: comma-separated litellm model routes tried in order after the
+    # primary, e.g. "openrouter/google/gemini-2.0-flash-001,ollama/llama3.2:3b".
+    # The provider is the route's first segment (drives the egress re-check); a
+    # cloud fallback still needs the opt-in, a local (ollama) one is always
+    # allowed. config.yaml is wiped on redeploy, so this is the durable home.
+    if fallback_raw := os.getenv("LLM_FALLBACK"):
+        entries: list[LLMFallbackEntry] = []
+        for route in (r.strip() for r in fallback_raw.split(",")):
+            if not route:
+                continue
+            provider = route.split("/", 1)[0]
+            # Ollama models carry a bare tag (the client re-adds the "ollama/"
+            # prefix); cloud routes keep their full litellm path.
+            model = route.split("/", 1)[1] if provider == "ollama" and "/" in route else route
+            entries.append(LLMFallbackEntry(provider=provider, model=model))
+        if entries:
+            llm_updates["fallback"] = entries
 
     if llm_updates:
         config.llm = config.llm.model_copy(update=llm_updates)
