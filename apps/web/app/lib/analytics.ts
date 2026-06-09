@@ -152,6 +152,32 @@ export function dayOfWeekPivot(points: SeriesPoint[], stat: Stat = "mean"): DowC
   }));
 }
 
+// ── Week × hour heatmap (Grafana HR-by-hour, generalized) ────────────────────
+
+export type HeatCell = { dow: number; hour: number; value: number | null; n: number };
+
+// A 7×24 grid (Mon..Sun × 0..23, UTC) of the stat over points — the "when in
+// the week" heatmap. Empty cells carry value null (rendered blank).
+export function weekHourPivot(points: SeriesPoint[], stat: Stat = "mean"): HeatCell[] {
+  const buckets = new Map<string, number[]>();
+  for (const p of valued(points)) {
+    const d = new Date(p.t);
+    const dow = (d.getUTCDay() + 6) % 7;
+    const key = `${dow}-${d.getUTCHours()}`;
+    const arr = buckets.get(key);
+    if (arr) arr.push(p.value);
+    else buckets.set(key, [p.value]);
+  }
+  const cells: HeatCell[] = [];
+  for (let dow = 0; dow < 7; dow += 1) {
+    for (let hour = 0; hour < 24; hour += 1) {
+      const v = buckets.get(`${dow}-${hour}`);
+      cells.push({ dow, hour, value: v ? Number(reduceStat(v, stat).toFixed(2)) : null, n: v?.length ?? 0 });
+    }
+  }
+  return cells;
+}
+
 // ── Period-over-period comparison (net-new; absent from Grafana) ─────────────
 
 export type Period = { mean: number; n: number; start: string | null; end: string | null };

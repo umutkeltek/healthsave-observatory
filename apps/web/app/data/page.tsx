@@ -1,12 +1,17 @@
 import type { Metadata } from "next";
 
+import { DataTable } from "../components/DataTable";
+import { DayOfWeekChart } from "../components/DayOfWeekChart";
 import { FilterBar } from "../components/FilterBar";
+import { HeatmapChart } from "../components/HeatmapChart";
 import { MetricCard } from "../components/MetricCard";
 import { ReadinessCard } from "../components/ReadinessCard";
 import { SleepCard } from "../components/SleepCard";
 import { SourceDistribution } from "../components/SourceDistribution";
-import { distribution } from "../lib/analytics";
+import { ZoneBar } from "../components/ZoneBar";
+import { dayOfWeekPivot, distribution, hrZoneHistogram, weekHourPivot } from "../lib/analytics";
 import type { MetricSeries, MetricSummary, SeriesPoint } from "../lib/api";
+import { demoPatternSeries } from "../lib/demoSeries";
 import {
   GRID_METRICS,
   loadReadinessSparklines,
@@ -122,6 +127,34 @@ export default async function DataPage({ searchParams }: { searchParams: Promise
     sortSel,
   );
 
+  // Patterns panels for a single selected metric (exotic Grafana panels,
+  // computed from its series points). Falls back to a labelled demo offline.
+  const selectedMetric: MetricSummary | null = metricSel
+    ? (all.find((m) => m.id === metricSel) ??
+      fallback.find((m) => m.id === metricSel) ?? {
+        id: metricSel,
+        display_name: metricSel.split(".").pop() ?? metricSel,
+        category: "",
+        value_type: "",
+        canonical_unit: null,
+      })
+    : null;
+
+  let patterns: { metric: MetricSummary; points: SeriesPoint[]; unit: string; isHr: boolean; demo: boolean } | null =
+    null;
+  if (selectedMetric) {
+    const liveSeries = cards.length === 1 && cards[0].metric.id === metricSel ? cards[0].series : null;
+    const demo = (liveSeries?.points.length ?? 0) === 0;
+    const src = demo ? demoPatternSeries(selectedMetric) : (liveSeries as MetricSeries);
+    patterns = {
+      metric: selectedMetric,
+      points: src.points,
+      unit: src.metric.canonical_unit ?? "",
+      isHr: selectedMetric.id.includes("heart_rate") || src.metric.canonical_unit === "bpm",
+      demo,
+    };
+  }
+
   return (
     <>
       <section className="lead">
@@ -153,6 +186,35 @@ export default async function DataPage({ searchParams }: { searchParams: Promise
         ))}
         {isDefault && <SleepCard series={sleep} />}
       </section>
+
+      {patterns && (
+        <>
+          <div className="section-label">
+            Patterns · {patterns.metric.display_name}
+            {patterns.demo ? " · demo" : ""}
+          </div>
+          <div className="today-grid prov-grid">
+            <article className="card col-8">
+              <div className="card-title">When in the week</div>
+              <HeatmapChart cells={weekHourPivot(patterns.points)} unit={patterns.unit} />
+            </article>
+            <article className="card col-4">
+              <div className="card-title">By weekday</div>
+              <DayOfWeekChart cells={dayOfWeekPivot(patterns.points)} unit={patterns.unit} />
+            </article>
+            {patterns.isHr && (
+              <article className="card col-12">
+                <div className="card-title">Heart-rate zones</div>
+                <ZoneBar zones={hrZoneHistogram(patterns.points)} />
+              </article>
+            )}
+            <article className="card col-12">
+              <div className="card-title">Recent readings</div>
+              <DataTable points={patterns.points} unit={patterns.unit} />
+            </article>
+          </div>
+        </>
+      )}
     </>
   );
 }
