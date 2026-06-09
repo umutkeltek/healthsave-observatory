@@ -1891,14 +1891,16 @@ def test_phase_5g_analysis_tables_carry_owner_and_workspace_ids():
     assert "idx_insights_owner_type_created" in migration
 
 
-def test_readme_documents_existing_install_migration_flow():
-    readme = Path("README.md").read_text()
+def test_docs_document_existing_install_migration_flow():
+    # The migration flow moved out of README.md into the operations docs
+    # during the docs restructure.
+    doc = Path("docs/operations/backup-and-migrations.md").read_text()
 
-    assert "db/migrations/001_audit_hardening.sql" in readme
-    assert "db/migrations/002_analysis_tables.sql" in readme
-    assert "db/migrations/" in readme
-    assert "docker compose run --rm migrate" in readme
-    assert "schema_migrations" in readme
+    assert "db/migrations/001_audit_hardening.sql" in doc
+    assert "db/migrations/002_analysis_tables.sql" in doc
+    assert "db/migrations/" in doc
+    assert "docker compose run --rm migrate" in doc
+    assert "schema_migrations" in doc
 
 
 def test_phase_7a_agent_runtime_tables_declared_in_schema_and_migration():

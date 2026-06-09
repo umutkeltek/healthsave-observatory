@@ -10,22 +10,18 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_readme_and_bridge_list_all_shipped_grafana_dashboards():
-    readme = (ROOT / "README.md").read_text()
-    bridge = (ROOT / "BRIDGE.md").read_text()
+def test_grafana_doc_lists_all_shipped_dashboards():
+    grafana = (ROOT / "docs" / "surfaces" / "grafana.md").read_text()
 
-    for text in (readme, bridge):
-        for expected in (
-            "HealthSave Overview",
-            "Activity & Movement",
-            "Heart",
-            "Sleep",
-            "Insights",
-            "Workouts",
-        ):
-            assert expected in text
-
-    assert "Three auto-provisioned Grafana dashboards" not in bridge
+    for expected in (
+        "HealthSave Overview",
+        "Activity & Movement",
+        "Heart",
+        "Sleep",
+        "Insights",
+        "Workouts",
+    ):
+        assert expected in grafana
 
 
 def test_source_plugin_readmes_match_worker_and_ingest_state():
@@ -212,11 +208,9 @@ def test_ci_workflow_uses_node24_ready_action_majors():
     assert "actions/setup-python@v5" not in workflow
 
 
-def test_readme_and_bridge_list_shipped_importers():
-    readme = (ROOT / "README.md").read_text()
-    bridge = (ROOT / "BRIDGE.md").read_text()
+def test_capture_doc_lists_shipped_importers():
+    importers = (ROOT / "docs" / "capture" / "importers-garmin-samsung.md").read_text()
 
-    for text in (readme, bridge):
-        assert "scripts/import_garmin.py" in text
-        assert "scripts/import_samsung.py" in text
-        assert "Health Sync" in text
+    assert "scripts/import_garmin.py" in importers
+    assert "scripts/import_samsung.py" in importers
+    assert "Health Sync" in importers
