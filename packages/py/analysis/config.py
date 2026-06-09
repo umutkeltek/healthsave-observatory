@@ -76,6 +76,13 @@ class RecoveryConfig(BaseModel):
 class LLMFallbackEntry(BaseModel):
     provider: str
     model: str
+    # Self-describing endpoint + auth for a DB-resolved fallback (each fallback
+    # points at its own connection). Env-derived fallbacks (LLM_FALLBACK) leave
+    # these None and let litellm resolve the provider key from the environment.
+    # The narrator client reads them per candidate; the egress gate re-checks
+    # the (provider, base_url) route before any byte leaves.
+    base_url: str | None = None
+    api_key: str | None = None
 
 
 class LLMConfig(BaseModel):
