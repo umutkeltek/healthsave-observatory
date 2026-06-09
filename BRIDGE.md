@@ -11,16 +11,16 @@ the full README.
 
 ## The pipeline, in one line
 
-> Any device — Apple Health via **HealthSave** today; Android Health Connect + webhooks
-> planned — → `POST /api/apple/batch` → **health-data-hub** (this repo: FastAPI + TimescaleDB,
-> canonical observations you own) → the **Observatory** web app (primary surface) + optional
-> **Grafana**, evidence-linked findings, optional **Home Assistant / MQTT** routes, and your own
-> private API.
+> **Apple Health + file importers** → `POST /api/apple/batch` — the frozen v1 compatibility contract.
+> **Android Health Connect, native apps & webhooks** → `POST /api/v2/ingest/batch` — planned (R5).
+> Both normalize into **HealthSave Observatory** (FastAPI + TimescaleDB, canonical observations you
+> own) → the **Observatory** web app (primary surface) + optional **Grafana**, evidence-linked
+> findings, optional **Home Assistant / MQTT** routes, and your own private API.
 
 ```
 Capture (Apple = on-ramp, not the boundary)        Surfaces & routes
   Apple Health → HealthSave (iOS)         ─┐
-  Whoop / Amazfit (plugins)                 ├─► health-data-hub ─► Observatory web app (primary)
+  Whoop / Amazfit (plugins)                 ├─► HealthSave Observatory ─► Observatory web app (primary)
   Garmin / Samsung (importers)              │   FastAPI +          Grafana (optional)
   Android Health Connect (planned)          │   TimescaleDB    →   findings + Body Briefs
   Generic webhook / native API (planned)   ─┘   canonical obs      Home Assistant / MQTT / export
@@ -49,7 +49,7 @@ This is the bit Reddit/HA people ask about first, so it gets its own section.
 |---|---|---|---|
 | Apple Health database | On your iPhone, encrypted | yes | already there |
 | HealthSave (iOS) — Dashboard, Trends, on-device Export (CSV/JSON/PDF) | Your iPhone, on-device | yes if you want the bridge | free download, one-time **Pro** unlock for server sync + Home Assistant + extended history |
-| **health-data-hub** (this repo — the Observatory backend) | Your own hardware: laptop, NUC, Mac mini, Synology, NAS, homelab box | **optional** | free to self-host, source-available (Elastic License 2.0), runs in Docker |
+| **HealthSave Observatory** (this repo — the backend) | Your own hardware: laptop, NUC, Mac mini, Synology, NAS, homelab box | **optional** | free to self-host, source-available (Elastic License 2.0), runs in Docker |
 | Observatory web app + TimescaleDB (+ optional Grafana) | Inside the same Docker compose stack | bundled with the hub | free |
 | Ollama AI narration | Same machine, local LLM | optional, opt-in during `./setup.sh` | free, RAM-dependent |
 | Home Assistant integration | Your existing HA instance | optional | free |

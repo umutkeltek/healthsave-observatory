@@ -12,13 +12,13 @@
 > **Your whole body, in one place you own — and it actually tells you something.**
 > HealthSave Observatory is a **self-hosted private body observatory**. It captures your health data from *any* device, builds a longitudinal record you own, explains what's changing with evidence-linked findings and **Body Briefs**, and exposes a private API your own scripts and tools can query — with **raw data that never leaves your hardware unless you choose to send it**.
 
-> **New here?** [BRIDGE.md](BRIDGE.md) is the one-page tour: pipeline diagram, who it's for, what's local vs self-hosted, setup gotchas. Read that first if 500 lines of README is too much.
+> **New here?** [BRIDGE.md](BRIDGE.md) is the one-page tour — pipeline, who it's for, what's local vs self-hosted, and setup gotchas in two minutes.
 
 **Keywords:** `self-hosted health dashboard` · `private health observatory` · `apple-health` · `android-health-connect` · `healthkit` · `wearables` · `whoop` · `oura` · `garmin` · `hrv` · `quantified-self` · `biohacking` · `personal-health-api` · `mcp` · `home-assistant` · `timescaledb` · `fastapi` · `local-llm` · `privacy` · `docker`
 
 Your health data is scattered across silos you don't control — Apple Health here, Whoop's cloud there, Oura's app, your scale's app. Each one shows you a few charts and keeps the data. **HealthSave Observatory pulls all of it into one private place that's yours** — queryable, routable, and finally able to answer the questions that matter: *what changed, compared to my own baseline, where did it come from, and what should I look at next?*
 
-It runs entirely on your hardware — a laptop, a NUC, a Mac mini, a Synology, a Proxmox VM. No cloud, no subscription, no one else reading your numbers. **Apple Health is the easiest way in, but it is not the boundary:** Android Health Connect, direct wearable connectors, file imports, and webhooks all land in the same canonical record.
+It runs entirely on your hardware — a laptop, a NUC, a Mac mini, a Synology, a Proxmox VM. No cloud, no subscription, no one else reading your numbers. **Apple Health is the easiest way in, but it is not the boundary:** direct wearable connectors (Whoop, Amazfit) and file importers (Garmin, Samsung) land in the same canonical record today, with Android Health Connect and generic webhooks planned next.
 
 ## Just want the app?
 
