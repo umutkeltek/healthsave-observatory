@@ -55,6 +55,17 @@ def test_cloud_prompt_redaction_defaults_on(tmp_path):
     assert config.llm.redaction_salt == ""
 
 
+def test_llm_fallback_env_parses_ordered_routes(tmp_path, monkeypatch):
+    # Cloud routes keep their full litellm path; ollama routes drop the prefix
+    # (the client re-adds it). Whitespace around entries is trimmed.
+    monkeypatch.setenv("LLM_FALLBACK", "openrouter/google/gemini-2.0-flash-001, ollama/llama3.2:3b")
+    config = load_config(tmp_path / "missing-config.yaml")
+    assert [(e.provider, e.model) for e in config.llm.fallback] == [
+        ("openrouter", "openrouter/google/gemini-2.0-flash-001"),
+        ("ollama", "llama3.2:3b"),
+    ]
+
+
 def test_environment_can_opt_out_of_cloud_prompt_redaction(tmp_path, monkeypatch):
     monkeypatch.setenv("LLM_REDACT_CLOUD_PROMPTS", "false")
     monkeypatch.setenv("LLM_REDACTION_SALT", "pepper")
