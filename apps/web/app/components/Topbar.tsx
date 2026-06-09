@@ -11,6 +11,7 @@ const TITLES: Record<string, { title: string; sub: string }> = {
   "/findings": { title: "Findings", sub: "What the engine found — computed, not guessed." },
   "/sources": { title: "Sources", sub: "Where your data comes from — origin and freshness." },
   "/data": { title: "Data", sub: "Coverage, freshness, and every metric." },
+  "/compare": { title: "Compare", sub: "Period vs previous, source vs source — both kept." },
   "/privacy": { title: "Privacy", sub: "What leaves this host." },
 };
 

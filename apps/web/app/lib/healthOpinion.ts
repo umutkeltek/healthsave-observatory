@@ -84,6 +84,45 @@ export function reliabilityFor(source: string): SourceReliability {
   return RULES.find((r) => r.match.test(source)) ?? UNKNOWN;
 }
 
+// Vendor family of a source — the axis along which device measurements diverge.
+function family(source: string): string {
+  const s = source.toLowerCase();
+  if (/oura/.test(s)) return "oura";
+  if (/whoop/.test(s)) return "whoop";
+  if (/garmin/.test(s)) return "garmin";
+  if (/apple|healthkit|health\s?save|watch|iphone/.test(s)) return "apple";
+  return "other";
+}
+
+export type Comparability = { comparable: boolean; warn: boolean; caveat: string | null };
+
+// Whether two (or more) sources can be compared for a metric — grounded in the
+// research's reconciliation rule: keep both, never average, and surface what the
+// science says about each device. The canonical incomparable case is HRV across
+// vendors (Apple SDNN vs Whoop/Oura RMSSD). We never hard-block — we warn loudly
+// and still render both readings verbatim.
+export function comparability(metricId: string, sources: string[]): Comparability {
+  const families = [...new Set(sources.map(family))];
+  const crossVendor = families.length > 1;
+  if (!crossVendor) {
+    return { comparable: true, warn: false, caveat: null };
+  }
+  if (/hrv/.test(metricId)) {
+    return {
+      comparable: false,
+      warn: true,
+      caveat:
+        "Apple reports HRV as SDNN; Whoop and Oura report RMSSD — different definitions that are not directly comparable. Shown side by side, never merged.",
+    };
+  }
+  return {
+    comparable: true,
+    warn: false,
+    caveat:
+      "Cross-source comparison — these devices measure differently (wrist PPG vs ring/strap/ECG). Read the gap as provenance, not a verdict: both kept, never averaged.",
+  };
+}
+
 export type Verdict = {
   state: "prime" | "steady" | "caution" | "suppressed";
   label: string;
