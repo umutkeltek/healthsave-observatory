@@ -9,9 +9,10 @@ byte leaves — *where* a call may go and *what* may ride along.
 
 Two axes:
 
-* **Destination.** A ``LOCAL`` model (Ollama on the user's own host) stays
-  inside the trust boundary; a ``CLOUD`` model (OpenAI / Anthropic / Google /
-  any non-Ollama provider) crosses it.
+* **Destination.** Classification is route-based, not provider-name-based
+  (ADR-0003 D1): a ``LOCAL`` route (Ollama on a trusted-local host — loopback /
+  the bundled sidecar) stays inside the boundary; a ``CLOUD`` route (any named
+  cloud provider, OR a *remote* / Ollama-cloud endpoint) crosses it.
 * **Payload class.** ``RAW_OBSERVATIONS`` must **never** leave — that is the
   product's privacy promise, enforced unconditionally. Derived
   findings / aggregates / evidence and an assembled narration prompt MAY leave,
@@ -60,13 +61,60 @@ _CLOUD_ELIGIBLE: frozenset[PayloadClass] = frozenset(
     }
 )
 
-# Provider strings that denote a LOCAL model. Everything else is CLOUD.
-_LOCAL_PROVIDERS: frozenset[str] = frozenset({"ollama"})
+
+@dataclass(frozen=True)
+class EgressRoute:
+    """A resolved LLM endpoint to classify against the trust boundary.
+
+    ``provider`` is the engine/vendor (e.g. ``"ollama"``, ``"deepseek"``);
+    ``base_url`` is where it actually points. Classification is route-based, not
+    provider-name-based (ADR-0003 D1): a local engine counts as LOCAL only when
+    it targets a trusted-local host.
+    """
+
+    provider: str
+    base_url: str | None = None
 
 
-def classify_destination(provider: str) -> Destination:
-    """Map an LLM provider string to a :class:`Destination`."""
-    return Destination.LOCAL if provider.strip().lower() in _LOCAL_PROVIDERS else Destination.CLOUD
+# Engines that *can* run on the user's own host. Being one is necessary but not
+# sufficient for LOCAL — the route must also point at a trusted-local host.
+_LOCAL_ENGINES: frozenset[str] = frozenset({"ollama"})
+
+# Hosts always inside the trust boundary: loopback + the bundled docker sidecar.
+_LOCAL_HOSTS: frozenset[str] = frozenset(
+    {"localhost", "127.0.0.1", "::1", "[::1]", "ollama", "host.docker.internal"}
+)
+
+
+def _host_of(base_url: str | None) -> str | None:
+    """The lowercase hostname of ``base_url``, or ``None`` if absent/unparseable."""
+    if not base_url:
+        return None
+    from urllib.parse import urlparse
+
+    raw = base_url if "://" in base_url else f"//{base_url}"
+    host = urlparse(raw).hostname
+    return host.lower() if host else None
+
+
+def classify_destination(
+    route: EgressRoute, *, trusted_local_hosts: frozenset[str] = frozenset()
+) -> Destination:
+    """Classify a route as LOCAL (inside the boundary) or CLOUD (outside).
+
+    A named cloud provider is always CLOUD. A local engine (Ollama) is LOCAL
+    only when it targets a trusted-local host — loopback, the bundled sidecar,
+    or an explicitly trusted host; a remote or Ollama-cloud endpoint is CLOUD.
+    Fail-closed: anything not provably local is treated as cloud (ADR-0003 D1).
+    """
+    if route.provider.strip().lower() not in _LOCAL_ENGINES:
+        return Destination.CLOUD
+    host = _host_of(route.base_url)
+    if host is None:
+        # Zero-config default: no base_url means the bundled loopback sidecar.
+        return Destination.LOCAL
+    trusted = _LOCAL_HOSTS | {h.strip().lower() for h in trusted_local_hosts}
+    return Destination.LOCAL if host in trusted else Destination.CLOUD
 
 
 @dataclass(frozen=True)
@@ -107,6 +155,9 @@ class EgressPolicy:
     """
 
     allow_cloud: bool = False
+    # Extra hosts the operator declares inside the boundary (e.g. a LAN Ollama).
+    # The loopback + bundled-sidecar hosts are always local; this only widens it.
+    trusted_local_hosts: frozenset[str] = frozenset()
 
     @classmethod
     def from_config(cls, llm_config) -> EgressPolicy:
@@ -116,17 +167,20 @@ class EgressPolicy:
         is treated as opted-out (the safe default), so older configs fail
         closed rather than open.
         """
-        return cls(allow_cloud=bool(getattr(llm_config, "allow_cloud_egress", False)))
+        return cls(
+            allow_cloud=bool(getattr(llm_config, "allow_cloud_egress", False)),
+            trusted_local_hosts=frozenset(getattr(llm_config, "trusted_local_hosts", ()) or ()),
+        )
 
-    def evaluate(self, *, provider: str, payload_class: PayloadClass) -> EgressEnvelope:
+    def evaluate(self, *, route: EgressRoute, payload_class: PayloadClass) -> EgressEnvelope:
         """Decide whether this egress is permitted; never raises."""
-        destination = classify_destination(provider)
+        destination = classify_destination(route, trusted_local_hosts=self.trusted_local_hosts)
 
         def envelope(*, allowed: bool, reason: str) -> EgressEnvelope:
             return EgressEnvelope(
                 destination=destination,
                 payload_class=payload_class,
-                provider=provider,
+                provider=route.provider,
                 allowed=allowed,
                 reason=reason,
             )
@@ -147,12 +201,12 @@ class EgressPolicy:
             )
         return envelope(allowed=True, reason="derived payload to opted-in cloud destination")
 
-    def enforce(self, *, provider: str, payload_class: PayloadClass) -> EgressEnvelope:
+    def enforce(self, *, route: EgressRoute, payload_class: PayloadClass) -> EgressEnvelope:
         """Evaluate and raise :class:`EgressDenied` unless allowed.
 
         Returns the (allowed) envelope so the caller can log / persist it.
         """
-        envelope = self.evaluate(provider=provider, payload_class=payload_class)
+        envelope = self.evaluate(route=route, payload_class=payload_class)
         if not envelope.allowed:
             raise EgressDenied(envelope)
         return envelope
@@ -169,11 +223,11 @@ class EgressGate:
         self,
         payload: str,
         *,
-        provider: str,
+        route: EgressRoute,
         payload_class: PayloadClass,
     ) -> PreparedEgressPayload:
         """Fail closed, then redact cloud-bound derived payloads."""
-        envelope = self.egress_policy.enforce(provider=provider, payload_class=payload_class)
+        envelope = self.egress_policy.enforce(route=route, payload_class=payload_class)
         if envelope.destination is not Destination.CLOUD or not self.redaction_policy.enabled:
             return PreparedEgressPayload(payload=payload, envelope=envelope)
 

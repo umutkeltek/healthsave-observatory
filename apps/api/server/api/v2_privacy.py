@@ -15,7 +15,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from analysis.egress import Destination, EgressPolicy, PayloadClass, classify_destination
+from analysis.egress import (
+    Destination,
+    EgressPolicy,
+    EgressRoute,
+    PayloadClass,
+    classify_destination,
+)
 from fastapi import APIRouter, Depends, Request
 
 from .deps import verify_api_key
@@ -32,8 +38,9 @@ async def privacy(request: Request) -> dict:
     """
     llm = request.app.state.analysis_config.llm
     provider = llm.provider
-    destination = classify_destination(provider)
     policy = EgressPolicy.from_config(llm)
+    route = EgressRoute(provider=provider, base_url=getattr(llm, "base_url", None))
+    destination = classify_destination(route, trusted_local_hosts=policy.trusted_local_hosts)
     is_local = destination is Destination.LOCAL
 
     # Per-payload-class breakdown straight from the policy, so the UI shows the
@@ -41,7 +48,7 @@ async def privacy(request: Request) -> dict:
     egress: list[dict[str, Any]] = []
     raw_leaves = False
     for payload_class in PayloadClass:
-        envelope = policy.evaluate(provider=provider, payload_class=payload_class)
+        envelope = policy.evaluate(route=route, payload_class=payload_class)
         # "Leaves the host" only counts a CLOUD destination; a local model is
         # on-host, so an allowed local payload never leaves.
         leaves_host = envelope.allowed and not is_local

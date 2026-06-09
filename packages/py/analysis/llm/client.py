@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from ..egress import Destination, EgressDenied, EgressGate, EgressPolicy, PayloadClass
+from ..egress import Destination, EgressDenied, EgressGate, EgressPolicy, EgressRoute, PayloadClass
 from ..redaction import RedactionPolicy
 from .prompts.base import SYSTEM_PROMPT
 from .safety import inject_disclaimer
@@ -127,21 +127,26 @@ class HealthLLMClient:
         failures: list[str] = []
         denials: list[EgressDenied] = []
         for candidate in chain:
+            # Cloud routes carry the provider prefix in the model already
+            # ("deepseek/deepseek-chat"); bare ollama tags get it added for context.
+            label = (
+                candidate.model
+                if "/" in candidate.model
+                else f"{candidate.provider}/{candidate.model}"
+            )
             try:
                 return await self._narrate_once(prompt, candidate, insight_type=insight_type)
             except EgressDenied as exc:
                 denials.append(exc)
-                failures.append(
-                    f"{candidate.provider}/{candidate.model}: egress denied ({exc.envelope.reason})"
-                )
+                failures.append(f"{label}: egress denied ({exc.envelope.reason})")
                 log.warning(
                     "narrator: egress denied for %s (%s); trying next candidate",
-                    candidate.model,
+                    label,
                     exc.envelope.reason,
                 )
             except LLMUnavailableError as exc:
-                failures.append(f"{candidate.provider}/{candidate.model}: {exc}")
-                log.warning("narrator: candidate %s failed (%s); trying next", candidate.model, exc)
+                failures.append(f"{label}: {exc}")
+                log.warning("narrator: candidate %s failed (%s); trying next", label, exc)
 
         # Every candidate was refused by the egress gate (e.g. all-cloud with no
         # opt-in) → surface the specific "opt-in required" denial rather than a
@@ -158,7 +163,7 @@ class HealthLLMClient:
         """One narration attempt against ``candidate`` — egress-gated + redacted."""
         prepared = self.egress_gate.prepare(
             prompt,
-            provider=candidate.provider,
+            route=EgressRoute(provider=candidate.provider, base_url=candidate.base_url),
             payload_class=PayloadClass.PROMPT,
         )
         payload = prepared.payload
