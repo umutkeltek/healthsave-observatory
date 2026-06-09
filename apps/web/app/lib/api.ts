@@ -207,6 +207,16 @@ export function fetchPrivacy(): Promise<Privacy> {
   return getJson<Privacy>("/api/v2/privacy");
 }
 
+// A deployment with no LLM narrator (provider "disabled"/empty) performs zero
+// egress — it is the *most* private posture, not "cloud". The egress classifier
+// only knows ollama→local / everything-else→cloud, so a narrator-off host is
+// bucketed as cloud; callers special-case it here so the UI never mislabels a
+// no-egress host as a cloud one.
+export function isNarratorOff(provider: string | null | undefined): boolean {
+  const p = (provider ?? "").trim().toLowerCase();
+  return p === "" || p === "disabled" || p === "none";
+}
+
 // Experiments — committed n-of-1 ABAB runs. Mirrors the lifecycle routes in
 // server/api/v2_experiments.py (ExperimentView et al.).
 
