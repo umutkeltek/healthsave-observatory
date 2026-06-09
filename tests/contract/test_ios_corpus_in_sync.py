@@ -24,6 +24,7 @@ IOS_DIR = REPO_ROOT.parent / "ios_app" / "Tests" / "HealthSyncTests" / "Fixtures
 
 # datahub fixture -> the iOS fixture it must match (the app's real output).
 PAIRS = {
+    "body_temperature_batch.json": "health_data_hub_body_temperature_batch.json",
     "heart_rate_batch.json": "health_data_hub_heart_rate_batch.json",
     "sleep_analysis_batch.json": "health_data_hub_sleep_analysis_batch.json",
     "quantity_step_count_batch.json": "health_data_hub_step_count_batch.json",
