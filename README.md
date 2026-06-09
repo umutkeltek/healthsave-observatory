@@ -1,6 +1,6 @@
 # HealthSave Observatory
 
-[![CI](https://github.com/umutkeltek/health-data-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/umutkeltek/health-data-hub/actions/workflows/ci.yml)
+[![CI](https://github.com/umutkeltek/healthsave-observatory/actions/workflows/ci.yml/badge.svg)](https://github.com/umutkeltek/healthsave-observatory/actions/workflows/ci.yml)
 [![License: Elastic 2.0](https://img.shields.io/badge/License-Elastic--2.0-005571.svg)](LICENSE)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -58,8 +58,8 @@ Not on the list? If it writes to Apple Health, the iOS bridge forwards it automa
 You need [Docker](https://www.docker.com/products/docker-desktop/) installed and running, plus a terminal. On Windows, run this inside WSL2 - `setup.sh` is a bash script.
 
 ```bash
-git clone https://github.com/umutkeltek/health-data-hub.git
-cd health-data-hub
+git clone https://github.com/umutkeltek/healthsave-observatory.git
+cd healthsave-observatory
 ./setup.sh
 ```
 

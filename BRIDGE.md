@@ -105,7 +105,7 @@ Things people actually trip on. Worth reading before `./setup.sh`.
 
 ## Links
 
-- **GitHub (this repo):** https://github.com/umutkeltek/health-data-hub
+- **GitHub (this repo):** https://github.com/umutkeltek/healthsave-observatory
 - **HealthSave on the App Store:** https://apps.apple.com/app/id6759843047
 - **API contract:** [API.md](API.md)
 - **README (full reference + troubleshooting):** [README.md](README.md)
