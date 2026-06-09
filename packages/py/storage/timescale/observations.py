@@ -37,6 +37,7 @@ class SeriesPoint:
     unit: str | None
     source_id: str
     confidence: float | None
+    stream_id: str | None = None
 
 
 def observation_columns(obs: Observation) -> dict[str, Any]:
@@ -92,6 +93,7 @@ def observation_columns(obs: Observation) -> dict[str, Any]:
 
 def row_to_series_point(row: dict[str, Any]) -> SeriesPoint:
     """Map a query row mapping to a SeriesPoint (pure)."""
+    stream = row.get("stream_id")
     return SeriesPoint(
         t=row["interval_start"],
         interval_end=row["interval_end"],
@@ -100,6 +102,7 @@ def row_to_series_point(row: dict[str, Any]) -> SeriesPoint:
         unit=row["canonical_unit"],
         source_id=str(row["source_id"]),
         confidence=row["confidence"],
+        stream_id=str(stream) if stream else None,
     )
 
 
@@ -126,7 +129,7 @@ _INSERT_SQL = text(
 _SERIES_SQL = text(
     """
     SELECT interval_start, interval_end, numeric_value, code, canonical_unit,
-           source_id, confidence
+           source_id, stream_id, confidence
     FROM canonical_observations
     WHERE owner_id = :owner_id
       AND workspace_id = :workspace_id
@@ -134,6 +137,7 @@ _SERIES_SQL = text(
       AND interval_start >= :start
       AND interval_start < :end
       AND status = 'active'
+      AND (CAST(:stream_id AS uuid) IS NULL OR stream_id = CAST(:stream_id AS uuid))
     ORDER BY interval_start ASC
     LIMIT :limit
     """
@@ -161,8 +165,13 @@ class CanonicalObservationRepository:
         start: datetime,
         end: datetime,
         limit: int = 5000,
+        stream_id: str | None = None,
     ) -> list[SeriesPoint]:
-        """Read one metric's active series within [start, end)."""
+        """Read one metric's active series within [start, end).
+
+        ``stream_id`` optionally narrows to a single device stream; ``None``
+        returns the fused series across all streams (unchanged behavior).
+        """
         result = await session.execute(
             _SERIES_SQL,
             {
@@ -172,6 +181,7 @@ class CanonicalObservationRepository:
                 "start": start,
                 "end": end,
                 "limit": limit,
+                "stream_id": str(stream_id) if stream_id else None,
             },
         )
         return [row_to_series_point(dict(row)) for row in result.mappings().all()]

@@ -2804,7 +2804,7 @@
     },
     "/api/v2/metrics/{metric_id}/series": {
       "get": {
-        "description": "One metric's time-series over a multi-timescale window.",
+        "description": "One metric's time-series over a multi-timescale window.\n\n``stream_id`` optionally narrows the series to a single device stream\n(one physical emitter); omitted returns the fused series across all\nstreams, unchanged.",
         "operationId": "metric_series_api_v2_metrics__metric_id__series_get",
         "parameters": [
           {
@@ -2824,6 +2824,22 @@
               "default": "7d",
               "title": "Range",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stream_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Stream Id"
             }
           },
           {
