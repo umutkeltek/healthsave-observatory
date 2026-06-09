@@ -10,16 +10,49 @@ every touch of this module.
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from ..egress import Destination, EgressDenied, EgressGate, EgressPolicy, EgressRoute, PayloadClass
+from ..egress import (
+    Destination,
+    EgressDenied,
+    EgressGate,
+    EgressPolicy,
+    EgressRoute,
+    PayloadClass,
+    classify_destination,
+)
+from ..netguard import assert_safe_probe_target
 from ..redaction import RedactionPolicy
 from .prompts.base import SYSTEM_PROMPT
 from .safety import inject_disclaimer
 
 log = logging.getLogger("healthsave.analysis")
+
+# The compose default Ollama endpoint. A cloud LLMConfig inherits this as its
+# base_url when LLM_BASE_URL is unset (the field's default), so we must treat it
+# as "no custom endpoint" for a non-Ollama provider — otherwise a cloud probe
+# would be pointed at the local Ollama and the SSRF guard would false-positive.
+_OLLAMA_DEFAULT_BASE_URL = "http://ollama:11434"
+
+
+def _effective_api_base(provider: str, base_url: str | None) -> str | None:
+    """The ``api_base`` litellm should use, or None for the built-in endpoint.
+
+    Ollama always gets an endpoint (its configured one, or the compose default).
+    A cloud provider gets None — keeping litellm's built-in endpoint — UNLESS a
+    genuinely custom ``base_url`` is set; the leftover Ollama default that a
+    cloud config inherits is ignored. This is what lets the live DeepSeek path
+    (default base_url, no custom endpoint) resolve to None → built-in, while a
+    real custom OpenAI-compatible endpoint is honoured and SSRF-validated.
+    """
+    if provider == "ollama":
+        return base_url or _OLLAMA_DEFAULT_BASE_URL
+    if base_url and base_url != _OLLAMA_DEFAULT_BASE_URL:
+        return base_url
+    return None
 
 
 class LLMUnavailableError(RuntimeError):
@@ -45,6 +78,22 @@ class InsightResult(BaseModel):
     tokens_out: int
     model: str
     insight_type: str
+
+
+@dataclass(frozen=True)
+class HealthcheckResult:
+    """Outcome of a test-connection probe (ADR-0003 D7).
+
+    Carries no provider response body — only whether the call succeeded, how
+    long it took, and a short error string on failure. Persisted as a
+    ``provider_healthcheck`` audit event; never any health data.
+    """
+
+    ok: bool
+    destination: str
+    model: str
+    latency_ms: int | None = None
+    error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -155,6 +204,62 @@ class HealthLLMClient:
             raise denials[0]
         raise LLMUnavailableError(
             f"all {len(chain)} narrator candidate(s) failed: " + " | ".join(failures)
+        )
+
+    async def healthcheck(self, *, timeout: float = 10.0, resolver=None) -> HealthcheckResult:
+        """Probe the configured provider with a trivial call — test-connection.
+
+        ADR-0003 D7: validates that the provider + key + endpoint actually work
+        BEFORE the user consents to send real findings. The probe sends a fixed
+        ``"ping"`` (NO health data), caps output at one token, and uses a short
+        timeout. It does NOT pass through the egress *payload* gate — there is no
+        derived health data to protect, and a key must be testable pre-consent —
+        but it DOES run the SSRF pre-flight on the route, so a cloud ``base_url``
+        can't be turned on the server's own network.
+
+        Returns a :class:`HealthcheckResult`; raises
+        :class:`~analysis.netguard.SsrfError` (propagated) when the target is
+        refused for safety, so the caller can answer ``400`` distinctly from a
+        provider failure (``ok=False``).
+        """
+        provider = self.config.provider
+        api_base = _effective_api_base(provider, getattr(self.config, "base_url", None))
+        # Classify + SSRF-guard the EFFECTIVE route (api_base is what the call
+        # actually hits), so an inherited Ollama default on a cloud config is a
+        # no-op and only a genuinely custom endpoint is validated.
+        route = EgressRoute(provider=provider, base_url=api_base)
+        destination = classify_destination(
+            route, trusted_local_hosts=self.egress_policy.trusted_local_hosts
+        )
+        # SSRF pre-flight (cloud custom base_url only) — may raise SsrfError.
+        assert_safe_probe_target(route, destination, resolver=resolver)
+
+        model = f"ollama/{self.config.model}" if provider == "ollama" else self.config.model
+
+        import litellm  # deferred import - single transport (see module docstring)
+
+        kwargs: dict = {
+            "model": model,
+            "messages": [{"role": "user", "content": "ping"}],
+            "max_tokens": 1,
+            "temperature": 0,
+            "timeout": timeout,
+        }
+        if api_base is not None:
+            kwargs["api_base"] = api_base
+        if self.config.api_key:
+            kwargs["api_key"] = self.config.api_key
+
+        started = time.monotonic()
+        try:
+            await litellm.acompletion(**kwargs)
+        except Exception as exc:  # noqa: BLE001 - report any provider failure as not-ok
+            return HealthcheckResult(
+                ok=False, destination=destination.value, model=model, error=str(exc)
+            )
+        latency_ms = int((time.monotonic() - started) * 1000)
+        return HealthcheckResult(
+            ok=True, destination=destination.value, model=model, latency_ms=latency_ms
         )
 
     async def _narrate_once(
