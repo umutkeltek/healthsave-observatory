@@ -53,9 +53,15 @@ async def list_metrics() -> list[dict]:
 async def metric_series(
     metric_id: str,
     range: str = "7d",
+    stream_id: str | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    """One metric's time-series over a multi-timescale window."""
+    """One metric's time-series over a multi-timescale window.
+
+    ``stream_id`` optionally narrows the series to a single device stream
+    (one physical emitter); omitted returns the fused series across all
+    streams, unchanged.
+    """
     metric = get_metric(metric_id)
     if metric is None:
         raise HTTPException(status_code=404, detail=f"unknown metric: {metric_id}")
@@ -75,6 +81,7 @@ async def metric_series(
         metric_id=metric_id,
         start=start,
         end=end,
+        stream_id=stream_id,
     )
     return {
         "metric": _metric_summary(metric),
@@ -88,6 +95,7 @@ async def metric_series(
                 "code": point.code,
                 "unit": point.unit,
                 "source_id": point.source_id,
+                "stream_id": point.stream_id,
                 "confidence": point.confidence,
             }
             for point in points

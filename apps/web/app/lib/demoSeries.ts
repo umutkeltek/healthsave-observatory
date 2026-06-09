@@ -14,12 +14,14 @@ const APPLE_HRV = [62, 60, 63, 61, 64, 59, 62, 58, 55, 53, 51, 49, 52, 50];
 const WHOOP_HRV = [70, 68, 71, 69, 72, 67, 70, 66, 63, 61, 60, 58, 61, 59];
 
 function points(source: string, vals: number[]): SeriesPoint[] {
+  const stream = `demo-${source.toLowerCase().replace(/\s+/g, "-")}`;
   return DAYS.map((d, i) => ({
     t: `${d}T08:00:00Z`,
     value: vals[i],
     code: null,
     unit: "ms",
     source_id: source,
+    stream_id: stream,
     confidence: null,
   }));
 }

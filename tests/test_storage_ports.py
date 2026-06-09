@@ -629,8 +629,15 @@ class _InMemoryTimeSeriesQueryService:
         start: datetime,
         end: datetime,
         limit: int = 5000,
+        stream_id: str | None = None,
     ) -> list[SeriesPoint]:
-        out = [p for mid, p in self.points if mid == metric_id and start <= p.t < end]
+        out = [
+            p
+            for mid, p in self.points
+            if mid == metric_id
+            and start <= p.t < end
+            and (stream_id is None or p.stream_id == stream_id)
+        ]
         out.sort(key=lambda p: p.t)
         return out[:limit]
 
@@ -675,6 +682,44 @@ async def test_in_memory_timeseries_query_filters_window_and_metric() -> None:
     )
 
     assert [p.value for p in got] == [60.0, 62.0]
+
+
+@pytest.mark.asyncio
+async def test_in_memory_timeseries_query_filters_by_stream() -> None:
+    """stream_id narrows to one device stream; None returns the fused series."""
+    repo: TimeSeriesQueryService = _InMemoryTimeSeriesQueryService()
+
+    def point(day: int, value: float, stream: str | None) -> SeriesPoint:
+        t = datetime(2026, 5, day, tzinfo=UTC)
+        return SeriesPoint(
+            t=t,
+            interval_end=t,
+            value=value,
+            code=None,
+            unit="bpm",
+            source_id="apple",
+            confidence=None,
+            stream_id=stream,
+        )
+
+    repo.points = [
+        ("vital.heart_rate", point(1, 60.0, "watch")),
+        ("vital.heart_rate", point(2, 70.0, "phone")),
+    ]
+    window = dict(
+        session=None,
+        owner_id=None,
+        workspace_id=None,
+        metric_id="vital.heart_rate",
+        start=datetime(2026, 5, 1, tzinfo=UTC),
+        end=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    fused = await repo.query_series(**window)
+    assert [p.value for p in fused] == [60.0, 70.0]
+
+    watch = await repo.query_series(**window, stream_id="watch")
+    assert [p.value for p in watch] == [60.0]
 
 
 # ──────────────────────────────────────────────────────────────

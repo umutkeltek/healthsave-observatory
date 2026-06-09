@@ -66,6 +66,35 @@ async def test_metric_series_returns_mapped_points() -> None:
 
 
 @pytest.mark.asyncio
+async def test_metric_series_carries_stream_id() -> None:
+    """Each point exposes its stream_id (the per-device provenance axis)."""
+    stream = UUID("22222222-2222-2222-2222-222222222222")
+    rows = [
+        {
+            "interval_start": _T,
+            "interval_end": _T,
+            "numeric_value": 61.0,
+            "code": None,
+            "canonical_unit": "bpm",
+            "source_id": _SOURCE,
+            "stream_id": stream,
+            "confidence": None,
+        },
+    ]
+    body = await metric_series("vital.heart_rate", range="7d", session=_FakeSession(rows))
+    assert body["points"][0]["stream_id"] == str(stream)
+
+
+@pytest.mark.asyncio
+async def test_metric_series_accepts_stream_id_param() -> None:
+    """The optional stream_id filter param is accepted (absent = fused)."""
+    body = await metric_series(
+        "vital.heart_rate", range="7d", stream_id=str(_SOURCE), session=_FakeSession([])
+    )
+    assert body["points"] == []
+
+
+@pytest.mark.asyncio
 async def test_metric_series_unknown_metric_404() -> None:
     with pytest.raises(HTTPException) as exc:
         await metric_series("not.a.metric", range="7d", session=_FakeSession())

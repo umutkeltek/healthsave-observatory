@@ -286,6 +286,7 @@ class TimeSeriesQueryService(Protocol):
         start: datetime,
         end: datetime,
         limit: int = 5000,
+        stream_id: str | None = None,
     ) -> list[SeriesPoint]: ...
 
 

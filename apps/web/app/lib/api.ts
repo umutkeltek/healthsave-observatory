@@ -15,6 +15,7 @@ export type SeriesPoint = {
   code: string | null;
   unit: string | null;
   source_id: string;
+  stream_id: string | null;
   confidence: number | null;
 };
 

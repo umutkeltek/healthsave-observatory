@@ -13,7 +13,7 @@ import {
 import type { SeriesPoint } from "./api";
 
 function pt(t: string, value: number | null, source_id = "apple"): SeriesPoint {
-  return { t, value, code: null, unit: "count", source_id, confidence: null };
+  return { t, value, code: null, unit: "count", source_id, stream_id: null, confidence: null };
 }
 
 describe("groupBySource", () => {
