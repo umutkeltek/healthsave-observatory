@@ -653,6 +653,9 @@ Example response:
 | `/api/v2/agents/proposals/{proposal_id}/decide` | POST | key | approve / reject a proposal |
 | `/api/v2/readiness` | GET | key | readiness / recovery summary |
 | `/api/v2/privacy` | GET | key | egress policy + audit (what derived data may leave the host) |
+| `/api/v2/intelligence` | GET, PUT | key | narrator (LLM) settings: mode (off/local/cloud), primary provider+model, fallback chain — keys never returned |
+| `/api/v2/intelligence/consent` | POST | key | grant / revoke the cloud-egress opt-in (separate from provider setup) |
+| `/api/v2/intelligence/test-connection` | POST | key | SSRF-guarded provider probe (one token, no health data) |
 | `/api/v2/export/metrics` | GET | key | list exportable metrics with counts + date ranges |
 | `/api/v2/export` | GET | key | export one metric (or `all`) as JSON or CSV |
 | `/api/v2/sources/whoop/webhook` | POST | HMAC | Whoop push webhook; authenticity via `X-WHOOP-Signature` |

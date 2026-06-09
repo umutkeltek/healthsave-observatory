@@ -101,6 +101,18 @@ ALLOWLIST: dict[str, str] = {
         "missing proposal_id to a 404. All actual SQL stays in "
         "storage.timescale.agents (the Phase 7-B repository)."
     ),
+    "apps/api/server/api/v2_intelligence.py": (
+        "stays — ADR-0003 Intelligence settings API. AsyncSession typing for Depends(); "
+        "the SQL lives in storage.timescale.intelligence (TimescaleIntelligenceRepository), "
+        "destination classification is analysis.egress, and the route only orchestrates "
+        "those — no raw SQL here."
+    ),
+    "apps/api/server/api/v2_privacy.py": (
+        "stays — v2 egress-posture API. AsyncSession typing for Depends(); the route "
+        "passes the session to analysis.intelligence.resolve_llm_config (which reads via "
+        "storage.timescale.intelligence) and runs the pure analysis.egress policy — no "
+        "raw SQL here."
+    ),
     "apps/api/server/api/health_routes.py": (
         "stays — readiness probe runs SELECT 1; trivial enough to skip migration"
     ),
