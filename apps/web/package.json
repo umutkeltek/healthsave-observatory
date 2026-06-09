@@ -8,7 +8,8 @@
     "dev": "next dev -p 4173",
     "build": "next build",
     "start": "next start -p 4173",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test app/"
   },
   "dependencies": {
     "next": "^15.1.6",
