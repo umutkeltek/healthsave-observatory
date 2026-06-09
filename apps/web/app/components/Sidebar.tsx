@@ -43,6 +43,14 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M3 8c0 1.1 2.2 2 5 2s5-.9 5-2" />
     </>
   ),
+  compare: (
+    <>
+      <path d="M2.5 5.5h8" />
+      <path d="M8 3 10.5 5.5 8 8" />
+      <path d="M13.5 10.5h-8" />
+      <path d="M8 8 5.5 10.5 8 13" />
+    </>
+  ),
   privacy: <path d="M8 2.2l4.5 1.8v3.6c0 2.8-1.9 4.7-4.5 5.6-2.6-.9-4.5-2.8-4.5-5.6V4z" />,
 };
 
@@ -52,6 +60,7 @@ const NAV = [
   { href: "/findings", label: "Findings", icon: "findings" },
   { href: "/sources", label: "Sources", icon: "sources" },
   { href: "/data", label: "Data", icon: "data" },
+  { href: "/compare", label: "Compare", icon: "compare" },
   { href: "/privacy", label: "Privacy", icon: "privacy" },
 ] as const;
 
