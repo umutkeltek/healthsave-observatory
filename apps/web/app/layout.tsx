@@ -10,7 +10,7 @@ const sans = Geist({ subsets: ["latin"], variable: "--font-sans", display: "swap
 const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "HealthSave · datahub",
+  title: "HealthSave Observatory",
   description: "Your health data, interpreted — a local-first personal health console.",
 };
 

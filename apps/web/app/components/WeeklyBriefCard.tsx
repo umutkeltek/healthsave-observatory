@@ -10,7 +10,7 @@ export function WeeklyBriefCard({ latest }: { latest: InsightsLatest | null }) {
     return (
       <article className="card brief">
         <h2>Weekly Brief</h2>
-        <p className="empty">Backend unreachable — start datahub and sync from HealthSave.</p>
+        <p className="empty">Backend unreachable — start HealthSave Observatory and sync from the app.</p>
       </article>
     );
   }

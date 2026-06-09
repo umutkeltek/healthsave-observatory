@@ -1,4 +1,4 @@
-"""Health Data Hub analysis engine.
+"""HealthSave Observatory analysis engine.
 
 Two-brain architecture:
 

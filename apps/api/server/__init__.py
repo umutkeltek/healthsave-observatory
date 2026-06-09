@@ -1,4 +1,4 @@
-"""Health Data Hub server package.
+"""HealthSave Observatory server package.
 
 Minimal FastAPI server that receives health data from a compatible client
 such as the HealthSave iOS app and stores it in TimescaleDB. HealthSave

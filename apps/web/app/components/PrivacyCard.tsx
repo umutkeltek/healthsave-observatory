@@ -17,7 +17,7 @@ export function PrivacyCard({ privacy }: { privacy: Privacy | null }) {
     return (
       <article className="card privacy">
         <h2>What Leaves This Host</h2>
-        <p className="empty">Backend unreachable — start datahub to see your egress posture.</p>
+        <p className="empty">Backend unreachable — start HealthSave Observatory to see your egress posture.</p>
       </article>
     );
   }

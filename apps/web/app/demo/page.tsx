@@ -7,7 +7,7 @@ import { LocalVaultReceipt, type VaultStep } from "../components/LocalVaultRecei
 // recovery dip, so a fresh clone (or the README screenshot) shows the product
 // alive before any real data is synced. Pure fixtures; no API required.
 
-export const metadata: Metadata = { title: "Today · demo · datahub" };
+export const metadata: Metadata = { title: "Today · demo · HealthSave Observatory" };
 
 // HRV (ms) over 30 days — steady, then a clear multi-day decline at the end.
 const HRV_30D = [

@@ -1,4 +1,4 @@
-// Typed client for the datahub v2 read API (the same contract the LLM narrator
+// Typed client for the HealthSave Observatory v2 read API (the same contract the LLM narrator
 // consumes). Shapes mirror server/api/v2_metrics.py responses.
 
 export type MetricSummary = {

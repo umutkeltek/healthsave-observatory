@@ -83,7 +83,7 @@ export function Sidebar({
           ◆
         </span>
         <span className="brand-name">HealthSave</span>
-        <span className="brand-sub">datahub</span>
+        <span className="brand-sub">Observatory</span>
       </div>
 
       <nav className="nav">

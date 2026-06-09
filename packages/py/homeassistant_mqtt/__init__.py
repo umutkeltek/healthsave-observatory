@@ -1,4 +1,4 @@
-"""Home Assistant MQTT bridge package for Health Data Hub."""
+"""Home Assistant MQTT bridge package for HealthSave Observatory."""
 
 from .bridge import HomeAssistantMQTTConfig, SensorSpec
 from .snapshot import HealthSnapshot

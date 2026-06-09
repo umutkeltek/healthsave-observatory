@@ -61,7 +61,7 @@ def test_discovery_messages_use_home_assistant_mqtt_discovery_shape() -> None:
                 "device": {
                     "identifiers": ["healthsave"],
                     "manufacturer": "HealthSave",
-                    "model": "HealthSave Data Hub MQTT Bridge",
+                    "model": "HealthSave Observatory MQTT Bridge",
                     "name": "HealthSave",
                 },
                 "enabled_by_default": True,

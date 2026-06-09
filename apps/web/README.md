@@ -1,6 +1,6 @@
 # @hdh/web — HealthSave dashboard
 
-The standalone, insight-first dashboard for datahub v2 — the eventual
+The standalone, insight-first dashboard for HealthSave Observatory v2 — the eventual
 replacement for Grafana. Reads the v2 API (`/api/v2/metrics`,
 `/api/v2/metrics/{id}/series`), the same contract the local LLM narrator will
 consume.
@@ -13,7 +13,7 @@ bun install
 API_BASE=http://localhost:8000 bun run dev   # http://localhost:4173
 ```
 
-Point `API_BASE` at a running datahub API. Server components fetch it directly;
+Point `API_BASE` at a running HealthSave Observatory API. Server components fetch it directly;
 the `/api/*` rewrite (next.config.mjs) covers any client-side fetch.
 
 ## Status

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Health Data Hub - one-command bootstrap for non-technical users.
+# HealthSave Observatory - one-command bootstrap for non-technical users.
 #
 # Usage:
 #   ./setup.sh            # interactive setup
@@ -50,7 +50,7 @@ OLLAMA_URL_DEFAULT="http://localhost:11434"
 # ----------------------------------------------------------------- helpers
 print_usage() {
     cat <<'EOF'
-Health Data Hub bootstrap.
+HealthSave Observatory bootstrap.
 
 Usage:
   ./setup.sh            Run interactive setup (default).
@@ -470,7 +470,7 @@ check_endpoint() {
 
 # ------------------------------------------------------------------ setup
 cmd_setup() {
-    log_info "Health Data Hub bootstrap - self-hosted setup"
+    log_info "HealthSave Observatory bootstrap - self-hosted setup"
 
     if ! docker_available; then
         log_error "Docker is not running. Start Docker Desktop (or the Docker daemon) and re-run ./setup.sh."
@@ -606,7 +606,7 @@ cmd_setup() {
     grafana_pw="$(read_env_value GRAFANA_PASSWORD)"
 
     echo
-    log_ok "Health Data Hub is up."
+    log_ok "HealthSave Observatory is up."
     echo "  API:            ${API_URL_DEFAULT}"
     echo "  Readiness:      ${API_URL_DEFAULT}/ready"
     echo "  Grafana:        ${GRAFANA_URL_DEFAULT}  (user: ${grafana_user}, pass: ${grafana_pw})"
