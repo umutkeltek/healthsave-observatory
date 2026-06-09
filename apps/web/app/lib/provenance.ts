@@ -65,6 +65,19 @@ export function shortId(id: string): string {
   return head.length >= 6 ? head.slice(0, 8) : id;
 }
 
+// Friendly label for a source plugin id / display name. Real registries store
+// the plugin id (e.g. "apple-healthkit-ios"); show the human name instead.
+const SOURCE_NAMES: { match: RegExp; name: string }[] = [
+  { match: /apple|healthkit/i, name: "Apple Health" },
+  { match: /whoop/i, name: "WHOOP" },
+  { match: /oura/i, name: "Oura" },
+  { match: /amazfit|zepp/i, name: "Zepp" },
+  { match: /garmin/i, name: "Garmin" },
+];
+export function friendlyName(name: string): string {
+  return SOURCE_NAMES.find((s) => s.match.test(name))?.name ?? name;
+}
+
 // Join streams → sources on plugin_id, newest sync first. The display_name is
 // the human label for the integration; the plugin id is the honest fallback.
 export function buildProvenanceRows(streams: StreamView[], sources: SourceView[]): ProvenanceRow[] {
@@ -76,7 +89,7 @@ export function buildProvenanceRows(streams: StreamView[], sources: SourceView[]
       return {
         streamId: s.id,
         shortId: shortId(s.id),
-        sourceName: nameByPlugin.get(s.source_plugin_id) ?? s.source_plugin_id,
+        sourceName: friendlyName(nameByPlugin.get(s.source_plugin_id) ?? s.source_plugin_id),
         origin: s.source_plugin_id,
         hardware: s.device_label ?? "—",
         lastSync: agoLabel(s.last_seen_at),
@@ -86,20 +99,23 @@ export function buildProvenanceRows(streams: StreamView[], sources: SourceView[]
     });
 }
 
-// Honest coverage: one bar per SOURCE (the R2 model is one source → many device
-// streams), each bar the mean freshness of that source's streams, and the
-// headline the mean of those bars — a descriptive statistic over your own data,
-// verifiable by eye. It is NOT a synthesized consensus of conflicting values;
-// the product never claims one disagreeing source is "right".
+// Honest coverage: one bar per DEVICE (the physical emitter), each bar the mean
+// freshness of that device's streams, and the headline the mean of those bars —
+// a descriptive statistic over your own data, verifiable by eye. We key on the
+// device because real-world capture is one source (e.g. all via Apple Health)
+// with many devices behind it, so the device is where the variety lives. It is
+// NOT a synthesized consensus of conflicting values; the product never claims
+// one disagreeing reading is "right".
 export function buildCoverage(rows: ProvenanceRow[]): Coverage {
-  const bySource = new Map<string, { label: string; values: number[]; anyFresh: boolean }>();
+  const byDevice = new Map<string, { label: string; values: number[]; anyFresh: boolean }>();
   for (const row of rows) {
-    const group = bySource.get(row.origin) ?? { label: row.sourceName, values: [], anyFresh: false };
+    const key = row.hardware && row.hardware !== "—" ? row.hardware : row.sourceName;
+    const group = byDevice.get(key) ?? { label: key, values: [], anyFresh: false };
     group.values.push(row.freshness);
     if (!row.stale) group.anyFresh = true;
-    bySource.set(row.origin, group);
+    byDevice.set(key, group);
   }
-  const domains: CoverageDomain[] = [...bySource.entries()]
+  const domains: CoverageDomain[] = [...byDevice.entries()]
     .map(([id, g]) => ({
       id,
       label: g.label,

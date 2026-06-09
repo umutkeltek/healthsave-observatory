@@ -31,7 +31,7 @@ export function CoverageCard({ headline, domains }: Coverage) {
           {headline}
           <span className="cov-pct">%</span>
         </span>
-        <span className="cov-sub">mean source freshness</span>
+        <span className="cov-sub">mean device freshness</span>
       </div>
       <p className="cov-verdict">{verdict.line}</p>
       <ul className="cov-list">

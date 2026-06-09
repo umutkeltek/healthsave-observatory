@@ -157,10 +157,6 @@ export default async function DataPage({ searchParams }: { searchParams: Promise
 
   return (
     <>
-      <section className="lead">
-        <ReadinessCard readiness={readiness} sparklines={sparklines} />
-      </section>
-
       <FilterBar
         metrics={(all.length ? all : fallback).map((m) => ({
           id: m.id,
@@ -215,6 +211,13 @@ export default async function DataPage({ searchParams }: { searchParams: Promise
           </div>
         </>
       )}
+
+      <div className="section-label" style={{ marginTop: 36 }}>
+        Data readiness
+      </div>
+      <section className="lead">
+        <ReadinessCard readiness={readiness} sparklines={sparklines} />
+      </section>
     </>
   );
 }
