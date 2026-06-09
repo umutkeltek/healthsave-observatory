@@ -1,10 +1,10 @@
 # Licensing — HealthSave Observatory
 
-> **One-line summary:** the **protocol is open (Apache-2.0)** so anyone can build on it and
-> agents can speak it; the **product core is source-available (Elastic License 2.0)** so no
-> better-funded competitor can take it and sell it as a hosted service; the **premium layer is
-> proprietary** so the crown jewels stay ours. This split is deliberate — it maximizes adoption
-> of the *standard* while protecting the *business*.
+> **One-line summary:** the **protocol is open** (Apache-2.0) so anyone — and any agent — can speak
+> the HealthSave observation format; the **product core is source-available** (Elastic License 2.0)
+> so you can self-host it freely, while offering it to third parties as a managed service is not
+> permitted; the **premium/managed features are commercial** and reserved. The split maximizes
+> adoption of the open *standard* while keeping the project sustainable.
 
 This file is the authoritative map of which license governs which path. Where a directory carries
 its own `LICENSE` file, that file governs that directory and everything under it. Everything not
@@ -18,8 +18,8 @@ covered by a directory-level `LICENSE` is governed by the root [`LICENSE`](./LIC
 | Layer | Paths | License | Why this license |
 |---|---|---|---|
 | **Protocol & client surface** (the open standard) | `contracts/` · `packages/py/contracts/` · `packages/ts/api-client/` · `packages/py/plugin_sdk/` · *(future)* `cli/`, SDKs | **Apache-2.0** | We *want* other apps, devices, backends, and especially your own agents to speak the HealthSave observation format without fear. Apache (not MIT) because of its explicit **patent grant** — defensive for us and for adopters. This layer spreading is pure upside: every client built on it points back at HealthSave. |
-| **Product core** (the self-hostable server) | repo root + everything else: `apps/api`, `apps/worker`, `apps/agents`, `packages/py/storage`, `packages/py/analysis`, `apps/web`, `db/`, `deploy/`, `integrations/`, … | **Elastic License 2.0** (source-available) | ELv2 lets anyone read, run, modify, and self-host the core — but **forbids providing it to third parties as a hosted or managed service**. That single clause is the moat against a competitor with more marketing cloning our hosted tier. |
-| **Premium / managed** (the paid value) | *not in this repo* — advanced Body Briefs, report packs, backup/restore, managed updater, signed builds, managed single-tenant hosting | **Proprietary / commercial** | The highest-value differentiators are withheld from the source tree entirely, so even a permitted self-hoster or forker does not get them. This is where revenue compounds. |
+| **Product core** (the self-hostable server) | repo root + everything else: `apps/api`, `apps/worker`, `apps/agents`, `packages/py/storage`, `packages/py/analysis`, `apps/web`, `db/`, `deploy/`, `integrations/`, … | **Elastic License 2.0** (source-available) | ELv2 lets anyone read, run, modify, and self-host the core — but **does not permit offering it to third parties as a hosted or managed service**. That keeps a managed/hosted tier available to sustain the project. |
+| **Premium / managed** (the paid value) | *not in this repo* — advanced Body Briefs, report packs, backup/restore, managed updater, signed builds, managed single-tenant hosting | **Proprietary / commercial** | The premium/managed features live outside the source tree — a commercial product that funds ongoing development. The open core stays fully usable without them. |
 
 ## How to describe it publicly (precise wording matters)
 
@@ -29,26 +29,23 @@ covered by a directory-level `LICENSE` is governed by the root [`LICENSE`](./LIC
   Correct phrasings: *"source-available,"* *"self-hostable,"* *"open-core."*
 - The **premium/managed** layer is a **commercial product**.
 
-## Why this is the smart move (the defensive design)
+## Why the split
 
-Four compounding levers make life hard for a bigger, better-funded competitor — without
-crippling adoption:
+Three goals, balanced:
 
-1. **ELv2 on the core** — they cannot legally stand up our server as a managed SaaS for others.
-   The most likely "outspend us on marketing and host it" attack is closed by the license itself.
-2. **Trademark on the name** (see [`TRADEMARK.md`](./TRADEMARK.md)) — even a permitted fork
-   **cannot call itself "HealthSave" or "HealthSave Observatory."** A forker must rebrand, which
-   forfeits our SEO, App Store presence, reviews, and word-of-mouth. For a solo builder, brand +
-   distribution is often a stronger moat than the code license.
-3. **Proprietary premium layer** — the features people actually pay for never enter the source
-   tree, so forking the core yields an incomplete product.
-4. **Apache protocol** — counter-intuitively *protective*: the more clients, devices, and agents
-   speak our observation format, the more HealthSave becomes the default standard, and standards
-   are sticky. Adoption of the open layer deepens the moat around the closed layer.
+1. **Interoperability (Apache protocol).** The more clients, devices, and agents speak the
+   observation format, the more useful the standard becomes — so the protocol/SDK layer is fully
+   open and permissively licensed.
+2. **Sustainable self-hosting (ELv2 core).** Anyone can self-host the core for free; what ELv2
+   withholds is *reselling it as a managed service*, which keeps a hosted/managed tier available to
+   fund continued development.
+3. **A name people can trust (trademark).** The code licenses don't grant use of the marks — see
+   [`TRADEMARK.md`](./TRADEMARK.md). Forks are welcome but use their own name, so "HealthSave"
+   reliably means this project.
 
-What we deliberately **do not** do: we don't MIT/Apache the whole thing (that invites a hosted
-clone and kills the wealth path), and we don't ELv2/proprietary the protocol (that scares off the
-agent/developer ecosystem we want). The split gets both.
+We deliberately don't permissively license the whole thing (that would allow a hosted clone with no
+way to fund the project) and don't restrict the protocol (that would discourage the
+developer/agent ecosystem we want). The split keeps the standard open and the project viable.
 
 ## Contributor terms
 
