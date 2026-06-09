@@ -21,7 +21,7 @@ A two-brain daily briefing ships today. The MVP includes:
 - HR / HRV anomaly detection against your rolling baseline
 - HR / HRV trend detection over a configurable 30-day window
 - Workout recovery hints when HR or HRV deviates from baseline
-- Weekly summaries and cross-metric correlation analysis
+- Weekly rollups and cross-metric correlation analysis — not yet the productized Body Brief
 
 These are exposed over read and trigger endpoints:
 
@@ -52,7 +52,7 @@ The response includes a run ID; poll `GET /api/insights/latest` for the rendered
 
 The daily briefing is the shipped slice of a larger loop. Still being built:
 
-- **The weekly Body Brief.** The productized weekly narrative — the thing meant to bring you back week over week — built on the same findings pipeline. It is in progress, not yet shipped.
+- **The weekly Body Brief.** The weekly Body Brief is the productized report layer built on top of the shipped finding pipeline — the thing meant to bring you back week over week. It is in progress, not yet shipped.
 - **A first-class finding-card schema.** Each finding rendered as an evidence card: the **claim**, the **baseline window** it was measured against, the **effect size**, a **confidence** level, and — importantly — **what it cannot conclude**. This makes every narrated sentence traceable back to deterministic math.
 
 Also on the roadmap (not yet included): goal-tracking, anomaly alerting via Home Assistant, and multi-person households.

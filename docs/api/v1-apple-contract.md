@@ -63,6 +63,6 @@ The HealthSave app (1.5+) calls `GET /api/health` first and falls back to `GET /
 
 ## Building a compatible backend
 
-A HealthSave-compatible server does **not** have to be this one. The minimum core contract is: `GET /api/health` returns `2xx`, `GET /api/apple/status` returns flat metric objects, and `POST /api/apple/batch` accepts batches with a `2xx`. Idempotent batch handling is strongly recommended. Optional Data Hub extensions (`/api/v2/sync/*` receipts) light up extra confidence tiers in the app when present — a v1-only server still syncs cleanly without them.
+A HealthSave-compatible server does **not** have to be this one. The minimum core contract is: `GET /api/health` returns `2xx`, `GET /api/apple/status` returns flat metric objects, and `POST /api/apple/batch` accepts batches with a `2xx`. Idempotent batch handling is strongly recommended. Optional Observatory v2 sync receipts (`/api/v2/sync/*`) light up extra confidence tiers in the app when present — a v1-only server still syncs cleanly without them.
 
 The full contract, compatibility tiers, and the iOS liveness behavior live in [`API.md`](../../API.md). For payload-level examples across both surfaces, see [`API_REFERENCE.md`](../../API_REFERENCE.md). To register your backend in the community list, see [Storage backends](../development/storage-backends.md) and open a PR ([`CONTRIBUTING.md`](../../CONTRIBUTING.md)).

@@ -23,7 +23,8 @@ devices.
 | **Samsung / Huawei Health** | CLI importer (via the Health Sync app) — see [Importers: Garmin & Samsung](./importers-garmin-samsung.md) | **Shipped** (via importer) |
 | **Android Health Connect** | Native capture into the generic ingest API — see [Roadmap: Android & webhooks](./roadmap-android-webhooks.md) | **Planned** |
 | **Generic webhook / native API** | Any registered source posting canonical observations (HMAC-signed) — see [Roadmap: Android & webhooks](./roadmap-android-webhooks.md) | **Planned** |
-| **Oura** | Via Apple Health today; a direct connector (modelled on Whoop's) is on the roadmap | Via Apple Health today; **Planned** (direct) |
+| **Oura via Apple Health** | Any Oura data written into HealthKit is forwarded by HealthSave | Shipped indirectly |
+| **Oura direct connector** | Direct poll plugin, modeled on Whoop | Planned |
 
 If a device writes to Apple Health, the iOS bridge forwards it automatically —
 that already covers Oura, many Garmin watches, Withings, and more. If it

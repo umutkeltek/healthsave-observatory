@@ -8,7 +8,8 @@ your hardware unless you choose to send it.
 
 It runs entirely on your hardware — a laptop, a NUC, a Mac mini, a Synology, a
 homelab VM. No cloud, no subscription, no one else reading your numbers. Apple
-Health is the easiest way in, but it is not the boundary.
+Health is the most polished shipped path; all sources resolve into the same
+canonical model.
 
 ## The pipeline, in two lanes
 
@@ -25,7 +26,7 @@ Both lanes normalize into the same place: **HealthSave Observatory** (FastAPI +
 TimescaleDB, [canonical observations](concepts/canonical-observations.md) you own).
 
 ```
-Capture (Apple = on-ramp, not the boundary)        Surfaces & routes
+Capture (all sources → one canonical model)        Surfaces & routes
   Apple Health → HealthSave (iOS)         ─┐
   Whoop / Amazfit (plugins)                 ├─► HealthSave Observatory ─► Observatory web app (primary)
   Garmin / Samsung (importers)              │   FastAPI +          Grafana (optional)
