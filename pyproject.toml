@@ -117,7 +117,13 @@ markers = [
 # `import worker` work without requiring `pip install -e .` first.
 # CI still runs `pip install -e .[dev]` for the full install path;
 # this pythonpath is the safety net for fresh checkouts.
-pythonpath = ["apps/api", "apps/worker", "apps/agents", "packages/py"]
+#
+# "." (repo root) is first so bare `pytest` (CI's command) puts it on sys.path
+# the same way `python -m pytest` does. Several suites do `from tests.X import
+# ...` and rely on that package-import chain (which binds submodules like
+# server.ingestion); without the root on the path, monkeypatch string targets
+# such as "server.ingestion.owner.*" fail under bare pytest.
+pythonpath = [".", "apps/api", "apps/worker", "apps/agents", "packages/py"]
 
 [tool.ruff]
 line-length = 100
