@@ -44,6 +44,7 @@ COMPOSE_OVERRIDE="docker-compose.override.yml"
 COMPOSE_OVERRIDE_EXAMPLE="docker-compose.override.yml.example"
 
 API_URL_DEFAULT="http://localhost:8000"
+WEB_URL_DEFAULT="http://localhost:4173"
 GRAFANA_URL_DEFAULT="http://localhost:3000"
 OLLAMA_URL_DEFAULT="http://localhost:11434"
 
@@ -275,6 +276,11 @@ GRAFANA_PASSWORD=${grafana_password}
 # Grafana exposes the full PHI dashboard. It binds to 127.0.0.1 (loopback) by
 # default; set GRAFANA_BIND=0.0.0.0 to reach it from other devices on your LAN.
 GRAFANA_BIND=127.0.0.1
+
+# The Observatory web dashboard (your friendly default surface) also exposes
+# PHI; it binds to 127.0.0.1 (loopback) by default. Set WEB_BIND=0.0.0.0 to open
+# it to other devices on your LAN.
+WEB_BIND=127.0.0.1
 
 # Access control. API_KEY gates the API via the X-API-Key header; setup leaves
 # it as chosen above (empty = open access, and the server logs a loud warning at
@@ -607,10 +613,10 @@ cmd_setup() {
 
     echo
     log_ok "HealthSave Observatory is up."
-    echo "  API:            ${API_URL_DEFAULT}"
-    echo "  Readiness:      ${API_URL_DEFAULT}/ready"
-    echo "  Grafana:        ${GRAFANA_URL_DEFAULT}  (user: ${grafana_user}, pass: ${grafana_pw})"
-    echo "  iOS app URL:    http://${lan_ip}:8000"
+    echo "  ▸ Observatory:  ${WEB_URL_DEFAULT}   ← open this — your dashboard"
+    echo "  iOS app URL:    http://${lan_ip}:8000   (point the HealthSave app here)"
+    echo "  API:            ${API_URL_DEFAULT}   (health: /ready)"
+    echo "  Grafana:        ${GRAFANA_URL_DEFAULT}  (optional power-user view — user: ${grafana_user}, pass: ${grafana_pw})"
     echo
     log_info "Next step: ./setup.sh doctor   - verify every service is healthy."
 }
@@ -646,6 +652,9 @@ cmd_doctor() {
     # --- API endpoints --------------------------------------------------
     check_endpoint "API /health" "${API_URL_DEFAULT}/health" || failures=$((failures + 1))
     check_endpoint "API /ready"  "${API_URL_DEFAULT}/ready"  || failures=$((failures + 1))
+
+    # --- Observatory web (the primary surface) --------------------------
+    check_endpoint "Observatory web" "${WEB_URL_DEFAULT}/" || failures=$((failures + 1))
 
     # --- Ollama (only if enabled) --------------------------------------
     if [ -f "$COMPOSE_OVERRIDE" ]; then

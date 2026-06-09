@@ -45,3 +45,9 @@ services:
       HDH_GRAFANA_DATASOURCE_URL: ${HEALTH_DATA_HUB_DB_HOST:-postgres.example.internal}:${HEALTH_DATA_HUB_DB_PORT:-5432}
     ports: !override
       - "${HEALTH_DATA_HUB_GRAFANA_PORT:-3300}:3000"
+
+  # Observatory web reads the API (not the DB), so no external-DB rewiring — just
+  # publish it on the LAN like Grafana (the deploy is a single-host appliance).
+  web:
+    ports: !override
+      - "${HEALTH_DATA_HUB_WEB_PORT:-18090}:4173"

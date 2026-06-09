@@ -220,6 +220,24 @@ services:
       # PHI dashboard). Set GRAFANA_BIND=0.0.0.0 to publish it on the LAN.
       - "${GRAFANA_BIND:-127.0.0.1}:3000:3000"
 
+  # Observatory web — the primary, friendly dashboard surface (the easy
+  # alternative to Grafana). Next.js server components read the v2 API over the
+  # internal Docker network; API_KEY is the same one the API enforces, so the
+  # browser never sees it. Like Grafana it exposes PHI, so it binds to loopback
+  # by default (SECURITY-005); set WEB_BIND=0.0.0.0 to reach it from your LAN.
+  web:
+    build:
+      context: ./apps/web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      API_BASE: ${WEB_API_BASE:-http://api:8000}
+      API_KEY: ${API_KEY:-}
+    ports:
+      - "${WEB_BIND:-127.0.0.1}:4173:4173"
+
 volumes:
   db_data:
   grafana_data:
