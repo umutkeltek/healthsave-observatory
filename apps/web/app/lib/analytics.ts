@@ -34,6 +34,20 @@ export function groupBySource(points: SeriesPoint[]): Map<string, SeriesPoint[]>
   return out;
 }
 
+// Group points by device stream (stream_id). Points without a stream_id are
+// dropped — they cannot be attributed to a physical emitter. This is the
+// per-device axis the v2 series endpoint unlocked.
+export function groupByStream(points: SeriesPoint[]): Map<string, SeriesPoint[]> {
+  const out = new Map<string, SeriesPoint[]>();
+  for (const p of points) {
+    if (!p.stream_id) continue;
+    const arr = out.get(p.stream_id);
+    if (arr) arr.push(p);
+    else out.set(p.stream_id, [p]);
+  }
+  return out;
+}
+
 export type SourceCount = { source_id: string; count: number };
 
 // Count per source, sorted desc — the "data sources" distribution panels.

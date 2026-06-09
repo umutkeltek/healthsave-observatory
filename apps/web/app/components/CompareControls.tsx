@@ -12,7 +12,8 @@ export function CompareControls({ metrics, ranges }: { metrics: MetricOption[]; 
   const params = useSearchParams();
 
   const metric = params.get("metric") ?? "";
-  const mode = params.get("mode") === "source" ? "source" : "period";
+  const modeParam = params.get("mode");
+  const mode = modeParam === "source" || modeParam === "device" ? modeParam : "period";
   const range = params.get("range") ?? "30d";
 
   function set(key: string, value: string) {
@@ -42,6 +43,7 @@ export function CompareControls({ metrics, ranges }: { metrics: MetricOption[]; 
         <select className="filter-select" value={mode} onChange={(e) => set("mode", e.target.value)}>
           <option value="period">Period vs previous</option>
           <option value="source">Source vs source</option>
+          <option value="device">Device vs device</option>
         </select>
       </label>
 

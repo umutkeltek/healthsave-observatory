@@ -17,15 +17,19 @@ const SORTS = [
   { value: "coverage", label: "Most readings" },
 ];
 
+export type DeviceOption = { id: string; label: string };
+
 export function FilterBar({
   metrics,
   categories,
   sources,
+  devices,
   ranges,
 }: {
   metrics: MetricOption[];
   categories: string[];
   sources: string[];
+  devices: DeviceOption[];
   ranges: string[];
 }) {
   const router = useRouter();
@@ -36,6 +40,7 @@ export function FilterBar({
   const category = params.get("category") ?? "";
   const metric = params.get("metric") ?? "";
   const source = params.get("source") ?? "";
+  const device = params.get("device") ?? "";
   const sort = params.get("sort") ?? "";
 
   function update(mutate: (next: URLSearchParams) => void) {
@@ -56,7 +61,7 @@ export function FilterBar({
 
   // Only offer metrics within the chosen category (if any), so the two facets stay coherent.
   const metricOptions = category ? metrics.filter((m) => m.category === category) : metrics;
-  const active = Boolean(metric || category || source || sort || range !== "7d");
+  const active = Boolean(metric || category || source || device || sort || range !== "7d");
 
   return (
     <div className="filter-bar" role="search" aria-label="Filter metrics">
@@ -95,6 +100,20 @@ export function FilterBar({
           ))}
         </select>
       </label>
+
+      {devices.length > 0 && (
+        <label className="filter-field">
+          <span className="filter-label">Device</span>
+          <select className="filter-select" value={device} onChange={(e) => set("device", e.target.value)}>
+            <option value="">All devices</option>
+            {devices.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <label className="filter-field">
         <span className="filter-label">Range</span>

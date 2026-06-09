@@ -3,11 +3,11 @@ import type { Metadata } from "next";
 import { CompareControls } from "../components/CompareControls";
 import { ComparisonCard, type Side } from "../components/ComparisonCard";
 import { MultiSeriesChart, type ChartSeries } from "../components/MultiSeriesChart";
-import { type Delta, groupBySource, periodSplit } from "../lib/analytics";
-import type { MetricSeries, SeriesPoint } from "../lib/api";
+import { type Delta, groupBySource, groupByStream, periodSplit } from "../lib/analytics";
+import type { MetricSeries, SeriesPoint, StreamView } from "../lib/api";
 import { DEMO_COMPARE_SERIES } from "../lib/demoSeries";
 import { comparability } from "../lib/healthOpinion";
-import { safeMetrics, safeSeries } from "../lib/load";
+import { safeMetrics, safeSeries, safeStreams } from "../lib/load";
 
 export const metadata: Metadata = { title: "Compare · HealthSave" };
 export const dynamic = "force-dynamic";
@@ -27,15 +27,28 @@ function mean(values: number[]): number {
 
 type CardModel = { a: Side; b: Side; delta: Delta; caveat: string | null; warn: boolean };
 
+// A device stream's human label — the registry's device_label, or a tidied
+// fallback from the stream id so demo/unknown streams still read sensibly.
+function streamLabel(id: string, labels: Map<string, string>): string {
+  const known = labels.get(id);
+  if (known) return known;
+  const tidy = id.replace(/^demo-/, "").replace(/-/g, " ").trim();
+  return tidy ? tidy.replace(/\b\w/g, (c) => c.toUpperCase()) : id;
+}
+
 export default async function ComparePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const sp = await searchParams;
   const metricSel = one(sp.metric);
-  const mode = one(sp.mode) === "source" ? "source" : "period";
+  const modeSel = one(sp.mode);
+  const mode = modeSel === "source" || modeSel === "device" ? modeSel : "period";
   const range = RANGES.includes(one(sp.range)) ? one(sp.range) : "30d";
 
-  const metrics = await safeMetrics();
+  const [metrics, streams] = await Promise.all([safeMetrics(), safeStreams()]);
   const all = metrics ?? [];
   const metricId = metricSel || all[0]?.id || DEMO_COMPARE_SERIES.metric.id;
+  const streamLabels = new Map<string, string>(
+    (streams ?? []).map((s: StreamView) => [s.id, s.device_label ?? s.source_plugin_id]),
+  );
 
   const live = await safeSeries(metricId, range);
   const isDemo = live === null;
@@ -46,7 +59,29 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
   let card: CardModel | null = null;
   let note: string | null = null;
 
-  if (mode === "source") {
+  if (mode === "device") {
+    const groups = [...groupByStream(series.points).entries()]
+      .map(([id, pts]) => ({ id, label: streamLabel(id, streamLabels), pts: [...pts].sort(byTime) }))
+      .sort((a, b) => b.pts.length - a.pts.length);
+    chart = groups.slice(0, 4).map((g) => ({ label: g.label, values: vals(g.pts) }));
+    if (groups.length < 2) {
+      note = "Only one device stream for this metric — connect another device to compare.";
+    } else {
+      const [A, B] = groups;
+      const ma = mean(vals(A.pts));
+      const mb = mean(vals(B.pts));
+      const abs = round1(mb - ma);
+      const pct = ma !== 0 ? Number(((abs / Math.abs(ma)) * 100).toFixed(1)) : null;
+      const cmp = comparability(metricId, [A.label, B.label]);
+      card = {
+        a: { label: A.label, value: round1(ma), meta: `${vals(A.pts).length} readings` },
+        b: { label: B.label, value: round1(mb), meta: `${vals(B.pts).length} readings` },
+        delta: { abs, pct, direction: abs > 0 ? "up" : abs < 0 ? "down" : "flat" },
+        caveat: cmp.caveat,
+        warn: cmp.warn,
+      };
+    }
+  } else if (mode === "source") {
     const groups = [...groupBySource(series.points).entries()]
       .map(([source, pts]) => ({ source, pts: [...pts].sort(byTime) }))
       .sort((a, b) => b.pts.length - a.pts.length);
@@ -115,7 +150,13 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
       {card && (
         <section className="lead">
           <ComparisonCard
-            title={mode === "source" ? "Source vs source" : "Period vs previous"}
+            title={
+              mode === "device"
+                ? "Device vs device"
+                : mode === "source"
+                  ? "Source vs source"
+                  : "Period vs previous"
+            }
             unit={unit}
             a={card.a}
             b={card.b}

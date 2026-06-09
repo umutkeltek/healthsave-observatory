@@ -6,8 +6,15 @@ import { ReadinessCard } from "../components/ReadinessCard";
 import { SleepCard } from "../components/SleepCard";
 import { SourceDistribution } from "../components/SourceDistribution";
 import { distribution } from "../lib/analytics";
-import type { MetricSeries, MetricSummary } from "../lib/api";
-import { GRID_METRICS, loadReadinessSparklines, safeMetrics, safeReadiness, safeSeries } from "../lib/load";
+import type { MetricSeries, MetricSummary, SeriesPoint } from "../lib/api";
+import {
+  GRID_METRICS,
+  loadReadinessSparklines,
+  safeMetrics,
+  safeReadiness,
+  safeSeries,
+  safeStreams,
+} from "../lib/load";
 
 export const metadata: Metadata = { title: "Data · HealthSave" };
 export const dynamic = "force-dynamic";
@@ -47,10 +54,15 @@ export default async function DataPage({ searchParams }: { searchParams: Promise
   const metricSel = one(sp.metric);
   const categorySel = one(sp.category);
   const sourceSel = one(sp.source);
+  const deviceSel = one(sp.device);
   const sortSel = one(sp.sort);
   const range = RANGES.includes(one(sp.range)) ? one(sp.range) : "7d";
 
-  const [readiness, metrics] = await Promise.all([safeReadiness(), safeMetrics()]);
+  const [readiness, metrics, streams] = await Promise.all([
+    safeReadiness(),
+    safeMetrics(),
+    safeStreams(),
+  ]);
   const all = metrics ?? [];
   const categories = [...new Set(all.map((m) => m.category).filter(Boolean))].sort();
 
@@ -85,17 +97,26 @@ export default async function DataPage({ searchParams }: { searchParams: Promise
     isDefault ? safeSeries("sleep.stage", range) : Promise.resolve(null),
   ]);
 
-  // Source facet + distribution from the actually-fetched points.
+  // Source + device facets from the actually-fetched points.
   const allPoints = seriesList.flatMap((s) => s?.points ?? []);
   const sources = [...new Set(allPoints.map((p) => p.source_id))].sort();
-  const dist = distribution(sourceSel ? allPoints.filter((p) => p.source_id === sourceSel) : allPoints);
+  const streamLabels = new Map((streams ?? []).map((s) => [s.id, s.device_label ?? s.source_plugin_id]));
+  const deviceIds = [...new Set(allPoints.map((p) => p.stream_id).filter((s): s is string => Boolean(s)))];
+  const devices = deviceIds
+    .map((id) => ({ id, label: streamLabels.get(id) ?? id }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
-  // Apply the source filter to each series client-side, then sort.
+  const keep = (p: SeriesPoint): boolean =>
+    (!sourceSel || p.source_id === sourceSel) && (!deviceSel || p.stream_id === deviceSel);
+  const filtering = Boolean(sourceSel || deviceSel);
+
+  const dist = distribution(allPoints.filter(keep));
+
+  // Apply the source/device filter to each series client-side, then sort.
   const cards = sortCards(
     visible.map((metric, i) => {
       const series = seriesList[i];
-      const filtered =
-        series && sourceSel ? { ...series, points: series.points.filter((p) => p.source_id === sourceSel) } : series;
+      const filtered = series && filtering ? { ...series, points: series.points.filter(keep) } : series;
       return { metric, series: filtered };
     }),
     sortSel,
@@ -115,6 +136,7 @@ export default async function DataPage({ searchParams }: { searchParams: Promise
         }))}
         categories={categories}
         sources={sources}
+        devices={devices}
         ranges={RANGES}
       />
 
@@ -123,7 +145,7 @@ export default async function DataPage({ searchParams }: { searchParams: Promise
       <div className="section-label">
         {metrics === null
           ? "Metrics"
-          : `${visible.length} metric${visible.length === 1 ? "" : "s"} · ${range}${sourceSel ? ` · ${sourceSel}` : ""}`}
+          : `${visible.length} metric${visible.length === 1 ? "" : "s"} · ${range}${sourceSel ? ` · ${sourceSel}` : ""}${deviceSel ? ` · ${streamLabels.get(deviceSel) ?? deviceSel}` : ""}`}
       </div>
       <section className="grid">
         {cards.map(({ metric, series }) => (
