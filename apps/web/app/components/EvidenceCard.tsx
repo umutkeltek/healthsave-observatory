@@ -108,7 +108,7 @@ export function EvidenceCard({ findings }: { findings: Finding[] | null }) {
   if (findings === null) {
     return (
       <article className="card evidence">
-        <h2>Evidence</h2>
+        <h2>Findings</h2>
         <p className="empty">Backend unreachable — start HealthSave Observatory and sync from the app.</p>
       </article>
     );
@@ -117,7 +117,7 @@ export function EvidenceCard({ findings }: { findings: Finding[] | null }) {
   if (findings.length === 0) {
     return (
       <article className="card evidence">
-        <h2>Evidence</h2>
+        <h2>Findings</h2>
         <p className="empty">
           No findings yet — anomalies, trends and correlations appear here as the engine runs.
         </p>
@@ -127,7 +127,7 @@ export function EvidenceCard({ findings }: { findings: Finding[] | null }) {
 
   return (
     <article className="card evidence">
-      <h2>Evidence</h2>
+      <h2>Findings</h2>
       <ul className="evidence-list">
         {findings.map((finding) => (
           <EvidenceRow key={finding.id} finding={finding} />

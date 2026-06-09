@@ -4,10 +4,10 @@ import { EvidenceCard } from "../components/EvidenceCard";
 import { WeeklyBriefCard } from "../components/WeeklyBriefCard";
 import { safeFindings, safeLatest } from "../lib/load";
 
-export const metadata: Metadata = { title: "Evidence · HealthSave" };
+export const metadata: Metadata = { title: "Findings · HealthSave" };
 export const dynamic = "force-dynamic";
 
-export default async function EvidencePage() {
+export default async function FindingsPage() {
   const [latest, findings] = await Promise.all([safeLatest(), safeFindings()]);
   return (
     <>

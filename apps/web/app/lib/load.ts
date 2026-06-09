@@ -12,11 +12,15 @@ import {
   fetchPrivacy,
   fetchReadiness,
   fetchSeries,
+  fetchSources,
+  fetchStreams,
   type Finding,
   type InsightsLatest,
   type MetricSeries,
   type Privacy,
   type Readiness,
+  type SourceView,
+  type StreamView,
 } from "./api";
 
 // Curated sparkline metrics for the Data view grid. Each is a real ontology
@@ -82,6 +86,26 @@ export async function safeExperiments(): Promise<ExperimentList | null> {
 export async function safePrivacy(): Promise<Privacy | null> {
   try {
     return await fetchPrivacy();
+  } catch {
+    return null;
+  }
+}
+
+// Identity / provenance loaders — the Sources view. Each returns the inner
+// array (mirroring safeFindings) and degrades to null when the backend is
+// unreachable so the page can fall back to a clearly-labelled demo.
+
+export async function safeSources(): Promise<SourceView[] | null> {
+  try {
+    return (await fetchSources()).sources;
+  } catch {
+    return null;
+  }
+}
+
+export async function safeStreams(): Promise<StreamView[] | null> {
+  try {
+    return (await fetchStreams()).streams;
   } catch {
     return null;
   }
