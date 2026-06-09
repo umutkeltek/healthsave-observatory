@@ -9,19 +9,20 @@
 [![Ollama](https://img.shields.io/badge/Ollama-local%20LLM-000000.svg)](https://ollama.com/)
 [![Download on the App Store](https://img.shields.io/badge/Download-App%20Store-0D96F6?logo=apple&logoColor=white)](https://apps.apple.com/app/id6759843047)
 
-> **Your whole body, in one place you own — and it actually tells you something.**
-> HealthSave Observatory is a **self-hosted private body observatory**. It captures your health data from *any* device, builds a longitudinal record you own, explains what's changing with evidence-linked findings and **Body Briefs**, and exposes a private API your own scripts and tools can query — with **raw data that never leaves your hardware unless you choose to send it**.
+> **A self-hosted observatory for your body data — one place you own.**
+> HealthSave Observatory brings **Apple Health**, early wearable plugins, and file imports into one canonical record you own. It shows what changed against your **own baseline**, computes **evidence-linked findings**, and exposes a **private API** for your scripts, dashboards, and automations — with raw observations staying on your hardware unless you explicitly route them elsewhere.
 
 New here? Start with the [overview](docs/overview.md) or jump to the [quick start](docs/quick-start.md).
 
 ## Status at a glance
 
-| Area | Today | Next |
+| Area | Shipped today | In progress / next |
 |---|---|---|
-| **Capture** | Apple Health (HealthSave iOS), early Whoop/Amazfit plugins, Garmin/Samsung importers | Android Health Connect, generic webhook ingest |
-| **Surface** | Grafana bundled today; web Observatory being wired in | web Observatory as the default surface |
-| **Findings** | daily briefing / anomaly / trend analysis | weekly Body Brief + evidence-card schema |
-| **Agent surface** | typed `/api/v2` read API | private CLI + local MCP server |
+| **Capture** | Apple Health via HealthSave iOS; early Whoop/Amazfit poll plugins; Garmin/Samsung importers | Android Health Connect; HMAC-signed generic ingest |
+| **Surfaces** | Grafana dashboards bundled; pre-release Observatory web app (runnable manually) | Observatory web app in the default Docker stack; Grafana as optional power-user view |
+| **Findings** | daily briefing, HR/HRV anomalies, trends, weekly rollups, correlations | weekly Body Brief; first-class finding-card schema |
+| **API / agents** | frozen v1 Apple ingest; evolving `/api/v2` read API | `healthsave` CLI; local MCP server; scoped read tokens |
+| **Trust boundary** | default-deny egress; local Ollama path; cloud AI opt-in / redacted | unified route audit + outbound policy |
 | **License** | source-available core (Elastic 2.0); Apache-2.0 protocol/SDK | premium / managed reserved |
 
 ## Why it exists
@@ -71,13 +72,13 @@ Building another client? The batch endpoint is `POST /api/apple/batch`, a frozen
 
 ## What you get
 
-- **Universal capture.** Apple Health (via [HealthSave](https://apps.apple.com/app/id6759843047)), early Whoop/Amazfit direct plugins, and Garmin/Samsung file importers today; Android Health Connect and generic webhooks planned — all normalized into one canonical, source-tagged record you can query with normal SQL.
-- **One record you own.** Every source resolves to the same **Source / Device / Stream** identity, so dashboards and automations stay stable as you add devices.
-- **A private Observatory dashboard.** *Today vs your personal baseline*, what changed, how complete the data is, and where each number came from. The web Observatory is the primary surface; Grafana ships as an optional power-user view.
-- **Evidence-linked findings.** A deterministic statistical engine computes the findings; a local LLM only narrates them. A daily briefing ships today; the weekly **Body Brief** with full finding cards is in progress.
-- **Your own private health API.** Query your history from your scripts, notebooks, and dashboards over a typed read API — locally, without handing your data to a third-party vendor. *(A `healthsave` CLI and a local MCP server are on the roadmap.)*
-- **Route it anywhere (optional).** Home Assistant, MQTT, Grafana, webhooks, exports — your data piped to your tools, behind a policy you control.
-- **A trust boundary you can audit.** Default-deny egress: raw observations never leave your host; cloud AI is opt-in and carries only derived, on-device-redacted findings.
+- **Capture without a new silo.** Apple Health syncs through the HealthSave iOS app; early Whoop/Amazfit plugins and Garmin/Samsung importers ship today. Android Health Connect and generic webhooks are planned.
+- **One canonical record.** Readings resolve into the same **Source / Device / Stream** identity model, so adding a device doesn't break dashboards, automations, or provenance.
+- **Baseline-aware surfaces.** The Observatory web app shows today against your own history, data completeness, and source provenance. Grafana stays bundled for raw, SQL-backed exploration.
+- **Deterministic findings, local narration.** Statistics compute anomalies, trends, and summaries; a local LLM only turns those findings into readable briefings. Daily briefings ship today; the weekly **Body Brief** is in progress.
+- **A private API for your tools.** Query your health history from scripts, notebooks, dashboards, and future local agents over the evolving `/api/v2` read API.
+- **Routes under policy.** Send selected outputs to Home Assistant, MQTT, Grafana, webhooks, or exports behind an explicit egress policy.
+- **An auditable trust boundary.** Raw observations stay on your host by default; cloud AI is opt-in and receives only derived, on-device-redacted findings.
 
 ## Architecture
 

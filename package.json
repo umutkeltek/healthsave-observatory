@@ -2,7 +2,7 @@
   "name": "health-data-hub",
   "private": true,
   "version": "0.0.0",
-  "description": "Bun workspace root — TypeScript packages live under packages/ts/.",
+  "description": "Self-hosted HealthSave Observatory monorepo: API, web app, and client packages for a private health-data backend.",
   "workspaces": [
     "packages/ts/*"
   ],

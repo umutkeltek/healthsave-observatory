@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "license": "Apache-2.0",
-  "description": "Generated TypeScript types + thin client for the Health Data Hub API. v1 from contracts/openapi/v1.locked.json; v2 from contracts/json-schema/_bundle.json.",
+  "description": "TypeScript client for the HealthSave Observatory v2 read API and compatibility contracts.",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",

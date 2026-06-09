@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "HealthSave standalone dashboard — insight-first read UI over the datahub v2 API (replaces Grafana).",
+  "description": "Insight-first HealthSave Observatory web app for baseline, provenance, evidence, and privacy surfaces.",
   "scripts": {
     "dev": "next dev -p 4173",
     "build": "next build",

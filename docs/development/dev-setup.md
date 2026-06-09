@@ -25,7 +25,7 @@ Run the same four checks CI runs:
 python3.12 -m ruff format --check .   # formatting
 python3.12 -m ruff check .            # lint
 python3.12 -m pytest -q               # tests
-docker build -t health-data-hub-dev . # image builds
+docker build -t healthsave-observatory-dev . # image builds
 ```
 
 The test suite runs **without a live database** (async sessions are mocked), so `pytest` works on a clean checkout. Ruff is configured with the `E`, `F`, `I`, `UP`, `B`, and `SIM` rule sets; run `ruff format .` (without `--check`) to auto-fix formatting before committing.

@@ -21,10 +21,10 @@ The endpoint is DB-independent: it does not touch Postgres, so it returns `200` 
 
 ```yaml
 scrape_configs:
-  - job_name: health-data-hub
+  - job_name: healthsave-observatory
     metrics_path: /metrics
     static_configs:
-      - targets: ['health-data-hub:8000']  # or 'localhost:8000' for host scrape
+      - targets: ['api:8000']  # or 'localhost:8000' for host scrape
 ```
 
 ## Sample PromQL

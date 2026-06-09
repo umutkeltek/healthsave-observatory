@@ -1,6 +1,6 @@
 # Observatory Web App
 
-The Observatory is the standalone, insight-first web surface for HealthSave Observatory. It is a Next.js app (`apps/web`) that reads your canonical health record over the v2 API and shows you what changed against your own baseline — not just a wall of charts. This is the **primary surface** for the project and is being wired into the default deployment; Grafana stays as an optional power-user view until that lands.
+The Observatory is the standalone, insight-first web surface for HealthSave Observatory. It is a Next.js app (`apps/web`) that reads your canonical health record over the v2 API and shows you what changed against your own baseline — not just a wall of charts. This is the **pre-release primary surface**: the direction of the project, runnable manually today, with Grafana remaining the bundled default until the web app lands in the standard Docker Compose stack.
 
 ## What it shows
 
@@ -15,9 +15,9 @@ Pages today: home, evidence, experiments, privacy, data, and a demo page. Empty 
 
 Everything is driven by the v2 read API — `/api/v2/metrics` and `/api/v2/metrics/{id}/series` — the same contract the local LLM narrator consumes. See [Findings & Body Briefs](findings-and-body-briefs.md) for how those findings are computed and narrated.
 
-## The primary surface
+## The pre-release primary surface
 
-The Observatory web app is the direction of the project: an insight-first surface that replaces the chart-first Grafana experience for everyday use. It is being wired into the default `docker compose` stack. Until that work lands, [Grafana](grafana.md) remains the bundled, supported dashboard — the optional power-user view — and you can run the Observatory manually alongside it.
+The Observatory web app is the direction of the project: an insight-first surface that replaces the chart-first Grafana experience for everyday use, and it can be run manually today. It is not yet part of the standard Docker Compose stack, so [Grafana](grafana.md) remains the bundled default — the supported dashboard you get out of the box — until the web app lands in that stack. You can run the Observatory manually alongside Grafana in the meantime.
 
 ## How to run it today
 

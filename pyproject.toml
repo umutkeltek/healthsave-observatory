@@ -5,33 +5,34 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "healthsave-observatory"
 version = "1.0.0"
-description = "HealthSave Observatory - a self-hosted private body observatory: health-data capture (Apple Health today; Android Health Connect, wearables, and webhooks planned) into a canonical TimescaleDB record, with evidence-linked findings, Body Briefs, a private read API (CLI + MCP planned), and a default-deny egress boundary."
+description = "Self-hosted health-data backend for HealthSave Observatory: FastAPI, TimescaleDB, canonical observations, source/device/stream provenance, baseline-linked findings, and a private read API."
 requires-python = ">=3.12,<3.14"
 license = { text = "Elastic-2.0" }
 readme = "README.md"
 keywords = [
+    "healthsave",
     "health-observatory",
+    "health-data",
     "self-hosted",
+    "local-first",
+    "privacy",
     "apple-health",
-    "android-health-connect",
     "healthkit",
+    "health-connect",
     "wearables",
     "whoop",
-    "oura",
     "garmin",
     "hrv",
     "quantified-self",
     "biohacking",
     "personal-health-api",
-    "mcp",
     "home-assistant",
+    "mqtt",
+    "grafana",
     "timescaledb",
-    "postgresql",
     "fastapi",
-    "local-llm",
-    "privacy",
     "docker",
-    "time-series",
+    "local-llm",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
