@@ -6,9 +6,12 @@ dashboard can show, plainly, what does and doesn't leave the user's host. The
 any byte is sent; this read exposes the *same* decision for display — it does
 not decide anything itself.
 
-Pure read: derives everything from the in-process analysis config + the pure
-egress policy. No DB (no storage-zone import), no health data — just the
-local-vs-cloud posture and the per-payload-class allow/deny breakdown.
+Read of the *effective* posture: the in-process analysis config is the env
+floor, and the DB Intelligence settings overlay it (``resolve_llm_config``, the
+same resolver the narrator uses per job), so the chip reflects what the narrator
+will actually do — not just the boot-time env. No health data; just the
+local-vs-cloud posture and the per-payload-class allow/deny breakdown, all from
+the pure egress policy (never a hand-maintained copy of the verdicts).
 """
 
 from __future__ import annotations
@@ -22,21 +25,26 @@ from analysis.egress import (
     PayloadClass,
     classify_destination,
 )
+from analysis.intelligence import resolve_llm_config
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from .deps import verify_api_key
+from .deps import get_session, verify_api_key
 
 router = APIRouter(prefix="/api/v2", dependencies=[Depends(verify_api_key)])
 
 
 @router.get("/privacy")
-async def privacy(request: Request) -> dict:
+async def privacy(request: Request, session: AsyncSession = Depends(get_session)) -> dict:
     """The host's egress posture: provider, local-vs-cloud, and what may leave.
 
     ``raw_observations_leave_host`` is always ``false`` — the privacy promise is
     an invariant, enforced unconditionally by the policy regardless of opt-in.
     """
-    llm = request.app.state.analysis_config.llm
+    base = request.app.state.analysis_config.llm
+    # Overlay DB Intelligence settings (mode/provider/opt-in) onto the env floor;
+    # falls back to the env config when unconfigured or on any read error.
+    llm = await resolve_llm_config(session, base=base)
     provider = llm.provider
     policy = EgressPolicy.from_config(llm)
     route = EgressRoute(provider=provider, base_url=getattr(llm, "base_url", None))

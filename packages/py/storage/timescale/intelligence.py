@@ -601,16 +601,21 @@ class TimescaleIntelligenceRepository:
     ) -> None:
         """Record (or revoke) cloud-egress consent on the head row + audit it.
 
-        Granting stamps the four ``consent_*`` columns; revoking clears them.
-        The row must already exist (created by :meth:`update_settings`); consent
-        is a decision *about* an existing posture, so we update, never insert.
+        Consent IS the ``allow_cloud_egress`` opt-in (ADR-0003 D4/D5): a grant
+        flips it on AND stamps the four ``consent_*`` columns; a revoke clears
+        both. Keeping the boolean and the consent stamp in one UPDATE makes the
+        two-step honest — configuring ``mode='cloud'`` via update_settings does
+        NOT egress until consent is granted here. The row must already exist
+        (created by :meth:`update_settings`); consent is a decision *about* an
+        existing posture, so we update, never insert.
         """
         if granted:
             await session.execute(
                 text(
                     """
                     UPDATE intelligence_settings
-                       SET consent_version = :version, consent_text_hash = :hash,
+                       SET allow_cloud_egress = TRUE,
+                           consent_version = :version, consent_text_hash = :hash,
                            consented_at = NOW(), consented_by = :by, updated_at = NOW()
                      WHERE owner_id = :owner_id
                     """
@@ -627,7 +632,8 @@ class TimescaleIntelligenceRepository:
                 text(
                     """
                     UPDATE intelligence_settings
-                       SET consent_version = NULL, consent_text_hash = NULL,
+                       SET allow_cloud_egress = FALSE,
+                           consent_version = NULL, consent_text_hash = NULL,
                            consented_at = NULL, consented_by = NULL, updated_at = NOW()
                      WHERE owner_id = :owner_id
                     """
