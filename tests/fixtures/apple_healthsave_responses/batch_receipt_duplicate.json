@@ -1,0 +1,43 @@
+{
+  "body": {
+    "batch": 0,
+    "batch_id": "corpus-heart_rate-000",
+    "batch_index": 0,
+    "idempotency_key": "corpus-heart_rate-000",
+    "metric": "heart_rate",
+    "per_metric": {
+      "heart_rate": {
+        "accepted": 1,
+        "deduped_existing": null,
+        "deduped_in_batch": 0,
+        "inserted_new": null,
+        "received": 1,
+        "rejected": 0,
+        "sample_window": {
+          "max_sample_time": "2026-01-01T06:00:00Z",
+          "min_sample_time": "2026-01-01T00:00:00Z"
+        }
+      }
+    },
+    "receipt_id": "corpus-heart_rate-000",
+    "records": 1,
+    "records_accepted": 1,
+    "records_deduped_existing": null,
+    "records_deduped_in_batch": 0,
+    "records_inserted_new": null,
+    "records_received": 1,
+    "records_rejected": 0,
+    "sample_window": {
+      "max_sample_time": "2026-01-01T06:00:00Z",
+      "min_sample_time": "2026-01-01T00:00:00Z"
+    },
+    "status": "processed",
+    "storage_result_level": "accepted_only",
+    "sync_run_id": "corpus-run-001",
+    "total_batches": 1,
+    "verification_level": "delivery_receipt"
+  },
+  "endpoint": "/api/apple/batch",
+  "method": "POST",
+  "status": 200
+}

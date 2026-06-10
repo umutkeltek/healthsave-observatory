@@ -1,0 +1,33 @@
+{
+  "body": {
+    "batches_empty": 0,
+    "batches_failed": 0,
+    "batches_processed": 3,
+    "batches_seen": 3,
+    "completed_at": "2026-01-01T06:05:00+00:00",
+    "latest_sample_time": "2026-01-01T05:59:00+00:00",
+    "metrics": [
+      "heart_rate",
+      "sleep_analysis",
+      "step_count"
+    ],
+    "records_accepted": 118,
+    "records_deduped_existing": 18,
+    "records_inserted_new": 100,
+    "records_received": 120,
+    "records_skipped": 2,
+    "sample_max_at": "2026-01-01T05:59:00+00:00",
+    "sample_min_at": "2026-01-01T00:00:00+00:00",
+    "sample_window": {
+      "max_sample_time": "2026-01-01T05:59:00+00:00",
+      "min_sample_time": "2026-01-01T00:00:00+00:00"
+    },
+    "started_at": "2026-01-01T06:00:00+00:00",
+    "status": "ok",
+    "storage_result_level": "inserted_vs_existing",
+    "sync_run_id": "corpus-run-001"
+  },
+  "endpoint": "/api/v2/sync/runs/latest",
+  "method": "GET",
+  "status": 200
+}

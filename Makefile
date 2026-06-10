@@ -1,4 +1,4 @@
-.PHONY: help setup regen-lock check-lock regen-v2-schemas check-v2-schemas regen-ts-client check-ts-client typecheck-ts test e2e lint format doctor compose-up compose-down
+.PHONY: help setup regen-lock check-lock regen-v2-schemas check-v2-schemas regen-ts-client check-ts-client typecheck-ts regen-response-corpus check-response-corpus test e2e lint format doctor compose-up compose-down
 
 help:
 	@echo "Targets:"
@@ -10,6 +10,8 @@ help:
 	@echo "  regen-ts-client    Regenerate packages/ts/api-client/src/v[12].ts from the v1 lock + v2 bundle"
 	@echo "  check-ts-client    Verify TS client generated files match committed (no drift)"
 	@echo "  typecheck-ts       Run tsc --noEmit on the api-client package"
+	@echo "  regen-response-corpus  Regenerate tests/fixtures/apple_healthsave_responses/ (iOS response corpus)"
+	@echo "  check-response-corpus  Verify the iOS response corpus matches the live handlers (no drift)"
 	@echo "  test               Run the full pytest suite"
 	@echo "  e2e                Boot an ephemeral compose stack and run the e2e suite"
 	@echo "  lint               ruff check + ruff format --check"
@@ -54,6 +56,14 @@ check-ts-client:
 
 typecheck-ts:
 	@cd packages/ts/api-client && bun run typecheck
+
+regen-response-corpus:
+	@python3 -m scripts.generate_ios_response_corpus
+	@echo "Mirror to the iOS repo and re-run its BackendResponseCorpusTests:"
+	@echo "  cp tests/fixtures/apple_healthsave_responses/*.json ../ios_app/Tests/HealthSyncTests/Fixtures/Responses/"
+
+check-response-corpus:
+	@python3 -m scripts.generate_ios_response_corpus --check
 
 test:
 	@python3 -m pytest -q

@@ -1,0 +1,15 @@
+{
+  "body": {
+    "detail": [
+      {
+        "loc": [
+          "samples"
+        ],
+        "type": "list_type"
+      }
+    ]
+  },
+  "endpoint": "/api/apple/batch",
+  "method": "POST",
+  "status": 422
+}

@@ -1,0 +1,12 @@
+{
+  "body": {
+    "detail": {
+      "error_code": "idempotency_key_payload_mismatch",
+      "message": "This idempotency key was already received with a different payload hash.",
+      "status": "rejected"
+    }
+  },
+  "endpoint": "/api/apple/batch",
+  "method": "POST",
+  "status": 409
+}
