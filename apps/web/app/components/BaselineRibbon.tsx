@@ -10,6 +10,7 @@ type Props = {
   anomalies?: number[]; // indices into `values` to pin
   height?: number; // plot height in px
   axis?: [string, string]; // left / right captions
+  live?: boolean; // last reading <24h — adds the slow mint freshness shimmer
 };
 
 function quantile(sorted: number[], q: number): number {
@@ -20,7 +21,7 @@ function quantile(sorted: number[], q: number): number {
   return next !== undefined ? sorted[base] + rest * (next - sorted[base]) : sorted[base];
 }
 
-export function BaselineRibbon({ values, band, anomalies = [], height = 76, axis }: Props) {
+export function BaselineRibbon({ values, band, anomalies = [], height = 76, axis, live }: Props) {
   if (values.length < 2) return null;
 
   const sorted = [...values].sort((a, b) => a - b);
@@ -45,7 +46,7 @@ export function BaselineRibbon({ values, band, anomalies = [], height = 76, axis
 
   return (
     <div className="ribbon-wrap">
-      <div className="ribbon-plot" style={{ height }}>
+      <div className={`ribbon-plot ${live ? "is-live" : ""}`} style={{ height }}>
         <svg
           className="ribbon"
           viewBox={`0 0 ${W} ${H}`}
@@ -63,7 +64,7 @@ export function BaselineRibbon({ values, band, anomalies = [], height = 76, axis
           <line className="ribbon-band-edge" x1="0" y1={bandTop} x2={W} y2={bandTop} vectorEffect="non-scaling-stroke" />
           <line className="ribbon-band-edge" x1="0" y1={bandBot} x2={W} y2={bandBot} vectorEffect="non-scaling-stroke" />
           <line className="ribbon-median" x1="0" y1={mid} x2={W} y2={mid} vectorEffect="non-scaling-stroke" />
-          <path className="ribbon-trace" d={trace} vectorEffect="non-scaling-stroke" />
+          <path className="ribbon-trace" d={trace} pathLength={1} vectorEffect="non-scaling-stroke" />
         </svg>
         {anomalies.map((i) => (
           <span

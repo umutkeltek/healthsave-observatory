@@ -69,6 +69,7 @@ export default function DemoToday() {
             band={HRV_BAND}
             anomalies={HRV_ANOMALIES}
             axis={["30 days ago", "today"]}
+            live
           />
           <ul className="contribs">
             {CONTRIBUTORS.map((c) => (

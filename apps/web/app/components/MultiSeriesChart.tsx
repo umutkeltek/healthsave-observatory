@@ -30,6 +30,7 @@ export function MultiSeriesChart({ series }: { series: ChartSeries[] }) {
           <path
             key={s.label}
             d={path(s.values, min, span, w, h)}
+            pathLength={1}
             fill="none"
             stroke={PALETTE[i % PALETTE.length]}
             strokeWidth="2"

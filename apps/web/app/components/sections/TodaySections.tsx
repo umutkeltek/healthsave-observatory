@@ -115,9 +115,12 @@ export async function HeroSection() {
   const ribbonValues = (hrv?.points ?? [])
     .map((p) => p.value)
     .filter((v): v is number => v !== null);
+  const lastObs = readiness?.last_observation_at;
+  const live = Boolean(lastObs && Date.now() - new Date(lastObs).getTime() < 24 * 3600_000);
   return (
     <RecoveryHero
       freshness={agoLabel(readiness?.last_observation_at)}
+      live={live}
       score={recoveryScore(findings)}
       headline={heroHeadline(
         latest?.daily_briefing?.narrative,

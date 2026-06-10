@@ -1,4 +1,5 @@
 import type { MetricSeries } from "../lib/api";
+import { CountUp } from "./CountUp";
 
 function Sparkline({ values }: { values: number[] }) {
   if (values.length < 2) return null;
@@ -13,7 +14,7 @@ function Sparkline({ values }: { values: number[] }) {
     .join(" ");
   return (
     <svg className="spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden>
-      <path d={d} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d={d} pathLength={1} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -55,7 +56,7 @@ export function MetricCard({
     <article className="card">
       <h2>{series.metric.display_name}</h2>
       <div className="big">
-        {Math.round(last)}
+        <CountUp value={Math.round(last)} />
         <span className="unit">{series.metric.canonical_unit}</span>
       </div>
       <div className={`delta ${delta >= 0 ? "up" : "down"}`}>
