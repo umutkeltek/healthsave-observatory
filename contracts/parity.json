@@ -1,0 +1,1018 @@
+{
+  "manifest_version": 1,
+  "_comment": "Canonical cross-platform parity manifest. Canonical home: datahub/contracts/parity.json. Byte-equal mirrors live in ios_app/Tests/HealthSyncTests/Fixtures/parity.json and android_app/contract/src/test/resources/fixtures/parity.json. iOS suite asserts {ios=='available'} == HealthTypes wire names; Android suite asserts {android=='available'} == MetricCatalog. availability: available | unavailable (needs reason) | planned (needs planned_since).",
+  "metrics": {
+    "abdominal_cramps": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "acne": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "active_energy_burned": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "appetite_changes": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "apple_exercise_time": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "apple_move_time": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "apple_stand_hour": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "apple_stand_time": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "apple_walking_steadiness": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "apple_walking_steadiness_event": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "atrial_fibrillation_burden": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "basal_body_temperature": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "basal_energy_burned": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "bladder_incontinence": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "bleeding_after_pregnancy": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "bleeding_during_pregnancy": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "bloating": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "blood_alcohol_content": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "blood_glucose": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "blood_pressure_diastolic": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "blood_pressure_systolic": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "bmi": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "body_fat_percentage": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "body_mass": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "body_temperature": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "breast_pain": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "cervical_mucus_quality": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "chest_tightness_or_pain": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "chills": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "constipation": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "contraceptive": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "coughing": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "cross_country_skiing_speed": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "cycling_cadence": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "cycling_functional_threshold_power": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "cycling_power": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "cycling_speed": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "diarrhea": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_biotin": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_caffeine": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_calcium": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_carbohydrates": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_chloride": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_cholesterol": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_chromium": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_copper": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_energy_consumed": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_fat_monounsaturated": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_fat_polyunsaturated": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_fat_saturated": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_fat_total": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_fiber": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_folate": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_iodine": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_iron": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_magnesium": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_manganese": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_molybdenum": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_niacin": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_pantothenic_acid": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_phosphorus": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_potassium": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_protein": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_riboflavin": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_selenium": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_sodium": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_sugar": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_thiamin": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_vitamin_a": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_vitamin_b12": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_vitamin_b6": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_vitamin_c": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_vitamin_d": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_vitamin_e": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_vitamin_k": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_water": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dietary_zinc": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "distance_cross_country_skiing": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "distance_cycling": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "distance_downhill_snow_sports": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "distance_paddle_sports": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "distance_rowing": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "distance_skating_sports": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "distance_swimming": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "distance_walking_running": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "distance_wheelchair": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dizziness": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "dry_skin": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "ecg": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "electrodermal_activity": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "environmental_audio_exposure": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "environmental_audio_exposure_event": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "environmental_sound_reduction": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "estimated_workout_effort_score": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "fainting": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "fatigue": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "fever": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "flights_climbed": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "forced_expiratory_volume_1": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "forced_vital_capacity": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "generalized_body_ache": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "hair_loss": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "handwashing_event": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "headache": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "headphone_audio_exposure": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "headphone_audio_exposure_event": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "heart_rate": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "heart_rate_recovery": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "heart_rate_variability": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "heartburn": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "height": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "high_heart_rate_event": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "hot_flashes": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "infrequent_menstrual_cycles": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "inhaler_usage": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "insulin_delivery": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "intermenstrual_bleeding": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "irregular_heart_rhythm_event": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "irregular_menstrual_cycles": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "lactation": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "lean_body_mass": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "loss_of_smell": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "loss_of_taste": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "low_cardio_fitness_event": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "low_heart_rate_event": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "lower_back_pain": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "memory_lapse": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "menstrual_flow": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "mindful_session": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "mood_changes": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "nausea": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "night_sweats": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "nike_fuel": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "number_of_alcoholic_beverages": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "number_of_times_fallen": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "ovulation_test_result": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "oxygen_saturation": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "paddle_sports_speed": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "peak_expiratory_flow_rate": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "pelvic_pain": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "peripheral_perfusion_index": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "persistent_intermenstrual_bleeding": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "physical_effort": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "pregnancy": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "pregnancy_test_result": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "progesterone_test_result": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "prolonged_menstrual_periods": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "push_count": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "rapid_pounding_or_fluttering_heartbeat": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "respiratory_rate": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "resting_heart_rate": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "rowing_speed": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "running_ground_contact_time": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "running_power": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "running_speed": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "running_stride_length": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "running_vertical_oscillation": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "runny_nose": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "sexual_activity": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "shortness_of_breath": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "sinus_congestion": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "six_minute_walk_test_distance": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "skipped_heartbeat": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "sleep_analysis": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "sleep_apnea_event": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "sleep_changes": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "sleeping_breathing_disturbances": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "sore_throat": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "stair_ascent_speed": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "stair_descent_speed": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "step_count": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "swimming_stroke_count": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "time_in_daylight": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "toothbrushing_event": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "underwater_depth": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "uv_exposure": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "vaginal_dryness": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "vo2_max": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "vomiting": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "waist_circumference": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "walking_asymmetry": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "walking_double_support": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "walking_heart_rate_average": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "walking_speed": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "walking_step_length": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "water_temperature": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "wheezing": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "workout_effort_score": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "workouts": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
+    "wrist_temperature": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    }
+  },
+  "features": {
+    "server_sync": {
+      "ios": true,
+      "android": "planned",
+      "planned_since": "2026-06-10",
+      "pro": true
+    },
+    "export_csv": {
+      "ios": true,
+      "android": "planned",
+      "planned_since": "2026-06-10",
+      "pro": false
+    },
+    "export_json": {
+      "ios": true,
+      "android": "planned",
+      "planned_since": "2026-06-10",
+      "pro": false
+    },
+    "export_pdf": {
+      "ios": true,
+      "android": "planned",
+      "planned_since": "2026-06-10",
+      "pro": true
+    },
+    "trends_7day": {
+      "ios": true,
+      "android": "planned",
+      "planned_since": "2026-06-10",
+      "pro": false
+    },
+    "trends_30_90day": {
+      "ios": true,
+      "android": "planned",
+      "planned_since": "2026-06-10",
+      "pro": true
+    },
+    "home_assistant_integration": {
+      "ios": true,
+      "android": "planned",
+      "planned_since": "2026-06-10",
+      "pro": true
+    },
+    "background_auto_sync": {
+      "ios": true,
+      "android": "planned",
+      "planned_since": "2026-06-10",
+      "pro": true
+    },
+    "data_scope_selection": {
+      "ios": true,
+      "android": "planned",
+      "planned_since": "2026-06-10",
+      "pro": false
+    },
+    "backfill_full_export": {
+      "ios": true,
+      "android": "planned",
+      "planned_since": "2026-06-10",
+      "pro": false
+    }
+  }
+}
