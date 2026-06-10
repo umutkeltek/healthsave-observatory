@@ -127,6 +127,19 @@ class LLMUnavailableError(RuntimeError):
     """
 
 
+class FailoverAttempt(BaseModel):
+    """One narrator candidate that failed before a later one succeeded.
+
+    ``error`` is a short provider/egress failure summary — never a prompt
+    body, an API key, or health data. The engine persists these as
+    ``narrator_failover`` audit events so /api/v2/receipts shows that the
+    brief was served by a fallback, not the configured primary.
+    """
+
+    candidate: str
+    error: str
+
+
 class InsightResult(BaseModel):
     """Structured narrator output.
 
@@ -134,6 +147,8 @@ class InsightResult(BaseModel):
     persist narrative + token usage + the resolved model name (e.g.
     ``"ollama/llama3.1:8b"``) into ``analysis_insights`` and
     ``analysis_runs`` without carrying LiteLLM types through the stack.
+    ``failovers`` lists the candidates that failed before ``model`` answered
+    (empty when the primary served).
     """
 
     narrative: str
@@ -141,6 +156,7 @@ class InsightResult(BaseModel):
     tokens_out: int
     model: str
     insight_type: str
+    failovers: list[FailoverAttempt] = []
 
 
 @dataclass(frozen=True)
@@ -237,6 +253,7 @@ class HealthLLMClient:
         """
         chain = self._candidate_chain()
         failures: list[str] = []
+        attempts: list[FailoverAttempt] = []
         denials: list[EgressDenied] = []
         for candidate in chain:
             # Cloud routes carry the provider prefix in the model already
@@ -247,10 +264,13 @@ class HealthLLMClient:
                 else f"{candidate.provider}/{candidate.model}"
             )
             try:
-                return await self._narrate_once(prompt, candidate, insight_type=insight_type)
+                result = await self._narrate_once(prompt, candidate, insight_type=insight_type)
             except EgressDenied as exc:
                 denials.append(exc)
                 failures.append(f"{label}: egress denied ({exc.envelope.reason})")
+                attempts.append(
+                    FailoverAttempt(candidate=label, error=f"egress denied ({exc.envelope.reason})")
+                )
                 log.warning(
                     "narrator: egress denied for %s (%s); trying next candidate",
                     label,
@@ -258,7 +278,14 @@ class HealthLLMClient:
                 )
             except LLMUnavailableError as exc:
                 failures.append(f"{label}: {exc}")
+                attempts.append(FailoverAttempt(candidate=label, error=str(exc)[:300]))
                 log.warning("narrator: candidate %s failed (%s); trying next", label, exc)
+            else:
+                # A fallback answered: carry the earlier failures so the engine
+                # can audit the failover (the success path must not hide them).
+                if attempts:
+                    result = result.model_copy(update={"failovers": attempts})
+                return result
 
         # Every candidate was refused by the egress gate (e.g. all-cloud with no
         # opt-in) → surface the specific "opt-in required" denial rather than a
