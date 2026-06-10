@@ -1,0 +1,43 @@
+{
+  "metric": "sleep_analysis",
+  "batch_index": 0,
+  "total_batches": 1,
+  "client_platform": "android-health-connect",
+  "client_schema_version": 1,
+  "bridge_install_id": "00000000-0000-4000-8000-000000000001",
+  "samples": [
+    {
+      "startDate": "2026-04-09T22:30:00.000Z",
+      "endDate": "2026-04-10T01:00:00.000Z",
+      "value": "Core",
+      "source": "Pixel Watch 3",
+      "provider_object_id": "hc-corpus-sleep-0001",
+      "source_bundle_id": "com.google.android.apps.wearables.maestro.companion",
+      "device_manufacturer": "Google",
+      "device_model": "Pixel Watch 3",
+      "source_revision_operating_system": "Android 16"
+    },
+    {
+      "startDate": "2026-04-10T01:00:00.000Z",
+      "endDate": "2026-04-10T02:15:00.000Z",
+      "value": "Deep",
+      "source": "Pixel Watch 3",
+      "provider_object_id": "hc-corpus-sleep-0002",
+      "source_bundle_id": "com.google.android.apps.wearables.maestro.companion",
+      "device_manufacturer": "Google",
+      "device_model": "Pixel Watch 3",
+      "source_revision_operating_system": "Android 16"
+    },
+    {
+      "startDate": "2026-04-10T02:15:00.000Z",
+      "endDate": "2026-04-10T06:45:00.000Z",
+      "value": "REM",
+      "source": "Pixel Watch 3",
+      "provider_object_id": "hc-corpus-sleep-0003",
+      "source_bundle_id": "com.google.android.apps.wearables.maestro.companion",
+      "device_manufacturer": "Google",
+      "device_model": "Pixel Watch 3",
+      "source_revision_operating_system": "Android 16"
+    }
+  ]
+}
