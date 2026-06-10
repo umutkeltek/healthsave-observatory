@@ -1571,7 +1571,7 @@
         "type": "object"
       },
       "TriggerBody": {
-        "description": "v2 trigger request \u2014 extensible by ``type`` (correlation_analysis,\nrecovery_check).",
+        "description": "v2 trigger request \u2014 extensible by ``type`` (correlation_analysis,\nrecovery_check, daily_briefing).",
         "properties": {
           "type": {
             "default": "correlation_analysis",
@@ -3201,7 +3201,7 @@
     },
     "/api/v2/insights/trigger": {
       "post": {
-        "description": "Run an analysis job on demand.\n\nSupports ``correlation_analysis`` and ``recovery_check``. Each checks its\nconfig block is enabled, runs the Brain-1 engine job inline through the\npipeline_runs ledger, and reports completed vs skipped.",
+        "description": "Run an analysis job on demand.\n\nSupports ``correlation_analysis``, ``recovery_check`` and\n``daily_briefing`` (the brief card's refresh \u2014 Brain-1 findings plus a\nBrain-2 narration). Each checks its config block is enabled, runs the\nengine job inline through the pipeline_runs ledger, and reports\ncompleted vs skipped.",
         "operationId": "trigger_api_v2_insights_trigger_post",
         "parameters": [
           {

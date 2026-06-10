@@ -16,13 +16,15 @@ export function RefreshInsightsButton() {
     startTransition(async () => {
       setNote(null);
       // Independent analyses — run them concurrently (sequential worst case
-      // was 2 × 60s with the button frozen).
-      const [recovery, correlation] = await Promise.all([
+      // froze the button for minutes). daily_briefing is the narration
+      // itself: without it this button never actually refreshed the brief.
+      const [recovery, correlation, briefing] = await Promise.all([
         triggerAnalysisAction("recovery_check"),
         triggerAnalysisAction("correlation_analysis"),
+        triggerAnalysisAction("daily_briefing"),
       ]);
-      if (!recovery.ok && !correlation.ok) {
-        const detail = recovery.error ?? correlation.error ?? "";
+      if (!recovery.ok && !correlation.ok && !briefing.ok) {
+        const detail = briefing.error ?? recovery.error ?? correlation.error ?? "";
         setNote(
           detail.includes("disabled")
             ? "Analysis is off — enable it under Intelligence."
