@@ -3087,7 +3087,7 @@
     },
     "/api/v2/insights/latest": {
       "get": {
-        "description": "Most recent daily-briefing + weekly-summary narratives (the weekly-brief card).",
+        "description": "Most recent daily-briefing + weekly-summary narratives (the weekly-brief card).\n\n``runs`` carries the latest ``analysis_runs`` attempt per narrator job \u2014\n{status, error, at, completed_at, provider} \u2014 so the card can distinguish\n\"no briefing yet\" from \"the last attempt failed\" (silent-failure review).",
         "operationId": "latest_narratives_api_v2_insights_latest_get",
         "parameters": [
           {
