@@ -76,41 +76,86 @@ async def record_origins(
     return len(seen)
 
 
-async def list_sources(session: AsyncSession, owner_id: UUID) -> list[dict[str, Any]]:
-    result = await session.execute(
-        text(
-            "SELECT id, plugin_id, display_name, first_seen_at, last_seen_at "
-            "FROM sources WHERE owner_id = :owner ORDER BY plugin_id"
-        ),
+# Pagination is additive: limit=None preserves the original unbounded reads
+# byte-for-byte. Ordering is part of the contract (documented in API.md) so
+# offset pagination stays stable: sources by plugin_id, streams by
+# last_seen_at DESC, devices by device_label.
+def _page(sql: str, params: dict[str, Any], limit: int | None, offset: int) -> tuple[str, dict]:
+    if limit is None:
+        return sql, params
+    return f"{sql} LIMIT :limit OFFSET :offset", {**params, "limit": limit, "offset": offset}
+
+
+async def list_sources(
+    session: AsyncSession, owner_id: UUID, *, limit: int | None = None, offset: int = 0
+) -> list[dict[str, Any]]:
+    sql, params = _page(
+        "SELECT id, plugin_id, display_name, first_seen_at, last_seen_at "
+        "FROM sources WHERE owner_id = :owner ORDER BY plugin_id",
         {"owner": str(owner_id)},
+        limit,
+        offset,
     )
+    result = await session.execute(text(sql), params)
     return [dict(row._mapping) for row in result]
 
 
-async def list_streams(session: AsyncSession, owner_id: UUID) -> list[dict[str, Any]]:
+async def count_sources(session: AsyncSession, owner_id: UUID) -> int:
     result = await session.execute(
-        text(
-            "SELECT id, source_plugin_id, origin_key, device_label, "
-            "first_seen_at, last_seen_at FROM source_device_streams "
-            "WHERE owner_id = :owner ORDER BY last_seen_at DESC"
-        ),
+        text("SELECT count(*) FROM sources WHERE owner_id = :owner"),
         {"owner": str(owner_id)},
     )
+    return int(result.scalar() or 0)
+
+
+async def list_streams(
+    session: AsyncSession, owner_id: UUID, *, limit: int | None = None, offset: int = 0
+) -> list[dict[str, Any]]:
+    sql, params = _page(
+        "SELECT id, source_plugin_id, origin_key, device_label, "
+        "first_seen_at, last_seen_at FROM source_device_streams "
+        "WHERE owner_id = :owner ORDER BY last_seen_at DESC",
+        {"owner": str(owner_id)},
+        limit,
+        offset,
+    )
+    result = await session.execute(text(sql), params)
     return [dict(row._mapping) for row in result]
 
 
-async def list_devices(session: AsyncSession, owner_id: UUID) -> list[dict[str, Any]]:
+async def count_streams(session: AsyncSession, owner_id: UUID) -> int:
+    result = await session.execute(
+        text("SELECT count(*) FROM source_device_streams WHERE owner_id = :owner"),
+        {"owner": str(owner_id)},
+    )
+    return int(result.scalar() or 0)
+
+
+async def list_devices(
+    session: AsyncSession, owner_id: UUID, *, limit: int | None = None, offset: int = 0
+) -> list[dict[str, Any]]:
     """Distinct emitters, derived from streams (no separate devices table yet)."""
+    sql, params = _page(
+        "SELECT device_label, count(*) AS stream_count, "
+        "min(first_seen_at) AS first_seen_at, max(last_seen_at) AS last_seen_at "
+        "FROM source_device_streams WHERE owner_id = :owner "
+        "GROUP BY device_label ORDER BY device_label",
+        {"owner": str(owner_id)},
+        limit,
+        offset,
+    )
+    result = await session.execute(text(sql), params)
+    return [dict(row._mapping) for row in result]
+
+
+async def count_devices(session: AsyncSession, owner_id: UUID) -> int:
     result = await session.execute(
         text(
-            "SELECT device_label, count(*) AS stream_count, "
-            "min(first_seen_at) AS first_seen_at, max(last_seen_at) AS last_seen_at "
-            "FROM source_device_streams WHERE owner_id = :owner "
-            "GROUP BY device_label ORDER BY device_label"
+            "SELECT count(DISTINCT device_label) FROM source_device_streams WHERE owner_id = :owner"
         ),
         {"owner": str(owner_id)},
     )
-    return [dict(row._mapping) for row in result]
+    return int(result.scalar() or 0)
 
 
 async def get_stream(

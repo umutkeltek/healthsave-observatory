@@ -76,6 +76,14 @@ ALLOWLIST: dict[str, str] = {
         "stays — v2 Source/Device/Stream read API. AsyncSession typing for Depends(); "
         "the SQL lives in storage.timescale.registry, not the route."
     ),
+    "apps/api/server/api/v2_changes.py": (
+        "stays — v2 change-fingerprint read. AsyncSession typing for Depends(); "
+        "composes readiness/sync/briefing repositories, no SQL in the route."
+    ),
+    "apps/api/server/api/v2_receipts.py": (
+        "stays — v2 receipts read. AsyncSession typing for Depends(); composes "
+        "intelligence/readiness/sync repositories, no SQL in the route."
+    ),
     "apps/api/server/api/v2_insights.py": (
         "stays — v2 insights read/trigger API. AsyncSession typing for Depends(); the "
         "SQL lives in storage.timescale.briefings (fetch_correlations), not the route."

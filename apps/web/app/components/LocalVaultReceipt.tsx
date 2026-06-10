@@ -7,9 +7,13 @@ export type VaultStep = { label: string; meta: string; blocked?: boolean };
 export function LocalVaultReceipt({
   steps,
   seal = "No cloud egress",
+  auditNote,
 }: {
   steps: VaultStep[];
   seal?: string;
+  // Real chain-of-custody proof from /api/v2/receipts (e.g. the last
+  // egress-relevant config event) — renders under the chain when available.
+  auditNote?: string | null;
 }) {
   return (
     <article className="card vault">
@@ -25,6 +29,7 @@ export function LocalVaultReceipt({
           </li>
         ))}
       </ul>
+      {auditNote && <div className="vault-audit mono">{auditNote}</div>}
     </article>
   );
 }

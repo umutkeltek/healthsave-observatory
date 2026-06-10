@@ -11,7 +11,7 @@ from datetime import datetime
 from uuid import UUID
 
 from contracts._base import DEFAULT_OWNER_ID
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.timescale import registry
@@ -45,37 +45,63 @@ class DeviceView(BaseModel):
     last_seen_at: datetime
 
 
+# `total` is additive: the full row count when paginating (count = page size).
+# Unpaginated reads keep total == count, so existing consumers see no change
+# in meaning.
 class SourcesResponse(BaseModel):
     count: int
+    total: int | None = None
     sources: list[SourceView]
 
 
 class StreamsResponse(BaseModel):
     count: int
+    total: int | None = None
     streams: list[StreamView]
 
 
 class DevicesResponse(BaseModel):
     count: int
+    total: int | None = None
     devices: list[DeviceView]
 
 
+# Shared pagination params: limit=None keeps the original unbounded response.
+_LIMIT = Query(default=None, ge=1, le=1000)
+_OFFSET = Query(default=0, ge=0)
+
+
 @router.get("/sources", response_model=SourcesResponse)
-async def list_sources(session: AsyncSession = Depends(get_session)) -> SourcesResponse:
-    rows = await registry.list_sources(session, DEFAULT_OWNER_ID)
-    return SourcesResponse(count=len(rows), sources=rows)
+async def list_sources(
+    limit: int | None = _LIMIT,
+    offset: int = _OFFSET,
+    session: AsyncSession = Depends(get_session),
+) -> SourcesResponse:
+    rows = await registry.list_sources(session, DEFAULT_OWNER_ID, limit=limit, offset=offset)
+    total = await registry.count_sources(session, DEFAULT_OWNER_ID) if limit else len(rows)
+    return SourcesResponse(count=len(rows), total=total, sources=rows)
 
 
 @router.get("/devices", response_model=DevicesResponse)
-async def list_devices(session: AsyncSession = Depends(get_session)) -> DevicesResponse:
-    rows = await registry.list_devices(session, DEFAULT_OWNER_ID)
-    return DevicesResponse(count=len(rows), devices=rows)
+async def list_devices(
+    limit: int | None = _LIMIT,
+    offset: int = _OFFSET,
+    session: AsyncSession = Depends(get_session),
+) -> DevicesResponse:
+    rows = await registry.list_devices(session, DEFAULT_OWNER_ID, limit=limit, offset=offset)
+    total = await registry.count_devices(session, DEFAULT_OWNER_ID) if limit else len(rows)
+    return DevicesResponse(count=len(rows), total=total, devices=rows)
 
 
 @router.get("/streams", response_model=StreamsResponse)
-async def list_streams(session: AsyncSession = Depends(get_session)) -> StreamsResponse:
-    rows = await registry.list_streams(session, DEFAULT_OWNER_ID)
-    return StreamsResponse(count=len(rows), streams=rows)
+async def list_streams(
+    limit: int | None = _LIMIT,
+    offset: int = _OFFSET,
+    session: AsyncSession = Depends(get_session),
+) -> StreamsResponse:
+    rows = await registry.list_streams(session, DEFAULT_OWNER_ID, limit=limit, offset=offset)
+    total = await registry.count_streams(session, DEFAULT_OWNER_ID) if limit else len(rows)
+    return StreamsResponse(count=len(rows), total=total, streams=rows)
 
 
 @router.get("/streams/{stream_id}", response_model=StreamView)

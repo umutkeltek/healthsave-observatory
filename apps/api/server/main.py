@@ -41,6 +41,7 @@ from .api import (
     status,
     sync,
     v2_agents,
+    v2_changes,
     v2_experiments,
     v2_export,
     v2_identity,
@@ -50,6 +51,7 @@ from .api import (
     v2_metrics,
     v2_privacy,
     v2_readiness,
+    v2_receipts,
     v2_sources,
 )
 from .api.deps import warn_if_auth_disabled
@@ -166,6 +168,7 @@ app.include_router(status.router)
 app.include_router(sync.router)
 app.include_router(insights.router)
 app.include_router(v2_agents.router)
+app.include_router(v2_changes.router)
 app.include_router(v2_experiments.router)
 app.include_router(v2_export.router)
 app.include_router(v2_identity.router)
@@ -175,4 +178,5 @@ app.include_router(v2_meta.router)
 app.include_router(v2_metrics.router)
 app.include_router(v2_privacy.router)
 app.include_router(v2_readiness.router)
+app.include_router(v2_receipts.router)
 app.include_router(v2_sources.router)

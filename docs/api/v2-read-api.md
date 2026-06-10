@@ -38,10 +38,12 @@ Findings are computed by a deterministic statistical engine; the local LLM only 
 
 | Endpoint | Auth | Purpose |
 |---|---|---|
-| `GET /api/v2/sources` | key | Source integrations (the path data entered through) |
-| `GET /api/v2/devices` | key | Distinct device emitters (derived from streams) |
-| `GET /api/v2/streams` | key | Source-device streams with stable deterministic UUIDs |
+| `GET /api/v2/sources` | key | Source integrations (the path data entered through; optional `limit`/`offset`) |
+| `GET /api/v2/devices` | key | Distinct device emitters (derived from streams; optional `limit`/`offset`) |
+| `GET /api/v2/streams` | key | Source-device streams with stable deterministic UUIDs (optional `limit`/`offset`) |
 | `GET /api/v2/streams/{stream_id}` | key | One stream (`404` if unknown) |
+| `GET /api/v2/changes` | key | Cheap change fingerprint with ETag/`304` semantics (dashboard live poll) |
+| `GET /api/v2/receipts` | key | Intelligence audit trail + ingest freshness (chain-of-custody proof) |
 
 A *stream* is the join of "this device, via this integration" — the same band over HealthKit versus a direct poll is two streams. Stream UUIDs are stable, so Home Assistant and other consumers can key entities on them without fragmenting when you add devices.
 

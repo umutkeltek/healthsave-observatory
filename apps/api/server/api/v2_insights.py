@@ -54,11 +54,12 @@ def _validate_period(period: str | None) -> str | None:
 @router.get("/correlations")
 async def list_correlations(
     period: str | None = Query(default=None, description="Optional day window such as 30d or 90d"),
+    limit: int = Query(default=_CORRELATIONS_LIMIT, ge=1, le=_CORRELATIONS_LIMIT),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Persisted cross-metric correlation findings, newest first."""
     findings = await _BRIEFING_REPO.fetch_correlations(
-        session, period_days=_validate_period(period), limit=_CORRELATIONS_LIMIT
+        session, period_days=_validate_period(period), limit=limit
     )
     correlations = [
         {
@@ -94,6 +95,7 @@ async def list_findings(
         alias="type",
         description="Optional finding kind (anomaly / trend / correlation / summary).",
     ),
+    limit: int = Query(default=_FINDINGS_LIMIT, ge=1, le=_FINDINGS_LIMIT),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Recent structured findings (the evidence feed), newest first.
@@ -104,9 +106,7 @@ async def list_findings(
     """
     if finding_type is not None and finding_type not in _EVIDENCE_TYPES:
         raise HTTPException(status_code=422, detail=f"unknown finding type: {finding_type}")
-    rows = await _BRIEFING_REPO.fetch_findings(
-        session, finding_type=finding_type, limit=_FINDINGS_LIMIT
-    )
+    rows = await _BRIEFING_REPO.fetch_findings(session, finding_type=finding_type, limit=limit)
     findings = [
         {
             "id": row.id,

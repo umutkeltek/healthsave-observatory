@@ -2845,3 +2845,29 @@ table.prov {
 .density-toggle button:disabled {
   opacity: 0.6;
 }
+
+/* Live poll chip + vault audit line (Phase 4: trust + live feel) */
+
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--signal);
+  border-color: var(--signal-line);
+}
+
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--signal);
+  animation: pulse-dot 3.2s var(--ease-io) infinite;
+}
+
+.vault-audit {
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line-soft);
+  font-size: var(--fs-2xs);
+  color: var(--faint);
+}

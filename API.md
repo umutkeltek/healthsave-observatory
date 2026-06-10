@@ -633,9 +633,9 @@ Example response:
 | `/api/v2/metrics` | GET | open | list available canonical metrics |
 | `/api/v2/metrics/{metric_id}/series` | GET | key | time-series for one metric |
 | `/api/v2/series` | GET | key | batch time-series for many metrics (`ids=` comma list, max 24) |
-| `/api/v2/sources` | GET | key | Source integrations (Source/Device/Stream identity) |
-| `/api/v2/devices` | GET | key | distinct device emitters (derived from streams) |
-| `/api/v2/streams` | GET | key | source-device streams with stable UUIDs (HA keys on these) |
+| `/api/v2/sources` | GET | key | Source integrations (Source/Device/Stream identity; optional `limit`/`offset`) |
+| `/api/v2/devices` | GET | key | distinct device emitters (derived from streams; optional `limit`/`offset`) |
+| `/api/v2/streams` | GET | key | source-device streams with stable UUIDs (HA keys on these; optional `limit`/`offset`) |
 | `/api/v2/streams/{stream_id}` | GET | key | one source-device stream |
 | `/api/v2/insights/latest` | GET | key | latest daily-briefing + weekly-summary narratives |
 | `/api/v2/insights/correlations` | GET | key | recent cross-metric correlation findings |
@@ -645,6 +645,8 @@ Example response:
 | `/api/v2/sync/runs/{sync_run_id}` | GET | key | per-run delivery-receipt summary |
 | `/api/v2/sync/coverage` | GET | key | per-metric receipt-vs-destination freshness |
 | `/api/v2/sync/anomalies` | GET | key | overlapping-sync-run + coverage anomalies |
+| `/api/v2/changes` | GET | key | cheap change fingerprint with ETag/304 (the dashboard's live poll) |
+| `/api/v2/receipts` | GET | key | intelligence audit trail + ingest freshness (the Local Vault's proof) |
 | `/api/v2/experiments` | GET, POST | key | list / create self-experiments |
 | `/api/v2/experiments/candidates` | GET | key | suggested experiments |
 | `/api/v2/experiments/{experiment_id}` | GET | key | one experiment |

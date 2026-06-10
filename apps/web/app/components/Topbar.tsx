@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { LiveStatus } from "./LiveStatus";
 import { ThemeToggle } from "./ThemeToggle";
 
 const TITLES: Record<string, { title: string; sub: string }> = {
@@ -40,6 +41,7 @@ export function Topbar({
         <p>{sub}</p>
       </div>
       <div className="topbar-status">
+        <LiveStatus />
         {status}
         <ThemeToggle />
       </div>
