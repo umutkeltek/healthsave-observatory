@@ -228,6 +228,17 @@ class _InMemoryBriefingRepository:
                 out[row.insight_type] = row
         return out
 
+    async def list_narratives(
+        self,
+        session: Any,
+        *,
+        insight_type: str | None = None,
+        limit: int = 20,
+    ) -> list[NarrativeRow]:
+        out = [r for r in self.narratives if insight_type is None or r.insight_type == insight_type]
+        out.sort(key=lambda r: r.created_at, reverse=True)
+        return out[:limit]
+
     async def fetch_anomalies(
         self,
         session: Any,

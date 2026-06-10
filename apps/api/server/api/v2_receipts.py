@@ -13,6 +13,7 @@ target DB — the route degrades to an empty event list if the table is absent.
 from __future__ import annotations
 
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.exc import ProgrammingError
@@ -35,7 +36,7 @@ _INTELLIGENCE = intelligence_repo
 
 @router.get("/receipts")
 async def list_receipts(
-    limit: int = Query(default=50, ge=1, le=500),
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Egress-relevant audit events (newest first) + ingest freshness."""

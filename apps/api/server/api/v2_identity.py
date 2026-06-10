@@ -8,6 +8,7 @@ missing. These are keyed (they expose device/stream metadata). The SQL lives in
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Annotated
 from uuid import UUID
 
 from contracts._base import DEFAULT_OWNER_ID
@@ -67,14 +68,16 @@ class DevicesResponse(BaseModel):
 
 
 # Shared pagination params: limit=None keeps the original unbounded response.
-_LIMIT = Query(default=None, ge=1, le=1000)
-_OFFSET = Query(default=0, ge=0)
+# Annotated (not Query(default=…)) so direct test calls get real defaults and
+# the FieldInfo isn't shared mutable state across signatures.
+_Limit = Annotated[int | None, Query(ge=1, le=1000)]
+_Offset = Annotated[int, Query(ge=0)]
 
 
 @router.get("/sources", response_model=SourcesResponse)
 async def list_sources(
-    limit: int | None = _LIMIT,
-    offset: int = _OFFSET,
+    limit: _Limit = None,
+    offset: _Offset = 0,
     session: AsyncSession = Depends(get_session),
 ) -> SourcesResponse:
     rows = await registry.list_sources(session, DEFAULT_OWNER_ID, limit=limit, offset=offset)
@@ -85,8 +88,8 @@ async def list_sources(
 
 @router.get("/devices", response_model=DevicesResponse)
 async def list_devices(
-    limit: int | None = _LIMIT,
-    offset: int = _OFFSET,
+    limit: _Limit = None,
+    offset: _Offset = 0,
     session: AsyncSession = Depends(get_session),
 ) -> DevicesResponse:
     rows = await registry.list_devices(session, DEFAULT_OWNER_ID, limit=limit, offset=offset)
@@ -97,8 +100,8 @@ async def list_devices(
 
 @router.get("/streams", response_model=StreamsResponse)
 async def list_streams(
-    limit: int | None = _LIMIT,
-    offset: int = _OFFSET,
+    limit: _Limit = None,
+    offset: _Offset = 0,
     session: AsyncSession = Depends(get_session),
 ) -> StreamsResponse:
     rows = await registry.list_streams(session, DEFAULT_OWNER_ID, limit=limit, offset=offset)
