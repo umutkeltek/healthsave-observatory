@@ -48,6 +48,12 @@ jobs:
       - name: Typecheck TS
         run: bun run --cwd packages/ts/api-client typecheck
 
+      - name: Install web deps
+        run: bun install --cwd apps/web --frozen-lockfile
+
+      - name: Web tests
+        run: bun run --cwd apps/web test
+
       - name: Test
         run: pytest -q
 
