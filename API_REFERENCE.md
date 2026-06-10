@@ -339,6 +339,14 @@ All three list endpoints take optional **`limit`** (1–1000) + **`offset`** pag
     "first_seen_at": "…", "last_seen_at": "…" } ] }
 ```
 
+### `GET /api/v2/insights/narratives` — keyed
+Narrative history, newest first — the brief card's "previous briefs". **Query:** optional `type` (`daily_briefing` / `weekly_summary`), `limit` (1–100, default 20).
+```json
+{ "narratives": [ { "insight_type": "weekly_summary",
+    "narrative": "Recovery dipped midweek …", "created_at": "2026-06-08T07:00:00Z" } ],
+  "count": 1 }
+```
+
 ### `GET /api/v2/changes` — keyed
 Cheap change fingerprint for near-real-time UIs: latest ingest, latest sync run, latest narrative. `version_token` doubles as an **ETag** — poll with `If-None-Match` and an unchanged state answers `304` with no body. The dashboard polls this (~30s) and refreshes on change; SSE remains the documented upgrade path if sub-5s latency is ever needed.
 ```json

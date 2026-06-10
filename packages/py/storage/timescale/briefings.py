@@ -112,6 +112,32 @@ class TimescaleBriefingRepository:
             for row in rows
         }
 
+    async def list_narratives(
+        self,
+        session: AsyncSession,
+        *,
+        insight_type: str | None = None,
+        limit: int = 20,
+    ) -> list[NarrativeRow]:
+        """Recent narratives newest first — the brief-history surface."""
+        where = "WHERE insight_type = :t" if insight_type else ""
+        sql = text(
+            "SELECT insight_type, narrative, created_at FROM analysis_insights "
+            f"{where} ORDER BY created_at DESC LIMIT :limit"
+        )
+        params: dict[str, Any] = {"limit": limit}
+        if insight_type:
+            params["t"] = insight_type
+        rows = (await session.execute(sql, params)).fetchall()
+        return [
+            NarrativeRow(
+                insight_type=row.insight_type,
+                narrative=row.narrative,
+                created_at=row.created_at,
+            )
+            for row in rows
+        ]
+
     async def fetch_anomalies(
         self,
         session: AsyncSession,

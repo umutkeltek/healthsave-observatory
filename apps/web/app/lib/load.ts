@@ -18,6 +18,7 @@ import {
   fetchIntelligence,
   fetchLatest,
   fetchMetrics,
+  fetchNarratives,
   fetchPrivacy,
   fetchReadiness,
   fetchReceipts,
@@ -31,6 +32,7 @@ import {
   type InsightsLatest,
   type MetricSeries,
   type MetricSummary,
+  type NarrativeHistoryItem,
   type Privacy,
   type Readiness,
   type Receipts,
@@ -151,6 +153,14 @@ export const safePrivacy = cache(async (): Promise<Privacy | null> => {
 export const safeReceipts = cache(async (): Promise<Receipts | null> => {
   try {
     return await fetchReceipts();
+  } catch {
+    return null;
+  }
+});
+
+export const safeNarratives = cache(async (): Promise<NarrativeHistoryItem[] | null> => {
+  try {
+    return (await fetchNarratives()).narratives;
   } catch {
     return null;
   }

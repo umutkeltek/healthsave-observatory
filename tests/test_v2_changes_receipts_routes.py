@@ -117,3 +117,43 @@ async def test_receipts_degrades_when_audit_table_missing(monkeypatch) -> None:
     assert body["events_unavailable"] is True
     assert body["events"] == []
     assert body["ingest"]["sources"][0]["source_plugin_id"] == "apple_healthsave"
+
+
+class _FakeBriefingRepo:
+    def __init__(self, rows):
+        self._rows = rows
+
+    async def list_narratives(self, session, *, insight_type=None, limit=20):
+        rows = [r for r in self._rows if insight_type is None or r.insight_type == insight_type]
+        return rows[:limit]
+
+
+@pytest.mark.asyncio
+async def test_narratives_history_newest_first(monkeypatch) -> None:
+    from server.api import v2_insights
+
+    rows = [
+        SimpleNamespace(insight_type="weekly_summary", narrative="week story", created_at=_T),
+        SimpleNamespace(insight_type="daily_briefing", narrative="day story", created_at=_T),
+    ]
+    monkeypatch.setattr(v2_insights, "_BRIEFING_REPO", _FakeBriefingRepo(rows))
+    body = await v2_insights.list_narratives(insight_type=None, limit=20, session=None)
+    assert body["count"] == 2
+    assert body["narratives"][0]["narrative"] == "week story"
+    assert body["narratives"][0]["created_at"] == _T.isoformat()
+
+    only_weekly = await v2_insights.list_narratives(
+        insight_type="weekly_summary", limit=20, session=None
+    )
+    assert only_weekly["count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_narratives_unknown_type_422(monkeypatch) -> None:
+    from fastapi import HTTPException
+    from server.api import v2_insights
+
+    monkeypatch.setattr(v2_insights, "_BRIEFING_REPO", _FakeBriefingRepo([]))
+    with pytest.raises(HTTPException) as exc:
+        await v2_insights.list_narratives(insight_type="bogus", limit=20, session=None)
+    assert exc.value.status_code == 422

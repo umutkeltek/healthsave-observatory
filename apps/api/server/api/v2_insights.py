@@ -88,6 +88,32 @@ async def latest_narratives(session: AsyncSession = Depends(get_session)) -> dic
     }
 
 
+_NARRATIVE_TYPES = ("daily_briefing", "weekly_summary")
+
+
+@router.get("/narratives")
+async def list_narratives(
+    insight_type: str | None = Query(
+        default=None, alias="type", description="daily_briefing or weekly_summary"
+    ),
+    limit: int = Query(default=20, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Narrative history, newest first — the brief card's "previous briefs"."""
+    if insight_type is not None and insight_type not in _NARRATIVE_TYPES:
+        raise HTTPException(status_code=422, detail=f"unknown narrative type: {insight_type}")
+    rows = await _BRIEFING_REPO.list_narratives(session, insight_type=insight_type, limit=limit)
+    narratives = [
+        {
+            "insight_type": row.insight_type,
+            "narrative": row.narrative,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
+        for row in rows
+    ]
+    return {"narratives": narratives, "count": len(narratives)}
+
+
 @router.get("/findings")
 async def list_findings(
     finding_type: str | None = Query(

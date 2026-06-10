@@ -640,6 +640,7 @@ Example response:
 | `/api/v2/insights/latest` | GET | key | latest daily-briefing + weekly-summary narratives |
 | `/api/v2/insights/correlations` | GET | key | recent cross-metric correlation findings |
 | `/api/v2/insights/findings` | GET | key | recent structured analysis findings |
+| `/api/v2/insights/narratives` | GET | key | narrative history, newest first (`type=`, `limit=`) |
 | `/api/v2/insights/trigger` | POST | key | run a briefing / trend / analysis job on demand |
 | `/api/v2/sync/runs/latest` | GET | key | latest sync-run summary |
 | `/api/v2/sync/runs/{sync_run_id}` | GET | key | per-run delivery-receipt summary |

@@ -1,0 +1,54 @@
+"use client";
+
+import { useState, useTransition } from "react";
+
+import { triggerAnalysisAction } from "../lib/actions";
+
+// "Refresh the narration" affordance on the brief card. Pending state shows a
+// calm mint "narrating" caption (the honest alternative to a fake typewriter —
+// the backend generates whole briefs, it does not stream tokens). A disabled
+// analysis block (409) gets a quiet pointer to /intelligence, not an error.
+export function RefreshInsightsButton() {
+  const [pending, startTransition] = useTransition();
+  const [note, setNote] = useState<string | null>(null);
+
+  const run = () =>
+    startTransition(async () => {
+      setNote(null);
+      const recovery = await triggerAnalysisAction("recovery_check");
+      const correlation = await triggerAnalysisAction("correlation_analysis");
+      if (!recovery.ok && !correlation.ok) {
+        const detail = recovery.error ?? correlation.error ?? "";
+        setNote(
+          detail.includes("disabled")
+            ? "Analysis is off — enable it under Intelligence."
+            : detail || "Could not run the analysis.",
+        );
+      }
+    });
+
+  return (
+    <span className="brief-refresh">
+      {pending && (
+        <span className="brief-narrating mono" aria-live="polite">
+          <span className="live-dot" aria-hidden />
+          analyzing…
+        </span>
+      )}
+      {!pending && note && (
+        <span className="brief-note mono">
+          {note.includes("Intelligence") ? (
+            <>
+              Analysis is off — <a href="/intelligence">enable it</a>.
+            </>
+          ) : (
+            note
+          )}
+        </span>
+      )}
+      <button type="button" className="btn btn-ghost" disabled={pending} onClick={run}>
+        Refresh
+      </button>
+    </span>
+  );
+}

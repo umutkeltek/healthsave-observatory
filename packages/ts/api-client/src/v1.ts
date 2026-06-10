@@ -549,6 +549,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/insights/narratives": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Narratives
+         * @description Narrative history, newest first — the brief card's "previous briefs".
+         */
+        get: operations["list_narratives_api_v2_insights_narratives_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/insights/trigger": {
         parameters: {
             query?: never;
@@ -2410,6 +2430,41 @@ export interface operations {
     latest_narratives_api_v2_insights_latest_get: {
         parameters: {
             query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_narratives_api_v2_insights_narratives_get: {
+        parameters: {
+            query?: {
+                /** @description daily_briefing or weekly_summary */
+                type?: string | null;
+                limit?: number;
+            };
             header?: {
                 "x-api-key"?: string;
             };

@@ -146,6 +146,14 @@ class BriefingRepository(Protocol):
         insight_types: Iterable[str] = ("daily_briefing", "weekly_summary"),
     ) -> dict[str, NarrativeRow]: ...
 
+    async def list_narratives(
+        self,
+        session: AsyncSession,
+        *,
+        insight_type: str | None = None,
+        limit: int = 20,
+    ) -> list[NarrativeRow]: ...
+
     async def fetch_anomalies(
         self,
         session: AsyncSession,

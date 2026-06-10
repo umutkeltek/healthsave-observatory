@@ -17,6 +17,7 @@ import {
   type DetectCandidate,
   fetchDetectLocal,
   postConsent,
+  postInsightsTrigger,
   postTestConnection,
   type TestConnectionPayload,
   type TestConnectionResult,
@@ -148,5 +149,23 @@ export async function setDensityAction(mode: Density): Promise<ActionResult> {
     return { ok: true };
   } catch (error) {
     return failure(error, "Could not switch the view mode.");
+  }
+}
+
+export type TriggerAnalysisResult = ActionResult & { status?: string };
+
+// On-demand narration/analysis refresh (the Weekly Brief card's button). A
+// 409 means the analysis block is disabled — the card surfaces that calmly
+// with a link to /intelligence instead of an error tone.
+export async function triggerAnalysisAction(
+  type: "correlation_analysis" | "recovery_check",
+): Promise<TriggerAnalysisResult> {
+  try {
+    const result = await postInsightsTrigger(type);
+    revalidatePath("/");
+    revalidatePath("/findings");
+    return { ok: true, status: result.status };
+  } catch (error) {
+    return failure(error, "Could not run the analysis.");
   }
 }
