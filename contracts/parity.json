@@ -57,6 +57,11 @@
       "android": "planned",
       "planned_since": "2026-06-10"
     },
+    "audio_exposure_event": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10"
+    },
     "basal_body_temperature": {
       "ios": "available",
       "android": "planned",
@@ -453,11 +458,6 @@
       "planned_since": "2026-06-10"
     },
     "environmental_audio_exposure": {
-      "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
-    },
-    "environmental_audio_exposure_event": {
       "ios": "available",
       "android": "planned",
       "planned_since": "2026-06-10"
