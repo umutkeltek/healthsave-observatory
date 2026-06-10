@@ -82,8 +82,12 @@ export default async function SettingsPage() {
         <article className="card">
           <h2>Intelligence</h2>
           <p className="set-hint">
-            {intelligence
-              ? `Narrator ${narratorOff ? "off" : `${intelligence.mode} · ${intelligence.primary?.provider ?? "—"}`} — provider, fallback chain, redaction and consent are managed end-to-end on the Intelligence page.`
+            {privacy
+              ? `Narrator ${
+                  narratorOff
+                    ? "off"
+                    : `${privacy.is_local ? "local" : "cloud"} · ${privacy.provider}`
+                }${intelligence?.managed_by_env ? " (set by deploy env)" : ""} — provider, fallback chain, redaction and consent are managed end-to-end on the Intelligence page.`
               : "Narrator settings unavailable (backend unreachable)."}
           </p>
           <div className="exp-action">
