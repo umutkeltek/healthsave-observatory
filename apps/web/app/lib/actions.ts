@@ -147,7 +147,10 @@ export async function setDensityAction(mode: Density): Promise<ActionResult> {
       sameSite: "lax",
       httpOnly: true,
     });
-    revalidatePath("/", "layout");
+    // No explicit revalidate: cookie writes in a server action already
+    // invalidate the router cache, and every page is dynamic — the old
+    // revalidatePath("/", "layout") forced a full re-render storm that made
+    // the toggle feel sluggish. The nav itself is optimistic client state.
     return { ok: true };
   } catch (error) {
     return failure(error, "Could not switch the view mode.");
