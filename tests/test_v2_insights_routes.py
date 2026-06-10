@@ -375,3 +375,52 @@ async def test_trigger_recovery_check_409_when_disabled():
         await trigger(request, TriggerBody(type="recovery_check"))
     assert getattr(exc_info.value, "status_code", None) == 409
     assert request.app.state.analysis_engine.calls == 0
+
+
+class _FakeBriefingEngine:
+    def __init__(self, run_id):
+        self._run_id = run_id
+        self.calls = 0
+
+    async def run_daily_briefing(self):
+        self.calls += 1
+        return self._run_id
+
+
+def _briefing_request(*, enabled: bool, run_id: int | None = 11):
+    config = AnalysisConfig.model_validate({"analysis": {"daily_briefing": {"enabled": enabled}}})
+    return SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                analysis_config=config,
+                analysis_engine=_FakeBriefingEngine(run_id),
+            )
+        )
+    )
+
+
+@pytest.mark.asyncio
+async def test_trigger_daily_briefing_runs_engine_when_enabled():
+    request = _briefing_request(enabled=True, run_id=11)
+    result = await trigger(request, TriggerBody(type="daily_briefing"))
+    assert result["status"] == "completed"
+    assert result["run_type"] == "daily_briefing"
+    assert result["run_id"] == 11
+    assert request.app.state.analysis_engine.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_trigger_daily_briefing_reports_skipped_when_no_data():
+    request = _briefing_request(enabled=True, run_id=None)
+    result = await trigger(request, TriggerBody(type="daily_briefing"))
+    assert result["status"] == "skipped"
+    assert result["run_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_trigger_daily_briefing_409_when_disabled():
+    request = _briefing_request(enabled=False)
+    with pytest.raises(Exception) as exc_info:
+        await trigger(request, TriggerBody(type="daily_briefing"))
+    assert getattr(exc_info.value, "status_code", None) == 409
+    assert request.app.state.analysis_engine.calls == 0

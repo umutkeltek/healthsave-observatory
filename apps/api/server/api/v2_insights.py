@@ -182,7 +182,7 @@ async def list_findings(
 
 class TriggerBody(BaseModel):
     """v2 trigger request — extensible by ``type`` (correlation_analysis,
-    recovery_check)."""
+    recovery_check, daily_briefing)."""
 
     type: str = "correlation_analysis"
 
@@ -191,12 +191,28 @@ class TriggerBody(BaseModel):
 async def trigger(request: Request, body: TriggerBody | None = None) -> dict:
     """Run an analysis job on demand.
 
-    Supports ``correlation_analysis`` and ``recovery_check``. Each checks its
-    config block is enabled, runs the Brain-1 engine job inline through the
-    pipeline_runs ledger, and reports completed vs skipped.
+    Supports ``correlation_analysis``, ``recovery_check`` and
+    ``daily_briefing`` (the brief card's refresh — Brain-1 findings plus a
+    Brain-2 narration). Each checks its config block is enabled, runs the
+    engine job inline through the pipeline_runs ledger, and reports
+    completed vs skipped.
     """
     body = body or TriggerBody()
     analysis = request.app.state.analysis_config.analysis
+
+    if body.type == "daily_briefing":
+        if not analysis.daily_briefing.enabled:
+            raise HTTPException(status_code=409, detail="daily_briefing is disabled")
+        run_id = await _record_trigger_run(
+            request,
+            job_kind="daily_briefing",
+            coro=request.app.state.analysis_engine.run_daily_briefing(),
+        )
+        return {
+            "status": "completed" if run_id is not None else "skipped",
+            "run_type": "daily_briefing",
+            "run_id": run_id,
+        }
 
     if body.type == "correlation_analysis":
         if not analysis.correlation_analysis.enabled:

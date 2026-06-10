@@ -223,11 +223,12 @@ export type TriggerResult = {
   count?: number;
 };
 
-export function postInsightsTrigger(
-  type: "correlation_analysis" | "recovery_check",
-): Promise<TriggerResult> {
-  // Analysis runs inline server-side — give it well past the default timeout.
-  return postJson<TriggerResult>("/api/v2/insights/trigger", { type }, 60_000);
+export type TriggerType = "correlation_analysis" | "recovery_check" | "daily_briefing";
+
+export function postInsightsTrigger(type: TriggerType): Promise<TriggerResult> {
+  // Analysis runs inline server-side (daily_briefing includes a real LLM
+  // narration round-trip) — give it well past the default timeout.
+  return postJson<TriggerResult>("/api/v2/insights/trigger", { type }, 90_000);
 }
 
 // Version axes (open endpoint). Mirrors server/api/v2_meta.py.

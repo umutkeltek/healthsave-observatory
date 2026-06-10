@@ -163,7 +163,7 @@ export type TriggerAnalysisResult = ActionResult & { status?: string };
 // 409 means the analysis block is disabled — the card surfaces that calmly
 // with a link to /intelligence instead of an error tone.
 export async function triggerAnalysisAction(
-  type: "correlation_analysis" | "recovery_check",
+  type: "correlation_analysis" | "recovery_check" | "daily_briefing",
 ): Promise<TriggerAnalysisResult> {
   try {
     const result = await postInsightsTrigger(type);
