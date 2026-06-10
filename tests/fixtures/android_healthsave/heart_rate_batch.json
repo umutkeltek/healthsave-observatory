@@ -1,0 +1,20 @@
+{
+  "metric": "heart_rate",
+  "batch_index": 0,
+  "total_batches": 1,
+  "client_platform": "android-health-connect",
+  "client_schema_version": 1,
+  "bridge_install_id": "00000000-0000-4000-8000-000000000001",
+  "samples": [
+    {
+      "date": "2026-04-10T12:00:00.000Z",
+      "qty": 72,
+      "source": "Pixel Watch 3",
+      "provider_object_id": "hc-corpus-hr-0001",
+      "source_bundle_id": "com.google.android.apps.wearables.maestro.companion",
+      "device_manufacturer": "Google",
+      "device_model": "Pixel Watch 3",
+      "source_revision_operating_system": "Android 16"
+    }
+  ]
+}
