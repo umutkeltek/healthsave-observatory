@@ -2583,3 +2583,265 @@ table.prov {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   Library — the full metric registry, browsable + pinnable
+   ───────────────────────────────────────────────────────────────────── */
+
+.lib-intro {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-lg);
+  max-width: 640px;
+}
+
+.lib-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  margin-top: var(--s5);
+}
+
+.lib-search {
+  flex: 1 1 220px;
+  max-width: 320px;
+  padding: 8px 12px;
+  font-size: var(--fs-sm);
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--raise);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color var(--dur-1) ease;
+}
+
+.lib-search:focus {
+  border-color: var(--accent-line);
+}
+
+.lib-select {
+  padding: 8px 10px;
+  font-size: var(--fs-sm);
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--raise);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.lib-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.lib-count {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--faint);
+}
+
+.lib-group {
+  margin-top: var(--s5);
+}
+
+.lib-card {
+  padding: var(--s2) 0;
+}
+
+.lib-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: 9px var(--s5);
+  border-bottom: 1px solid var(--line-soft);
+  transition: background var(--dur-1) ease;
+}
+
+.lib-row:last-child {
+  border-bottom: 0;
+}
+
+.lib-row:hover {
+  background: var(--hover);
+}
+
+.lib-row-empty .lib-name {
+  color: var(--faint);
+}
+
+.lib-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-md);
+  color: var(--ink);
+  text-decoration: none;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+}
+
+.lib-name:hover {
+  color: var(--accent);
+}
+
+.lib-unit {
+  font-size: var(--fs-2xs);
+  color: var(--faint);
+}
+
+.lib-stats {
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.lib-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--signal);
+  background: var(--signal-weak);
+  border: 1px solid var(--signal-line);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.pin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  color: var(--faint);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--dur-1) ease, background var(--dur-1) ease;
+}
+
+.pin-btn:hover {
+  color: var(--warn);
+  background: var(--hover);
+}
+
+.pin-btn.pinned {
+  color: var(--warn);
+}
+
+.pin-btn:disabled {
+  opacity: 0.5;
+}
+
+/* Detail page */
+
+.lib-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s4);
+  flex-wrap: wrap;
+  margin-bottom: var(--s4);
+}
+
+.lib-detail-title {
+  margin: 6px 0 0;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+}
+
+.lib-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.lib-ranges {
+  display: flex;
+  gap: var(--s1);
+}
+
+.chip-active {
+  color: var(--ink);
+  background: var(--accent-weak);
+  border-color: var(--accent-line);
+}
+
+.lib-stats-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+  margin-top: var(--s4);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+
+.lib-stat-label {
+  color: var(--faint);
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-right: 4px;
+}
+
+.lib-divergence {
+  margin: var(--s3) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  border-left: 2px solid var(--signal-line);
+  padding-left: var(--s3);
+}
+
+.lib-notes {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  display: grid;
+  gap: var(--s2);
+}
+
+/* Essentials/Observatory mode switch (sidebar foot) */
+
+.density-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  margin-bottom: var(--s3);
+  background: var(--raise);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.density-toggle button {
+  flex: 1 1 50%;
+  padding: 5px 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--faint);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color var(--dur-1) ease, background var(--dur-1) ease;
+}
+
+.density-toggle button.active {
+  color: var(--ink);
+  background: var(--surface-3);
+}
+
+.density-toggle button:disabled {
+  opacity: 0.6;
+}

@@ -14,6 +14,8 @@ const TITLES: Record<string, { title: string; sub: string }> = {
   "/data": { title: "Data", sub: "Coverage, freshness, and every metric." },
   "/compare": { title: "Compare", sub: "Period vs previous, source vs source — both kept." },
   "/privacy": { title: "Privacy", sub: "What leaves this host." },
+  "/library": { title: "Library", sub: "Every signal you collect — browsable, pinnable." },
+  "/intelligence": { title: "Intelligence", sub: "The narrator: local by default, cloud by consent." },
 };
 
 export function Topbar({
@@ -24,7 +26,8 @@ export function Topbar({
   onMenu?: () => void;
 }) {
   const pathname = usePathname();
-  const { title, sub } = TITLES[pathname] ?? TITLES["/"];
+  const segment = `/${pathname.split("/")[1] ?? ""}`;
+  const { title, sub } = TITLES[pathname] ?? TITLES[segment] ?? TITLES["/"];
   return (
     <header className="topbar">
       <button type="button" className="menu-btn" onClick={onMenu} aria-label="Open navigation">

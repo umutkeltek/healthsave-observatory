@@ -10,6 +10,7 @@ import {
   TopbarStatusFallback,
 } from "./components/ShellStatus";
 import "./globals.css";
+import { getDensity } from "./lib/prefs";
 
 const sans = Geist({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
 const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
@@ -19,10 +20,11 @@ export const metadata: Metadata = {
   description: "Your health data, interpreted — a local-first personal health console.",
 };
 
-// The layout awaits nothing: the chrome flushes immediately and the
-// posture/sync status streams in via Suspense (see ShellStatus). This is half
-// of the old first-byte waterfall; the other half was the page's series fan-out.
-export default function RootLayout({ children }: { children: ReactNode }) {
+// The layout awaits no backend reads: the chrome flushes immediately and the
+// posture/sync status streams in via Suspense (see ShellStatus). The density
+// cookie read is local and instant — it decides Essentials vs Observatory nav.
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const density = await getDensity();
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
@@ -36,6 +38,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body>
         <Shell
+          density={density}
           sidebarStatus={
             <Suspense fallback={<SidebarStatusFallback />}>
               <SidebarStatus />

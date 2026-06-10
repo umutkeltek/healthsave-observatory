@@ -10,16 +10,18 @@ import {
   agoLabel,
   GRID_METRICS,
   hasAnyData,
-  loadGrid,
   loadReadinessSparklines,
   safeCandidates,
   safeExperiments,
   safeFindings,
   safeLatest,
+  safeMetrics,
   safePrivacy,
   safeReadiness,
   safeSeries,
+  safeSeriesMany,
 } from "../../lib/load";
+import { getPinnedMetrics } from "../../lib/prefs";
 import { EvidenceCard } from "../EvidenceCard";
 import { ExperimentsCard } from "../ExperimentsCard";
 import { LocalVaultReceipt, type VaultStep } from "../LocalVaultReceipt";
@@ -165,13 +167,26 @@ export async function ExperimentsSection() {
 
 export async function SignalsSection() {
   if (!(await hasAnyData())) return null;
-  const [gridSeries, sleep] = await Promise.all([loadGrid(), safeSeries("sleep.stage", "7d")]);
+  // Pinned metrics (Library star) replace the curated default grid.
+  const pinned = await getPinnedMetrics();
+  let defs: { id: string; title: string }[] = GRID_METRICS;
+  if (pinned.length > 0) {
+    const catalog = await safeMetrics();
+    defs = pinned.map((id) => ({
+      id,
+      title: catalog?.find((m) => m.id === id)?.display_name ?? id,
+    }));
+  }
+  const [map, sleep] = await Promise.all([
+    safeSeriesMany(defs.map((d) => d.id), "7d"),
+    safeSeries("sleep.stage", "7d"),
+  ]);
   return (
     <>
-      <div className="section-label">Signals</div>
+      <div className="section-label">Signals{pinned.length > 0 ? " · pinned" : ""}</div>
       <section className="grid">
-        {GRID_METRICS.map((metric, index) => (
-          <MetricCard key={metric.id} series={gridSeries[index]} fallbackTitle={metric.title} />
+        {defs.map((metric) => (
+          <MetricCard key={metric.id} series={map.get(metric.id) ?? null} fallbackTitle={metric.title} />
         ))}
         <SleepCard series={sleep} />
       </section>
