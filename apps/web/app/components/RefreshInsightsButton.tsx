@@ -23,8 +23,18 @@ export function RefreshInsightsButton() {
         triggerAnalysisAction("correlation_analysis"),
         triggerAnalysisAction("daily_briefing"),
       ]);
-      if (!recovery.ok && !correlation.ok && !briefing.ok) {
-        const detail = briefing.error ?? recovery.error ?? correlation.error ?? "";
+      // The briefing IS this card — its failure must surface even when the
+      // finding jobs succeeded (a swallowed brief error is the exact silent
+      // failure this card is meant to expose).
+      if (!briefing.ok) {
+        const detail = briefing.error ?? "";
+        setNote(
+          detail.includes("disabled")
+            ? "Narration is off — enable it under Intelligence."
+            : `Brief didn't regenerate${detail ? `: ${detail}` : "."}`,
+        );
+      } else if (!recovery.ok && !correlation.ok) {
+        const detail = recovery.error ?? correlation.error ?? "";
         setNote(
           detail.includes("disabled")
             ? "Analysis is off — enable it under Intelligence."
