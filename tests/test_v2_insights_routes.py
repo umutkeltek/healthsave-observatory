@@ -324,7 +324,7 @@ async def test_trigger_409_when_disabled():
 async def test_trigger_400_for_unknown_type():
     request = _request(enabled=True)
     with pytest.raises(Exception) as exc_info:
-        await trigger(request, TriggerBody(type="weekly_summary"))
+        await trigger(request, TriggerBody(type="zen_garden_analysis"))
     assert getattr(exc_info.value, "status_code", None) == 400
 
 
@@ -381,14 +381,19 @@ class _FakeBriefingEngine:
     def __init__(self, run_id):
         self._run_id = run_id
         self.calls = 0
+        self.weekly_calls = 0
 
     async def run_daily_briefing(self):
         self.calls += 1
         return self._run_id
 
+    async def run_weekly_summary(self):
+        self.weekly_calls += 1
+        return self._run_id
 
-def _briefing_request(*, enabled: bool, run_id: int | None = 11):
-    config = AnalysisConfig.model_validate({"analysis": {"daily_briefing": {"enabled": enabled}}})
+
+def _briefing_request(*, enabled: bool, run_id: int | None = 11, job: str = "daily_briefing"):
+    config = AnalysisConfig.model_validate({"analysis": {job: {"enabled": enabled}}})
     return SimpleNamespace(
         app=SimpleNamespace(
             state=SimpleNamespace(
@@ -424,3 +429,23 @@ async def test_trigger_daily_briefing_409_when_disabled():
         await trigger(request, TriggerBody(type="daily_briefing"))
     assert getattr(exc_info.value, "status_code", None) == 409
     assert request.app.state.analysis_engine.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_trigger_weekly_summary_runs_engine_when_enabled():
+    request = _briefing_request(enabled=True, run_id=23, job="weekly_summary")
+    result = await trigger(request, TriggerBody(type="weekly_summary"))
+    assert result["status"] == "completed"
+    assert result["run_type"] == "weekly_summary"
+    assert result["run_id"] == 23
+    assert request.app.state.analysis_engine.weekly_calls == 1
+    assert request.app.state.analysis_engine.calls == 0  # daily untouched
+
+
+@pytest.mark.asyncio
+async def test_trigger_weekly_summary_409_when_disabled():
+    request = _briefing_request(enabled=False, job="weekly_summary")
+    with pytest.raises(Exception) as exc_info:
+        await trigger(request, TriggerBody(type="weekly_summary"))
+    assert getattr(exc_info.value, "status_code", None) == 409
+    assert request.app.state.analysis_engine.weekly_calls == 0
