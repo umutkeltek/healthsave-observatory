@@ -25,7 +25,13 @@ export function MultiSeriesChart({ series }: { series: ChartSeries[] }) {
   const h = 130;
   return (
     <div className="multi-chart">
-      <svg className="multi-svg" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden>
+      <svg
+        className="multi-svg"
+        viewBox={`0 0 ${w} ${h}`}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={`Comparison chart: ${series.map((s) => s.label).join(" vs ")}`}
+      >
         {series.map((s, i) => (
           <path
             key={s.label}
