@@ -38,6 +38,7 @@ API_TS = REPO_ROOT / "apps" / "web" / "app" / "lib" / "api.ts"
 TYPE_TO_MODULES: dict[str, list[str]] = {
     "MetricSummary": ["server.api.v2_metrics"],
     "MetricSeries": ["server.api.v2_metrics"],
+    "SeriesBatch": ["server.api.v2_metrics"],
     "Readiness": ["server.api.v2_readiness"],
     "InsightsLatest": ["server.api.v2_insights"],
     "FindingsList": ["server.api.v2_insights"],

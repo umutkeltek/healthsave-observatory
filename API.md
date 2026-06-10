@@ -632,6 +632,7 @@ Example response:
 | `/api/v2/setup/diagnostics` | GET | open | self-describe the service so a misconfigured client (e.g. pointed at Grafana) detects it |
 | `/api/v2/metrics` | GET | open | list available canonical metrics |
 | `/api/v2/metrics/{metric_id}/series` | GET | key | time-series for one metric |
+| `/api/v2/series` | GET | key | batch time-series for many metrics (`ids=` comma list, max 24) |
 | `/api/v2/sources` | GET | key | Source integrations (Source/Device/Stream identity) |
 | `/api/v2/devices` | GET | key | distinct device emitters (derived from streams) |
 | `/api/v2/streams` | GET | key | source-device streams with stable UUIDs (HA keys on these) |

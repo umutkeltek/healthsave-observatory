@@ -1,4 +1,4 @@
-"""v2 read API: /api/v2/metrics + /api/v2/metrics/{id}/series."""
+"""v2 read API: /api/v2/metrics + /api/v2/metrics/{id}/series + /api/v2/series."""
 
 from __future__ import annotations
 
@@ -7,7 +7,12 @@ from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
-from server.api.v2_metrics import list_metrics, metric_series
+from server.api.v2_metrics import (
+    MAX_SERIES_BATCH_IDS,
+    list_metrics,
+    metric_series,
+    metric_series_batch,
+)
 
 _T = datetime(2026, 5, 28, 8, 0, tzinfo=UTC)
 _SOURCE = UUID("11111111-1111-1111-1111-111111111111")
@@ -105,4 +110,69 @@ async def test_metric_series_unknown_metric_404() -> None:
 async def test_metric_series_unknown_range_422() -> None:
     with pytest.raises(HTTPException) as exc:
         await metric_series("vital.heart_rate", range="bogus", session=_FakeSession())
+    assert exc.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_batch_series_returns_item_per_metric() -> None:
+    rows = [
+        {
+            "interval_start": _T,
+            "interval_end": _T,
+            "numeric_value": 61.0,
+            "code": None,
+            "canonical_unit": "bpm",
+            "source_id": _SOURCE,
+            "confidence": None,
+        },
+    ]
+    body = await metric_series_batch(
+        ids="vital.heart_rate,sleep.stage", range="7d", session=_FakeSession(rows)
+    )
+    assert body["range"] == "7d"
+    assert len(body["series"]) == 2
+    first = body["series"][0]
+    assert first["metric"]["id"] == "vital.heart_rate"
+    assert first["points"][0]["value"] == 61.0
+    assert first["points"][0]["unit"] == "bpm"
+    assert body["series"][1]["metric"]["id"] == "sleep.stage"
+
+
+@pytest.mark.asyncio
+async def test_batch_series_unknown_id_is_per_item_error() -> None:
+    """One bad id reports inline; the rest of the batch still returns."""
+    body = await metric_series_batch(
+        ids="not.a.metric,vital.heart_rate", range="7d", session=_FakeSession([])
+    )
+    assert body["series"][0] == {"metric_id": "not.a.metric", "error": "unknown metric"}
+    assert body["series"][1]["metric"]["id"] == "vital.heart_rate"
+
+
+@pytest.mark.asyncio
+async def test_batch_series_dedupes_and_ignores_blank_ids() -> None:
+    body = await metric_series_batch(
+        ids=" vital.heart_rate, ,vital.heart_rate,", range="7d", session=_FakeSession([])
+    )
+    assert len(body["series"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_batch_series_empty_ids_422() -> None:
+    with pytest.raises(HTTPException) as exc:
+        await metric_series_batch(ids=" , ", range="7d", session=_FakeSession())
+    assert exc.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_batch_series_too_many_ids_422() -> None:
+    ids = ",".join(f"fake.metric_{i}" for i in range(MAX_SERIES_BATCH_IDS + 1))
+    with pytest.raises(HTTPException) as exc:
+        await metric_series_batch(ids=ids, range="7d", session=_FakeSession())
+    assert exc.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_batch_series_unknown_range_422() -> None:
+    with pytest.raises(HTTPException) as exc:
+        await metric_series_batch(ids="vital.heart_rate", range="bogus", session=_FakeSession())
     assert exc.value.status_code == 422

@@ -748,6 +748,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Metric Series Batch
+         * @description Many metrics' time-series in one request (the dashboard's grid fetch).
+         *
+         *     ``ids`` is a comma-separated list of metric ids. Unknown ids come back as
+         *     per-item ``{"metric_id", "error"}`` entries instead of failing the whole
+         *     request, so one bad id can't blank a dashboard. Each known item carries
+         *     the exact shape of ``/metrics/{id}/series`` minus the redundant
+         *     range/start/end (hoisted to the envelope).
+         */
+        get: operations["metric_series_batch_api_v2_series_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/setup/diagnostics": {
         parameters: {
             query?: never;
@@ -2642,6 +2668,41 @@ export interface operations {
     readiness_api_v2_readiness_get: {
         parameters: {
             query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    metric_series_batch_api_v2_series_get: {
+        parameters: {
+            query: {
+                ids: string;
+                range?: string;
+                stream_id?: string | null;
+            };
             header?: {
                 "x-api-key"?: string;
             };
