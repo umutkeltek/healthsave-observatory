@@ -18,8 +18,9 @@ Check `GET /api/v2/meta` first — it reports the running backend's version axes
 |---|---|---|
 | `GET /api/v2/metrics` | open | List available canonical metrics (static catalog; ids are dotted, e.g. `vital.heart_rate`) |
 | `GET /api/v2/metrics/{metric_id}/series` | key | Time series for one metric (`range`, e.g. `7d`, or `start`/`end`) |
+| `GET /api/v2/series` | key | Batch time series for many metrics (`ids=` comma list, max 24; unknown ids return per-item errors) |
 
-The series endpoint returns points tagged with `source_id`, `unit`, and optional `confidence` — the same contract the local LLM narrator consumes.
+The series endpoints return points tagged with `source_id`, `unit`, and optional `confidence` — the same contract the local LLM narrator consumes.
 
 ## Insights and readiness
 

@@ -27,15 +27,39 @@ export type MetricSeries = {
   points: SeriesPoint[];
 };
 
+// One item per requested metric id: a known id carries metric+points (the
+// /metrics/{id}/series item shape); an unknown id carries metric_id+error.
+export type SeriesBatchItem = {
+  metric?: MetricSummary;
+  points?: SeriesPoint[];
+  metric_id?: string;
+  error?: string;
+};
+
+export type SeriesBatch = {
+  range: string;
+  start: string;
+  end: string;
+  series: SeriesBatchItem[];
+};
+
 const API_BASE = process.env.API_BASE ?? "http://localhost:8000";
 // Server-side only — the key stays in the Next server (these are server
 // components), never shipped to the browser.
 const API_KEY = process.env.API_KEY ?? "";
 
-async function getJson<T>(path: string): Promise<T> {
+// A hung backend must degrade a card, not wedge the whole SSR stream. LLM
+// probe calls override this (provider healthchecks legitimately take longer).
+const DEFAULT_TIMEOUT_MS = Number(process.env.API_TIMEOUT_MS ?? 5000);
+
+async function getJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
   const headers: Record<string, string> = {};
   if (API_KEY) headers["X-API-Key"] = API_KEY;
-  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store", headers });
+  const res = await fetch(`${API_BASE}${path}`, {
+    cache: "no-store",
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
   if (!res.ok) throw new Error(`${path} -> ${res.status}`);
   return res.json() as Promise<T>;
 }
@@ -43,7 +67,7 @@ async function getJson<T>(path: string): Promise<T> {
 // Server-side POST — used by the experiment write actions. The key never
 // reaches the browser (these run in server actions). On error we surface the
 // backend's `detail` (e.g. a 422 readiness rationale) so the UI can show it.
-async function postJson<T>(path: string, body: unknown): Promise<T> {
+async function postJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (API_KEY) headers["X-API-Key"] = API_KEY;
   const res = await fetch(`${API_BASE}${path}`, {
@@ -51,6 +75,7 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
     cache: "no-store",
     headers,
     body: JSON.stringify(body ?? {}),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) {
     let detail = `${path} -> ${res.status}`;
@@ -68,7 +93,7 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 }
 
 // Server-side PUT — mirrors postJson. Used by the Intelligence settings apply.
-async function putJson<T>(path: string, body: unknown): Promise<T> {
+async function putJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (API_KEY) headers["X-API-Key"] = API_KEY;
   const res = await fetch(`${API_BASE}${path}`, {
@@ -76,6 +101,7 @@ async function putJson<T>(path: string, body: unknown): Promise<T> {
     cache: "no-store",
     headers,
     body: JSON.stringify(body ?? {}),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) {
     let detail = `${path} -> ${res.status}`;
@@ -98,6 +124,13 @@ export function fetchMetrics(): Promise<MetricSummary[]> {
 
 export function fetchSeries(metricId: string, range = "7d"): Promise<MetricSeries> {
   return getJson<MetricSeries>(`/api/v2/metrics/${metricId}/series?range=${range}`);
+}
+
+// Batch read: the dashboard grid's one-request replacement for per-metric
+// fan-out. Max 24 ids per request (server-enforced).
+export function fetchSeriesBatch(metricIds: string[], range = "7d"): Promise<SeriesBatch> {
+  const ids = encodeURIComponent(metricIds.join(","));
+  return getJson<SeriesBatch>(`/api/v2/series?ids=${ids}&range=${range}`);
 }
 
 // Data-readiness — Insight Action Loop card #1. Mirrors server/api/v2_readiness.py.

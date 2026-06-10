@@ -111,6 +111,18 @@ Time series for one canonical metric. **Query:** `range` (e.g. `7d`) or `start`/
                 "unit": "count/min", "source_id": "apple_watch", "confidence": null } ] }
 ```
 
+### `GET /api/v2/series` — keyed
+Batch time-series read: many canonical metrics in one request (the dashboard's grid fetch, replacing per-metric fan-out). **Query:** `ids` (comma-separated metric ids, max 24, deduped), `range` (e.g. `7d`), optional `stream_id` applied to every id. Unknown ids come back as per-item `{"metric_id","error"}` entries instead of failing the request. Each known item matches the `/metrics/{id}/series` shape minus the envelope-hoisted `range`/`start`/`end`.
+```json
+{ "range": "7d", "start": "2026-06-01T00:00:00Z", "end": "2026-06-08T00:00:00Z",
+  "series": [
+    { "metric": { "id": "vital.heart_rate", "display_name": "Heart Rate", "category": "vital",
+                  "value_type": "quantity", "canonical_unit": "count/min" },
+      "points": [ { "t": "2026-06-08T20:17:39Z", "value": 62.0, "code": null,
+                    "unit": "count/min", "source_id": "apple_watch", "confidence": null } ] },
+    { "metric_id": "not.a.metric", "error": "unknown metric" } ] }
+```
+
 ### `GET /api/v2/privacy` — keyed
 The egress trust-boundary posture (the moat, made inspectable).
 ```json

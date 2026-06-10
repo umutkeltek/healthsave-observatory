@@ -3503,6 +3503,83 @@
         "summary": "Readiness"
       }
     },
+    "/api/v2/series": {
+      "get": {
+        "description": "Many metrics' time-series in one request (the dashboard's grid fetch).\n\n``ids`` is a comma-separated list of metric ids. Unknown ids come back as\nper-item ``{\"metric_id\", \"error\"}`` entries instead of failing the whole\nrequest, so one bad id can't blank a dashboard. Each known item carries\nthe exact shape of ``/metrics/{id}/series`` minus the redundant\nrange/start/end (hoisted to the envelope).",
+        "operationId": "metric_series_batch_api_v2_series_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ids",
+            "required": true,
+            "schema": {
+              "title": "Ids",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "default": "7d",
+              "title": "Range",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stream_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Stream Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Metric Series Batch Api V2 Series Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Metric Series Batch"
+      }
+    },
     "/api/v2/setup/diagnostics": {
       "get": {
         "description": "Return a no-secret setup fingerprint for humans and clients.\n\nThis is intentionally unauthenticated: it exposes no health data and helps\nusers distinguish the Data Hub API from nearby Grafana/Homepage ports before\nthey troubleshoot keys or sync.",

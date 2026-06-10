@@ -32,6 +32,11 @@ RANGE_WINDOWS: dict[str, timedelta] = {
     "1y": timedelta(days=365),
 }
 
+# One batch request replaces the dashboard's per-metric fan-out; the cap keeps
+# a single request from scanning the whole registry (runtime-enforced so the
+# OpenAPI snapshot stays byte-identical, same convention as v2_export's clamp).
+MAX_SERIES_BATCH_IDS = 24
+
 
 def _metric_summary(metric: MetricDefinition) -> dict:
     return {
@@ -88,16 +93,76 @@ async def metric_series(
         "range": range,
         "start": start.isoformat(),
         "end": end.isoformat(),
-        "points": [
-            {
-                "t": point.t.isoformat(),
-                "value": point.value,
-                "code": point.code,
-                "unit": point.unit,
-                "source_id": point.source_id,
-                "stream_id": point.stream_id,
-                "confidence": point.confidence,
-            }
-            for point in points
-        ],
+        "points": _point_dicts(points),
+    }
+
+
+def _point_dicts(points) -> list[dict]:
+    return [
+        {
+            "t": point.t.isoformat(),
+            "value": point.value,
+            "code": point.code,
+            "unit": point.unit,
+            "source_id": point.source_id,
+            "stream_id": point.stream_id,
+            "confidence": point.confidence,
+        }
+        for point in points
+    ]
+
+
+@router.get("/series", dependencies=[Depends(verify_api_key)])
+async def metric_series_batch(
+    ids: str,
+    range: str = "7d",
+    stream_id: str | None = None,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Many metrics' time-series in one request (the dashboard's grid fetch).
+
+    ``ids`` is a comma-separated list of metric ids. Unknown ids come back as
+    per-item ``{"metric_id", "error"}`` entries instead of failing the whole
+    request, so one bad id can't blank a dashboard. Each known item carries
+    the exact shape of ``/metrics/{id}/series`` minus the redundant
+    range/start/end (hoisted to the envelope).
+    """
+    window = RANGE_WINDOWS.get(range)
+    if window is None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown range '{range}'; expected one of {sorted(RANGE_WINDOWS)}",
+        )
+    metric_ids = list(dict.fromkeys(part.strip() for part in ids.split(",") if part.strip()))
+    if not metric_ids:
+        raise HTTPException(status_code=422, detail="ids must name at least one metric")
+    if len(metric_ids) > MAX_SERIES_BATCH_IDS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"too many ids ({len(metric_ids)}); max {MAX_SERIES_BATCH_IDS} per request",
+        )
+
+    end = datetime.now(UTC)
+    start = end - window
+    series: list[dict] = []
+    for metric_id in metric_ids:
+        metric = get_metric(metric_id)
+        if metric is None:
+            series.append({"metric_id": metric_id, "error": "unknown metric"})
+            continue
+        points = await _REPO.query_series(
+            session,
+            owner_id=DEFAULT_OWNER_ID,
+            workspace_id=DEFAULT_WORKSPACE_ID,
+            metric_id=metric_id,
+            start=start,
+            end=end,
+            stream_id=stream_id,
+        )
+        series.append({"metric": _metric_summary(metric), "points": _point_dicts(points)})
+    return {
+        "range": range,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "series": series,
     }
