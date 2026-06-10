@@ -20,6 +20,7 @@ import {
   fetchMetrics,
   fetchPrivacy,
   fetchReadiness,
+  fetchReceipts,
   fetchSeries,
   fetchSeriesBatch,
   fetchSources,
@@ -32,6 +33,7 @@ import {
   type MetricSummary,
   type Privacy,
   type Readiness,
+  type Receipts,
   type SourceView,
   type StreamView,
 } from "./api";
@@ -141,6 +143,14 @@ export async function safeExperiments(): Promise<ExperimentList | null> {
 export const safePrivacy = cache(async (): Promise<Privacy | null> => {
   try {
     return await fetchPrivacy();
+  } catch {
+    return null;
+  }
+});
+
+export const safeReceipts = cache(async (): Promise<Receipts | null> => {
+  try {
+    return await fetchReceipts();
   } catch {
     return null;
   }

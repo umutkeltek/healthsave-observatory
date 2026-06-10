@@ -297,6 +297,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Changes
+         * @description Latest-activity fingerprint with ETag/304 semantics.
+         */
+        get: operations["changes_api_v2_changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/devices": {
         parameters: {
             query?: never;
@@ -748,6 +768,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Receipts
+         * @description Egress-relevant audit events (newest first) + ingest freshness.
+         */
+        get: operations["list_receipts_api_v2_receipts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/series": {
         parameters: {
             query?: never;
@@ -1160,6 +1200,8 @@ export interface components {
             count: number;
             /** Devices */
             devices: components["schemas"]["DeviceView"][];
+            /** Total */
+            total?: number | null;
         };
         /** ExperimentListResponse */
         ExperimentListResponse: {
@@ -1435,6 +1477,8 @@ export interface components {
             count: number;
             /** Sources */
             sources: components["schemas"]["SourceView"][];
+            /** Total */
+            total?: number | null;
         };
         /** StreamView */
         StreamView: {
@@ -1466,6 +1510,8 @@ export interface components {
             count: number;
             /** Streams */
             streams: components["schemas"]["StreamView"][];
+            /** Total */
+            total?: number | null;
         };
         /** TestConnectionRequest */
         TestConnectionRequest: {
@@ -1959,9 +2005,43 @@ export interface operations {
             };
         };
     };
-    list_devices_api_v2_devices_get: {
+    changes_api_v2_changes_get: {
         parameters: {
             query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_devices_api_v2_devices_get: {
+        parameters: {
+            query?: {
+                limit?: number | null;
+                offset?: number;
+            };
             header?: {
                 "x-api-key"?: string;
             };
@@ -2262,6 +2342,7 @@ export interface operations {
             query?: {
                 /** @description Optional day window such as 30d or 90d */
                 period?: string | null;
+                limit?: number;
             };
             header?: {
                 "x-api-key"?: string;
@@ -2296,6 +2377,7 @@ export interface operations {
             query?: {
                 /** @description Optional finding kind (anomaly / trend / correlation / summary). */
                 type?: string | null;
+                limit?: number;
             };
             header?: {
                 "x-api-key"?: string;
@@ -2696,6 +2778,39 @@ export interface operations {
             };
         };
     };
+    list_receipts_api_v2_receipts_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     metric_series_batch_api_v2_series_get: {
         parameters: {
             query: {
@@ -2753,7 +2868,10 @@ export interface operations {
     };
     list_sources_api_v2_sources_get: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number | null;
+                offset?: number;
+            };
             header?: {
                 "x-api-key"?: string;
             };
@@ -2804,7 +2922,10 @@ export interface operations {
     };
     list_streams_api_v2_streams_get: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number | null;
+                offset?: number;
+            };
             header?: {
                 "x-api-key"?: string;
             };

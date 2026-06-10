@@ -324,17 +324,39 @@ The identity model, **typed** (R2). Populated as batches arrive (the ingest path
 - `GET /api/v2/streams` — the join "device via integration" (the same band via HealthKit vs a direct poll = two streams).
 - `GET /api/v2/streams/{stream_id}` — one stream (`404` if unknown).
 
+All three list endpoints take optional **`limit`** (1–1000) + **`offset`** pagination; omitted = full list, unchanged. When paginating, the additive `total` field carries the full row count (`count` = page size). Ordering is part of the contract: sources by `plugin_id`, streams by `last_seen_at` DESC, devices by `device_label`.
+
 ```json
 // GET /api/v2/sources
-{ "count": 1, "sources": [ { "id": "f0…", "plugin_id": "apple-healthkit-ios",
+{ "count": 1, "total": 1, "sources": [ { "id": "f0…", "plugin_id": "apple-healthkit-ios",
     "display_name": "apple-healthkit-ios", "first_seen_at": "…", "last_seen_at": "…" } ] }
 // GET /api/v2/streams
-{ "count": 2, "streams": [ { "id": "9e…", "source_plugin_id": "apple-healthkit-ios",
+{ "count": 2, "total": 2, "streams": [ { "id": "9e…", "source_plugin_id": "apple-healthkit-ios",
     "origin_key": "apple watch", "device_label": "Apple Watch",
     "first_seen_at": "…", "last_seen_at": "…" } ] }
 // GET /api/v2/devices
-{ "count": 2, "devices": [ { "device_label": "Apple Watch", "stream_count": 1,
+{ "count": 2, "total": 2, "devices": [ { "device_label": "Apple Watch", "stream_count": 1,
     "first_seen_at": "…", "last_seen_at": "…" } ] }
+```
+
+### `GET /api/v2/changes` — keyed
+Cheap change fingerprint for near-real-time UIs: latest ingest, latest sync run, latest narrative. `version_token` doubles as an **ETag** — poll with `If-None-Match` and an unchanged state answers `304` with no body. The dashboard polls this (~30s) and refreshes on change; SSE remains the documented upgrade path if sub-5s latency is ever needed.
+```json
+{ "last_ingested_at": "2026-06-10T08:00:00Z",
+  "latest_sync_run": { "sync_run_id": "…", "last_seen_at": "…" },
+  "last_narrative_at": "2026-06-10T07:45:00Z",
+  "version_token": "\"3f9c…\"" }
+```
+
+### `GET /api/v2/receipts` — keyed
+The Local Vault's inspectable chain of custody: the stored intelligence audit trail (settings changes, consent grants, credential rotations, provider healthchecks — every event that could change what leaves the host) plus ingest freshness. **Query:** `limit` (1–500, default 50). On a DB that predates migration 017 the events list reports `events_unavailable: true` instead of silently showing empty.
+```json
+{ "events_unavailable": false, "count": 1,
+  "events": [ { "id": 1, "actor": "user", "event_type": "consent_granted",
+                "before_revision": 1, "after_revision": 2,
+                "metadata": { "version": "2026-06" }, "created_at": "…" } ],
+  "ingest": { "sources": [ { "source_plugin_id": "apple_healthsave", "last_ingested_at": "…" } ],
+              "latest_sync_run": { "sync_run_id": "…" } } }
 ```
 
 ---

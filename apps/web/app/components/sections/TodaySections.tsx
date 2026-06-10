@@ -18,6 +18,7 @@ import {
   safeMetrics,
   safePrivacy,
   safeReadiness,
+  safeReceipts,
   safeSeries,
   safeSeriesMany,
 } from "../../lib/load";
@@ -136,10 +137,21 @@ export async function HeroSection() {
 
 export async function VaultSection() {
   if (!(await hasAnyData())) return null;
-  const [privacy, readiness] = await Promise.all([safePrivacy(), safeReadiness()]);
+  const [privacy, readiness, receipts] = await Promise.all([
+    safePrivacy(),
+    safeReadiness(),
+    safeReceipts(),
+  ]);
+  // Real chain-of-custody proof: the most recent egress-relevant config event.
+  const lastEvent = receipts?.events?.[0];
+  const auditNote = lastEvent
+    ? `last config event: ${lastEvent.event_type} · ${agoLabel(lastEvent.created_at)}`
+    : receipts?.events_unavailable
+      ? "audit trail unavailable (backend predates migration 017)"
+      : null;
   return (
     <div className="col-4">
-      <LocalVaultReceipt steps={vaultSteps(privacy, readiness)} />
+      <LocalVaultReceipt steps={vaultSteps(privacy, readiness)} auditNote={auditNote} />
     </div>
   );
 }

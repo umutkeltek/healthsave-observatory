@@ -133,6 +133,33 @@ export function fetchSeriesBatch(metricIds: string[], range = "7d"): Promise<Ser
   return getJson<SeriesBatch>(`/api/v2/series?ids=${ids}&range=${range}`);
 }
 
+// Receipts — the Local Vault's real chain-of-custody data. Mirrors
+// server/api/v2_receipts.py.
+
+export type ReceiptEvent = {
+  id: number;
+  actor: string | null;
+  event_type: string;
+  before_revision: number | null;
+  after_revision: number | null;
+  metadata: Record<string, unknown>;
+  created_at: string | null;
+};
+
+export type Receipts = {
+  events_unavailable: boolean;
+  count: number;
+  events: ReceiptEvent[];
+  ingest: {
+    sources: { source_plugin_id: string | null; last_ingested_at: string | null }[];
+    latest_sync_run: Record<string, unknown> | null;
+  };
+};
+
+export function fetchReceipts(limit = 20): Promise<Receipts> {
+  return getJson<Receipts>(`/api/v2/receipts?limit=${limit}`);
+}
+
 // Data-readiness — Insight Action Loop card #1. Mirrors server/api/v2_readiness.py.
 
 export type GateVerdict = {
