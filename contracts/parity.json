@@ -14,8 +14,8 @@
     },
     "active_energy_burned": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "ActiveCaloriesBurnedRecord"
     },
     "appetite_changes": {
       "ios": "available",
@@ -64,8 +64,8 @@
     },
     "basal_body_temperature": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "BasalBodyTemperatureRecord"
     },
     "basal_energy_burned": {
       "ios": "available",
@@ -99,18 +99,18 @@
     },
     "blood_glucose": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "BloodGlucoseRecord"
     },
     "blood_pressure_diastolic": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "BloodPressureRecord"
     },
     "blood_pressure_systolic": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "BloodPressureRecord"
     },
     "bmi": {
       "ios": "available",
@@ -119,18 +119,18 @@
     },
     "body_fat_percentage": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "BodyFatRecord"
     },
     "body_mass": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "WeightRecord"
     },
     "body_temperature": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "BodyTemperatureRecord"
     },
     "breast_pain": {
       "ios": "available",
@@ -199,198 +199,198 @@
     },
     "dietary_biotin": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_caffeine": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_calcium": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_carbohydrates": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_chloride": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_cholesterol": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_chromium": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_copper": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_energy_consumed": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_fat_monounsaturated": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_fat_polyunsaturated": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_fat_saturated": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_fat_total": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_fiber": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_folate": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_iodine": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_iron": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_magnesium": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_manganese": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_molybdenum": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_niacin": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_pantothenic_acid": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_phosphorus": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_potassium": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_protein": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_riboflavin": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_selenium": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_sodium": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_sugar": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_thiamin": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_vitamin_a": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_vitamin_b12": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_vitamin_b6": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_vitamin_c": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_vitamin_d": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_vitamin_e": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_vitamin_k": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "dietary_water": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "HydrationRecord"
     },
     "dietary_zinc": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "NutritionRecord"
     },
     "distance_cross_country_skiing": {
       "ios": "available",
@@ -429,8 +429,8 @@
     },
     "distance_walking_running": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "DistanceRecord"
     },
     "distance_wheelchair": {
       "ios": "available",
@@ -489,8 +489,8 @@
     },
     "flights_climbed": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "FloorsClimbedRecord"
     },
     "forced_expiratory_volume_1": {
       "ios": "available",
@@ -534,8 +534,8 @@
     },
     "heart_rate": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "HeartRateRecord"
     },
     "heart_rate_recovery": {
       "ios": "available",
@@ -547,6 +547,12 @@
       "android": "planned",
       "planned_since": "2026-06-10"
     },
+    "heart_rate_variability_rmssd": {
+      "ios": "unavailable",
+      "reason": "HealthKit HRV is SDNN (wire metric heart_rate_variability); Health Connect HRV is RMSSD. Differing semantics are never mapped across — RMSSD ships as this additive metric (cross-platform honesty rule, Android plan 2026-06-10).",
+      "android": "available",
+      "android_record": "HeartRateVariabilityRmssdRecord"
+    },
     "heartburn": {
       "ios": "available",
       "android": "planned",
@@ -554,8 +560,8 @@
     },
     "height": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "HeightRecord"
     },
     "high_heart_rate_event": {
       "ios": "available",
@@ -604,8 +610,8 @@
     },
     "lean_body_mass": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "LeanBodyMassRecord"
     },
     "loss_of_smell": {
       "ios": "available",
@@ -684,8 +690,8 @@
     },
     "oxygen_saturation": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "OxygenSaturationRecord"
     },
     "paddle_sports_speed": {
       "ios": "available",
@@ -739,8 +745,8 @@
     },
     "push_count": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "WheelchairPushesRecord"
     },
     "rapid_pounding_or_fluttering_heartbeat": {
       "ios": "available",
@@ -749,13 +755,13 @@
     },
     "respiratory_rate": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "RespiratoryRateRecord"
     },
     "resting_heart_rate": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "RestingHeartRateRecord"
     },
     "rowing_speed": {
       "ios": "available",
@@ -819,8 +825,8 @@
     },
     "sleep_analysis": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "SleepSessionRecord"
     },
     "sleep_apnea_event": {
       "ios": "available",
@@ -854,8 +860,8 @@
     },
     "step_count": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "StepsRecord"
     },
     "swimming_stroke_count": {
       "ios": "available",
@@ -889,8 +895,8 @@
     },
     "vo2_max": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "Vo2MaxRecord"
     },
     "vomiting": {
       "ios": "available",
@@ -944,8 +950,8 @@
     },
     "workouts": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-10"
+      "android": "available",
+      "android_record": "ExerciseSessionRecord"
     },
     "wrist_temperature": {
       "ios": "available",
