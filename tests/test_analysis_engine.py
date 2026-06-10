@@ -7,6 +7,7 @@ LLM-failure re-raise paths.
 
 from __future__ import annotations
 
+import json
 import sys
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -147,6 +148,78 @@ async def test_run_daily_briefing_success_writes_run_finding_and_insight():
         "status = 'completed'" in sql and params.get("tokens_in") == 42 for sql, params in updates
     )
     llm_mock.generate_insight.assert_awaited_once()
+    # Primary served → no failover audit event
+    assert session.all_insert_params_for("intelligence_audit_events") == []
+
+
+@pytest.mark.asyncio
+async def test_run_daily_briefing_persists_failover_audit_event():
+    """A brief served by a fallback leaves a narrator_failover audit event
+    so /api/v2/receipts shows the provider switch (silent-failure review)."""
+    from analysis.llm.client import FailoverAttempt
+
+    session = _FakeSession(run_queue=[101, 202])
+    summary = PeriodSummary(
+        period="daily",
+        metrics={"heart_rate": {"avg_bpm": 65.0, "sample_count": 24}},
+    )
+    llm_mock = AsyncMock()
+    llm_mock.generate_insight.return_value = InsightResult(
+        narrative="Fallback narrative. Not medical advice.",
+        tokens_in=10,
+        tokens_out=20,
+        model="openrouter/gemini-2.5-flash-lite",
+        insight_type="daily_briefing",
+        failovers=[FailoverAttempt(candidate="deepseek/deepseek-chat", error="timeout after 60s")],
+    )
+
+    engine = _make_engine(session, summary, llm_mock)
+    run_id = await engine.run_daily_briefing()
+
+    assert run_id == 101
+    audit_inserts = session.all_insert_params_for("intelligence_audit_events")
+    assert len(audit_inserts) == 1
+    assert audit_inserts[0]["event_type"] == "narrator_failover"
+    metadata = json.loads(audit_inserts[0]["metadata"])
+    assert metadata["insight_type"] == "daily_briefing"
+    assert metadata["served_by"] == "openrouter/gemini-2.5-flash-lite"
+    assert metadata["failed_candidates"] == [
+        {"candidate": "deepseek/deepseek-chat", "error": "timeout after 60s"}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_failover_audit_write_failure_does_not_fail_the_briefing(monkeypatch):
+    """The audit write is best-effort: a missing intelligence_audit_events
+    table (pre-migration-017 DB) must not kill a brief that already succeeded."""
+    from analysis.llm.client import FailoverAttempt
+    from storage.timescale import intelligence as intelligence_module
+
+    session = _FakeSession(run_queue=[101, 202])
+    summary = PeriodSummary(
+        period="daily",
+        metrics={"heart_rate": {"avg_bpm": 65.0, "sample_count": 24}},
+    )
+    llm_mock = AsyncMock()
+    llm_mock.generate_insight.return_value = InsightResult(
+        narrative="Fallback narrative. Not medical advice.",
+        tokens_in=10,
+        tokens_out=20,
+        model="ollama/llama3.2:3b",
+        insight_type="daily_briefing",
+        failovers=[FailoverAttempt(candidate="deepseek/deepseek-chat", error="boom")],
+    )
+    monkeypatch.setattr(
+        intelligence_module.default_repository,
+        "record_audit",
+        AsyncMock(side_effect=RuntimeError("relation does not exist")),
+    )
+
+    engine = _make_engine(session, summary, llm_mock)
+    run_id = await engine.run_daily_briefing()
+
+    assert run_id == 101
+    assert session.committed is True
 
 
 @pytest.mark.asyncio

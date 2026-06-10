@@ -384,6 +384,21 @@ async def test_fallback_used_when_primary_fails(monkeypatch):
     assert acompletion.await_count == 2  # primary tried, then fallback
     assert acompletion.await_args.kwargs["model"] == "ollama/llama3.2:3b"  # last = fallback
     assert "not medical advice" in result.narrative.lower()
+    # The failover is visible on the result so the engine can audit it.
+    assert len(result.failovers) == 1
+    assert result.failovers[0].candidate == "ollama/llama3.1:8b"
+    assert "primary down" in result.failovers[0].error
+
+
+@pytest.mark.asyncio
+async def test_primary_success_reports_no_failovers(monkeypatch):
+    acompletion = AsyncMock(return_value=_fake_response("Primary narrative."))
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(LLMConfig(provider="ollama", model="llama3.1:8b"))
+    result = await client.generate_insight("p", insight_type="daily_briefing")
+
+    assert result.failovers == []
 
 
 @pytest.mark.asyncio
@@ -407,6 +422,10 @@ async def test_fallback_reruns_egress_gate_cloud_denied_then_local(monkeypatch):
     assert acompletion.await_count == 1
     assert acompletion.await_args.kwargs["model"] == "ollama/llama3.2:3b"
     assert "not medical advice" in result.narrative.lower()
+    # The egress-denied skip is a failover too — auditable, not silent.
+    assert len(result.failovers) == 1
+    assert result.failovers[0].candidate == "openai/gpt-4o-mini"
+    assert "egress denied" in result.failovers[0].error
 
 
 @pytest.mark.asyncio

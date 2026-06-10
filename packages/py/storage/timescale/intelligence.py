@@ -140,6 +140,10 @@ _AUDIT_EVENT_TYPES = frozenset(
         "provider_healthcheck",
         "credential_set",
         "credential_rotated",
+        # A narrator run was served by a fallback candidate, not the configured
+        # primary — egress went somewhere the user didn't pick first. Metadata
+        # carries candidate labels + short error strings only.
+        "narrator_failover",
     }
 )
 

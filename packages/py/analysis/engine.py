@@ -117,6 +117,43 @@ class AnalysisEngine:
         self.trend_analyzer = TrendAnalyzer(self._fetch_trend_daily_values)
         self.correlation_analyzer = CorrelationAnalyzer(self._fetch_metric_daily_series)
 
+    async def _record_failover_audit(self, session, insight_result) -> None:
+        """Persist narrator failovers as a ``narrator_failover`` audit event.
+
+        Best-effort: the brief already succeeded on a fallback; a missing
+        audit table (pre-migration-017 DB) or a write hiccup must not fail
+        the run. But it must not be *silent* either — log at warning.
+        Metadata carries candidate labels + short error strings only (the
+        :class:`~analysis.llm.client.FailoverAttempt` contract) — never
+        keys, prompts, or health data.
+        """
+        if not insight_result.failovers:
+            return
+        from storage.timescale.intelligence import default_repository as intelligence_repo
+
+        try:
+            await intelligence_repo.record_audit(
+                session,
+                event_type="narrator_failover",
+                actor="analysis-engine",
+                metadata={
+                    "insight_type": insight_result.insight_type,
+                    "served_by": insight_result.model,
+                    "failed_candidates": [
+                        {"candidate": a.candidate, "error": a.error}
+                        for a in insight_result.failovers
+                    ],
+                },
+            )
+        except Exception:
+            log.warning(
+                "narrator failover audit write failed (run unaffected); "
+                "served_by=%s after %d failed candidate(s)",
+                insight_result.model,
+                len(insight_result.failovers),
+                exc_info=True,
+            )
+
     async def _narrate(self, session, prompt: str, *, insight_type: str):
         """Narrate ``prompt`` via the per-owner *effective* LLM config.
 
@@ -201,6 +238,7 @@ class AnalysisEngine:
             )
 
             insight_result = await self._narrate(session, prompt, insight_type="daily_briefing")
+            await self._record_failover_audit(session, insight_result)
 
             insight = Insight(
                 insight_type="daily_briefing",
@@ -315,6 +353,7 @@ class AnalysisEngine:
             )
 
             insight_result = await self._narrate(session, prompt, insight_type="weekly_summary")
+            await self._record_failover_audit(session, insight_result)
 
             await self._insert_insight(
                 session,
