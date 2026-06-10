@@ -1,4 +1,5 @@
 import { BaselineRibbon } from "./BaselineRibbon";
+import { CountUp } from "./CountUp";
 
 // Score → state label, using the same bands the product narrates by. The score
 // itself is the backend's open formula (analysis/statistical/scoring.py); we
@@ -28,11 +29,13 @@ export function RecoveryHero({
   score,
   headline,
   ribbon,
+  live,
 }: {
   freshness: string;
   score: number | null;
   headline: string;
   ribbon: HeroRibbon | null;
+  live?: boolean;
 }) {
   const state = score !== null ? stateFor(score) : null;
 
@@ -42,7 +45,9 @@ export function RecoveryHero({
 
       {score !== null && state && (
         <div className="recovery">
-          <div className="recovery-score">{score}</div>
+          <div className="recovery-score">
+            <CountUp value={score} />
+          </div>
           <div className={`recovery-state ${state.cls}`}>{state.label}</div>
         </div>
       )}
@@ -52,7 +57,7 @@ export function RecoveryHero({
       </p>
 
       {ribbon && ribbon.values.length >= 2 && (
-        <BaselineRibbon values={ribbon.values} band={ribbon.band} axis={ribbon.axis} />
+        <BaselineRibbon values={ribbon.values} band={ribbon.band} axis={ribbon.axis} live={live} />
       )}
     </section>
   );

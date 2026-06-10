@@ -63,6 +63,31 @@
 
   /* Type scale */
   --text-hero: clamp(44px, 6vw, 72px);
+  --fs-2xs: 10.5px; /* chip / axis captions */
+  --fs-xs: 11.5px; /* eyebrows, metadata */
+  --fs-sm: 12.5px; /* secondary copy */
+  --fs-md: 14px; /* card titles, controls */
+  --fs-lg: 15px; /* body */
+  --fs-xl: 18px; /* leads */
+  --fs-2xl: 22px; /* section headings */
+
+  /* Spacing scale — new rules use these; legacy px values migrate as touched. */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 24px;
+  --s7: 32px;
+  --s8: 44px;
+
+  /* Motion — every animation/transition draws from these four durations. */
+  --dur-1: 120ms; /* hover, focus */
+  --dur-2: 240ms; /* small reveals */
+  --dur-3: 480ms; /* section entrances */
+  --dur-4: 900ms; /* chart draw-in, count-up */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-io: cubic-bezier(0.65, 0, 0.35, 1);
 
   --mono: var(--font-mono), ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   --sans: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -421,14 +446,16 @@ a {
   padding: 22px 24px;
 }
 
+/* Card titles are human/editorial — mono+uppercase stays reserved for
+   eyebrows, section labels, and system metadata (the locked direction). */
 .card h2 {
-  margin: 0 0 16px;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  color: var(--faint);
+  margin: 0 0 14px;
+  font-family: var(--sans);
+  font-size: var(--fs-md);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--muted);
 }
 
 .big {
@@ -1130,17 +1157,24 @@ html {
 }
 
 .content > * {
-  animation: rise 0.22s ease both;
+  animation: rise var(--dur-3) var(--ease-out) both;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
-  .skeleton-card .sk,
-  .content > * {
-    animation: none;
-  }
+/* Staggered entrance: each top-level section lands a beat after the last. */
+.content > *:nth-child(2) {
+  animation-delay: 60ms;
+}
+.content > *:nth-child(3) {
+  animation-delay: 120ms;
+}
+.content > *:nth-child(4) {
+  animation-delay: 180ms;
+}
+.content > *:nth-child(5) {
+  animation-delay: 240ms;
+}
+.content > *:nth-child(n + 6) {
+  animation-delay: 300ms;
 }
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -2471,4 +2505,81 @@ table.prov {
 .intel-save.bad {
   color: var(--down);
   background: rgba(255, 107, 138, 0.1);
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Motion layer — chart draw-in, live shimmer, status pulse.
+   Durations/easings come from the :root motion tokens; the blanket
+   prefers-reduced-motion gate at the end of this file stills all of it.
+   ───────────────────────────────────────────────────────────────────── */
+
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Traces draw themselves in left-to-right (paths set pathLength={1}). */
+.ribbon-trace,
+.spark path,
+.multi-svg path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: draw var(--dur-4) var(--ease-io) both;
+}
+
+/* Freshness shimmer: a slow mint sweep over the ribbon when the signal is
+   live (last reading <24h). Mint = physiology/live/local, per the palette. */
+@keyframes shimmer-live {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.ribbon-plot {
+  overflow: hidden;
+}
+
+.ribbon-plot.is-live::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 35%, rgba(94, 234, 212, 0.07) 50%, transparent 65%);
+  animation: shimmer-live 6s linear infinite;
+  pointer-events: none;
+}
+
+/* The sidebar status dot breathes while the posture is healthy. */
+@keyframes pulse-dot {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.12);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(52, 211, 153, 0.05);
+  }
+}
+
+.status-line .status-dot:not(.warn) {
+  animation: pulse-dot 3.2s var(--ease-io) infinite;
+}
+
+/* Blanket motion kill-switch — overrides every animation/transition above. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
