@@ -111,9 +111,9 @@ def _emitted_keys(source: str) -> set[str]:
     Covers the three styles sync_receipts.py uses: SQL ``AS alias``,
     dict-literal ``"key": value``, and item assignment ``d["key"] = value``.
     """
-    aliases = set(re.findall(r"\bAS\s+([a-z_]+)", source))
-    literals = set(re.findall(r'"([a-z_]+)":', source))
-    assigned = set(re.findall(r'\["([a-z_]+)"\]\s*=', source))
+    aliases = set(re.findall(r"\bAS\s+([a-z][a-z0-9_]*)", source))
+    literals = set(re.findall(r'"([a-z][a-z0-9_]*)":', source))
+    assigned = set(re.findall(r'\["([a-z][a-z0-9_]*)"\]\s*=', source))
     return aliases | literals | assigned
 
 
