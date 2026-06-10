@@ -23,6 +23,7 @@ from storage.ports import ReadinessRepository, SyncReceiptRepository
 from storage.timescale import intelligence as intelligence_repo
 
 from .deps import get_session, verify_api_key
+from .swr import v2_read_cache
 
 _log = logging.getLogger("healthsave.api.v2_receipts")
 
@@ -42,7 +43,11 @@ async def list_receipts(
     """Egress-relevant audit events (newest first) + ingest freshness."""
     # Ingest freshness first: if the audit table is absent (pre-017 DB), its
     # failed query aborts the transaction and would poison these reads.
-    sources = await _READINESS.fetch_canonical_sources(session)
+    # Source attribution is the whole-store aggregate — SWR-cached (shared
+    # key with /readiness); audit events stay live, they are the point here.
+    sources = await v2_read_cache.get(
+        "canonical_sources", lambda: _READINESS.fetch_canonical_sources(session)
+    )
     latest_run = await _SYNC.latest_sync_run(session)
 
     # Only the missing-table case (pre-migration-017 DB) degrades; anything

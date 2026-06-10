@@ -25,3 +25,24 @@ try:  # pragma: no cover - defensive
     _deps.ALLOW_NO_AUTH = True
 except Exception:  # noqa: BLE001 - deps may not be importable in every subset
     pass
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _clear_v2_read_cache():
+    """Reset the process-level SWR cache between tests.
+
+    The v2 readiness/receipts routes cache the canonical-store aggregates;
+    without this, one test's fake rows would leak into the next test's
+    response. Cleared on both sides so test order never matters.
+    """
+    try:
+        from server.api.swr import v2_read_cache
+    except Exception:  # pragma: no cover - server may not import in every subset
+        yield
+        return
+    v2_read_cache.clear()
+    yield
+    v2_read_cache.clear()

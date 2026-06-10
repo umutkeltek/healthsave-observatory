@@ -45,11 +45,10 @@ async def changes(
     session: AsyncSession = Depends(get_session),
 ) -> Response | dict:
     """Latest-activity fingerprint with ETag/304 semantics."""
-    sources = await _READINESS.fetch_canonical_sources(session)
-    last_ingested_at = max(
-        (s.get("last_ingested_at") for s in sources if s.get("last_ingested_at")),
-        default=None,
-    )
+    # A fingerprint polled every ~30s must stay cheap AND exact: the scalar
+    # max(created_at) read (index-assisted by migration 018) replaces the
+    # whole-store per-source aggregate this poll used to trigger each time.
+    last_ingested_at = await _READINESS.fetch_last_ingested_at(session)
     latest_run = await _SYNC.latest_sync_run(session)
     narratives = await _BRIEFINGS.latest_narratives_by_type(session)
     last_narrative_at = max(

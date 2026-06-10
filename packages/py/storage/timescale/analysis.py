@@ -633,6 +633,35 @@ async def fetch_canonical_coverage(
     ]
 
 
+async def fetch_last_ingested_at(
+    session,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+    workspace_id: UUID = DEFAULT_WORKSPACE_ID,
+) -> datetime | None:
+    """``max(created_at)`` over active canonical observations — the freshness scalar.
+
+    The change-fingerprint surface only needs "when did data last land", not
+    the full per-source attribution aggregate (which walks the whole store and
+    parses provenance JSONB per row). This single max is index-assisted by
+    migration 018's ``(owner_id, workspace_id, created_at)`` partial index.
+    """
+    result = await session.execute(
+        text(
+            """
+            SELECT max(created_at) AS last_ingested_at
+            FROM canonical_observations
+            WHERE owner_id = :owner_id
+              AND workspace_id = :workspace_id
+              AND status = 'active'
+            """
+        ),
+        {"owner_id": str(owner_id), "workspace_id": str(workspace_id)},
+    )
+    row = result.fetchone()
+    return row.last_ingested_at if row is not None else None
+
+
 async def fetch_canonical_sources(
     session,
     *,
@@ -692,6 +721,15 @@ class TimescaleReadinessRepository:
         workspace_id: UUID = DEFAULT_WORKSPACE_ID,
     ) -> list[dict[str, Any]]:
         return await fetch_canonical_sources(session, owner_id=owner_id, workspace_id=workspace_id)
+
+    async def fetch_last_ingested_at(
+        self,
+        session,
+        *,
+        owner_id: UUID = DEFAULT_OWNER_ID,
+        workspace_id: UUID = DEFAULT_WORKSPACE_ID,
+    ) -> datetime | None:
+        return await fetch_last_ingested_at(session, owner_id=owner_id, workspace_id=workspace_id)
 
 
 default_readiness_repository = TimescaleReadinessRepository()
