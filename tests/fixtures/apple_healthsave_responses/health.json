@@ -1,0 +1,8 @@
+{
+  "body": {
+    "status": "ok"
+  },
+  "endpoint": "/api/health",
+  "method": "GET",
+  "status": 200
+}

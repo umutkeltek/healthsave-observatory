@@ -1,0 +1,8 @@
+{
+  "body": {
+    "detail": "invalid JSON body"
+  },
+  "endpoint": "/api/apple/batch",
+  "method": "POST",
+  "status": 400
+}

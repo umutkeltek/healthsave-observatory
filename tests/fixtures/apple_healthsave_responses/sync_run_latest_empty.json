@@ -1,0 +1,9 @@
+{
+  "body": {
+    "message": "No HealthSave sync receipts recorded yet.",
+    "status": "empty"
+  },
+  "endpoint": "/api/v2/sync/runs/latest",
+  "method": "GET",
+  "status": 200
+}

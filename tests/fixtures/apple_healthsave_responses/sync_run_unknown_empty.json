@@ -1,0 +1,10 @@
+{
+  "body": {
+    "message": "No HealthSave sync receipts recorded for this run.",
+    "status": "empty",
+    "sync_run_id": "corpus-run-missing"
+  },
+  "endpoint": "/api/v2/sync/runs/corpus-run-missing",
+  "method": "GET",
+  "status": 200
+}

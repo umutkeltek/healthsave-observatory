@@ -1,0 +1,65 @@
+{
+  "body": {
+    "completed_at": "2026-01-01T06:05:00+00:00",
+    "per_metric": {
+      "heart_rate": {
+        "accepted": 79,
+        "batches_empty": 0,
+        "batches_failed": 0,
+        "batches_processed": 2,
+        "batches_seen": 2,
+        "deduped_existing": 9,
+        "inserted_new": 70,
+        "latest_sample_time": "2026-01-01T05:59:00+00:00",
+        "received": 80,
+        "rejected": 1,
+        "sample_window": {
+          "max_sample_time": "2026-01-01T05:59:00+00:00",
+          "min_sample_time": "2026-01-01T00:00:00+00:00"
+        },
+        "storage_result_level": "inserted_vs_existing"
+      },
+      "step_count": {
+        "accepted": 39,
+        "batches_empty": 0,
+        "batches_failed": 0,
+        "batches_processed": 1,
+        "batches_seen": 1,
+        "deduped_existing": 9,
+        "inserted_new": 30,
+        "latest_sample_time": "2026-01-01T05:30:00+00:00",
+        "received": 40,
+        "rejected": 1,
+        "sample_window": {
+          "max_sample_time": "2026-01-01T05:30:00+00:00",
+          "min_sample_time": "2026-01-01T01:00:00+00:00"
+        },
+        "storage_result_level": "inserted_vs_existing"
+      }
+    },
+    "started_at": "2026-01-01T06:00:00+00:00",
+    "status": "ok",
+    "summary": {
+      "batches_empty": 0,
+      "batches_failed": 0,
+      "batches_processed": 3,
+      "batches_seen": 3,
+      "metrics_seen": 2,
+      "records_accepted": 118,
+      "records_deduped_existing": 18,
+      "records_inserted_new": 100,
+      "records_received": 120,
+      "records_rejected": 2,
+      "sample_window": {
+        "max_sample_time": "2026-01-01T05:59:00+00:00",
+        "min_sample_time": "2026-01-01T00:00:00+00:00"
+      },
+      "storage_result_level": "inserted_vs_existing"
+    },
+    "sync_run_id": "corpus-run-001",
+    "verification_level": "delivery_receipt"
+  },
+  "endpoint": "/api/v2/sync/runs/corpus-run-001",
+  "method": "GET",
+  "status": 200
+}

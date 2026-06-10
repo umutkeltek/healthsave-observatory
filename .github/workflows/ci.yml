@@ -31,6 +31,9 @@ jobs:
       - name: Verify v2 JSON schemas (no drift)
         run: python -m scripts.generate_v2_schemas --check
 
+      - name: Verify iOS response corpus (no drift)
+        run: python -m scripts.generate_ios_response_corpus --check
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:

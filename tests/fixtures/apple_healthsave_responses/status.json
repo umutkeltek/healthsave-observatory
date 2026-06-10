@@ -1,0 +1,42 @@
+{
+  "body": {
+    "blood_oxygen": {
+      "count": 0,
+      "newest": null,
+      "oldest": null
+    },
+    "daily_activity": {
+      "count": 0,
+      "newest": null,
+      "oldest": null
+    },
+    "heart_rate": {
+      "count": 0,
+      "newest": null,
+      "oldest": null
+    },
+    "hrv": {
+      "count": 0,
+      "newest": null,
+      "oldest": null
+    },
+    "quantity_samples": {
+      "count": 0,
+      "newest": null,
+      "oldest": null
+    },
+    "sleep_sessions": {
+      "count": 0,
+      "newest": null,
+      "oldest": null
+    },
+    "workouts": {
+      "count": 0,
+      "newest": null,
+      "oldest": null
+    }
+  },
+  "endpoint": "/api/apple/status",
+  "method": "GET",
+  "status": 200
+}
