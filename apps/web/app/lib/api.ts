@@ -293,9 +293,23 @@ export type Narrative = {
   created_at: string | null;
 };
 
+// Last narrator attempt per job from analysis_runs — lets the brief card say
+// "last attempt failed" instead of an indistinguishable "no briefing yet".
+export type NarratorRun = {
+  status: string; // "running" | "completed" | "skipped" | "failed"
+  error: string | null;
+  at: string | null;
+  completed_at: string | null;
+  provider: string | null;
+};
+
 export type InsightsLatest = {
   daily_briefing: Narrative | null;
   weekly_summary: Narrative | null;
+  runs: {
+    daily_briefing: NarratorRun | null;
+    weekly_summary: NarratorRun | null;
+  };
 };
 
 export type Finding = {

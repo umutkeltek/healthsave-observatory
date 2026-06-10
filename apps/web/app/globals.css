@@ -2916,6 +2916,22 @@ table.prov {
   padding: 1px 7px;
 }
 
+/* Last narrator attempt (failed/skipped) — the honest empty/stale state. */
+.brief-run-status {
+  margin: var(--s2) 0 0;
+  font-size: var(--fs-2xs);
+  color: var(--faint);
+  overflow-wrap: anywhere;
+}
+
+.brief-run-status a {
+  color: inherit;
+}
+
+.brief-run-failed {
+  color: var(--warn);
+}
+
 .brief-body p {
   margin: 0 0 10px;
 }
