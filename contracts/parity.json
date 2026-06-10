@@ -962,8 +962,7 @@
   "features": {
     "server_sync": {
       "ios": true,
-      "android": "planned",
-      "planned_since": "2026-06-10",
+      "android": true,
       "pro": true
     },
     "export_csv": {
@@ -986,8 +985,7 @@
     },
     "trends_7day": {
       "ios": true,
-      "android": "planned",
-      "planned_since": "2026-06-10",
+      "android": true,
       "pro": false
     },
     "trends_30_90day": {
@@ -1004,20 +1002,17 @@
     },
     "background_auto_sync": {
       "ios": true,
-      "android": "planned",
-      "planned_since": "2026-06-10",
+      "android": true,
       "pro": true
     },
     "data_scope_selection": {
       "ios": true,
-      "android": "planned",
-      "planned_since": "2026-06-10",
+      "android": true,
       "pro": false
     },
     "backfill_full_export": {
       "ios": true,
-      "android": "planned",
-      "planned_since": "2026-06-10",
+      "android": true,
       "pro": false
     }
   }
