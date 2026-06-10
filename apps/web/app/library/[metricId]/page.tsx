@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { groupBySource } from "../../lib/analytics";
+import { detectDivergence, groupBySource } from "../../lib/analytics";
+import { quantile } from "../../components/chart/scale";
 import { comparability } from "../../lib/healthOpinion";
 import { agoLabel, safeMetrics, safeReadiness, safeSeries } from "../../lib/load";
 import { METRIC_NOTES } from "../../lib/metricNotes";
@@ -17,14 +18,6 @@ export const metadata: Metadata = { title: "Signal · HealthSave Observatory" };
 
 const RANGES = ["7d", "30d", "90d", "1y"] as const;
 type Range = (typeof RANGES)[number];
-
-function quantile(sorted: number[], q: number): number {
-  const pos = (sorted.length - 1) * q;
-  const base = Math.floor(pos);
-  const rest = pos - base;
-  const next = sorted[base + 1];
-  return next !== undefined ? sorted[base] + rest * (next - sorted[base]) : sorted[base];
-}
 
 export default async function MetricDetailPage({
   params,
@@ -66,6 +59,7 @@ export default async function MetricDetailPage({
   const bySource = groupBySource(points);
   const sourceIds = [...bySource.keys()];
   const comp = comparability(metricId, sourceIds);
+  const divergence = detectDivergence(points);
   const notes = METRIC_NOTES[metricId] ?? [];
 
   const stats =
@@ -119,7 +113,15 @@ export default async function MetricDetailPage({
           </div>
 
           {values.length >= 2 && !multiSource && (
-            <BaselineRibbon values={values} height={120} axis={[`${range} ago`, "today"]} />
+            <BaselineRibbon
+              values={values}
+              height={120}
+              axis={[`${range} ago`, "today"]}
+              hoverLabels={points
+                .filter((p) => p.value !== null)
+                .map((p) => new Date(p.t).toLocaleDateString(undefined, { month: "short", day: "numeric" }))}
+              unit={metric.canonical_unit}
+            />
           )}
 
           {multiSource && perSourceSeries.length >= 1 && (
@@ -128,6 +130,9 @@ export default async function MetricDetailPage({
               <p className="lib-divergence">
                 <strong>{sourceIds.length} sources stream this signal.</strong> Each trace is kept
                 separate — disagreeing sources are never averaged into an artificial consensus.
+                {divergence.diverged && divergence.gapPct !== null
+                  ? ` Right now they disagree by ~${Math.round(divergence.gapPct)}%.`
+                  : ""}
                 {comp.caveat ? ` ${comp.caveat}` : ""}
               </p>
             </>

@@ -42,6 +42,28 @@ function recoveryScore(findings: Finding[] | null): number | null {
   return typeof score === "number" && Number.isFinite(score) ? Math.round(score) : null;
 }
 
+// Contributor stack from the same finding's structured_data.contributors
+// (analysis/statistical/recovery.py shape). Only signals that actually have a
+// value render — missing inputs stay honestly absent.
+const CONTRIBUTOR_DEFS: { key: string; label: string; unit: string; positiveIsGood: boolean }[] = [
+  { key: "hrv_vs_baseline_pct", label: "HRV", unit: "%", positiveIsGood: true },
+  { key: "rhr_vs_baseline_pct", label: "Resting HR", unit: "%", positiveIsGood: false },
+  { key: "respiratory_rate_vs_baseline_pct", label: "Resp. rate", unit: "%", positiveIsGood: false },
+  { key: "temperature_deviation_c", label: "Wrist temp", unit: "°C", positiveIsGood: false },
+];
+
+function recoveryContributors(findings: Finding[] | null) {
+  const found = findings?.find((f) => f.finding_type === "recovery_score");
+  const raw = found?.structured_data?.contributors as Record<string, unknown> | undefined;
+  if (!raw) return [];
+  return CONTRIBUTOR_DEFS.flatMap((def) => {
+    const value = raw[def.key];
+    return typeof value === "number" && Number.isFinite(value)
+      ? [{ label: def.label, value, unit: def.unit, positiveIsGood: def.positiveIsGood }]
+      : [];
+  });
+}
+
 // Lead line for the hero: the briefing's first sentence (the local LLM's voice),
 // falling back to the weekly summary, then to an honest data-state line.
 function heroHeadline(
@@ -126,6 +148,7 @@ export async function HeroSection() {
       freshness={agoLabel(readiness?.last_observation_at)}
       live={live}
       score={recoveryScore(findings)}
+      contributors={recoveryContributors(findings)}
       headline={heroHeadline(
         latest?.daily_briefing?.narrative,
         latest?.weekly_summary?.narrative,

@@ -4,6 +4,9 @@
 // stretched edge-to-edge; anomaly pins are HTML overlays so they stay perfectly
 // round regardless of width.
 
+import { HoverOverlay } from "./chart/HoverOverlay";
+import { quantile } from "./chart/scale";
+
 type Props = {
   values: number[];
   band?: [number, number]; // expected range (value units); defaults to P25–P75
@@ -11,17 +14,20 @@ type Props = {
   height?: number; // plot height in px
   axis?: [string, string]; // left / right captions
   live?: boolean; // last reading <24h — adds the slow mint freshness shimmer
+  hoverLabels?: string[]; // per-value captions (dates) — enables the tooltip overlay
+  unit?: string | null; // printed after the value in the tooltip
 };
 
-function quantile(sorted: number[], q: number): number {
-  const pos = (sorted.length - 1) * q;
-  const base = Math.floor(pos);
-  const rest = pos - base;
-  const next = sorted[base + 1];
-  return next !== undefined ? sorted[base] + rest * (next - sorted[base]) : sorted[base];
-}
-
-export function BaselineRibbon({ values, band, anomalies = [], height = 76, axis, live }: Props) {
+export function BaselineRibbon({
+  values,
+  band,
+  anomalies = [],
+  height = 76,
+  axis,
+  live,
+  hoverLabels,
+  unit,
+}: Props) {
   if (values.length < 2) return null;
 
   const sorted = [...values].sort((a, b) => a - b);
@@ -74,6 +80,16 @@ export function BaselineRibbon({ values, band, anomalies = [], height = 76, axis
             aria-hidden
           />
         ))}
+        {hoverLabels && hoverLabels.length === values.length && (
+          <HoverOverlay
+            points={values.map((v, i) => ({
+              xPct: (i / (values.length - 1)) * 100,
+              yPct: (y(v) / H) * 100,
+              label: hoverLabels[i],
+              value: `${Number(v.toFixed(1))}${unit ? ` ${unit}` : ""}`,
+            }))}
+          />
+        )}
       </div>
       {axis && (
         <div className="ribbon-axis">

@@ -238,3 +238,41 @@ export function classify(metricId: string, value: number): ThresholdBand | null 
   if (!bands) return null;
   return bands.find((b) => value >= b.min && value < b.max) ?? null;
 }
+
+// ── Divergence (the never-average rule, quantified) ────────────────────
+//
+// When two sources stream the same metric we never merge them; this measures
+// HOW MUCH they currently disagree so the UI can say "kept separate — and
+// right now they differ by ~12%" instead of a vague caveat.
+
+export type SourceDivergence = {
+  diverged: boolean;
+  gapPct: number | null; // relative gap between the most-distant source means
+  sources: string[];
+};
+
+const DIVERGENCE_MIN_POINTS = 3; // per source, before we claim anything
+const DIVERGENCE_THRESHOLD_PCT = 10;
+
+export function detectDivergence(points: SeriesPoint[]): SourceDivergence {
+  const bySource = groupBySource(points);
+  const means: { source: string; mean: number }[] = [];
+  for (const [source, pts] of bySource) {
+    const values = pts.map((p) => p.value).filter((v): v is number => v !== null);
+    if (values.length < DIVERGENCE_MIN_POINTS) continue;
+    means.push({ source, mean: values.reduce((a, b) => a + b, 0) / values.length });
+  }
+  if (means.length < 2) {
+    return { diverged: false, gapPct: null, sources: means.map((m) => m.source) };
+  }
+  const sorted = [...means].sort((a, b) => a.mean - b.mean);
+  const low = sorted[0];
+  const high = sorted[sorted.length - 1];
+  const mid = (Math.abs(low.mean) + Math.abs(high.mean)) / 2 || 1;
+  const gapPct = (Math.abs(high.mean - low.mean) / mid) * 100;
+  return {
+    diverged: gapPct >= DIVERGENCE_THRESHOLD_PCT,
+    gapPct,
+    sources: means.map((m) => m.source),
+  };
+}

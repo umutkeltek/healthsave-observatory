@@ -4,6 +4,7 @@ import {
   bucketBy,
   classify,
   dayOfWeekPivot,
+  detectDivergence,
   distribution,
   groupBySource,
   groupByStream,
@@ -157,5 +158,41 @@ describe("classify (threshold bands)", () => {
     expect(classify("vital.resting_heart_rate", 90)?.tone).toBe("down");
     expect(classify("vital.blood_oxygen", 92)?.tone).toBe("down");
     expect(classify("unknown.metric", 5)).toBeNull();
+  });
+});
+
+describe("detectDivergence", () => {
+  const mk = (source: string, values: number[]) =>
+    values.map((value, i) => ({
+      t: `2026-06-0${(i % 7) + 1}T08:00:00Z`,
+      value,
+      code: null,
+      unit: "ms",
+      source_id: source,
+      stream_id: null,
+      confidence: null,
+    }));
+
+  it("reports no divergence for a single source", () => {
+    const result = detectDivergence(mk("apple", [50, 52, 54]));
+    expect(result.diverged).toBe(false);
+    expect(result.gapPct).toBeNull();
+  });
+
+  it("quantifies the gap between disagreeing sources", () => {
+    const result = detectDivergence([...mk("apple", [50, 50, 50]), ...mk("whoop", [60, 60, 60])]);
+    expect(result.diverged).toBe(true);
+    expect(result.gapPct).toBeCloseTo((10 / 55) * 100, 0);
+    expect(result.sources.sort()).toEqual(["apple", "whoop"]);
+  });
+
+  it("agrees within threshold → not diverged", () => {
+    const result = detectDivergence([...mk("apple", [50, 50, 50]), ...mk("whoop", [51, 51, 51])]);
+    expect(result.diverged).toBe(false);
+  });
+
+  it("ignores sources with too few points", () => {
+    const result = detectDivergence([...mk("apple", [50, 50, 50]), ...mk("whoop", [90])]);
+    expect(result.diverged).toBe(false);
   });
 });
