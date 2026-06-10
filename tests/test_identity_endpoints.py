@@ -39,7 +39,7 @@ def client(monkeypatch):
     async def fake_session():
         yield object()
 
-    async def list_sources(_session, _owner):
+    async def list_sources(_session, _owner, *, limit=None, offset=0):
         return [
             {
                 "id": UUID("a26bf104-aa3a-5686-a87b-510ffeee3e94"),
@@ -50,10 +50,10 @@ def client(monkeypatch):
             }
         ]
 
-    async def list_streams(_session, _owner):
+    async def list_streams(_session, _owner, *, limit=None, offset=0):
         return [_STREAM]
 
-    async def list_devices(_session, _owner):
+    async def list_devices(_session, _owner, *, limit=None, offset=0):
         return [
             {
                 "device_label": "Apple Watch",

@@ -11,6 +11,8 @@ strongest-first (the n-of-1 experiment candidate order).
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,7 +56,9 @@ def _validate_period(period: str | None) -> str | None:
 @router.get("/correlations")
 async def list_correlations(
     period: str | None = Query(default=None, description="Optional day window such as 30d or 90d"),
-    limit: int = Query(default=_CORRELATIONS_LIMIT, ge=1, le=_CORRELATIONS_LIMIT),
+    # Annotated keeps a real int default for direct (test) calls; Query(default=…)
+    # would leak the sentinel object through to the repository.
+    limit: Annotated[int, Query(ge=1, le=_CORRELATIONS_LIMIT)] = _CORRELATIONS_LIMIT,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Persisted cross-metric correlation findings, newest first."""
@@ -96,7 +100,7 @@ async def list_narratives(
     insight_type: str | None = Query(
         default=None, alias="type", description="daily_briefing or weekly_summary"
     ),
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Narrative history, newest first — the brief card's "previous briefs"."""
@@ -121,7 +125,7 @@ async def list_findings(
         alias="type",
         description="Optional finding kind (anomaly / trend / correlation / summary).",
     ),
-    limit: int = Query(default=_FINDINGS_LIMIT, ge=1, le=_FINDINGS_LIMIT),
+    limit: Annotated[int, Query(ge=1, le=_FINDINGS_LIMIT)] = _FINDINGS_LIMIT,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Recent structured findings (the evidence feed), newest first.
