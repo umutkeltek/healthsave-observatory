@@ -14,7 +14,7 @@ the cross-check whenever the iOS networking layer changes.
 > product workspace.
 > Cross-check with that repo at every contract bump.
 
-## Endpoints iOS actually calls (3 of 12)
+## Endpoints iOS actually calls (5: 3 v1 + 2 v2)
 
 The iOS app uses a *narrower* surface than the full v1 contract. The
 other v1 routes serve other v1 clients (the
@@ -27,11 +27,23 @@ the insights routes).
 | `/api/apple/batch` | `Config.swift:31` | `POST /api/apple/batch` |
 | `/api/apple/status` | `Config.swift:32` | `GET /api/apple/status` |
 | `/api/health` | `Config.swift:33` | `GET /api/health` |
+| `/api/v2/sync/runs/latest` | `Config.swift:49` | `GET /api/v2/sync/runs/latest` |
+| `/api/v2/sync/runs/{id}` | `Config.swift:51` | `GET /api/v2/sync/runs/{sync_run_id}` |
 
-The "iOS-narrow" contract is enforced separately by
-`tests/contract/api_v1/test_v1_ios_contract.py`. A removal of any of
-these three is an iOS-app-breaking change and must be coordinated
-with an App Store release.
+**The two v2 routes live at a v2 location but carry v1-grade freeze
+semantics.** The shipped binary hardcodes both paths in `Config.swift`
+(it does not discover them from `/api/v2/setup/diagnostics`) and
+decodes the responses in
+`BackendCompatibility.swift::decodeLatestReceipt` for destination
+receipts. "v2 is free to evolve" does NOT apply to them.
+
+The "iOS-narrow" v1 contract is enforced by
+`tests/contract/api_v1/test_v1_ios_contract.py`; the iOS-load-bearing
+v2 surface (routes, response keys, the `"empty"` status sentinel, and
+`/latest`-before-`/{sync_run_id}` route ordering) is enforced by
+`tests/contract/test_ios_v2_surface.py`. A removal or reshape of any of
+these five is an iOS-app-breaking change and must be coordinated with
+an App Store release.
 
 ## `POST /api/apple/batch` — request body
 
