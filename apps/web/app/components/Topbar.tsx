@@ -17,6 +17,8 @@ const TITLES: Record<string, { title: string; sub: string }> = {
   "/privacy": { title: "Privacy", sub: "What leaves this host." },
   "/library": { title: "Library", sub: "Every signal you collect — browsable, pinnable." },
   "/intelligence": { title: "Intelligence", sub: "The narrator: local by default, cloud by consent." },
+  "/integrations": { title: "Integrations", sub: "Data in, data out — every connection, live state." },
+  "/settings": { title: "Settings", sub: "Everything configurable, in one place." },
 };
 
 export function Topbar({
