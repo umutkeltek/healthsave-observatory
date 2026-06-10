@@ -16,6 +16,7 @@ import {
   safeFindings,
   safeLatest,
   safeMetrics,
+  safeNarratives,
   safePrivacy,
   safeReadiness,
   safeReceipts,
@@ -158,10 +159,19 @@ export async function VaultSection() {
 
 export async function InsightsSection() {
   if (!(await hasAnyData())) return null;
-  const [latest, findings] = await Promise.all([safeLatest(), safeFindings()]);
+  const [latest, findings, privacy, narratives] = await Promise.all([
+    safeLatest(),
+    safeFindings(),
+    safePrivacy(),
+    safeNarratives(),
+  ]);
   return (
     <div className="row-2">
-      <WeeklyBriefCard latest={latest} />
+      <WeeklyBriefCard
+        latest={latest}
+        narratorOff={isNarratorOff(privacy?.provider)}
+        history={narratives ?? []}
+      />
       <EvidenceCard findings={findings} />
     </div>
   );

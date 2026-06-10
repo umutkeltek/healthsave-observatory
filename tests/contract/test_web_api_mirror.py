@@ -40,6 +40,8 @@ TYPE_TO_MODULES: dict[str, list[str]] = {
     "MetricSeries": ["server.api.v2_metrics"],
     "SeriesBatch": ["server.api.v2_metrics"],
     "Receipts": ["server.api.v2_receipts"],
+    "NarrativesList": ["server.api.v2_insights"],
+    "TriggerResult": ["server.api.v2_insights"],
     "Readiness": ["server.api.v2_readiness"],
     "InsightsLatest": ["server.api.v2_insights"],
     "FindingsList": ["server.api.v2_insights"],

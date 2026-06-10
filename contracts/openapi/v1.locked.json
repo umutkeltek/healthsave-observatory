@@ -3127,6 +3127,78 @@
         "summary": "Latest Narratives"
       }
     },
+    "/api/v2/insights/narratives": {
+      "get": {
+        "description": "Narrative history, newest first \u2014 the brief card's \"previous briefs\".",
+        "operationId": "list_narratives_api_v2_insights_narratives_get",
+        "parameters": [
+          {
+            "description": "daily_briefing or weekly_summary",
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "daily_briefing or weekly_summary",
+              "title": "Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response List Narratives Api V2 Insights Narratives Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Narratives"
+      }
+    },
     "/api/v2/insights/trigger": {
       "post": {
         "description": "Run an analysis job on demand.\n\nSupports ``correlation_analysis`` and ``recovery_check``. Each checks its\nconfig block is enabled, runs the Brain-1 engine job inline through the\npipeline_runs ledger, and reports completed vs skipped.",

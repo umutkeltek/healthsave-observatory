@@ -160,6 +160,40 @@ export function fetchReceipts(limit = 20): Promise<Receipts> {
   return getJson<Receipts>(`/api/v2/receipts?limit=${limit}`);
 }
 
+// Narrative history + on-demand analysis trigger. Mirrors server/api/v2_insights.py.
+
+export type NarrativeHistoryItem = {
+  insight_type: string;
+  narrative: string;
+  created_at: string | null;
+};
+
+export type NarrativesList = {
+  narratives: NarrativeHistoryItem[];
+  count: number;
+};
+
+export function fetchNarratives(
+  type?: "daily_briefing" | "weekly_summary",
+  limit = 10,
+): Promise<NarrativesList> {
+  const typeParam = type ? `type=${type}&` : "";
+  return getJson<NarrativesList>(`/api/v2/insights/narratives?${typeParam}limit=${limit}`);
+}
+
+export type TriggerResult = {
+  status: string;
+  run_type: string;
+  count?: number;
+};
+
+export function postInsightsTrigger(
+  type: "correlation_analysis" | "recovery_check",
+): Promise<TriggerResult> {
+  // Analysis runs inline server-side — give it well past the default timeout.
+  return postJson<TriggerResult>("/api/v2/insights/trigger", { type }, 60_000);
+}
+
 // Data-readiness — Insight Action Loop card #1. Mirrors server/api/v2_readiness.py.
 
 export type GateVerdict = {
