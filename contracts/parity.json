@@ -967,14 +967,12 @@
     },
     "export_csv": {
       "ios": true,
-      "android": "planned",
-      "planned_since": "2026-06-10",
+      "android": true,
       "pro": false
     },
     "export_json": {
       "ios": true,
-      "android": "planned",
-      "planned_since": "2026-06-10",
+      "android": true,
       "pro": false
     },
     "export_pdf": {
