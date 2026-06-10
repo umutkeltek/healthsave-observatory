@@ -5,6 +5,34 @@ import { useMemo, useState } from "react";
 
 import { PinButton } from "./PinButton";
 
+// Stable colour identity per category — physiology mint, activity indigo,
+// sleep deep blue, body amber; the rest get a deterministic pick so a new
+// category never renders colourless.
+const CATEGORY_COLORS: Record<string, string> = {
+  vital: "var(--signal)",
+  cardio: "var(--down)",
+  activity: "var(--accent)",
+  sleep: "var(--sleep-core)",
+  body: "var(--warn)",
+  nutrition: "var(--up)",
+  mind: "var(--experiment)",
+};
+
+const FALLBACK_COLORS = [
+  "var(--signal)",
+  "var(--accent)",
+  "var(--warn)",
+  "var(--experiment)",
+  "var(--up)",
+];
+
+function categoryColor(category: string): string {
+  if (CATEGORY_COLORS[category]) return CATEGORY_COLORS[category];
+  let hash = 0;
+  for (const ch of category) hash = (hash * 31 + ch.charCodeAt(0)) % 997;
+  return FALLBACK_COLORS[hash % FALLBACK_COLORS.length];
+}
+
 // One row per canonical metric: registry metadata joined (server-side) with
 // readiness stats. ~190 rows of metadata — trivially serializable, filtered
 // entirely client-side.
@@ -105,7 +133,10 @@ export function LibraryBrowser({
 
       {grouped.map(([cat, list]) => (
         <section key={cat} className="lib-group">
-          <div className="section-label">{cat}</div>
+          <div className="section-label">
+            <span className="cat-dot" style={{ background: categoryColor(cat) }} aria-hidden />
+            {cat}
+          </div>
           <div className="card lib-card">
             {list.map((row) => (
               <div key={row.id} className={`lib-row ${row.count === 0 ? "lib-row-empty" : ""}`}>
