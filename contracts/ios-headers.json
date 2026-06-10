@@ -1,0 +1,19 @@
+{
+  "_comment": "Canonical iOS->server wire header manifest for POST /api/apple/batch. Source of truth for the names; iOS mirrors this file at ios_app/Tests/HealthSyncTests/Fixtures/ios-headers.json. Enforced by tests/contract/api_v1/test_v1_ios_headers.py (server consumes every header + completeness), the iOS HeaderContractTests (app emits exactly these), and tests/contract/test_ios_headers_in_sync.py (byte-equal mirror). Renaming a header on either side is an iOS-app-breaking change.",
+  "headers": {
+    "Idempotency-Key": "idempotency",
+    "X-HealthSave-Anchor-Present": "evidence",
+    "X-HealthSave-Batch-ID": "identity",
+    "X-HealthSave-Batch-Index": "identity",
+    "X-HealthSave-Full-Export": "evidence",
+    "X-HealthSave-Lower-Bound-Reason": "evidence",
+    "X-HealthSave-Metric": "identity",
+    "X-HealthSave-Payload-Hash": "idempotency",
+    "X-HealthSave-Query-Lower-Bound": "window",
+    "X-HealthSave-Sample-Max-Time": "window",
+    "X-HealthSave-Sample-Min-Time": "window",
+    "X-HealthSave-Sync-Mode": "evidence",
+    "X-HealthSave-Sync-Run-ID": "identity",
+    "X-HealthSave-Total-Batches": "identity"
+  }
+}

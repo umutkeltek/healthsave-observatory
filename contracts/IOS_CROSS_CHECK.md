@@ -94,6 +94,15 @@ key name on either side breaks ingest).
 
 ## `POST /api/apple/batch` — request headers
 
+> **Source of truth: `contracts/ios-headers.json`** (machine-pinned;
+> the table below is commentary). The manifest is enforced three ways:
+> `tests/contract/api_v1/test_v1_ios_headers.py` (server consumes every
+> header + manifest completeness against the ingest source),
+> `ios_app/Tests/HealthSyncTests/HeaderContractTests.swift` (the app's
+> real upload request emits exactly the manifest set), and
+> `tests/contract/test_ios_headers_in_sync.py` (the iOS mirror is
+> byte-equal).
+
 **iOS sets (`SyncEngine.swift`, `SyncReliability.swift`):**
 
 | Header | Source | Server uses |
