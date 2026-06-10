@@ -21,7 +21,7 @@ export async function GET(request: Request): Promise<Response> {
       signal: AbortSignal.timeout(5000),
     });
     if (res.status === 304) {
-      return new Response(null, { status: 304, headers: { ETag: inm ?? "" } });
+      return new Response(null, { status: 304, headers: inm ? { ETag: inm } : undefined });
     }
     if (!res.ok) {
       return Response.json({ error: `backend ${res.status}` }, { status: 502 });

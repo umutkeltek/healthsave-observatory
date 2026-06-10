@@ -3079,3 +3079,8 @@ table.prov {
 .contrib-value.down {
   color: var(--down);
 }
+
+.live-pill.offline {
+  color: var(--warn);
+  border-color: rgba(232, 180, 95, 0.3);
+}

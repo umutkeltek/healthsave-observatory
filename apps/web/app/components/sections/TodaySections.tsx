@@ -8,6 +8,7 @@
 import { type Finding, isNarratorOff, type Privacy, type Readiness } from "../../lib/api";
 import {
   agoLabel,
+  dataState,
   GRID_METRICS,
   hasAnyData,
   loadReadinessSparklines,
@@ -105,33 +106,57 @@ function vaultSteps(privacy: Privacy | null, readiness: Readiness | null): Vault
   ];
 }
 
-function EmptyToday() {
+function EmptyToday({ state }: { state: "empty" | "unreachable" }) {
   // Rendered inside .today-grid (the hero slot) — span the full grid so the
-  // empty state doesn't get squeezed into one column.
+  // empty state doesn't get squeezed into one column. The two states demand
+  // different actions: "empty" means keep syncing; "unreachable" means the
+  // backend is down or the key is wrong — telling that user to sync would be
+  // a lie they can't debug.
   return (
     <section className="lead" style={{ gridColumn: "1 / -1" }}>
       <article className="hero">
         <div className="hero-eyebrow">Today</div>
-        <p className="recovery-line" style={{ marginTop: 8 }}>
-          No data yet. HealthSave Observatory turns your Apple Health + wearable data into a daily, private
-          briefing — but it needs a day or so of readings first.
-        </p>
-        <div className="exp-action">
-          <a className="btn" href="/demo">
-            Explore the demo
-          </a>
-          <span className="empty">
-            Or open <strong>HealthSave → Settings → Server Sync</strong>, point it at this server,
-            and tap “Sync New Data.”
-          </span>
-        </div>
+        {state === "unreachable" ? (
+          <>
+            <p className="recovery-line" style={{ marginTop: 8 }}>
+              Can’t reach the backend. The dashboard is fine — the API didn’t answer (down,
+              wrong <code>API_BASE</code>, or rejected <code>API_KEY</code>).
+            </p>
+            <div className="exp-action">
+              <a className="btn" href="/demo">
+                Explore the demo
+              </a>
+              <span className="empty">
+                Check the web container’s <strong>API_BASE</strong> / <strong>API_KEY</strong> env
+                and the API logs — the server log lists the exact failing requests.
+              </span>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="recovery-line" style={{ marginTop: 8 }}>
+              No data yet. HealthSave Observatory turns your Apple Health + wearable data into a daily, private
+              briefing — but it needs a day or so of readings first.
+            </p>
+            <div className="exp-action">
+              <a className="btn" href="/demo">
+                Explore the demo
+              </a>
+              <span className="empty">
+                Or open <strong>HealthSave → Settings → Server Sync</strong>, point it at this server,
+                and tap “Sync New Data.”
+              </span>
+            </div>
+          </>
+        )}
       </article>
     </section>
   );
 }
 
 export async function HeroSection() {
-  if (!(await hasAnyData())) return <EmptyToday />;
+  const state = await dataState();
+  if (state !== "data") return <EmptyToday state={state} />;
   const [readiness, findings, latest, hrv] = await Promise.all([
     safeReadiness(),
     safeFindings(),

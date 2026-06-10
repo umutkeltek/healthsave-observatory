@@ -11,6 +11,7 @@ export function quantile(sorted: number[], q: number): number {
 }
 
 export function extent(values: number[]): [number, number] {
+  if (values.length === 0) return [0, 0]; // never leak ±Infinity into scales
   let min = Number.POSITIVE_INFINITY;
   let max = Number.NEGATIVE_INFINITY;
   for (const v of values) {

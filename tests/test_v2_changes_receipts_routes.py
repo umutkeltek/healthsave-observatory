@@ -73,14 +73,24 @@ async def test_changes_token_stable_for_same_state() -> None:
 
 
 class _FakeAuditRepo:
-    def __init__(self, events: list[Any] | None = None, error: bool = False):
+    def __init__(self, events: list[Any] | None = None, error: Exception | None = None):
         self._events = events or []
         self._error = error
 
     async def list_audit_events(self, session, *, owner_id=None, limit=100):
-        if self._error:
-            raise RuntimeError("relation does not exist")
+        if self._error is not None:
+            raise self._error
         return self._events[:limit]
+
+
+def _missing_table_error() -> Exception:
+    from sqlalchemy.exc import ProgrammingError
+
+    return ProgrammingError(
+        "SELECT …",
+        {},
+        Exception('relation "intelligence_audit_events" does not exist'),
+    )
 
 
 @pytest.mark.asyncio
@@ -111,12 +121,24 @@ async def test_receipts_degrades_when_audit_table_missing(monkeypatch) -> None:
     monkeypatch.setattr(
         v2_receipts,
         "_INTELLIGENCE",
-        SimpleNamespace(default_repository=_FakeAuditRepo(error=True)),
+        SimpleNamespace(default_repository=_FakeAuditRepo(error=_missing_table_error())),
     )
     body = await v2_receipts.list_receipts(limit=50, session=None)
     assert body["events_unavailable"] is True
     assert body["events"] == []
     assert body["ingest"]["sources"][0]["source_plugin_id"] == "apple_healthsave"
+
+
+@pytest.mark.asyncio
+async def test_receipts_other_db_errors_propagate(monkeypatch) -> None:
+    """Only the missing-table case degrades — anything else must NOT 200."""
+    monkeypatch.setattr(
+        v2_receipts,
+        "_INTELLIGENCE",
+        SimpleNamespace(default_repository=_FakeAuditRepo(error=RuntimeError("boom"))),
+    )
+    with pytest.raises(RuntimeError):
+        await v2_receipts.list_receipts(limit=50, session=None)
 
 
 class _FakeBriefingRepo:

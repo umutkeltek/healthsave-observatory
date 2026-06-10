@@ -76,14 +76,22 @@ async def record_origins(
     return len(seen)
 
 
-# Pagination is additive: limit=None preserves the original unbounded reads
-# byte-for-byte. Ordering is part of the contract (documented in API.md) so
-# offset pagination stays stable: sources by plugin_id, streams by
-# last_seen_at DESC, devices by device_label.
+# Pagination is additive: limit=None AND offset=0 preserves the original
+# unbounded reads byte-for-byte. Ordering is documented in API.md — sources by
+# plugin_id (unique, fully stable), streams by last_seen_at DESC with id as
+# tiebreaker (note: last_seen_at mutates on ingest, so an offset walk under
+# live ingest can still skew — acceptable for the single-user dashboard),
+# devices by device_label.
 def _page(sql: str, params: dict[str, Any], limit: int | None, offset: int) -> tuple[str, dict]:
-    if limit is None:
-        return sql, params
-    return f"{sql} LIMIT :limit OFFSET :offset", {**params, "limit": limit, "offset": offset}
+    clauses = ""
+    out = dict(params)
+    if limit is not None:
+        clauses += " LIMIT :limit"
+        out["limit"] = limit
+    if offset:
+        clauses += " OFFSET :offset"
+        out["offset"] = offset
+    return f"{sql}{clauses}", out
 
 
 async def list_sources(
@@ -114,7 +122,7 @@ async def list_streams(
     sql, params = _page(
         "SELECT id, source_plugin_id, origin_key, device_label, "
         "first_seen_at, last_seen_at FROM source_device_streams "
-        "WHERE owner_id = :owner ORDER BY last_seen_at DESC",
+        "WHERE owner_id = :owner ORDER BY last_seen_at DESC, id",
         {"owner": str(owner_id)},
         limit,
         offset,
@@ -149,9 +157,12 @@ async def list_devices(
 
 
 async def count_devices(session: AsyncSession, owner_id: UUID) -> int:
+    # Subquery (not count(DISTINCT …)) so a NULL device_label group counts —
+    # list_devices emits that group as a row, and total must match.
     result = await session.execute(
         text(
-            "SELECT count(DISTINCT device_label) FROM source_device_streams WHERE owner_id = :owner"
+            "SELECT count(*) FROM (SELECT 1 FROM source_device_streams "
+            "WHERE owner_id = :owner GROUP BY device_label) AS device_groups"
         ),
         {"owner": str(owner_id)},
     )

@@ -13,11 +13,15 @@ const POLL_MS = 30_000;
 export function LiveStatus() {
   const router = useRouter();
   const etag = useRef<string | null>(null);
-  const [live, setLive] = useState(false);
+  const wasLive = useRef(false);
+  const [state, setState] = useState<"unknown" | "live" | "offline">("unknown");
 
   useEffect(() => {
     let stopped = false;
+    let inflight = false;
     const tick = async () => {
+      if (inflight) return; // a hung poll must not race the next interval
+      inflight = true;
       try {
         const headers: Record<string, string> = {};
         if (etag.current) headers["If-None-Match"] = etag.current;
@@ -27,14 +31,18 @@ export function LiveStatus() {
           const next = res.headers.get("etag");
           if (etag.current && next && next !== etag.current) router.refresh();
           if (next) etag.current = next;
-          setLive(true);
+          wasLive.current = true;
+          setState("live");
         } else if (res.status === 304) {
-          setLive(true);
+          wasLive.current = true;
+          setState("live");
         } else {
-          setLive(false);
+          setState(wasLive.current ? "offline" : "unknown");
         }
       } catch {
-        if (!stopped) setLive(false);
+        if (!stopped) setState(wasLive.current ? "offline" : "unknown");
+      } finally {
+        inflight = false;
       }
     };
     tick();
@@ -45,7 +53,16 @@ export function LiveStatus() {
     };
   }, [router]);
 
-  if (!live) return null;
+  // Never claim "live" before the first successful poll — but once it HAS
+  // been live, a silent disappearance isn't feedback: show offline instead.
+  if (state === "unknown") return null;
+  if (state === "offline") {
+    return (
+      <span className="pill mono live-pill offline" title="Live poll failing — backend unreachable">
+        offline
+      </span>
+    );
+  }
   return (
     <span className="pill mono live-pill" title="Watching for new data (30s poll)">
       <span className="live-dot" aria-hidden />

@@ -81,11 +81,11 @@ export function WeeklyBriefCard({
       </div>
       <div className="brief-body">
         {paragraphs.map((paragraph, index) => (
-          <p
-            key={paragraph.slice(0, 40)}
-            className="anim-rise"
-            style={{ "--i": index } as CSSProperties}
-          >
+          // Index keys are correct here: the list is a stable split of one
+          // string per render and never reorders. Content-prefix keys would
+          // collide when the narrator repeats an opener.
+          // biome-ignore lint: see above
+          <p key={index} className="anim-rise" style={{ "--i": index } as CSSProperties}>
             {paragraph}
           </p>
         ))}

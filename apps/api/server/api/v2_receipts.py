@@ -12,13 +12,18 @@ target DB — the route degrades to an empty event list if the table is absent.
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.defaults import readiness_repository, sync_receipt_repository
 from storage.ports import ReadinessRepository, SyncReceiptRepository
 from storage.timescale import intelligence as intelligence_repo
 
 from .deps import get_session, verify_api_key
+
+_log = logging.getLogger("healthsave.api.v2_receipts")
 
 router = APIRouter(prefix="/api/v2", dependencies=[Depends(verify_api_key)])
 
@@ -39,10 +44,20 @@ async def list_receipts(
     sources = await _READINESS.fetch_canonical_sources(session)
     latest_run = await _SYNC.latest_sync_run(session)
 
+    # Only the missing-table case (pre-migration-017 DB) degrades; anything
+    # else propagates — a silently-degrading audit trail would betray the
+    # "privacy as proof" promise. The degraded path is still logged.
     events_unavailable = False
     try:
         events = await _INTELLIGENCE.default_repository.list_audit_events(session, limit=limit)
-    except Exception:  # noqa: BLE001 — table may predate migration 017
+    except ProgrammingError as exc:
+        if "does not exist" not in str(exc):
+            raise
+        # Roll back the aborted transaction so any read added after this
+        # block doesn't die with InFailedSQLTransaction far from the cause.
+        if session is not None:
+            await session.rollback()
+        _log.warning("receipts: audit events unavailable (apply migration 017): %s", exc)
         events = []
         events_unavailable = True
 
