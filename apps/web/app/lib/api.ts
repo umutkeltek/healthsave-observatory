@@ -191,9 +191,9 @@ export type Receipts = {
 
 export function fetchReceipts(limit = 20): Promise<Receipts> {
   // Composes the canonical-coverage aggregates — the slowest reads in the
-  // store (>5s live). Streams in via Suspense, so the longer budget never
-  // blocks first byte.
-  return getJson<Receipts>(`/api/v2/receipts?limit=${limit}`, 20_000);
+  // store. The backend now SWR-caches that aggregate (60s TTL), so steady
+  // state is fast; 10s covers the once-per-TTL refresh + cold start.
+  return getJson<Receipts>(`/api/v2/receipts?limit=${limit}`, 10_000);
 }
 
 // Narrative history + on-demand analysis trigger. Mirrors server/api/v2_insights.py.
@@ -284,9 +284,9 @@ export type Readiness = {
 
 export function fetchReadiness(): Promise<Readiness> {
   // Per-metric coverage over the whole canonical store — the heaviest read
-  // (>5s live; it was the old first-byte bottleneck). Streams via Suspense,
-  // so the longer budget never blocks first byte.
-  return getJson<Readiness>("/api/v2/readiness", 20_000);
+  // (it was the old first-byte bottleneck). The backend now SWR-caches both
+  // aggregates (60s TTL); 10s covers the once-per-TTL refresh + cold start.
+  return getJson<Readiness>("/api/v2/readiness", 10_000);
 }
 
 // Insights — Weekly Brief (narratives) + Evidence (findings).

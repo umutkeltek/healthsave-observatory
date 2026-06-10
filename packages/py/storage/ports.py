@@ -337,6 +337,14 @@ class ReadinessRepository(Protocol):
         workspace_id: UUID = ...,
     ) -> list[dict[str, Any]]: ...
 
+    async def fetch_last_ingested_at(
+        self,
+        session: AsyncSession,
+        *,
+        owner_id: UUID = ...,
+        workspace_id: UUID = ...,
+    ) -> datetime | None: ...
+
 
 @runtime_checkable
 class ExportRepository(Protocol):

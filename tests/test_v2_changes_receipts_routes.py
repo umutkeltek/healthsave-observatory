@@ -17,6 +17,9 @@ class _FakeReadiness:
     async def fetch_canonical_sources(self, session, **kwargs):
         return [{"source_plugin_id": "apple_healthsave", "last_ingested_at": _T}]
 
+    async def fetch_last_ingested_at(self, session, **kwargs):
+        return _T
+
 
 class _FakeSync:
     async def latest_sync_run(self, session):

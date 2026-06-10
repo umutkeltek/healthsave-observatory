@@ -28,6 +28,7 @@ from storage.defaults import readiness_repository
 from storage.ports import ReadinessRepository
 
 from .deps import get_session, verify_api_key
+from .swr import v2_read_cache
 
 router = APIRouter(prefix="/api/v2", dependencies=[Depends(verify_api_key)])
 _READINESS_REPO: ReadinessRepository = readiness_repository()
@@ -68,8 +69,15 @@ def _grade(summary: DataSummary) -> dict[str, Any]:
 @router.get("/readiness")
 async def readiness(session: AsyncSession = Depends(get_session)) -> dict:
     """Per-metric coverage + analyzability, plus source attribution and freshness."""
-    coverage = await _READINESS_REPO.fetch_canonical_coverage(session)
-    sources = await _READINESS_REPO.fetch_canonical_sources(session)
+    # Both aggregates walk the whole canonical store — served through the
+    # process-level SWR cache so the scan runs at most once per TTL, not per
+    # page load (the live 2M-row store took 5-20s per request).
+    coverage = await v2_read_cache.get(
+        "canonical_coverage", lambda: _READINESS_REPO.fetch_canonical_coverage(session)
+    )
+    sources = await v2_read_cache.get(
+        "canonical_sources", lambda: _READINESS_REPO.fetch_canonical_sources(session)
+    )
 
     metrics: list[dict[str, Any]] = []
     last_observation_at: datetime | None = None
