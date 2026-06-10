@@ -10,6 +10,7 @@ every touch of this module.
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import dataclass
 
@@ -36,6 +37,32 @@ log = logging.getLogger("healthsave.analysis")
 # as "no custom endpoint" for a non-Ollama provider — otherwise a cloud probe
 # would be pointed at the local Ollama and the SSRF guard would false-positive.
 _OLLAMA_DEFAULT_BASE_URL = "http://ollama:11434"
+
+# Inline chain-of-thought block emitted by reasoning models (qwen3, DeepSeek R1)
+# when the serving layer doesn't separate it out. ``\Z`` handles an unclosed
+# block — a narrative truncated mid-think has no user-facing prose to keep.
+_THINK_BLOCK_RE = re.compile(r"<think>.*?(?:</think>|\Z)", re.IGNORECASE | re.DOTALL)
+
+
+def _extract_narrative(message) -> str:
+    """The user-facing prose from a LiteLLM message, reasoning-model aware.
+
+    Reasoning models (OpenAI o-series, qwen3, DeepSeek R1) behind
+    OpenAI-compatible endpoints (llama.cpp, vLLM, OpenRouter) may return the
+    whole output in ``message.reasoning_content`` with ``content`` empty,
+    and/or prefix the prose with an inline ``<think>...</think>`` block.
+    Reading only ``content`` makes the briefing degenerate to the bare
+    disclaimer (GH issue #13). Prefer ``content``; fall back to
+    ``reasoning_content``; strip think blocks from either. Empty result means
+    the model produced no narrative at all — the caller treats that as a
+    failed attempt so the candidate chain can move on.
+    """
+    for field in ("content", "reasoning_content"):
+        text = getattr(message, field, None) or ""
+        text = _THINK_BLOCK_RE.sub("", text).strip()
+        if text:
+            return text
+    return ""
 
 
 def _effective_api_base(provider: str, base_url: str | None) -> str | None:
@@ -311,7 +338,12 @@ class HealthLLMClient:
         except Exception as exc:  # noqa: BLE001 - intentional wrap-and-raise
             raise LLMUnavailableError(f"LLM call failed: {exc}") from exc
 
-        raw = response.choices[0].message.content or ""
+        raw = _extract_narrative(response.choices[0].message)
+        if not raw:
+            raise LLMUnavailableError(
+                f"model {model!r} returned an empty narrative "
+                "(content and reasoning_content both empty after think-block stripping)"
+            )
         narrative = inject_disclaimer(raw)
         usage = getattr(response, "usage", None)
         tokens_in = int(getattr(usage, "prompt_tokens", 0) or 0) if usage else 0

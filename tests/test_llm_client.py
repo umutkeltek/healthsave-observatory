@@ -22,9 +22,16 @@ from analysis.config import LLMConfig, LLMFallbackEntry  # noqa: E402
 from analysis.egress import Destination, EgressDenied  # noqa: E402
 
 
-def _fake_response(content: str, prompt_tokens: int = 42, completion_tokens: int = 77):
+def _fake_response(
+    content: str,
+    prompt_tokens: int = 42,
+    completion_tokens: int = 77,
+    reasoning_content: str | None = None,
+):
     """Build a LiteLLM-shaped response object for tests."""
     message = SimpleNamespace(content=content)
+    if reasoning_content is not None:
+        message.reasoning_content = reasoning_content
     choice = SimpleNamespace(message=message, finish_reason="stop", index=0)
     usage = SimpleNamespace(
         prompt_tokens=prompt_tokens,
@@ -90,6 +97,70 @@ async def test_generate_insight_preserves_existing_disclaimer(monkeypatch):
 
     # Exactly one "not medical advice" - the existing one, not double-stamped
     assert result.narrative.lower().count("not medical advice") == 1
+
+
+@pytest.mark.asyncio
+async def test_reasoning_model_falls_back_to_reasoning_content(monkeypatch):
+    """GH #13: qwen3/R1-style endpoints put the output in ``reasoning_content``."""
+    response = _fake_response("", reasoning_content="Your HRV is trending above baseline.")
+    acompletion = AsyncMock(return_value=response)
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(LLMConfig(provider="ollama", model="qwen3:6b"))
+    result = await client.generate_insight("p", insight_type="daily_briefing")
+
+    assert "HRV is trending above baseline" in result.narrative
+    assert "not medical advice" in result.narrative.lower()
+
+
+@pytest.mark.asyncio
+async def test_inline_think_block_is_stripped_from_content(monkeypatch):
+    content = "<think>I should mention the baseline. Frame neutrally.</think>\n\nSleep was steady."
+    acompletion = AsyncMock(return_value=_fake_response(content))
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(LLMConfig(provider="ollama", model="qwen3:6b"))
+    result = await client.generate_insight("p", insight_type="daily_briefing")
+
+    assert result.narrative.startswith("Sleep was steady.")
+    assert "<think>" not in result.narrative
+
+
+@pytest.mark.asyncio
+async def test_empty_narrative_is_a_failed_attempt_not_a_bare_disclaimer(monkeypatch):
+    """An unclosed think block (truncated reasoning) yields no prose → the
+    attempt fails so the chain can move on, instead of shipping the
+    disclaimer alone as a 'successful' briefing."""
+    acompletion = AsyncMock(return_value=_fake_response("<think>ran out of tokens"))
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(LLMConfig(provider="ollama", model="qwen3:6b"))
+
+    with pytest.raises(llm_client.LLMUnavailableError) as exc_info:
+        await client.generate_insight("p", insight_type="daily_briefing")
+    assert "empty narrative" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_empty_primary_narrative_falls_through_to_fallback(monkeypatch):
+    """The empty-narrative failure participates in the candidate chain."""
+    responses = [
+        _fake_response(""),  # primary: reasoning model emitted nothing usable
+        _fake_response("Recovery looks solid today."),
+    ]
+    acompletion = AsyncMock(side_effect=responses)
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    config = LLMConfig(
+        provider="ollama",
+        model="qwen3:6b",
+        fallback=[LLMFallbackEntry(provider="ollama", model="llama3.1:8b")],
+    )
+    client = llm_client.HealthLLMClient(config)
+    result = await client.generate_insight("p", insight_type="daily_briefing")
+
+    assert acompletion.await_count == 2
+    assert "Recovery looks solid today." in result.narrative
 
 
 @pytest.mark.asyncio
