@@ -4,8 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
-import type { PostureChip } from "../lib/load";
-
 const ICONS: Record<string, ReactNode> = {
   overview: (
     <>
@@ -93,12 +91,10 @@ function NavIcon({ name }: { name: string }) {
 }
 
 export function Sidebar({
-  posture,
-  synced,
+  status,
   onNavigate,
 }: {
-  posture: PostureChip;
-  synced: string;
+  status: ReactNode;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
@@ -129,13 +125,7 @@ export function Sidebar({
         })}
       </nav>
 
-      <div className="sidebar-foot">
-        <div className="status-line">
-          <span className={`status-dot ${posture.ok ? "" : "warn"}`} />
-          {posture.text}
-        </div>
-        <div className="status-sub">synced {synced}</div>
-      </div>
+      <div className="sidebar-foot">{status}</div>
     </aside>
   );
 }

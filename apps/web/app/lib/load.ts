@@ -1,6 +1,13 @@
 // Shared server-side loaders for the dashboard views. Each wraps a fetcher in a
 // graceful null so a card can render its own "backend unreachable" state instead
 // of crashing the page. Reused across the Overview and the per-view routes.
+//
+// The hot read paths are wrapped in React cache(): the layout chrome and
+// several Suspense-streamed sections read the same surfaces (readiness,
+// privacy, latest, findings) in one render pass, and cache() collapses those
+// to a single upstream fetch per request.
+
+import { cache } from "react";
 
 import {
   type Candidates,
@@ -14,6 +21,7 @@ import {
   fetchPrivacy,
   fetchReadiness,
   fetchSeries,
+  fetchSeriesBatch,
   fetchSources,
   fetchStreams,
   isNarratorOff,
@@ -48,37 +56,71 @@ export async function safeSeries(id: string, range = "7d"): Promise<MetricSeries
   }
 }
 
-export async function safeMetrics(): Promise<MetricSummary[] | null> {
+// One request for many metrics, keyed by metric id. Falls back to the
+// per-metric endpoint when /api/v2/series is unavailable (older backend), so
+// a newer web can deploy ahead of the API without blanking the grid. The
+// cache key is the joined id string — call through safeSeriesMany.
+const batchSeriesCached = cache(
+  async (idsKey: string, range: string): Promise<Map<string, MetricSeries>> => {
+    const ids = idsKey.split(",");
+    const map = new Map<string, MetricSeries>();
+    try {
+      const batch = await fetchSeriesBatch(ids, range);
+      for (const item of batch.series) {
+        if (item.metric && item.points) {
+          map.set(item.metric.id, {
+            metric: item.metric,
+            range: batch.range,
+            start: batch.start,
+            end: batch.end,
+            points: item.points,
+          });
+        }
+      }
+      return map;
+    } catch {
+      const series = await Promise.all(ids.map((id) => safeSeries(id, range)));
+      for (const s of series) if (s) map.set(s.metric.id, s);
+      return map;
+    }
+  },
+);
+
+export function safeSeriesMany(ids: string[], range = "7d"): Promise<Map<string, MetricSeries>> {
+  return batchSeriesCached(ids.join(","), range);
+}
+
+export const safeMetrics = cache(async (): Promise<MetricSummary[] | null> => {
   try {
     return await fetchMetrics();
   } catch {
     return null;
   }
-}
+});
 
-export async function safeReadiness(): Promise<Readiness | null> {
+export const safeReadiness = cache(async (): Promise<Readiness | null> => {
   try {
     return await fetchReadiness();
   } catch {
     return null;
   }
-}
+});
 
-export async function safeLatest(): Promise<InsightsLatest | null> {
+export const safeLatest = cache(async (): Promise<InsightsLatest | null> => {
   try {
     return await fetchLatest();
   } catch {
     return null;
   }
-}
+});
 
-export async function safeFindings(): Promise<Finding[] | null> {
+export const safeFindings = cache(async (): Promise<Finding[] | null> => {
   try {
     return (await fetchFindings()).findings;
   } catch {
     return null;
   }
-}
+});
 
 export async function safeCandidates(): Promise<Candidates | null> {
   try {
@@ -96,13 +138,13 @@ export async function safeExperiments(): Promise<ExperimentList | null> {
   }
 }
 
-export async function safePrivacy(): Promise<Privacy | null> {
+export const safePrivacy = cache(async (): Promise<Privacy | null> => {
   try {
     return await fetchPrivacy();
   } catch {
     return null;
   }
-}
+});
 
 export async function safeIntelligence(): Promise<IntelligenceView | null> {
   try {
@@ -110,6 +152,22 @@ export async function safeIntelligence(): Promise<IntelligenceView | null> {
   } catch {
     return null;
   }
+}
+
+// Shared "is there anything to show?" verdict for the Today page's streamed
+// sections. Every input is cache()'d, so each section can ask independently
+// at the cost of one upstream read per surface per request.
+export async function hasAnyData(): Promise<boolean> {
+  const [readiness, latest, findings] = await Promise.all([
+    safeReadiness(),
+    safeLatest(),
+    safeFindings(),
+  ]);
+  return (
+    (readiness?.metrics.length ?? 0) > 0 ||
+    Boolean(latest?.daily_briefing) ||
+    (findings?.length ?? 0) > 0
+  );
 }
 
 // Identity / provenance loaders — the Sources view. Each returns the inner
@@ -132,8 +190,12 @@ export async function safeStreams(): Promise<StreamView[] | null> {
   }
 }
 
-export function loadGrid(): Promise<(MetricSeries | null)[]> {
-  return Promise.all(GRID_METRICS.map((metric) => safeSeries(metric.id, "7d")));
+export async function loadGrid(): Promise<(MetricSeries | null)[]> {
+  const map = await safeSeriesMany(
+    GRID_METRICS.map((metric) => metric.id),
+    "7d",
+  );
+  return GRID_METRICS.map((metric) => map.get(metric.id) ?? null);
 }
 
 // Recent values per readiness metric, for the inline row sparklines. Best-effort
@@ -152,15 +214,17 @@ export async function loadReadinessSparklines(
   const top = [...readiness.metrics]
     .sort((a, b) => (b.observation_count ?? 0) - (a.observation_count ?? 0))
     .slice(0, READINESS_SPARKLINE_LIMIT);
-  const entries = await Promise.all(
-    top.map(async (metric) => {
-      const series = await safeSeries(metric.metric_id, "30d");
-      const values = series
-        ? series.points.map((p) => p.value).filter((v): v is number => v !== null)
-        : [];
-      return [metric.metric_id, values] as const;
-    }),
+  const map = await safeSeriesMany(
+    top.map((metric) => metric.metric_id),
+    "30d",
   );
+  const entries = top.map((metric) => {
+    const series = map.get(metric.metric_id);
+    const values = series
+      ? series.points.map((p) => p.value).filter((v): v is number => v !== null)
+      : [];
+    return [metric.metric_id, values] as const;
+  });
   return Object.fromEntries(entries);
 }
 
