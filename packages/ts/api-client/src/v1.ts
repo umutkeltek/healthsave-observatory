@@ -539,6 +539,10 @@ export interface paths {
         /**
          * Latest Narratives
          * @description Most recent daily-briefing + weekly-summary narratives (the weekly-brief card).
+         *
+         *     ``runs`` carries the latest ``analysis_runs`` attempt per narrator job —
+         *     {status, error, at, completed_at, provider} — so the card can distinguish
+         *     "no briefing yet" from "the last attempt failed" (silent-failure review).
          */
         get: operations["latest_narratives_api_v2_insights_latest_get"];
         put?: never;
