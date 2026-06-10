@@ -43,7 +43,7 @@ export function RecoveryHero({
   const state = score !== null ? stateFor(score) : null;
 
   return (
-    <section className="hero col-8">
+    <section className={`hero col-8 ${state ? `hero-${state.cls}` : ""}`}>
       <div className="hero-eyebrow">Today · last reading {freshness}</div>
 
       {score !== null && state && (

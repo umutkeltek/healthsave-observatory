@@ -3186,3 +3186,59 @@ table.prov {
   gap: var(--s4);
   font-size: var(--fs-sm);
 }
+
+/* Creative presentation pass — state-aware hero glow, banded sparklines,
+   category colour identity */
+
+.spark-band {
+  fill: var(--baseline-fill);
+}
+
+.spark-dot {
+  fill: var(--signal);
+}
+
+.spark-dot.out {
+  fill: var(--anomaly);
+}
+
+/* The hero carries the day's state as a quiet ambient glow, not a banner. */
+.hero {
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: -40% -20% auto;
+  height: 130%;
+  pointer-events: none;
+  opacity: 0.5;
+  transition: background var(--dur-3) ease;
+}
+
+.hero-state-prime::before {
+  background: radial-gradient(640px 280px at 18% 0%, rgba(94, 234, 212, 0.13), transparent 70%);
+}
+
+.hero-state-steady::before {
+  background: radial-gradient(640px 280px at 18% 0%, rgba(124, 131, 255, 0.12), transparent 70%);
+}
+
+.hero-state-caution::before {
+  background: radial-gradient(640px 280px at 18% 0%, rgba(232, 180, 95, 0.12), transparent 70%);
+}
+
+.hero-state-suppressed::before {
+  background: radial-gradient(640px 280px at 18% 0%, rgba(255, 107, 138, 0.11), transparent 70%);
+}
+
+.cat-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: baseline;
+}
