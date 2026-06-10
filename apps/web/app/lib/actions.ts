@@ -5,6 +5,7 @@
 // Each revalidates "/" so the dashboard re-renders with the new state.
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 
 import {
   abandonExperiment,
@@ -20,6 +21,7 @@ import {
   type TestConnectionPayload,
   type TestConnectionResult,
 } from "./api";
+import { type Density, DENSITY_COOKIE, MAX_PINS, parsePinned, PINNED_COOKIE } from "./prefs";
 
 export type ActionResult = { ok: boolean; error?: string };
 
@@ -109,5 +111,42 @@ export async function detectLocalAction(): Promise<DetectActionResult> {
     return { ok: true, candidates };
   } catch (error) {
     return failure(error, "Could not probe for a local model.");
+  }
+}
+
+// ── Preference actions (cookie-backed; see lib/prefs.ts) ──────────────
+
+export async function togglePinAction(metricId: string): Promise<ActionResult> {
+  try {
+    const jar = await cookies();
+    const pinned = parsePinned(jar.get(PINNED_COOKIE)?.value);
+    const next = pinned.includes(metricId)
+      ? pinned.filter((id) => id !== metricId)
+      : [...pinned, metricId].slice(0, MAX_PINS);
+    jar.set(PINNED_COOKIE, JSON.stringify(next), {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax",
+    });
+    revalidatePath("/");
+    revalidatePath("/library");
+    return { ok: true };
+  } catch (error) {
+    return failure(error, "Could not update pinned signals.");
+  }
+}
+
+export async function setDensityAction(mode: Density): Promise<ActionResult> {
+  try {
+    const jar = await cookies();
+    jar.set(DENSITY_COOKIE, mode === "observatory" ? "observatory" : "essentials", {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax",
+    });
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (error) {
+    return failure(error, "Could not switch the view mode.");
   }
 }

@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { useTransition } from "react";
+
+import { setDensityAction } from "../lib/actions";
+import type { Density } from "../lib/prefs";
 
 const ICONS: Record<string, ReactNode> = {
   overview: (
@@ -52,6 +56,13 @@ const ICONS: Record<string, ReactNode> = {
     </>
   ),
   privacy: <path d="M8 2.2l4.5 1.8v3.6c0 2.8-1.9 4.7-4.5 5.6-2.6-.9-4.5-2.8-4.5-5.6V4z" />,
+  library: (
+    <>
+      <path d="M8 2.2 13.7 5.3 8 8.4 2.3 5.3z" />
+      <path d="M2.3 8.4 8 11.5l5.7-3.1" />
+      <path d="M2.3 11 8 14.1 13.7 11" />
+    </>
+  ),
   intelligence: (
     <>
       <path d="M8 1.8l1.5 3.2 3.2 1.5-3.2 1.5L8 11.2 6.5 8 3.3 6.5 6.5 5z" />
@@ -60,16 +71,44 @@ const ICONS: Record<string, ReactNode> = {
   ),
 };
 
+// `essential: true` rows show in both modes; the rest are Observatory-mode
+// power surfaces (still URL-accessible in Essentials — only the nav slims).
 const NAV = [
-  { href: "/", label: "Today", icon: "overview" },
-  { href: "/experiments", label: "Experiments", icon: "experiments" },
-  { href: "/findings", label: "Findings", icon: "findings" },
-  { href: "/sources", label: "Sources", icon: "sources" },
-  { href: "/data", label: "Data", icon: "data" },
-  { href: "/compare", label: "Compare", icon: "compare" },
-  { href: "/privacy", label: "Privacy", icon: "privacy" },
-  { href: "/intelligence", label: "Intelligence", icon: "intelligence" },
+  { href: "/", label: "Today", icon: "overview", essential: true },
+  { href: "/experiments", label: "Experiments", icon: "experiments", essential: false },
+  { href: "/findings", label: "Findings", icon: "findings", essential: true },
+  { href: "/sources", label: "Sources", icon: "sources", essential: false },
+  { href: "/data", label: "Data", icon: "data", essential: false },
+  { href: "/library", label: "Library", icon: "library", essential: true },
+  { href: "/compare", label: "Compare", icon: "compare", essential: false },
+  { href: "/privacy", label: "Privacy", icon: "privacy", essential: true },
+  { href: "/intelligence", label: "Intelligence", icon: "intelligence", essential: false },
 ] as const;
+
+function DensityToggle({ density }: { density: Density }) {
+  const [pending, startTransition] = useTransition();
+  const pick = (mode: Density) => startTransition(() => setDensityAction(mode).then(() => undefined));
+  return (
+    <div className="density-toggle" role="group" aria-label="View mode">
+      <button
+        type="button"
+        className={density === "essentials" ? "active" : ""}
+        disabled={pending}
+        onClick={() => pick("essentials")}
+      >
+        Essentials
+      </button>
+      <button
+        type="button"
+        className={density === "observatory" ? "active" : ""}
+        disabled={pending}
+        onClick={() => pick("observatory")}
+      >
+        Observatory
+      </button>
+    </div>
+  );
+}
 
 function NavIcon({ name }: { name: string }) {
   return (
@@ -92,12 +131,15 @@ function NavIcon({ name }: { name: string }) {
 
 export function Sidebar({
   status,
+  density,
   onNavigate,
 }: {
   status: ReactNode;
+  density: Density;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const items = density === "essentials" ? NAV.filter((item) => item.essential) : NAV;
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -109,7 +151,7 @@ export function Sidebar({
       </div>
 
       <nav className="nav">
-        {NAV.map((item) => {
+        {items.map((item) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           return (
             <Link
@@ -125,7 +167,10 @@ export function Sidebar({
         })}
       </nav>
 
-      <div className="sidebar-foot">{status}</div>
+      <div className="sidebar-foot">
+        <DensityToggle density={density} />
+        {status}
+      </div>
     </aside>
   );
 }

@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 
+import type { Density } from "../lib/prefs";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
@@ -13,17 +14,19 @@ import { Topbar } from "./Topbar";
 export function Shell({
   sidebarStatus,
   topbarStatus,
+  density,
   children,
 }: {
   sidebarStatus: ReactNode;
   topbarStatus: ReactNode;
+  density: Density;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
 
   return (
     <div className={`app ${open ? "nav-open" : ""}`}>
-      <Sidebar status={sidebarStatus} onNavigate={() => setOpen(false)} />
+      <Sidebar status={sidebarStatus} density={density} onNavigate={() => setOpen(false)} />
       <button
         type="button"
         className="nav-scrim"
