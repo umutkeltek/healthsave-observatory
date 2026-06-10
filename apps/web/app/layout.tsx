@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import type { ReactNode } from "react";
+import { type ReactNode, Suspense } from "react";
 
 import { Shell } from "./components/Shell";
+import {
+  SidebarStatus,
+  SidebarStatusFallback,
+  TopbarStatus,
+  TopbarStatusFallback,
+} from "./components/ShellStatus";
 import "./globals.css";
-import { agoLabel, postureChip, safePrivacy, safeReadiness } from "./lib/load";
 
 const sans = Geist({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
 const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
@@ -14,13 +19,10 @@ export const metadata: Metadata = {
   description: "Your health data, interpreted — a local-first personal health console.",
 };
 
-// The shell fetches the egress posture + freshness for the sidebar/topbar status.
-// Best-effort: defaults keep the chrome sensible when the backend is unreachable.
-export default async function RootLayout({ children }: { children: ReactNode }) {
-  const [privacy, readiness] = await Promise.all([safePrivacy(), safeReadiness()]);
-  const posture = postureChip(privacy);
-  const synced = agoLabel(readiness?.last_ingested_at ?? readiness?.last_observation_at ?? null);
-
+// The layout awaits nothing: the chrome flushes immediately and the
+// posture/sync status streams in via Suspense (see ShellStatus). This is half
+// of the old first-byte waterfall; the other half was the page's series fan-out.
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
@@ -33,7 +35,18 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         />
       </head>
       <body>
-        <Shell posture={posture} synced={synced}>
+        <Shell
+          sidebarStatus={
+            <Suspense fallback={<SidebarStatusFallback />}>
+              <SidebarStatus />
+            </Suspense>
+          }
+          topbarStatus={
+            <Suspense fallback={<TopbarStatusFallback />}>
+              <TopbarStatus />
+            </Suspense>
+          }
+        >
           {children}
         </Shell>
       </body>

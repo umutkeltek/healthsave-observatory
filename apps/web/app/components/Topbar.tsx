@@ -1,8 +1,8 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import type { ReactNode } from "react";
 
-import type { PostureChip } from "../lib/load";
 import { ThemeToggle } from "./ThemeToggle";
 
 const TITLES: Record<string, { title: string; sub: string }> = {
@@ -17,12 +17,10 @@ const TITLES: Record<string, { title: string; sub: string }> = {
 };
 
 export function Topbar({
-  posture,
-  synced,
+  status,
   onMenu,
 }: {
-  posture: PostureChip;
-  synced: string;
+  status: ReactNode;
   onMenu?: () => void;
 }) {
   const pathname = usePathname();
@@ -39,8 +37,7 @@ export function Topbar({
         <p>{sub}</p>
       </div>
       <div className="topbar-status">
-        <span className="pill mono">{posture.text}</span>
-        <span className="pill mono">synced {synced}</span>
+        {status}
         <ThemeToggle />
       </div>
     </header>
