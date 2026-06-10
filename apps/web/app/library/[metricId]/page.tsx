@@ -26,13 +26,16 @@ export default async function MetricDetailPage({
   params: Promise<{ metricId: string }>;
   searchParams: Promise<{ range?: string }>;
 }) {
+  // Next 15 delivers params already percent-decoded; validate against the
+  // canonical id shape (category.metric_name) so a crafted segment can't
+  // reach the upstream URL — and render the graceful unknown state instead.
   const { metricId: rawId } = await params;
-  const metricId = decodeURIComponent(rawId);
+  const metricId = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/.test(rawId) ? rawId : "";
   const sp = await searchParams;
   const range: Range = RANGES.includes(sp.range as Range) ? (sp.range as Range) : "30d";
 
   const [series, metrics, readiness, pinned] = await Promise.all([
-    safeSeries(metricId, range),
+    metricId ? safeSeries(metricId, range) : Promise.resolve(null),
     safeMetrics(),
     safeReadiness(),
     getPinnedMetrics(),
@@ -45,7 +48,7 @@ export default async function MetricDetailPage({
         <div className="card">
           <h2>Unknown signal</h2>
           <p className="empty">
-            “{metricId}” is not in the metric registry. <Link href="/library">Back to the Library</Link>.
+            That signal is not in the metric registry. <Link href="/library">Back to the Library</Link>.
           </p>
         </div>
       </section>

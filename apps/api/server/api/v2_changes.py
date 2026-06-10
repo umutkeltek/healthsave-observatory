@@ -63,7 +63,23 @@ async def changes(
         "last_narrative_at": last_narrative_at.isoformat() if last_narrative_at else None,
     }
     token = _token(body)
-    if request.headers.get("if-none-match") == token:
+    if token in _client_etags(request.headers.get("if-none-match")):
         return Response(status_code=304, headers={"ETag": token})
     response.headers["ETag"] = token
     return {**body, "version_token": token}
+
+
+def _client_etags(header: str | None) -> set[str]:
+    """Parse If-None-Match tolerantly: multi-value lists and proxy-weakened
+    ``W/"…"`` forms both still match (a gzip proxy downgrading the ETag must
+    not silently defeat every 304)."""
+    if not header:
+        return set()
+    out: set[str] = set()
+    for part in header.split(","):
+        candidate = part.strip()
+        if candidate.startswith("W/"):
+            candidate = candidate[2:].strip()
+        if candidate:
+            out.add(candidate)
+    return out

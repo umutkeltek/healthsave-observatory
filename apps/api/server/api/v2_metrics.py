@@ -9,6 +9,7 @@ shape; clients don't re-derive it). Additive, under the established
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
 from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
 from contracts.ontology import MetricDefinition, all_metrics, get_metric
@@ -58,7 +59,10 @@ async def list_metrics() -> list[dict]:
 async def metric_series(
     metric_id: str,
     range: str = "7d",
-    stream_id: str | None = None,
+    # Typed UUID: a malformed stream_id is a 422 at the edge instead of an
+    # asyncpg DataError → deterministic 500 deep in the query (this repo has
+    # been bitten by deterministic 500s before — clients retry them forever).
+    stream_id: UUID | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """One metric's time-series over a multi-timescale window.
@@ -116,7 +120,7 @@ def _point_dicts(points) -> list[dict]:
 async def metric_series_batch(
     ids: str,
     range: str = "7d",
-    stream_id: str | None = None,
+    stream_id: UUID | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Many metrics' time-series in one request (the dashboard's grid fetch).

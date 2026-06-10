@@ -15,8 +15,12 @@ export function RefreshInsightsButton() {
   const run = () =>
     startTransition(async () => {
       setNote(null);
-      const recovery = await triggerAnalysisAction("recovery_check");
-      const correlation = await triggerAnalysisAction("correlation_analysis");
+      // Independent analyses — run them concurrently (sequential worst case
+      // was 2 × 60s with the button frozen).
+      const [recovery, correlation] = await Promise.all([
+        triggerAnalysisAction("recovery_check"),
+        triggerAnalysisAction("correlation_analysis"),
+      ]);
       if (!recovery.ok && !correlation.ok) {
         const detail = recovery.error ?? correlation.error ?? "";
         setNote(

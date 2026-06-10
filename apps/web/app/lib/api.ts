@@ -52,15 +52,48 @@ const API_KEY = process.env.API_KEY ?? "";
 // probe calls override this (provider healthchecks legitimately take longer).
 const DEFAULT_TIMEOUT_MS = Number(process.env.API_TIMEOUT_MS ?? 5000);
 
+// Typed failure: the safe* loaders flatten errors to null for rendering, but
+// the status survives here so logging (and any page that cares) can tell a
+// 401 key mismatch from a timeout from "backend down" — they need different
+// operator actions and must not all look like "no data".
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number | null, // null = network/timeout, no response
+    public readonly detail: string | null = null,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+async function readDetail(res: Response): Promise<string | null> {
+  try {
+    const payload = (await res.json()) as { detail?: unknown };
+    if (!payload?.detail) return null;
+    return typeof payload.detail === "string" ? payload.detail : JSON.stringify(payload.detail);
+  } catch {
+    return null; // non-JSON error body
+  }
+}
+
 async function getJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
   const headers: Record<string, string> = {};
   if (API_KEY) headers["X-API-Key"] = API_KEY;
-  const res = await fetch(`${API_BASE}${path}`, {
-    cache: "no-store",
-    headers,
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (!res.ok) throw new Error(`${path} -> ${res.status}`);
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      cache: "no-store",
+      headers,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (cause) {
+    throw new ApiError(`${path} -> ${cause instanceof Error ? cause.name : "network error"}`, null);
+  }
+  if (!res.ok) {
+    const detail = await readDetail(res);
+    throw new ApiError(`${path} -> ${res.status}${detail ? `: ${detail}` : ""}`, res.status, detail);
+  }
   return res.json() as Promise<T>;
 }
 

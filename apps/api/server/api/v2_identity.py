@@ -78,7 +78,8 @@ async def list_sources(
     session: AsyncSession = Depends(get_session),
 ) -> SourcesResponse:
     rows = await registry.list_sources(session, DEFAULT_OWNER_ID, limit=limit, offset=offset)
-    total = await registry.count_sources(session, DEFAULT_OWNER_ID) if limit else len(rows)
+    paged = limit is not None or offset > 0
+    total = await registry.count_sources(session, DEFAULT_OWNER_ID) if paged else len(rows)
     return SourcesResponse(count=len(rows), total=total, sources=rows)
 
 
@@ -89,7 +90,8 @@ async def list_devices(
     session: AsyncSession = Depends(get_session),
 ) -> DevicesResponse:
     rows = await registry.list_devices(session, DEFAULT_OWNER_ID, limit=limit, offset=offset)
-    total = await registry.count_devices(session, DEFAULT_OWNER_ID) if limit else len(rows)
+    paged = limit is not None or offset > 0
+    total = await registry.count_devices(session, DEFAULT_OWNER_ID) if paged else len(rows)
     return DevicesResponse(count=len(rows), total=total, devices=rows)
 
 
@@ -100,7 +102,8 @@ async def list_streams(
     session: AsyncSession = Depends(get_session),
 ) -> StreamsResponse:
     rows = await registry.list_streams(session, DEFAULT_OWNER_ID, limit=limit, offset=offset)
-    total = await registry.count_streams(session, DEFAULT_OWNER_ID) if limit else len(rows)
+    paged = limit is not None or offset > 0
+    total = await registry.count_streams(session, DEFAULT_OWNER_ID) if paged else len(rows)
     return StreamsResponse(count=len(rows), total=total, streams=rows)
 
 

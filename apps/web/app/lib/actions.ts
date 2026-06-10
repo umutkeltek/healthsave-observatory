@@ -128,6 +128,7 @@ export async function togglePinAction(metricId: string): Promise<ActionResult> {
       path: "/",
       maxAge: 60 * 60 * 24 * 365,
       sameSite: "lax",
+      httpOnly: true,
     });
     revalidatePath("/");
     revalidatePath("/library");
@@ -144,6 +145,7 @@ export async function setDensityAction(mode: Density): Promise<ActionResult> {
       path: "/",
       maxAge: 60 * 60 * 24 * 365,
       sameSite: "lax",
+      httpOnly: true,
     });
     revalidatePath("/", "layout");
     return { ok: true };
