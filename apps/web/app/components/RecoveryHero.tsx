@@ -1,4 +1,5 @@
 import { BaselineRibbon } from "./BaselineRibbon";
+import { type Contributor, ContributorStack } from "./ContributorStack";
 import { CountUp } from "./CountUp";
 
 // Score → state label, using the same bands the product narrates by. The score
@@ -30,12 +31,14 @@ export function RecoveryHero({
   headline,
   ribbon,
   live,
+  contributors = [],
 }: {
   freshness: string;
   score: number | null;
   headline: string;
   ribbon: HeroRibbon | null;
   live?: boolean;
+  contributors?: Contributor[];
 }) {
   const state = score !== null ? stateFor(score) : null;
 
@@ -59,6 +62,8 @@ export function RecoveryHero({
       {ribbon && ribbon.values.length >= 2 && (
         <BaselineRibbon values={ribbon.values} band={ribbon.band} axis={ribbon.axis} live={live} />
       )}
+
+      {contributors.length > 0 && <ContributorStack contributors={contributors} />}
     </section>
   );
 }
