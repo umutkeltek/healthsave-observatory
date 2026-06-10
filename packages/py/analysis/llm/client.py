@@ -39,9 +39,45 @@ log = logging.getLogger("healthsave.analysis")
 _OLLAMA_DEFAULT_BASE_URL = "http://ollama:11434"
 
 # Inline chain-of-thought block emitted by reasoning models (qwen3, DeepSeek R1)
-# when the serving layer doesn't separate it out. ``\Z`` handles an unclosed
-# block — a narrative truncated mid-think has no user-facing prose to keep.
-_THINK_BLOCK_RE = re.compile(r"<think>.*?(?:</think>|\Z)", re.IGNORECASE | re.DOTALL)
+# when the serving layer doesn't separate it out; some chat templates spell it
+# ``<thinking>``. ``\Z`` handles an unclosed block — a narrative truncated
+# mid-think has no user-facing prose to keep.
+_THINK_BLOCK_RE = re.compile(
+    r"<think(?:ing)?>.*?(?:</think(?:ing)?>|\Z)", re.IGNORECASE | re.DOTALL
+)
+
+# Adaptive budget for reasoning models: when an attempt ends with
+# ``finish_reason == "length"`` and NO extractable prose (the model spent the
+# whole budget thinking), retry the same candidate once with a boosted
+# ``max_tokens`` instead of failing over to a model the user didn't pick.
+_TRUNCATION_RETRY_FACTOR = 4
+_TRUNCATION_RETRY_CAP = 8192
+
+
+def _content_to_text(value) -> str:
+    """Normalize a message field to plain text.
+
+    OpenAI-compatible servers usually return ``content`` as a string, but the
+    spec also allows a list of typed parts (``[{"type": "text", "text": ...}]``)
+    and error states can leave it ``None``. Anything non-textual is dropped.
+    """
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        parts: list[str] = []
+        for part in value:
+            if isinstance(part, str):
+                parts.append(part)
+            elif isinstance(part, dict):
+                text = part.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+            else:
+                text = getattr(part, "text", None)
+                if isinstance(text, str):
+                    parts.append(text)
+        return "".join(parts)
+    return ""
 
 
 def _extract_narrative(message) -> str:
@@ -58,7 +94,7 @@ def _extract_narrative(message) -> str:
     failed attempt so the candidate chain can move on.
     """
     for field in ("content", "reasoning_content"):
-        text = getattr(message, field, None) or ""
+        text = _content_to_text(getattr(message, field, None))
         text = _THINK_BLOCK_RE.sub("", text).strip()
         if text:
             return text
@@ -325,7 +361,6 @@ class HealthLLMClient:
             "model": model,
             "messages": messages,
             "temperature": self.config.temperature,
-            "max_tokens": self.config.max_tokens,
             "timeout": 120,
         }
         if candidate.provider == "ollama":
@@ -333,22 +368,66 @@ class HealthLLMClient:
         if candidate.api_key:
             kwargs["api_key"] = candidate.api_key
 
-        try:
-            response = await litellm.acompletion(**kwargs)
-        except Exception as exc:  # noqa: BLE001 - intentional wrap-and-raise
-            raise LLMUnavailableError(f"LLM call failed: {exc}") from exc
+        # Adaptive budget: attempt 1 uses the configured max_tokens; if the
+        # model is a reasoning model that spent the entire budget thinking
+        # (finish_reason "length" + no extractable prose), attempt 2 retries
+        # the SAME candidate with a boosted budget before failing over.
+        max_tokens = self.config.max_tokens
+        tokens_in = tokens_out = 0
+        raw = ""
+        response = None
+        for attempt in (1, 2):
+            kwargs["max_tokens"] = max_tokens
+            try:
+                response = await litellm.acompletion(**kwargs)
+            except Exception as exc:  # noqa: BLE001 - intentional wrap-and-raise
+                raise LLMUnavailableError(f"LLM call failed: {exc}") from exc
 
-        raw = _extract_narrative(response.choices[0].message)
-        if not raw:
+            # Defensive parse: a proxy/server error state can yield no choices
+            # or a None message. Surface it as LLMUnavailableError so the
+            # candidate chain moves on instead of crashing the run.
+            choices = getattr(response, "choices", None) or []
+            if not choices:
+                raise LLMUnavailableError(f"model {model!r} returned a response with no choices")
+            choice = choices[0]
+            raw = _extract_narrative(getattr(choice, "message", None))
+            finish_reason = getattr(choice, "finish_reason", None)
+
+            # Token accounting accumulates across attempts — a burned thinking
+            # budget is still spend the operator should see.
+            usage = getattr(response, "usage", None)
+            tokens_in += int(getattr(usage, "prompt_tokens", 0) or 0) if usage else 0
+            tokens_out += int(getattr(usage, "completion_tokens", 0) or 0) if usage else 0
+
+            if raw:
+                if finish_reason == "length":
+                    log.warning(
+                        "narrator: %s hit the %d-token cap mid-narrative; "
+                        "the briefing may be cut short — consider raising LLM_MAX_TOKENS",
+                        model,
+                        max_tokens,
+                    )
+                break
+
+            boosted = min(max_tokens * _TRUNCATION_RETRY_FACTOR, _TRUNCATION_RETRY_CAP)
+            if finish_reason == "length" and attempt == 1 and boosted > max_tokens:
+                log.warning(
+                    "narrator: %s spent all %d tokens reasoning with no prose; "
+                    "retrying once with max_tokens=%d",
+                    model,
+                    max_tokens,
+                    boosted,
+                )
+                max_tokens = boosted
+                continue
             raise LLMUnavailableError(
                 f"model {model!r} returned an empty narrative "
-                "(content and reasoning_content both empty after think-block stripping)"
+                "(content and reasoning_content both empty after think-block stripping"
+                + (", even after a boosted-budget retry" if attempt == 2 else "")
+                + ")"
             )
-        narrative = inject_disclaimer(raw)
-        usage = getattr(response, "usage", None)
-        tokens_in = int(getattr(usage, "prompt_tokens", 0) or 0) if usage else 0
-        tokens_out = int(getattr(usage, "completion_tokens", 0) or 0) if usage else 0
 
+        narrative = inject_disclaimer(raw)
         return InsightResult(
             narrative=narrative,
             tokens_in=tokens_in,

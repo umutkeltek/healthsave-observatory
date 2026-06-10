@@ -23,16 +23,17 @@ from analysis.egress import Destination, EgressDenied  # noqa: E402
 
 
 def _fake_response(
-    content: str,
+    content,
     prompt_tokens: int = 42,
     completion_tokens: int = 77,
     reasoning_content: str | None = None,
+    finish_reason: str = "stop",
 ):
     """Build a LiteLLM-shaped response object for tests."""
     message = SimpleNamespace(content=content)
     if reasoning_content is not None:
         message.reasoning_content = reasoning_content
-    choice = SimpleNamespace(message=message, finish_reason="stop", index=0)
+    choice = SimpleNamespace(message=message, finish_reason=finish_reason, index=0)
     usage = SimpleNamespace(
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
@@ -161,6 +162,109 @@ async def test_empty_primary_narrative_falls_through_to_fallback(monkeypatch):
 
     assert acompletion.await_count == 2
     assert "Recovery looks solid today." in result.narrative
+
+
+@pytest.mark.asyncio
+async def test_thinking_tag_variant_is_stripped(monkeypatch):
+    content = "<thinking>frame it neutrally</thinking>HRV held steady."
+    acompletion = AsyncMock(return_value=_fake_response(content))
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(LLMConfig(provider="ollama", model="qwen3:6b"))
+    result = await client.generate_insight("p", insight_type="daily_briefing")
+
+    assert result.narrative.startswith("HRV held steady.")
+    assert "<thinking>" not in result.narrative
+
+
+@pytest.mark.asyncio
+async def test_list_shaped_content_parts_are_joined(monkeypatch):
+    """OpenAI-compatible servers may return content as typed parts, not a str."""
+    content = [{"type": "text", "text": "Sleep was "}, {"type": "text", "text": "consistent."}]
+    acompletion = AsyncMock(return_value=_fake_response(content))
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(LLMConfig(provider="ollama", model="qwen3:6b"))
+    result = await client.generate_insight("p", insight_type="daily_briefing")
+
+    assert result.narrative.startswith("Sleep was consistent.")
+
+
+@pytest.mark.asyncio
+async def test_response_with_no_choices_fails_over_not_crashes(monkeypatch):
+    """A malformed provider response must feed the chain, not raise IndexError."""
+    responses = [
+        SimpleNamespace(choices=[], usage=None, model="ollama/qwen3:6b"),
+        _fake_response("Recovery looks solid today."),
+    ]
+    acompletion = AsyncMock(side_effect=responses)
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    config = LLMConfig(
+        provider="ollama",
+        model="qwen3:6b",
+        fallback=[LLMFallbackEntry(provider="ollama", model="llama3.1:8b")],
+    )
+    client = llm_client.HealthLLMClient(config)
+    result = await client.generate_insight("p", insight_type="daily_briefing")
+
+    assert acompletion.await_count == 2
+    assert "Recovery looks solid today." in result.narrative
+
+
+@pytest.mark.asyncio
+async def test_thinking_exhausted_budget_retries_same_model_with_boost(monkeypatch):
+    """finish_reason=length + no prose → one boosted-budget retry, same candidate."""
+    responses = [
+        _fake_response("<think>still planning the narrative", finish_reason="length"),
+        _fake_response(
+            "<think>plan</think>Resting heart rate stayed near baseline.",
+            prompt_tokens=42,
+            completion_tokens=900,
+        ),
+    ]
+    acompletion = AsyncMock(side_effect=responses)
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(LLMConfig(provider="ollama", model="qwen3:6b"))
+    result = await client.generate_insight("p", insight_type="daily_briefing")
+
+    assert acompletion.await_count == 2
+    first, second = acompletion.await_args_list
+    assert first.kwargs["max_tokens"] == 1000
+    assert second.kwargs["max_tokens"] == 4000
+    assert "Resting heart rate stayed near baseline." in result.narrative
+    # Token accounting includes the burned first attempt
+    assert result.tokens_out == 77 + 900
+
+
+@pytest.mark.asyncio
+async def test_boosted_retry_still_empty_fails_the_candidate(monkeypatch):
+    acompletion = AsyncMock(
+        return_value=_fake_response("<think>never stops thinking", finish_reason="length")
+    )
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(LLMConfig(provider="ollama", model="qwen3:6b"))
+
+    with pytest.raises(llm_client.LLMUnavailableError) as exc_info:
+        await client.generate_insight("p", insight_type="daily_briefing")
+    assert acompletion.await_count == 2  # one boost retry, not an endless loop
+    assert "boosted-budget retry" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_truncated_but_nonempty_narrative_is_kept_without_retry(monkeypatch):
+    """A narrative cut at the cap is still a narrative — warn, don't re-spend."""
+    response = _fake_response("Sleep debt is accumulating and", finish_reason="length")
+    acompletion = AsyncMock(return_value=response)
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(LLMConfig(provider="ollama", model="llama3.1:8b"))
+    result = await client.generate_insight("p", insight_type="daily_briefing")
+
+    assert acompletion.await_count == 1
+    assert "Sleep debt is accumulating" in result.narrative
 
 
 @pytest.mark.asyncio
