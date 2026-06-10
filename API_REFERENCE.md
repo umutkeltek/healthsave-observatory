@@ -231,7 +231,7 @@ The "honest accounting" surface: how much the app sent vs what was accepted/inse
 ```
 
 ### AI insights (v2) — keyed
-- `GET /api/v2/insights/latest` — current daily briefing + weekly summary (`null` until generated).
+- `GET /api/v2/insights/latest` — current daily briefing + weekly summary (`null` until generated), plus `runs.{daily_briefing,weekly_summary}` — the last narrator attempt per job as `{ status, error, at, completed_at, provider }` (`null` if that job never ran), so a missing brief is distinguishable from a failed one.
 - `GET /api/v2/insights/findings` — structured findings from the statistical engine (the analyst's evidence).
 - `GET /api/v2/insights/correlations` — discovered metric correlations.
 - `POST /api/v2/insights/trigger` — request a run. **Body:** `{ "type": "daily" | "weekly" | "anomaly" | ... }`.

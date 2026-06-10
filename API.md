@@ -637,7 +637,7 @@ Example response:
 | `/api/v2/devices` | GET | key | distinct device emitters (derived from streams; optional `limit`/`offset`) |
 | `/api/v2/streams` | GET | key | source-device streams with stable UUIDs (HA keys on these; optional `limit`/`offset`) |
 | `/api/v2/streams/{stream_id}` | GET | key | one source-device stream |
-| `/api/v2/insights/latest` | GET | key | latest daily-briefing + weekly-summary narratives |
+| `/api/v2/insights/latest` | GET | key | latest daily-briefing + weekly-summary narratives + last narrator run status per job (`runs`) |
 | `/api/v2/insights/correlations` | GET | key | recent cross-metric correlation findings |
 | `/api/v2/insights/findings` | GET | key | recent structured analysis findings |
 | `/api/v2/insights/narratives` | GET | key | narrative history, newest first (`type=`, `limit=`) |
