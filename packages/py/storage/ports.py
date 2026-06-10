@@ -60,7 +60,7 @@ if TYPE_CHECKING:
         RunStatus,
         TriggerKind,
     )
-    from .timescale.briefings import FindingRow, NarrativeRow
+    from .timescale.briefings import FindingRow, NarrativeRow, RunStatusRow
     from .timescale.experiments import ExperimentResultRow, ExperimentRow
     from .timescale.observations import SeriesPoint
     from .timescale.runs import PipelineRun, TriggeredBy
@@ -145,6 +145,13 @@ class BriefingRepository(Protocol):
         *,
         insight_types: Iterable[str] = ("daily_briefing", "weekly_summary"),
     ) -> dict[str, NarrativeRow]: ...
+
+    async def latest_runs_by_type(
+        self,
+        session: AsyncSession,
+        *,
+        run_types: Iterable[str] = ("daily_briefing", "weekly_summary"),
+    ) -> dict[str, RunStatusRow]: ...
 
     async def list_narratives(
         self,

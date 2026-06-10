@@ -40,13 +40,19 @@ class _Result:
 
 
 class _Session:
-    def __init__(self, rows):
+    """Fake AsyncSession. ``run_rows`` feeds the ``analysis_runs`` read that
+    /latest now issues alongside the narratives read; other queries get ``rows``."""
+
+    def __init__(self, rows, run_rows=()):
         self._rows = list(rows)
+        self._run_rows = list(run_rows)
         self.calls: list[tuple[str, dict]] = []
 
     async def execute(self, statement, params=None):
         sql = " ".join(str(statement).split())
         self.calls.append((sql, params or {}))
+        if "FROM analysis_runs" in sql:
+            return _Result(self._run_rows)
         return _Result(self._rows)
 
 
@@ -143,7 +149,64 @@ async def test_latest_narratives_shapes_daily_and_weekly():
 async def test_latest_narratives_missing_types_are_null():
     session = _Session([])
     result = await latest_narratives(session=session)
-    assert result == {"daily_briefing": None, "weekly_summary": None}
+    assert result == {
+        "daily_briefing": None,
+        "weekly_summary": None,
+        "runs": {"daily_briefing": None, "weekly_summary": None},
+    }
+
+
+@pytest.mark.asyncio
+async def test_latest_surfaces_failed_run_status():
+    """A failed narrator attempt is visible even when no narrative exists —
+    the card must be able to say "last attempt failed", not "no briefing yet"."""
+    run_rows = [
+        _Row(
+            run_type="weekly_summary",
+            status="failed",
+            error_message="all 2 narrator candidate(s) failed: deepseek/deepseek-chat: timeout",
+            started_at=datetime(2026, 6, 9, 6, 0, tzinfo=UTC),
+            completed_at=datetime(2026, 6, 9, 6, 1, tzinfo=UTC),
+            llm_provider=None,
+        ),
+    ]
+    session = _Session([], run_rows=run_rows)
+
+    result = await latest_narratives(session=session)
+
+    assert result["weekly_summary"] is None
+    run = result["runs"]["weekly_summary"]
+    assert run["status"] == "failed"
+    assert "timeout" in run["error"]
+    assert run["at"] == "2026-06-09T06:00:00+00:00"
+    assert run["completed_at"] == "2026-06-09T06:01:00+00:00"
+    assert result["runs"]["daily_briefing"] is None
+
+    runs_sql = next(sql for sql, _ in session.calls if "FROM analysis_runs" in sql)
+    assert "DISTINCT ON (run_type)" in runs_sql
+    assert "ORDER BY run_type, started_at DESC" in runs_sql
+
+
+@pytest.mark.asyncio
+async def test_latest_surfaces_completed_run_with_provider():
+    run_rows = [
+        _Row(
+            run_type="daily_briefing",
+            status="completed",
+            error_message=None,
+            started_at=datetime(2026, 6, 10, 7, 0, tzinfo=UTC),
+            completed_at=datetime(2026, 6, 10, 7, 2, tzinfo=UTC),
+            llm_provider="deepseek/deepseek-chat",
+        ),
+    ]
+    session = _Session([], run_rows=run_rows)
+
+    result = await latest_narratives(session=session)
+
+    run = result["runs"]["daily_briefing"]
+    assert run["status"] == "completed"
+    assert run["error"] is None
+    assert run["provider"] == "deepseek/deepseek-chat"
 
 
 # ──────────────────────────────────────────────────────────────

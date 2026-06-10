@@ -26,7 +26,7 @@ The series endpoints return points tagged with `source_id`, `unit`, and optional
 
 | Endpoint | Auth | Purpose |
 |---|---|---|
-| `GET /api/v2/insights/latest` | key | Latest daily-briefing + weekly-summary narratives |
+| `GET /api/v2/insights/latest` | key | Latest daily-briefing + weekly-summary narratives, plus the last narrator run status per job (`runs.{daily_briefing,weekly_summary}` = `{ status, error, at, completed_at, provider }`) |
 | `GET /api/v2/insights/findings` | key | Structured findings from the statistical engine (the evidence behind a briefing) |
 | `GET /api/v2/insights/narratives` | key | Narrative history, newest first (`type=daily_briefing\|weekly_summary`, `limit=`) |
 | `GET /api/v2/insights/correlations` | key | Recent cross-metric correlation findings |

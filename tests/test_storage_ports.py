@@ -35,6 +35,7 @@ from storage.ports import (
 from storage.timescale.briefings import (
     FindingRow,
     NarrativeRow,
+    RunStatusRow,
     TimescaleBriefingRepository,
 )
 from storage.timescale.briefings import default_repository as briefing_default_repository
@@ -211,6 +212,7 @@ class _InMemoryBriefingRepository:
     def __init__(self) -> None:
         self.narratives: list[NarrativeRow] = []
         self.findings: list[tuple[str, FindingRow]] = []  # (finding_type, row)
+        self.runs: list[RunStatusRow] = []
 
     async def latest_narratives_by_type(
         self,
@@ -226,6 +228,23 @@ class _InMemoryBriefingRepository:
             existing = out.get(row.insight_type)
             if existing is None or row.created_at > existing.created_at:
                 out[row.insight_type] = row
+        return out
+
+    async def latest_runs_by_type(
+        self,
+        session: Any,
+        *,
+        run_types: Iterable[str] = ("daily_briefing", "weekly_summary"),
+    ) -> dict[str, RunStatusRow]:
+        wanted = set(run_types)
+        out: dict[str, RunStatusRow] = {}
+        for row in self.runs:
+            if row.run_type not in wanted:
+                continue
+            existing = out.get(row.run_type)
+            epoch = datetime.min.replace(tzinfo=UTC)
+            if existing is None or (row.started_at or epoch) > (existing.started_at or epoch):
+                out[row.run_type] = row
         return out
 
     async def list_narratives(

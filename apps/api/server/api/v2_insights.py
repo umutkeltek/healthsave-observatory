@@ -44,6 +44,23 @@ def _narrative(row) -> dict | None:
     }
 
 
+def _run_status(row) -> dict | None:
+    """Shape a RunStatusRow for the wire, or None when that job never ran.
+
+    ``error`` is only ever non-null for ``status='failed'`` — it is the
+    narrator's stored failure message, never health data.
+    """
+    if row is None:
+        return None
+    return {
+        "status": row.status,
+        "error": row.error_message,
+        "at": row.started_at.isoformat() if row.started_at else None,
+        "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+        "provider": row.llm_provider,
+    }
+
+
 def _validate_period(period: str | None) -> str | None:
     """Return the leading day-count of a ``30d``/``90d`` period, or None."""
     if period is None:
@@ -82,13 +99,25 @@ async def list_correlations(
 
 @router.get("/latest")
 async def latest_narratives(session: AsyncSession = Depends(get_session)) -> dict:
-    """Most recent daily-briefing + weekly-summary narratives (the weekly-brief card)."""
+    """Most recent daily-briefing + weekly-summary narratives (the weekly-brief card).
+
+    ``runs`` carries the latest ``analysis_runs`` attempt per narrator job —
+    {status, error, at, completed_at, provider} — so the card can distinguish
+    "no briefing yet" from "the last attempt failed" (silent-failure review).
+    """
     narratives = await _BRIEFING_REPO.latest_narratives_by_type(
         session, insight_types=("daily_briefing", "weekly_summary")
+    )
+    runs = await _BRIEFING_REPO.latest_runs_by_type(
+        session, run_types=("daily_briefing", "weekly_summary")
     )
     return {
         "daily_briefing": _narrative(narratives.get("daily_briefing")),
         "weekly_summary": _narrative(narratives.get("weekly_summary")),
+        "runs": {
+            "daily_briefing": _run_status(runs.get("daily_briefing")),
+            "weekly_summary": _run_status(runs.get("weekly_summary")),
+        },
     }
 
 

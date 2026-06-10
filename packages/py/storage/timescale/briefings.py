@@ -53,6 +53,23 @@ class FindingRow:
     finding_type: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class RunStatusRow:
+    """The latest ``analysis_runs`` row for one ``run_type``.
+
+    The run-status companion to :class:`NarrativeRow` — lets the API say
+    *why* a narrative is missing or stale (last attempt failed / skipped)
+    instead of rendering a silent empty state.
+    """
+
+    run_type: str
+    status: str
+    error_message: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
+    llm_provider: str | None
+
+
 def _parse_structured_data(value: Any) -> dict[str, Any]:
     if value is None:
         return {}
@@ -108,6 +125,51 @@ class TimescaleBriefingRepository:
                 insight_type=row.insight_type,
                 narrative=row.narrative,
                 created_at=row.created_at,
+            )
+            for row in rows
+        }
+
+    async def latest_runs_by_type(
+        self,
+        session: AsyncSession,
+        *,
+        run_types: Iterable[str] = ("daily_briefing", "weekly_summary"),
+    ) -> dict[str, RunStatusRow]:
+        """Most recent ``analysis_runs`` row per ``run_type`` (DISTINCT ON pattern).
+
+        Failed and skipped runs count — that is the point: the narrator
+        surface uses this to report a failed last attempt instead of an
+        indistinguishable "no briefing yet".
+        """
+        type_list = sorted(set(run_types))
+        if not type_list:
+            return {}
+
+        placeholders = []
+        params: dict[str, Any] = {}
+        for index, t in enumerate(type_list):
+            name = f"t{index}"
+            placeholders.append(f":{name}")
+            params[name] = t
+
+        sql = text(
+            f"""
+            SELECT DISTINCT ON (run_type)
+                run_type, status, error_message, started_at, completed_at, llm_provider
+            FROM analysis_runs
+            WHERE run_type IN ({", ".join(placeholders)})
+            ORDER BY run_type, started_at DESC
+            """
+        )
+        rows = (await session.execute(sql, params)).fetchall()
+        return {
+            row.run_type: RunStatusRow(
+                run_type=row.run_type,
+                status=row.status,
+                error_message=row.error_message,
+                started_at=row.started_at,
+                completed_at=row.completed_at,
+                llm_provider=row.llm_provider,
             )
             for row in rows
         }
@@ -340,6 +402,14 @@ async def latest_narratives_by_type(
     insight_types: Iterable[str] = ("daily_briefing", "weekly_summary"),
 ) -> dict[str, NarrativeRow]:
     return await default_repository.latest_narratives_by_type(session, insight_types=insight_types)
+
+
+async def latest_runs_by_type(
+    session: AsyncSession,
+    *,
+    run_types: Iterable[str] = ("daily_briefing", "weekly_summary"),
+) -> dict[str, RunStatusRow]:
+    return await default_repository.latest_runs_by_type(session, run_types=run_types)
 
 
 async def fetch_anomalies(
