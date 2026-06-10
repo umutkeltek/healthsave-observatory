@@ -230,6 +230,18 @@ export function postInsightsTrigger(
   return postJson<TriggerResult>("/api/v2/insights/trigger", { type }, 60_000);
 }
 
+// Version axes (open endpoint). Mirrors server/api/v2_meta.py.
+
+export type MetaView = {
+  v2_status: string;
+  versions: Record<string, string>;
+  decision_record: string;
+};
+
+export function fetchMeta(): Promise<MetaView> {
+  return getJson<MetaView>("/api/v2/meta");
+}
+
 // Data-readiness — Insight Action Loop card #1. Mirrors server/api/v2_readiness.py.
 
 export type GateVerdict = {

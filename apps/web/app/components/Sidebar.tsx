@@ -3,10 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { useState, useTransition } from "react";
 
-import { setDensityAction } from "../lib/actions";
 import type { Density } from "../lib/prefs";
+import { DensityToggle, useOptimisticDensity } from "./DensityToggle";
 
 const ICONS: Record<string, ReactNode> = {
   overview: (
@@ -63,6 +62,19 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M2.3 11 8 14.1 13.7 11" />
     </>
   ),
+  integrations: (
+    <>
+      <path d="M5.5 2.5v3M10.5 2.5v3" />
+      <path d="M3.5 5.5h9v2.5a4.5 4.5 0 0 1-9 0z" />
+      <path d="M8 12.5v1.5" />
+    </>
+  ),
+  settings: (
+    <>
+      <circle cx="8" cy="8" r="2.2" />
+      <path d="M8 1.8v2M8 12.2v2M1.8 8h2M12.2 8h2M3.6 3.6l1.4 1.4M11 11l1.4 1.4M12.4 3.6 11 5M5 11l-1.4 1.4" />
+    </>
+  ),
   intelligence: (
     <>
       <path d="M8 1.8l1.5 3.2 3.2 1.5-3.2 1.5L8 11.2 6.5 8 3.3 6.5 6.5 5z" />
@@ -81,49 +93,12 @@ const NAV = [
   { href: "/data", label: "Data", icon: "data", essential: false },
   { href: "/library", label: "Library", icon: "library", essential: true },
   { href: "/compare", label: "Compare", icon: "compare", essential: false },
+  { href: "/integrations", label: "Integrations", icon: "integrations", essential: true },
   { href: "/privacy", label: "Privacy", icon: "privacy", essential: true },
   { href: "/intelligence", label: "Intelligence", icon: "intelligence", essential: false },
+  { href: "/settings", label: "Settings", icon: "settings", essential: true },
 ] as const;
 
-// Optimistic: the nav reshapes the instant you click; the cookie write +
-// server re-render settle in the background. Never disabled — switching back
-// and forth must feel like a light switch, not a form submit.
-function useOptimisticDensity(server: Density): [Density, (mode: Density) => void] {
-  const [local, setLocal] = useState<Density | null>(null);
-  const [, startTransition] = useTransition();
-  const pick = (mode: Density) => {
-    setLocal(mode);
-    startTransition(() => setDensityAction(mode).then(() => undefined));
-  };
-  return [local ?? server, pick];
-}
-
-function DensityToggle({
-  density,
-  onPick,
-}: {
-  density: Density;
-  onPick: (mode: Density) => void;
-}) {
-  return (
-    <div className="density-toggle" role="group" aria-label="View mode">
-      <button
-        type="button"
-        className={density === "essentials" ? "active" : ""}
-        onClick={() => onPick("essentials")}
-      >
-        Essentials
-      </button>
-      <button
-        type="button"
-        className={density === "observatory" ? "active" : ""}
-        onClick={() => onPick("observatory")}
-      >
-        Observatory
-      </button>
-    </div>
-  );
-}
 
 function NavIcon({ name }: { name: string }) {
   return (

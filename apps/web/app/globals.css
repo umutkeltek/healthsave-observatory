@@ -3084,3 +3084,105 @@ table.prov {
   color: var(--warn);
   border-color: rgba(232, 180, 95, 0.3);
 }
+
+/* Integrations + Settings (the manageable home) */
+
+.intg-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.intg-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.intg-head h2 {
+  margin-bottom: 4px;
+}
+
+.intg-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  color: var(--faint);
+}
+
+.intg-badge.intg-on {
+  color: var(--signal);
+  background: var(--signal-weak);
+  border-color: var(--signal-line);
+}
+
+.intg-badge.intg-manage {
+  color: var(--accent);
+  background: var(--accent-weak);
+  border-color: var(--accent-line);
+}
+
+.intg-badge.intg-host {
+  color: var(--muted);
+  background: var(--raise);
+}
+
+.intg-kind {
+  font-size: var(--fs-2xs);
+  color: var(--faint);
+  margin-bottom: var(--s2);
+}
+
+.intg-detail {
+  margin: 0 0 var(--s2);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  flex: 1 1 auto;
+}
+
+.set-hint {
+  margin: 0 0 var(--s3);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  max-width: 560px;
+}
+
+.set-toggle-row {
+  max-width: 260px;
+}
+
+.set-pins {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.set-pin-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.set-pin-row:last-child {
+  border-bottom: 0;
+}
+
+.set-pin-id {
+  margin-left: auto;
+  font-size: var(--fs-2xs);
+  color: var(--faint);
+}
+
+.set-system {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+  font-size: var(--fs-sm);
+}
