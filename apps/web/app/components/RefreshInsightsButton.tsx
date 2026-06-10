@@ -12,16 +12,26 @@ export function RefreshInsightsButton() {
   const [pending, startTransition] = useTransition();
   const [note, setNote] = useState<string | null>(null);
 
+  // The narration itself: prefer the weekly brief (the card's namesake; the
+  // only narrator job on a weekly-only live config), fall back to the daily
+  // briefing when weekly is disabled. The 409 probe costs nothing — the
+  // fallback never runs two narrations.
+  const runBriefing = async () => {
+    const weekly = await triggerAnalysisAction("weekly_summary");
+    if (weekly.ok || !(weekly.error ?? "").includes("disabled")) return weekly;
+    return triggerAnalysisAction("daily_briefing");
+  };
+
   const run = () =>
     startTransition(async () => {
       setNote(null);
       // Independent analyses — run them concurrently (sequential worst case
-      // froze the button for minutes). daily_briefing is the narration
-      // itself: without it this button never actually refreshed the brief.
+      // froze the button for minutes). Without the briefing trigger this
+      // button never actually refreshed the brief it sits on.
       const [recovery, correlation, briefing] = await Promise.all([
         triggerAnalysisAction("recovery_check"),
         triggerAnalysisAction("correlation_analysis"),
-        triggerAnalysisAction("daily_briefing"),
+        runBriefing(),
       ]);
       // The briefing IS this card — its failure must surface even when the
       // finding jobs succeeded (a swallowed brief error is the exact silent
@@ -55,7 +65,8 @@ export function RefreshInsightsButton() {
         <span className="brief-note mono">
           {note.includes("Intelligence") ? (
             <>
-              Analysis is off — <a href="/intelligence">enable it</a>.
+              {note.startsWith("Narration") ? "Narration" : "Analysis"} is off —{" "}
+              <a href="/intelligence">enable it</a>.
             </>
           ) : (
             note

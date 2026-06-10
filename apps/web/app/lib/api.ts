@@ -223,7 +223,11 @@ export type TriggerResult = {
   count?: number;
 };
 
-export type TriggerType = "correlation_analysis" | "recovery_check" | "daily_briefing";
+export type TriggerType =
+  | "correlation_analysis"
+  | "recovery_check"
+  | "daily_briefing"
+  | "weekly_summary";
 
 export function postInsightsTrigger(type: TriggerType): Promise<TriggerResult> {
   // Analysis runs inline server-side (daily_briefing includes a real LLM

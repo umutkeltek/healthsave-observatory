@@ -586,9 +586,9 @@ export interface paths {
          * Trigger
          * @description Run an analysis job on demand.
          *
-         *     Supports ``correlation_analysis``, ``recovery_check`` and
-         *     ``daily_briefing`` (the brief card's refresh — Brain-1 findings plus a
-         *     Brain-2 narration). Each checks its config block is enabled, runs the
+         *     Supports ``correlation_analysis``, ``recovery_check``, ``daily_briefing``
+         *     and ``weekly_summary`` (the brief card's refresh — Brain-1 findings plus
+         *     a Brain-2 narration). Each checks its config block is enabled, runs the
          *     engine job inline through the pipeline_runs ledger, and reports
          *     completed vs skipped.
          */
@@ -1580,7 +1580,7 @@ export interface components {
         /**
          * TriggerBody
          * @description v2 trigger request — extensible by ``type`` (correlation_analysis,
-         *     recovery_check, daily_briefing).
+         *     recovery_check, daily_briefing, weekly_summary).
          */
         TriggerBody: {
             /**

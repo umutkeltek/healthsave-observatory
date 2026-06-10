@@ -182,7 +182,7 @@ async def list_findings(
 
 class TriggerBody(BaseModel):
     """v2 trigger request — extensible by ``type`` (correlation_analysis,
-    recovery_check, daily_briefing)."""
+    recovery_check, daily_briefing, weekly_summary)."""
 
     type: str = "correlation_analysis"
 
@@ -191,26 +191,29 @@ class TriggerBody(BaseModel):
 async def trigger(request: Request, body: TriggerBody | None = None) -> dict:
     """Run an analysis job on demand.
 
-    Supports ``correlation_analysis``, ``recovery_check`` and
-    ``daily_briefing`` (the brief card's refresh — Brain-1 findings plus a
-    Brain-2 narration). Each checks its config block is enabled, runs the
+    Supports ``correlation_analysis``, ``recovery_check``, ``daily_briefing``
+    and ``weekly_summary`` (the brief card's refresh — Brain-1 findings plus
+    a Brain-2 narration). Each checks its config block is enabled, runs the
     engine job inline through the pipeline_runs ledger, and reports
     completed vs skipped.
     """
     body = body or TriggerBody()
     analysis = request.app.state.analysis_config.analysis
 
-    if body.type == "daily_briefing":
-        if not analysis.daily_briefing.enabled:
-            raise HTTPException(status_code=409, detail="daily_briefing is disabled")
-        run_id = await _record_trigger_run(
-            request,
-            job_kind="daily_briefing",
-            coro=request.app.state.analysis_engine.run_daily_briefing(),
+    if body.type in ("daily_briefing", "weekly_summary"):
+        job_config = getattr(analysis, body.type)
+        if not job_config.enabled:
+            raise HTTPException(status_code=409, detail=f"{body.type} is disabled")
+        engine = request.app.state.analysis_engine
+        coro = (
+            engine.run_daily_briefing()
+            if body.type == "daily_briefing"
+            else engine.run_weekly_summary()
         )
+        run_id = await _record_trigger_run(request, job_kind=body.type, coro=coro)
         return {
             "status": "completed" if run_id is not None else "skipped",
-            "run_type": "daily_briefing",
+            "run_type": body.type,
             "run_id": run_id,
         }
 

@@ -30,7 +30,7 @@ The series endpoints return points tagged with `source_id`, `unit`, and optional
 | `GET /api/v2/insights/findings` | key | Structured findings from the statistical engine (the evidence behind a briefing) |
 | `GET /api/v2/insights/narratives` | key | Narrative history, newest first (`type=daily_briefing\|weekly_summary`, `limit=`) |
 | `GET /api/v2/insights/correlations` | key | Recent cross-metric correlation findings |
-| `POST /api/v2/insights/trigger` | key | Run an analysis job on demand (body `{ "type": "correlation_analysis" | "recovery_check" | "daily_briefing" }`) |
+| `POST /api/v2/insights/trigger` | key | Run an analysis job on demand (body `{ "type": "correlation_analysis" | "recovery_check" | "daily_briefing" | "weekly_summary" }`) |
 | `GET /api/v2/readiness` | key | Per-metric data sufficiency — is there enough history to run anomaly/trend analysis |
 
 Findings are computed by a deterministic statistical engine; the local LLM only narrates them. See [How the AI analysis works](../operations/local-llm.md) for the two-brain split.
