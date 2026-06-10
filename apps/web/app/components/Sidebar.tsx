@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { setDensityAction } from "../lib/actions";
 import type { Density } from "../lib/prefs";
@@ -85,24 +85,39 @@ const NAV = [
   { href: "/intelligence", label: "Intelligence", icon: "intelligence", essential: false },
 ] as const;
 
-function DensityToggle({ density }: { density: Density }) {
-  const [pending, startTransition] = useTransition();
-  const pick = (mode: Density) => startTransition(() => setDensityAction(mode).then(() => undefined));
+// Optimistic: the nav reshapes the instant you click; the cookie write +
+// server re-render settle in the background. Never disabled — switching back
+// and forth must feel like a light switch, not a form submit.
+function useOptimisticDensity(server: Density): [Density, (mode: Density) => void] {
+  const [local, setLocal] = useState<Density | null>(null);
+  const [, startTransition] = useTransition();
+  const pick = (mode: Density) => {
+    setLocal(mode);
+    startTransition(() => setDensityAction(mode).then(() => undefined));
+  };
+  return [local ?? server, pick];
+}
+
+function DensityToggle({
+  density,
+  onPick,
+}: {
+  density: Density;
+  onPick: (mode: Density) => void;
+}) {
   return (
     <div className="density-toggle" role="group" aria-label="View mode">
       <button
         type="button"
         className={density === "essentials" ? "active" : ""}
-        disabled={pending}
-        onClick={() => pick("essentials")}
+        onClick={() => onPick("essentials")}
       >
         Essentials
       </button>
       <button
         type="button"
         className={density === "observatory" ? "active" : ""}
-        disabled={pending}
-        onClick={() => pick("observatory")}
+        onClick={() => onPick("observatory")}
       >
         Observatory
       </button>
@@ -139,7 +154,8 @@ export function Sidebar({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const items = density === "essentials" ? NAV.filter((item) => item.essential) : NAV;
+  const [shownDensity, pickDensity] = useOptimisticDensity(density);
+  const items = shownDensity === "essentials" ? NAV.filter((item) => item.essential) : NAV;
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -168,7 +184,7 @@ export function Sidebar({
       </nav>
 
       <div className="sidebar-foot">
-        <DensityToggle density={density} />
+        <DensityToggle density={shownDensity} onPick={pickDensity} />
         {status}
       </div>
     </aside>
