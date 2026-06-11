@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { type ReactNode, Suspense } from "react";
 
+import { CommandPalette } from "./components/CommandPalette";
+import { PaletteHost } from "./components/PaletteHost";
 import { Shell } from "./components/Shell";
 import {
   SidebarStatus,
@@ -52,6 +54,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         >
           {children}
         </Shell>
+        {/* ⌘K palette — pages-only while the catalog streams in. */}
+        <Suspense fallback={<CommandPalette metrics={[]} />}>
+          <PaletteHost />
+        </Suspense>
       </body>
     </html>
   );
