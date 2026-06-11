@@ -21,6 +21,11 @@ function dayLabel(iso: string | null): string {
   return iso ? iso.slice(0, 10) : "—";
 }
 
+// Server-enforced per-request ceiling (SECURITY-004, ORDER BY time DESC) —
+// disclose it whenever a metric holds more, or "rows on host" overpromises
+// what one download actually contains.
+const ROW_CAP = 100_000;
+
 export function ExportCard({ metrics }: { metrics: ExportMetricInfo[] | null }) {
   const available = (metrics ?? []).filter((m) => m.count > 0);
   const [metric, setMetric] = useState<string>(available[0]?.metric ?? "all");
@@ -91,8 +96,10 @@ export function ExportCard({ metrics }: { metrics: ExportMetricInfo[] | null }) 
         {available.length === 0
           ? "nothing exportable yet — sync some data first"
           : selected
-            ? `${selected.count.toLocaleString()} rows on host · ${dayLabel(selected.oldest)} → ${dayLabel(selected.newest)}`
-            : `${available.length} metrics · one JSON object, capped at 100k rows per metric`}
+            ? `${selected.count.toLocaleString()} rows on host · ${dayLabel(selected.oldest)} → ${dayLabel(selected.newest)}${
+                selected.count > ROW_CAP ? " · each download keeps the newest 100,000 rows" : ""
+              }`
+            : `${available.length} metrics · one JSON object · newest 100,000 rows per metric`}
       </div>
     </article>
   );
