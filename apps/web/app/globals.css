@@ -3258,3 +3258,99 @@ table.prov {
   margin-right: 8px;
   vertical-align: baseline;
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   Relationships — computed correlations + the pair explorer
+   ───────────────────────────────────────────────────────────────────── */
+
+.rel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+.rel-sub {
+  margin: var(--s1) 0 var(--s4);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  max-width: 64ch;
+}
+.rel-pair {
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--dur-1) ease;
+}
+.rel-pair:hover {
+  border-bottom-color: var(--accent-line);
+}
+.rel-x {
+  color: var(--faint);
+  padding: 0 2px;
+}
+.rel-r {
+  white-space: nowrap;
+}
+/* Signed strength bar: |r| as width, hue by direction. */
+.rel-bar {
+  display: inline-block;
+  vertical-align: middle;
+  width: 56px;
+  height: 4px;
+  margin-right: var(--s2);
+  border-radius: 999px;
+  background: var(--raise);
+  overflow: hidden;
+}
+.rel-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--up);
+}
+.rel-bar.neg > span {
+  background: var(--down);
+}
+.rel-weak {
+  color: var(--warn);
+}
+.rel-stat {
+  margin: var(--s4) 0 var(--s3);
+  font-size: var(--fs-sm);
+  color: var(--signal);
+}
+.rel-note {
+  margin: var(--s2) 0 var(--s5);
+  font-size: var(--fs-xs);
+  color: var(--faint);
+}
+
+/* Scatter — one dot per shared UTC day */
+.scatter {
+  margin: var(--s4) 0 0;
+}
+.scatter-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.scatter-frame {
+  fill: none;
+  stroke: var(--line);
+}
+.scatter-dot {
+  fill: var(--signal);
+  fill-opacity: 0.66;
+  transition: fill-opacity var(--dur-1) ease;
+}
+.scatter-dot:hover {
+  fill-opacity: 1;
+}
+.scatter-cap {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-top: var(--s2);
+  font-size: var(--fs-2xs);
+  color: var(--faint);
+}
