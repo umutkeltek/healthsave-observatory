@@ -44,6 +44,18 @@ export function Topbar({
         <p>{sub}</p>
       </div>
       <div className="topbar-status">
+        <button
+          type="button"
+          className="palette-btn"
+          aria-label="Jump to a signal or page (Cmd+K)"
+          onClick={() => window.dispatchEvent(new Event("hs:palette"))}
+        >
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
+            <circle cx="7" cy="7" r="4.2" />
+            <path d="M10.2 10.2 13.5 13.5" />
+          </svg>
+          <kbd className="palette-kbd">⌘K</kbd>
+        </button>
         <LiveStatus />
         {status}
         <ThemeToggle />
