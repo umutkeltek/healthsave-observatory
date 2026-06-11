@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { DataTable } from "../components/DataTable";
 import { DayOfWeekChart } from "../components/DayOfWeekChart";
+import { ExportCard } from "../components/ExportCard";
 import { FilterBar } from "../components/FilterBar";
 import { HeatmapChart } from "../components/HeatmapChart";
 import { MetricCard } from "../components/MetricCard";
@@ -15,6 +16,7 @@ import { demoPatternSeries } from "../lib/demoSeries";
 import {
   GRID_METRICS,
   loadReadinessSparklines,
+  safeExportMetrics,
   safeMetrics,
   safeReadiness,
   safeSeries,
@@ -63,10 +65,11 @@ export default async function DataPage({ searchParams }: { searchParams: Promise
   const sortSel = one(sp.sort);
   const range = RANGES.includes(one(sp.range)) ? one(sp.range) : "7d";
 
-  const [readiness, metrics, streams] = await Promise.all([
+  const [readiness, metrics, streams, exportMetrics] = await Promise.all([
     safeReadiness(),
     safeMetrics(),
     safeStreams(),
+    safeExportMetrics(),
   ]);
   const all = metrics ?? [];
   const categories = [...new Set(all.map((m) => m.category).filter(Boolean))].sort();
@@ -217,6 +220,13 @@ export default async function DataPage({ searchParams }: { searchParams: Promise
       </div>
       <section className="lead">
         <ReadinessCard readiness={readiness} sparklines={sparklines} />
+      </section>
+
+      <div className="section-label" style={{ marginTop: 36 }}>
+        Take it with you
+      </div>
+      <section className="lead">
+        <ExportCard metrics={exportMetrics} />
       </section>
     </>
   );

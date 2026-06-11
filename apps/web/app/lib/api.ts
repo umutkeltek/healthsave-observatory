@@ -654,6 +654,22 @@ export function postTestConnection(body: TestConnectionPayload): Promise<TestCon
   return postJson<TestConnectionResult>("/api/v2/intelligence/test-connection", body);
 }
 
+// Export — the per-metric CSV/JSON dump surface. Mirrors server/api/v2_export.py;
+// metric names here are the legacy public export names (heart_rate, hrv, …),
+// NOT ontology ids — always drive the UI from this list.
+
+export type ExportMetricInfo = {
+  metric: string;
+  display_name: string;
+  count: number;
+  oldest: string | null;
+  newest: string | null;
+};
+
+export function fetchExportMetrics(): Promise<ExportMetricInfo[]> {
+  return getJson<ExportMetricInfo[]>("/api/v2/export/metrics", 10_000);
+}
+
 export function fetchSources(): Promise<SourcesResponse> {
   return getJson<SourcesResponse>("/api/v2/sources");
 }

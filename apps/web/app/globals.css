@@ -3354,3 +3354,14 @@ table.prov {
   font-size: var(--fs-2xs);
   color: var(--faint);
 }
+
+/* ── Export card (/data) ── */
+.export-btn {
+  align-self: flex-end;
+  text-decoration: none;
+}
+.export-meta {
+  margin-top: var(--s3);
+  font-size: var(--fs-2xs);
+  color: var(--faint);
+}
