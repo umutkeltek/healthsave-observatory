@@ -276,3 +276,48 @@ export function detectDivergence(points: SeriesPoint[]): SourceDivergence {
     sources: means.map((m) => m.source),
   };
 }
+
+// ── Cross-metric relationship (the Relationships surface) ────────────────────
+//
+// Align two series on shared UTC days (mean per day) and measure how they move
+// together. Both sides stay verbatim — the output is a coefficient over shared
+// days, never a merged number, and the UI must always frame it as correlation,
+// not causation.
+
+export type AlignedPair = { day: string; a: number; b: number };
+
+export function alignDaily(a: SeriesPoint[], b: SeriesPoint[]): AlignedPair[] {
+  const other = new Map(bucketBy(b, "day", "mean").map((bucket) => [bucket.t, bucket.value]));
+  const out: AlignedPair[] = [];
+  for (const bucket of bucketBy(a, "day", "mean")) {
+    const value = other.get(bucket.t);
+    if (value !== undefined) out.push({ day: bucket.t, a: bucket.value, b: value });
+  }
+  return out;
+}
+
+// Below this many shared days a coefficient is noise, not signal — return null
+// and let the UI say "not enough overlapping days" instead of a fake r.
+export const CORRELATION_MIN_DAYS = 7;
+
+export type PearsonResult = { r: number; n: number };
+
+export function pearson(pairs: AlignedPair[]): PearsonResult | null {
+  const n = pairs.length;
+  if (n < CORRELATION_MIN_DAYS) return null;
+  const meanA = pairs.reduce((sum, p) => sum + p.a, 0) / n;
+  const meanB = pairs.reduce((sum, p) => sum + p.b, 0) / n;
+  let cov = 0;
+  let varA = 0;
+  let varB = 0;
+  for (const p of pairs) {
+    const da = p.a - meanA;
+    const db = p.b - meanB;
+    cov += da * db;
+    varA += da * da;
+    varB += db * db;
+  }
+  // A flat series correlates with nothing — r would be 0/0.
+  if (varA === 0 || varB === 0) return null;
+  return { r: Number((cov / Math.sqrt(varA * varB)).toFixed(3)), n };
+}

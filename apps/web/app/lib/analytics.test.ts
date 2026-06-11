@@ -1,14 +1,17 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  alignDaily,
   bucketBy,
   classify,
+  CORRELATION_MIN_DAYS,
   dayOfWeekPivot,
   detectDivergence,
   distribution,
   groupBySource,
   groupByStream,
   hrZoneHistogram,
+  pearson,
   periodSplit,
   topN,
   weekHourPivot,
@@ -194,5 +197,45 @@ describe("detectDivergence", () => {
   it("ignores sources with too few points", () => {
     const result = detectDivergence([...mk("apple", [50, 50, 50]), ...mk("whoop", [90])]);
     expect(result.diverged).toBe(false);
+  });
+});
+
+describe("alignDaily + pearson", () => {
+  const day = (i: number) => `2026-06-${String(i + 1).padStart(2, "0")}T08:00:00Z`;
+  const series = (vals: number[]) => vals.map((v, i) => pt(day(i), v));
+
+  it("joins on shared UTC days and keeps both sides verbatim", () => {
+    const a = series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    const b = series([10, 20, 30]); // only the first 3 days overlap
+    const pairs = alignDaily(a, b);
+    expect(pairs.length).toBe(3);
+    expect(pairs[0]).toEqual({ day: "2026-06-01", a: 1, b: 10 });
+    expect(pairs[2]).toEqual({ day: "2026-06-03", a: 3, b: 30 });
+  });
+
+  it("day-averages multiple readings before joining", () => {
+    const a = [pt(day(0), 10), pt("2026-06-01T20:00:00Z", 20)];
+    const b = [pt(day(0), 5)];
+    expect(alignDaily(a, b)).toEqual([{ day: "2026-06-01", a: 15, b: 5 }]);
+  });
+
+  it("returns null below the minimum overlap", () => {
+    const vals = [1, 2, 3, 4, 5, 6];
+    expect(vals.length).toBeLessThan(CORRELATION_MIN_DAYS);
+    expect(pearson(alignDaily(series(vals), series(vals)))).toBeNull();
+  });
+
+  it("r=1 for a linear relationship, r=-1 inverted", () => {
+    const a = [1, 2, 3, 4, 5, 6, 7, 8];
+    const up = pearson(alignDaily(series(a), series(a.map((v) => v * 3 + 2))));
+    expect(up?.r).toBe(1);
+    expect(up?.n).toBe(8);
+    const down = pearson(alignDaily(series(a), series(a.map((v) => 100 - v))));
+    expect(down?.r).toBe(-1);
+  });
+
+  it("returns null when one side is flat (zero variance)", () => {
+    const a = [1, 2, 3, 4, 5, 6, 7, 8];
+    expect(pearson(alignDaily(series(a), series(a.map(() => 42))))).toBeNull();
   });
 });

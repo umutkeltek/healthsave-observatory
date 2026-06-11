@@ -14,6 +14,7 @@ const TITLES: Record<string, { title: string; sub: string }> = {
   "/sources": { title: "Sources", sub: "Where your data comes from — origin and freshness." },
   "/data": { title: "Data", sub: "Coverage, freshness, and every metric." },
   "/compare": { title: "Compare", sub: "Period vs previous, source vs source — both kept." },
+  "/relationships": { title: "Relationships", sub: "How your signals move together — computed, never assumed." },
   "/privacy": { title: "Privacy", sub: "What leaves this host." },
   "/library": { title: "Library", sub: "Every signal you collect — browsable, pinnable." },
   "/intelligence": { title: "Intelligence", sub: "The narrator: local by default, cloud by consent." },

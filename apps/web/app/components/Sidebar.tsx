@@ -55,6 +55,14 @@ const ICONS: Record<string, ReactNode> = {
     </>
   ),
   privacy: <path d="M8 2.2l4.5 1.8v3.6c0 2.8-1.9 4.7-4.5 5.6-2.6-.9-4.5-2.8-4.5-5.6V4z" />,
+  relationships: (
+    <>
+      <circle cx="4.2" cy="11.6" r="1.8" />
+      <circle cx="11.8" cy="4.4" r="1.8" />
+      <path d="M5.6 10.3 10.4 5.7" />
+      <path d="M11.8 8.6v3M10.3 10.1h3" />
+    </>
+  ),
   library: (
     <>
       <path d="M8 2.2 13.7 5.3 8 8.4 2.3 5.3z" />
@@ -93,6 +101,7 @@ const NAV = [
   { href: "/data", label: "Data", icon: "data", essential: false },
   { href: "/library", label: "Library", icon: "library", essential: true },
   { href: "/compare", label: "Compare", icon: "compare", essential: false },
+  { href: "/relationships", label: "Relationships", icon: "relationships", essential: false },
   { href: "/integrations", label: "Integrations", icon: "integrations", essential: true },
   { href: "/privacy", label: "Privacy", icon: "privacy", essential: true },
   { href: "/intelligence", label: "Intelligence", icon: "intelligence", essential: false },

@@ -340,6 +340,27 @@ export function fetchFindings(type?: string): Promise<FindingsList> {
   return getJson<FindingsList>(`/api/v2/insights/findings${query}`);
 }
 
+// Persisted cross-metric correlations — the statistical engine's output; the
+// web only renders them. Mirrors /api/v2/insights/correlations (fields come
+// from structured_data, so every one is nullable on the wire).
+
+export type Correlation = {
+  metric_a: string | null;
+  metric_b: string | null;
+  coefficient: number | null;
+  method: string | null;
+  period_days: number | null;
+  p_value: number | null;
+  created_at: string | null;
+};
+
+export type CorrelationsList = { correlations: Correlation[]; count: number };
+
+export function fetchCorrelations(period?: string): Promise<CorrelationsList> {
+  const query = period ? `?period=${encodeURIComponent(period)}` : "";
+  return getJson<CorrelationsList>(`/api/v2/insights/correlations${query}`);
+}
+
 // Experiment candidates — "what to try next". Mirrors
 // server/api/v2_experiments.py /candidates.
 

@@ -1,4 +1,4 @@
-import type { MetricSeries, MetricSummary, SeriesPoint } from "./api";
+import type { Correlation, MetricSeries, MetricSummary, SeriesPoint } from "./api";
 
 // A believable demo series for /compare so a fresh clone (no backend) renders
 // alive — parallel to DEMO_PROVENANCE. Two sources for the SAME metric (HRV),
@@ -77,3 +77,90 @@ export const DEMO_COMPARE_SERIES: MetricSeries = {
   end: `${DAYS[DAYS.length - 1]}T08:00:00Z`,
   points: [...points("Apple Watch", APPLE_HRV), ...points("Whoop", WHOOP_HRV)],
 };
+
+// ── Relationships demo (fresh clone, no backend) ────────────────────────────
+//
+// A believable set of persisted correlations plus a deterministic related
+// pair for the explorer. Deliberately includes one weak, non-significant row
+// (p > 0.05) — the demo must model honesty, not just success.
+
+export const DEMO_RELATE_METRICS: MetricSummary[] = [
+  { id: "sleep.duration", display_name: "Sleep Duration", category: "sleep", value_type: "numeric", canonical_unit: "min" },
+  { id: "vital.hrv_sdnn", display_name: "Heart Rate Variability", category: "vital", value_type: "numeric", canonical_unit: "ms" },
+  { id: "activity.steps", display_name: "Steps", category: "activity", value_type: "numeric", canonical_unit: "count" },
+  { id: "vital.resting_heart_rate", display_name: "Resting Heart Rate", category: "vital", value_type: "numeric", canonical_unit: "bpm" },
+  { id: "activity.exercise_minutes", display_name: "Exercise Minutes", category: "activity", value_type: "numeric", canonical_unit: "min" },
+];
+
+export const DEMO_CORRELATIONS: Correlation[] = [
+  {
+    metric_a: "sleep.duration",
+    metric_b: "vital.hrv_sdnn",
+    coefficient: 0.58,
+    method: "spearman",
+    period_days: 90,
+    p_value: 0.006,
+    created_at: "2026-06-09T06:10:00Z",
+  },
+  {
+    metric_a: "activity.steps",
+    metric_b: "vital.resting_heart_rate",
+    coefficient: -0.42,
+    method: "pearson",
+    period_days: 90,
+    p_value: 0.021,
+    created_at: "2026-06-09T06:10:00Z",
+  },
+  {
+    metric_a: "activity.exercise_minutes",
+    metric_b: "vital.hrv_sdnn",
+    coefficient: 0.31,
+    method: "pearson",
+    period_days: 30,
+    p_value: 0.094,
+    created_at: "2026-06-09T06:10:00Z",
+  },
+];
+
+// Two coupled 30-day daily series for the explorer: B follows A's shape at
+// ~0.6 strength plus its own deterministic wobble, scaled into a plausible
+// range for each metric. No Date.now(); clearly labelled demo where rendered.
+export function demoRelatedPair(
+  a: MetricSummary,
+  b: MetricSummary,
+): { a: MetricSeries; b: MetricSeries } {
+  const base = Date.parse("2026-05-11T08:00:00Z");
+  const scale = (m: MetricSummary): { mid: number; amp: number } => {
+    if (m.canonical_unit === "bpm") return { mid: 62, amp: 9 };
+    if (m.canonical_unit === "ms") return { mid: 52, amp: 14 };
+    if (m.canonical_unit === "count") return { mid: 8200, amp: 2600 };
+    return { mid: 420, amp: 70 }; // minutes-ish default
+  };
+  const sa = scale(a);
+  const sb = scale(b);
+  const shapeA: number[] = [];
+  for (let i = 0; i < 30; i += 1) {
+    // Smooth multi-week rhythm + a deterministic wobble, in [-1, 1].
+    shapeA.push(0.7 * Math.sin(i * 0.45) + 0.3 * ((((i * 11) % 7) / 3) - 1));
+  }
+  const mk = (m: MetricSummary, vals: number[]): MetricSeries => ({
+    metric: m,
+    range: "30d",
+    start: new Date(base).toISOString(),
+    end: new Date(base + 29 * 86_400_000).toISOString(),
+    points: vals.map((v, i) => ({
+      t: new Date(base + i * 86_400_000).toISOString(),
+      value: Math.round(v),
+      code: null,
+      unit: m.canonical_unit ?? "",
+      source_id: "Demo",
+      stream_id: "demo-stream",
+      confidence: null,
+    })),
+  });
+  const valsA = shapeA.map((s) => sa.mid + sa.amp * s);
+  const valsB = shapeA.map(
+    (s, i) => sb.mid + sb.amp * (0.62 * s + 0.38 * (0.9 * Math.sin(i * 1.7 + 2))),
+  );
+  return { a: mk(a, valsA), b: mk(b, valsB) };
+}

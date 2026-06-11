@@ -169,6 +169,7 @@ export async function triggerAnalysisAction(
     const result = await postInsightsTrigger(type);
     revalidatePath("/");
     revalidatePath("/findings");
+    revalidatePath("/relationships");
     return { ok: true, status: result.status };
   } catch (error) {
     return failure(error, "Could not run the analysis.");
