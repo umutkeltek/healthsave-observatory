@@ -46,6 +46,10 @@ TYPE_TO_MODULES: dict[str, list[str]] = {
     "Readiness": ["server.api.v2_readiness"],
     "InsightsLatest": ["server.api.v2_insights"],
     "FindingsList": ["server.api.v2_insights"],
+    "CorrelationsList": ["server.api.v2_insights"],
+    # The export list's keys are emitted by the storage adapter's dict
+    # literal, not the thin route module — gate against where they live.
+    "ExportMetricInfo": ["server.api.v2_export", "storage.timescale.export"],
     "Candidates": ["server.api.v2_experiments"],
     "ExperimentList": ["server.api.v2_experiments"],
     "Experiment": ["server.api.v2_experiments"],
