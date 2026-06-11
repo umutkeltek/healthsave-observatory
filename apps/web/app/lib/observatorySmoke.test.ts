@@ -8,17 +8,26 @@ import { describe, expect, it } from "bun:test";
 // page renders empty or wrong and these go red before a deploy does.
 
 import {
+  alignDaily,
   bucketBy,
   classify,
+  CORRELATION_MIN_DAYS,
   dayOfWeekPivot,
   distribution,
   groupBySource,
   groupByStream,
   hrZoneHistogram,
+  pearson,
   periodSplit,
   weekHourPivot,
 } from "./analytics";
-import { DEMO_COMPARE_SERIES, demoPatternSeries } from "./demoSeries";
+import {
+  DEMO_COMPARE_SERIES,
+  DEMO_CORRELATIONS,
+  DEMO_RELATE_METRICS,
+  demoPatternSeries,
+  demoRelatedPair,
+} from "./demoSeries";
 import { comparability, coverageVerdict } from "./healthOpinion";
 import { buildCoverage, DEMO_PROVENANCE } from "./provenance";
 import { postureChip } from "./load";
@@ -123,5 +132,29 @@ describe("Shell flow: privacy posture chip", () => {
     expect(postureChip({ ...base } as never).ok).toBe(true);
     const cloud = { is_local: false, cloud_active: true, provider: "deepseek" };
     expect(postureChip(cloud as never)).toEqual({ text: "cloud · deepseek", ok: false });
+  });
+});
+
+describe("Relationships flow: demo fixtures through align + pearson", () => {
+  it("the coupled demo pair yields a real-but-imperfect exploratory r", () => {
+    const pair = demoRelatedPair(DEMO_RELATE_METRICS[0], DEMO_RELATE_METRICS[1]);
+    const pairs = alignDaily(pair.a.points, pair.b.points);
+    expect(pairs.length).toBe(30);
+    expect(pairs.length).toBeGreaterThanOrEqual(CORRELATION_MIN_DAYS);
+    const stat = pearson(pairs);
+    expect(stat).not.toBeNull();
+    // Coupled at ~0.6 with deterministic noise: clearly positive, never a
+    // fake-perfect 1.0 — the demo must look like data, not like a formula.
+    expect(stat!.r).toBeGreaterThan(0.35);
+    expect(stat!.r).toBeLessThan(0.95);
+  });
+
+  it("demo correlations are well-formed and include an honest weak row", () => {
+    for (const row of DEMO_CORRELATIONS) {
+      expect(row.metric_a).toBeTruthy();
+      expect(row.metric_b).toBeTruthy();
+      expect(Math.abs(row.coefficient ?? 0)).toBeLessThanOrEqual(1);
+    }
+    expect(DEMO_CORRELATIONS.some((c) => (c.p_value ?? 0) > 0.05)).toBe(true);
   });
 });
