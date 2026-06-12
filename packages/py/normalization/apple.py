@@ -186,9 +186,7 @@ def _build_value(
             if status not in _MEDICATION_STATUSES:
                 return None, f"unmappable_medication_status:{status}"
             summary = {
-                key: value
-                for key, value in sample.items()
-                if key not in (*_TIME_KEYS, *_END_KEYS)
+                key: value for key, value in sample.items() if key not in (*_TIME_KEYS, *_END_KEYS)
             }
             summary["status"] = status
             return (
