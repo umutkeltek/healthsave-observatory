@@ -648,6 +648,11 @@
       "android": "planned",
       "planned_since": "2026-06-10"
     },
+    "medication_dose_event": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-13"
+    },
     "mindful_session": {
       "ios": "available",
       "android": "planned",

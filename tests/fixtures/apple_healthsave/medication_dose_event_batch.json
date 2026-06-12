@@ -1,0 +1,19 @@
+{
+  "metric": "medication_dose_event",
+  "batch": 0,
+  "total_batches": 1,
+  "samples": [
+    {
+      "date": "2026-06-12T09:05:00Z",
+      "scheduled_date": "2026-06-12T09:00:00Z",
+      "medication_status": "not_interacted",
+      "medication_name": "Vitamin D, 3",
+      "medication_metric": "medication_vitamin_d_3",
+      "medication_concept_id": "concept-123",
+      "scheduled_dose_quantity": 1,
+      "dose_quantity": 0,
+      "medication_unit": "tablet",
+      "source": "Health"
+    }
+  ]
+}
