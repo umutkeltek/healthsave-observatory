@@ -240,6 +240,28 @@ CREATE TABLE quantity_samples (
 SELECT create_hypertable('quantity_samples', 'time', if_not_exists => TRUE);
 CREATE INDEX idx_quantity_samples_metric ON quantity_samples (metric_name, time DESC);
 
+-- ─── Medication dose events ─────────────────────────────────────────
+CREATE TABLE medication_dose_events (
+    time                    TIMESTAMPTZ NOT NULL,
+    scheduled_time          TIMESTAMPTZ,
+    device_id               INT REFERENCES devices(id),
+    medication_metric       TEXT NOT NULL,
+    medication_name         TEXT NOT NULL DEFAULT '',
+    status                  TEXT NOT NULL,
+    scheduled_dose_quantity DOUBLE PRECISION,
+    dose_quantity           DOUBLE PRECISION,
+    unit                    TEXT,
+    source_id               TEXT,
+    medication_concept_id   TEXT,
+    owner_id                UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    PRIMARY KEY (time, device_id, medication_metric, owner_id)
+);
+SELECT create_hypertable('medication_dose_events', 'time', if_not_exists => TRUE);
+CREATE INDEX idx_medication_dose_events_status_time
+    ON medication_dose_events (status, time DESC);
+CREATE INDEX idx_medication_dose_events_metric_time
+    ON medication_dose_events (medication_metric, time DESC);
+
 -- ─── Useful Continuous Aggregates ────────────────────────────────────
 
 -- Hourly heart rate stats

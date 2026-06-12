@@ -100,6 +100,7 @@ class _FakeSession:
         steps_rows: list[tuple] | None = None,
         sleep_rows: list[tuple] | None = None,
         quantity_values: dict[str, Any] | None = None,
+        medication_status: str | None = None,
         source_model: str | None = "HealthSave",
     ) -> None:
         self._hr = hr_rows or []
@@ -107,6 +108,7 @@ class _FakeSession:
         self._steps = steps_rows or []
         self._sleep = sleep_rows or []
         self._quantity_values = quantity_values or {}
+        self._medication_status = medication_status
         self._source_model = source_model
         self.executed_queries: list[str] = []
 
@@ -134,6 +136,10 @@ class _FakeSession:
             return _FakeResult([])
         if "FROM blood_oxygen" in sql:
             return _FakeResult([])
+        if "FROM medication_dose_events" in sql:
+            return _FakeResult(
+                [(self._medication_status,)] if self._medication_status is not None else []
+            )
         raise AssertionError(f"unexpected SQL: {sql}")
 
 
@@ -362,3 +368,14 @@ async def test_fetch_snapshot_uses_recent_source_labels_not_registered_devices()
     assert snapshot.source_model == "Apple Watch + WHOOP + Amazfit / Zepp"
     assert any("WITH recent_sources" in query for query in session.executed_queries)
     assert not any("FROM devices" in query for query in session.executed_queries)
+
+
+@pytest.mark.asyncio
+async def test_fetch_snapshot_includes_latest_medication_status() -> None:
+    session = _FakeSession(medication_status="not_interacted")
+    repo = TimescaleHealthSnapshotRepository()
+
+    snapshot = await repo.fetch_snapshot(session)
+
+    assert snapshot.latest_medication_status == "not_interacted"
+    assert any("FROM medication_dose_events" in query for query in session.executed_queries)
