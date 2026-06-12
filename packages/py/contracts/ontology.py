@@ -1598,6 +1598,21 @@ _SPECIAL: list[MetricDefinition] = [
         ),
     ),
     MetricDefinition(
+        id="medication.dose_event",
+        ontology_version=ONTOLOGY_VERSION,
+        display_name="Medication Dose Event",
+        category="medication",
+        value_type="event",
+        aggregation=AggregationSpec(kind="event", default_rollup="latest"),
+        fusion=FusionPolicy(strategy="dedup", source_priority=["apple_healthkit", "manual"]),
+        source_mappings=[
+            SourceVocabularyMapping(
+                source="apple_healthkit",
+                source_metric="medication_dose_event",
+            )
+        ],
+    ),
+    MetricDefinition(
         id="mindfulness.session",
         ontology_version=ONTOLOGY_VERSION,
         display_name="Mindful Session",

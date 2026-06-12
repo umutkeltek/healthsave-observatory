@@ -27,6 +27,24 @@ NORMALIZER_VERSION = "0.1.0"
 _TIME_KEYS = ("date", "startDate", "start", "start_date")
 _END_KEYS = ("endDate", "end", "end_date")
 _VALUE_KEYS = ("qty", "value")
+_MEDICATION_STATUSES = {
+    "taken",
+    "skipped",
+    "not_interacted",
+    "snoozed",
+    "notification_not_sent",
+    "not_logged",
+    "unknown",
+}
+_MEDICATION_EVENT_STATUS = {
+    "taken": "completed",
+    "skipped": "completed",
+    "not_interacted": "in_progress",
+    "snoozed": "in_progress",
+    "notification_not_sent": "in_progress",
+    "not_logged": "planned",
+    "unknown": "planned",
+}
 
 
 def _apple_wire_index() -> dict[str, MetricDefinition]:
@@ -163,6 +181,25 @@ def _build_value(
             return None, f"unmappable_code:{raw}"
         return CodedValue(type="categorical", code=code, label=_label_for(metric, code)), ""
     if metric.value_type == "event":
+        if metric.id == "medication.dose_event":
+            status = str(_first(sample, "status", "medication_status") or "").strip()
+            if status not in _MEDICATION_STATUSES:
+                return None, f"unmappable_medication_status:{status}"
+            summary = {
+                key: value
+                for key, value in sample.items()
+                if key not in (*_TIME_KEYS, *_END_KEYS)
+            }
+            summary["status"] = status
+            return (
+                EventValue(
+                    type="event",
+                    label=str(_first(sample, "medication_name") or metric.display_name),
+                    status=_MEDICATION_EVENT_STATUS[status],
+                    summary=summary,
+                ),
+                "",
+            )
         summary = {
             key: value for key, value in sample.items() if key not in (*_TIME_KEYS, *_END_KEYS)
         }

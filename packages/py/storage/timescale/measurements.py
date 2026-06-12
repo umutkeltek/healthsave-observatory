@@ -178,6 +178,8 @@ async def _ingest_metric(
         return await _ingest_daily_quantity(session, device_id, metric, samples, owner_id=owner_id)
     if metric == "sleep_analysis":
         return await _ingest_sleep(session, device_id, samples, owner_id=owner_id)
+    if metric == "medication_dose_event":
+        return await _ingest_medication_dose_events(session, device_id, samples, owner_id=owner_id)
     if metric == "workouts":
         return await _ingest_workouts(session, device_id, samples, owner_id=owner_id)
     if metric == "ecg":
@@ -339,6 +341,87 @@ async def _ingest_ecg(
                 "value": average_heart_rate,
                 "unit": "bpm",
                 "source": _sample_source(sample),
+                "owner_id": str(owner_id),
+            },
+        )
+        result = result.with_insert_flag(inserted_new)
+    return result.with_counts(rejected=rejected_count)
+
+
+async def _ingest_medication_dose_events(
+    session: AsyncSession,
+    device_id: int,
+    samples: list,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+) -> IngestWriteResult:
+    result = IngestWriteResult()
+    rejected_count = 0
+    allowed_statuses = {
+        "taken",
+        "skipped",
+        "not_interacted",
+        "snoozed",
+        "notification_not_sent",
+        "not_logged",
+        "unknown",
+    }
+    for s in samples:
+        t = parse_ts(s.get("date"))
+        status = s.get("status") or s.get("medication_status")
+        medication_metric = s.get("medication_metric") or s.get("metric")
+        if (
+            t is None
+            or not isinstance(status, str)
+            or status not in allowed_statuses
+            or not isinstance(medication_metric, str)
+            or not medication_metric
+        ):
+            rejected_count += 1
+            _bump_rejected("medication_dose_event", "missing_or_invalid_time_status_or_metric")
+            continue
+
+        inserted_new = await _execute_insert_with_result(
+            session,
+            """
+                INSERT INTO medication_dose_events
+                    (
+                        time, scheduled_time, device_id, medication_metric,
+                        medication_name, status, scheduled_dose_quantity,
+                        dose_quantity, unit, source_id, medication_concept_id,
+                        owner_id
+                    )
+                VALUES
+                    (
+                        :time, :scheduled_time, :device_id, :medication_metric,
+                        :medication_name, :status, :scheduled_dose_quantity,
+                        :dose_quantity, :unit, :source, :medication_concept_id,
+                        :owner_id
+                    )
+                ON CONFLICT (time, device_id, medication_metric, owner_id) DO UPDATE
+                SET
+                    scheduled_time = EXCLUDED.scheduled_time,
+                    medication_name = EXCLUDED.medication_name,
+                    status = EXCLUDED.status,
+                    scheduled_dose_quantity = EXCLUDED.scheduled_dose_quantity,
+                    dose_quantity = EXCLUDED.dose_quantity,
+                    unit = EXCLUDED.unit,
+                    source_id = EXCLUDED.source_id,
+                    medication_concept_id = EXCLUDED.medication_concept_id
+                RETURNING (xmax = 0) AS inserted_new
+            """,
+            {
+                "time": t,
+                "scheduled_time": parse_ts(s.get("scheduled_date")),
+                "device_id": device_id,
+                "medication_metric": medication_metric,
+                "medication_name": s.get("medication_name", ""),
+                "status": status,
+                "scheduled_dose_quantity": to_float(s.get("scheduled_dose_quantity")),
+                "dose_quantity": to_float(s.get("dose_quantity")),
+                "unit": s.get("medication_unit") or s.get("unit", ""),
+                "source": s.get("source", ""),
+                "medication_concept_id": s.get("medication_concept_id", ""),
                 "owner_id": str(owner_id),
             },
         )

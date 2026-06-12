@@ -265,6 +265,18 @@ class TimescaleHealthSnapshotRepository:
                 )
             )
         ).scalar_one_or_none() or "HealthSave"
+        latest_medication_status = (
+            await session.execute(
+                text(
+                    """
+                    SELECT status
+                    FROM medication_dose_events
+                    ORDER BY coalesce(scheduled_time, time) DESC, time DESC
+                    LIMIT 1
+                    """
+                )
+            )
+        ).scalar_one_or_none()
 
         snapshot = HealthSnapshot(
             collected_at=collected_at,
@@ -283,6 +295,7 @@ class TimescaleHealthSnapshotRepository:
             sleep_efficiency=sleep_efficiency,
             resting_heart_rate=resting_heart_rate,
             strain=strain,
+            latest_medication_status=latest_medication_status,
         )
         return HealthSnapshot(
             collected_at=snapshot.collected_at,
@@ -301,6 +314,7 @@ class TimescaleHealthSnapshotRepository:
             sleep_efficiency=snapshot.sleep_efficiency,
             resting_heart_rate=snapshot.resting_heart_rate,
             strain=snapshot.strain,
+            latest_medication_status=snapshot.latest_medication_status,
         )
 
     async def fetch_snapshots_by_source(self, session: AsyncSession) -> list[SourceHealthSnapshot]:

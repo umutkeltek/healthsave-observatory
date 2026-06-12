@@ -185,6 +185,13 @@ def _sensor_specs(entity_prefix: str, display_name: str) -> list[SensorSpec]:
             icon="mdi:medal",
         ),
         SensorSpec(
+            key="latest_medication_status",
+            entity_id=f"sensor.{prefix}_latest_medication_status",
+            name=f"{name} Latest Medication Status",
+            state_class="",
+            icon="mdi:pill",
+        ),
+        SensorSpec(
             key="blood_oxygen",
             entity_id=f"sensor.{prefix}_blood_oxygen",
             name=f"{name} Blood Oxygen",

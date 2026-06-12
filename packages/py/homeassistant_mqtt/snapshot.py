@@ -44,6 +44,7 @@ class HealthSnapshot:
     sleep_efficiency: float | None = None
     resting_heart_rate: int | None = None
     strain: float | None = None
+    latest_medication_status: str | None = None
 
 
 @dataclass(frozen=True)
