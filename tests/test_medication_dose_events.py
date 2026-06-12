@@ -109,8 +109,7 @@ def test_homeassistant_config_has_medication_status_sensor_shape() -> None:
     by_key = {spec.key: spec for spec in specs}
 
     assert (
-        by_key["latest_medication_status"].entity_id
-        == "sensor.healthsave_latest_medication_status"
+        by_key["latest_medication_status"].entity_id == "sensor.healthsave_latest_medication_status"
     )
     assert by_key["latest_medication_status"].state_class == ""
     assert by_key["latest_medication_status"].icon == "mdi:pill"
