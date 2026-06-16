@@ -5,8 +5,171 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from normalization.mappers import DAILY_ACTIVITY_QUANTITY_FIELDS
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+# GH#14: the catch-all destination is ``quantity_samples`` keyed by the wire
+# metric name, but several metrics land elsewhere — dedicated tables, dedicated
+# ``daily_activity`` columns, or (for ECG) ``quantity_samples`` under a *derived*
+# name. A receipt is recorded under the wire metric name, so if the destination
+# side of the coverage join has no matching row the endpoint reports the metric
+# as ``receipt_only``/``stale_payload`` and the frozen client resends it forever.
+# These entries must mirror the ingest routing in
+# ``storage.timescale.measurements._ingest_metric``. ``ECG_DESTINATION_METRIC``
+# is the derived ``quantity_samples.metric_name`` that ``_ingest_ecg`` writes;
+# it is surfaced under the ``ecg`` receipt name and excluded from the catch-all
+# so coverage does not double-count it.
+ECG_DESTINATION_METRIC = "ecg_average_heart_rate"
+
+# Metrics rolled up into ``daily_activity`` (keyed by DATE). Their stored sample
+# time is midnight, but the client uploads raw within-day samples, so a naive
+# destination-vs-receipt comparison always looks "behind" and the client
+# resends forever. These get a day-granularity GREATEST() adjustment so coverage
+# reports at least the client's own latest sample. ``activity_summaries`` shares
+# the same date-keyed table, so it is adjusted alongside the quantity rollups.
+DATE_ROLLUP_METRICS: tuple[str, ...] = (
+    "activity_summaries",
+    *DAILY_ACTIVITY_QUANTITY_FIELDS,
+)
+
+
+def _destination_union_sql() -> str:
+    """Build the ``destination_union`` CTE body.
+
+    The ``daily_activity`` quantity rollups are derived from the source-of-truth
+    mapper (``DAILY_ACTIVITY_QUANTITY_FIELDS``) so a newly added field can never
+    silently reopen the GH#14 resend loop — the drift-guard contract test pins
+    this set against the ingest routing.
+    """
+
+    fragments = [
+        # Dedicated tables that store real per-sample timestamps.
+        "SELECT 'heart_rate' AS metric, count(*) AS row_count, "
+        "max(time) AS latest_sample_at FROM heart_rate",
+        "SELECT 'heart_rate_variability' AS metric, count(*) AS row_count, "
+        "max(time) AS latest_sample_at FROM hrv",
+        "SELECT 'oxygen_saturation' AS metric, count(*) AS row_count, "
+        "max(time) AS latest_sample_at FROM blood_oxygen",
+        # body_temperature + wrist_temperature share one table with no in-row
+        # type discriminator (the writer never sets measurement_type), so both
+        # report its max(time).
+        "SELECT 'body_temperature' AS metric, count(*) AS row_count, "
+        "max(time) AS latest_sample_at FROM body_temperature",
+        "SELECT 'wrist_temperature' AS metric, count(*) AS row_count, "
+        "max(time) AS latest_sample_at FROM body_temperature",
+        "SELECT 'sleep_analysis' AS metric, count(*) AS row_count, "
+        "max(start_time) AS latest_sample_at FROM sleep_sessions",
+        "SELECT 'workouts' AS metric, count(*) AS row_count, "
+        "max(start_time) AS latest_sample_at FROM workouts",
+        # ECG lands in quantity_samples under a derived metric_name, not 'ecg'.
+        "SELECT 'ecg' AS metric, count(*) AS row_count, "
+        "max(time) AS latest_sample_at FROM quantity_samples "
+        f"WHERE metric_name = '{ECG_DESTINATION_METRIC}'",
+        # Medication dose events have their own dedicated table.
+        "SELECT 'medication_dose_event' AS metric, count(*) AS row_count, "
+        "max(time) AS latest_sample_at FROM medication_dose_events",
+        # activity_summaries → daily_activity (date-keyed rollup).
+        "SELECT 'activity_summaries' AS metric, count(*) AS row_count, "
+        "max(date)::timestamptz AS latest_sample_at FROM daily_activity",
+    ]
+    # daily_activity quantity rollups, one per DAILY_ACTIVITY_QUANTITY_FIELDS
+    # entry. Filter on the metric's own column so the row_count reflects rows
+    # that actually carry this metric (a daily_activity row may hold steps but
+    # not floors_climbed, etc.).
+    for wire_metric, (column, _converter) in DAILY_ACTIVITY_QUANTITY_FIELDS.items():
+        fragments.append(
+            f"SELECT '{wire_metric}' AS metric, count(*) AS row_count, "
+            f"max(date)::timestamptz AS latest_sample_at FROM daily_activity "
+            f"WHERE {column} IS NOT NULL"
+        )
+    # Catch-all for every other quantity metric (metric_name == wire name). ECG's
+    # derived name is surfaced under 'ecg' above, so exclude it here.
+    fragments.append(
+        "SELECT metric_name AS metric, count(*) AS row_count, "
+        "max(time) AS latest_sample_at FROM quantity_samples "
+        f"WHERE metric_name <> '{ECG_DESTINATION_METRIC}' GROUP BY metric_name"
+    )
+    return "\n                UNION ALL\n                ".join(fragments)
+
+
+def _sync_coverage_query() -> str:
+    """Assemble the full metric-coverage SQL.
+
+    The ``destination_union`` body and the date-rollup metric list are
+    interpolated from trusted internal constants (never client input).
+    """
+
+    date_rollup_in = ", ".join(f"'{metric}'" for metric in DATE_ROLLUP_METRICS)
+    return f"""
+            WITH receipt_coverage AS (
+                SELECT
+                    metric,
+                    count(*) AS batches_seen,
+                    count(*) FILTER (WHERE status = 'processed') AS batches_processed,
+                    count(*) FILTER (WHERE status = 'empty') AS batches_empty,
+                    count(*) FILTER (WHERE status = 'failed') AS batches_failed,
+                    coalesce(sum(records_received), 0) AS records_received,
+                    coalesce(sum(records_accepted), 0) AS records_accepted,
+                    sum(records_inserted_new) AS records_inserted_new,
+                    sum(records_deduped_existing) AS records_deduped_existing,
+                    CASE
+                        WHEN count(*) FILTER (
+                            WHERE storage_result_level = 'inserted_vs_existing'
+                        ) = count(*) THEN 'inserted_vs_existing'
+                        ELSE 'accepted_only'
+                    END AS storage_result_level,
+                    coalesce(sum(records_skipped), 0) AS records_skipped,
+                    max(coalesce(completed_at, received_at)) AS newest_receipt_at,
+                    min(sample_min_at) AS receipt_sample_min_at,
+                    max(sample_max_at) AS receipt_sample_max_at
+                FROM healthsave_sync_receipts
+                GROUP BY metric
+            ),
+            destination_union AS (
+                {_destination_union_sql()}
+            ),
+            destination_coverage AS (
+                SELECT
+                    metric,
+                    coalesce(sum(row_count), 0) AS destination_row_count,
+                    max(latest_sample_at) AS latest_destination_sample_at
+                FROM destination_union
+                GROUP BY metric
+            )
+            SELECT
+                coalesce(r.metric, d.metric) AS metric,
+                coalesce(r.batches_seen, 0) AS batches_seen,
+                coalesce(r.batches_processed, 0) AS batches_processed,
+                coalesce(r.batches_empty, 0) AS batches_empty,
+                coalesce(r.batches_failed, 0) AS batches_failed,
+                coalesce(r.records_received, 0) AS records_received,
+                coalesce(r.records_accepted, 0) AS records_accepted,
+                r.records_inserted_new,
+                r.records_deduped_existing,
+                coalesce(r.storage_result_level, 'accepted_only') AS storage_result_level,
+                coalesce(r.records_skipped, 0) AS records_skipped,
+                r.newest_receipt_at,
+                r.receipt_sample_min_at,
+                r.receipt_sample_max_at,
+                coalesce(d.destination_row_count, 0) AS destination_row_count,
+                d.latest_destination_sample_at,
+                -- GH#14: date-rollup destinations store midnight, so the raw value
+                -- reads as "behind" the client's within-day upload and triggers a
+                -- perpetual resend. Report at least the client's own latest sample
+                -- once the day is actually stored (row present). Guarded on
+                -- NOT NULL so a genuinely-unwritten metric still reports
+                -- receipt_only and the client correctly retries.
+                CASE
+                    WHEN coalesce(r.metric, d.metric) IN ({date_rollup_in})
+                         AND d.latest_destination_sample_at IS NOT NULL
+                    THEN GREATEST(d.latest_destination_sample_at, r.receipt_sample_max_at)
+                    ELSE d.latest_destination_sample_at
+                END AS adjusted_latest_destination_sample_at
+            FROM receipt_coverage r
+            FULL OUTER JOIN destination_coverage d ON d.metric = r.metric
+            ORDER BY metric
+            """
 
 
 class ReceiptIdempotencyConflict(ValueError):
@@ -367,108 +530,7 @@ async def sync_run(session: AsyncSession, sync_run_id: str) -> dict[str, Any]:
 async def sync_coverage(session: AsyncSession) -> dict[str, Any]:
     """Return metric-level receipt and destination sample coverage."""
 
-    result = await session.execute(
-        text(
-            """
-            WITH receipt_coverage AS (
-                SELECT
-                    metric,
-                    count(*) AS batches_seen,
-                    count(*) FILTER (WHERE status = 'processed') AS batches_processed,
-                    count(*) FILTER (WHERE status = 'empty') AS batches_empty,
-                    count(*) FILTER (WHERE status = 'failed') AS batches_failed,
-                    coalesce(sum(records_received), 0) AS records_received,
-                    coalesce(sum(records_accepted), 0) AS records_accepted,
-                    sum(records_inserted_new) AS records_inserted_new,
-                    sum(records_deduped_existing) AS records_deduped_existing,
-                    CASE
-                        WHEN count(*) FILTER (
-                            WHERE storage_result_level = 'inserted_vs_existing'
-                        ) = count(*) THEN 'inserted_vs_existing'
-                        ELSE 'accepted_only'
-                    END AS storage_result_level,
-                    coalesce(sum(records_skipped), 0) AS records_skipped,
-                    max(coalesce(completed_at, received_at)) AS newest_receipt_at,
-                    min(sample_min_at) AS receipt_sample_min_at,
-                    max(sample_max_at) AS receipt_sample_max_at
-                FROM healthsave_sync_receipts
-                GROUP BY metric
-            ),
-            destination_union AS (
-                SELECT
-                    'heart_rate' AS metric,
-                    count(*) AS row_count,
-                    max(time) AS latest_sample_at
-                FROM heart_rate
-                UNION ALL
-                SELECT
-                    'heart_rate_variability' AS metric,
-                    count(*) AS row_count,
-                    max(time) AS latest_sample_at
-                FROM hrv
-                UNION ALL
-                SELECT
-                    'oxygen_saturation' AS metric,
-                    count(*) AS row_count,
-                    max(time) AS latest_sample_at
-                FROM blood_oxygen
-                UNION ALL
-                SELECT
-                    'activity_summaries' AS metric,
-                    count(*) AS row_count,
-                    max(date)::timestamptz AS latest_sample_at
-                FROM daily_activity
-                UNION ALL
-                SELECT
-                    'sleep_analysis' AS metric,
-                    count(*) AS row_count,
-                    max(start_time) AS latest_sample_at
-                FROM sleep_sessions
-                UNION ALL
-                SELECT
-                    'workouts' AS metric,
-                    count(*) AS row_count,
-                    max(start_time) AS latest_sample_at
-                FROM workouts
-                UNION ALL
-                SELECT
-                    metric_name AS metric,
-                    count(*) AS row_count,
-                    max(time) AS latest_sample_at
-                FROM quantity_samples
-                GROUP BY metric_name
-            ),
-            destination_coverage AS (
-                SELECT
-                    metric,
-                    coalesce(sum(row_count), 0) AS destination_row_count,
-                    max(latest_sample_at) AS latest_destination_sample_at
-                FROM destination_union
-                GROUP BY metric
-            )
-            SELECT
-                coalesce(r.metric, d.metric) AS metric,
-                coalesce(r.batches_seen, 0) AS batches_seen,
-                coalesce(r.batches_processed, 0) AS batches_processed,
-                coalesce(r.batches_empty, 0) AS batches_empty,
-                coalesce(r.batches_failed, 0) AS batches_failed,
-                coalesce(r.records_received, 0) AS records_received,
-                coalesce(r.records_accepted, 0) AS records_accepted,
-                r.records_inserted_new,
-                r.records_deduped_existing,
-                coalesce(r.storage_result_level, 'accepted_only') AS storage_result_level,
-                coalesce(r.records_skipped, 0) AS records_skipped,
-                r.newest_receipt_at,
-                r.receipt_sample_min_at,
-                r.receipt_sample_max_at,
-                coalesce(d.destination_row_count, 0) AS destination_row_count,
-                d.latest_destination_sample_at
-            FROM receipt_coverage r
-            FULL OUTER JOIN destination_coverage d ON d.metric = r.metric
-            ORDER BY metric
-            """
-        )
-    )
+    result = await session.execute(text(_sync_coverage_query()))
     rows = [_format_coverage_row(dict(row)) for row in result.mappings().all()]
     return {
         "status": "ok",
@@ -496,7 +558,15 @@ def _sample_window(row: dict[str, Any]) -> dict[str, Any]:
 
 def _format_coverage_row(row: dict[str, Any]) -> dict[str, Any]:
     receipt_sample_max = row.get("receipt_sample_max_at")
-    destination_sample = row.get("latest_destination_sample_at")
+    # GH#14: prefer the day-granularity-adjusted destination timestamp. The iOS
+    # client keys its resend decision on ``latest_destination_sample_time``
+    # (BackendCompatibility.swift) and never reads ``freshness_state``, so the
+    # adjusted value must flow into the reported field — not just the internal
+    # freshness label. Fall back to the raw column when the query did not emit
+    # an adjusted value (e.g. mocked rows in unit tests).
+    destination_sample = row.get("adjusted_latest_destination_sample_at")
+    if destination_sample is None:
+        destination_sample = row.get("latest_destination_sample_at")
     return {
         "metric": row["metric"],
         "batches_seen": row["batches_seen"],
