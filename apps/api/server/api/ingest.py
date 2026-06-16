@@ -25,7 +25,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from normalization import identity, normalize_apple_batch
 from plugin_sdk import SDK_VERSION
 from pydantic import ValidationError
-from sqlalchemy.exc import InterfaceError, OperationalError
+from sqlalchemy.exc import DisconnectionError, InterfaceError, OperationalError
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.defaults import observation_repository
 from storage.timescale import registry
@@ -73,9 +74,32 @@ _APPLE_PLUGIN_ID = "apple-health-healthsave"
 _TRANSIENT_WRITE_ERRORS = (
     OperationalError,  # DB disconnect / deadlock / lock timeout / admin shutdown
     InterfaceError,  # connection-interface failure
+    # CONTRACT-001 gap: SQLAlchemy's connection-POOL checkout timeout is
+    # ``sqlalchemy.exc.TimeoutError`` — it only shares the NAME with the builtin
+    # ``TimeoutError`` (MRO: TimeoutError -> SQLAlchemyError), so the builtin
+    # below does NOT catch it. Under load / overlapping concurrent syncs the pool
+    # exhausts and this fires; without it the batch fell through to a deterministic
+    # 422, which the frozen iOS/Android clients read as a PERMANENT failure and
+    # park as ``failedTerminal`` — wedging the metric until a manual reset. Pool
+    # exhaustion is transient infra, so it must be a retryable 5xx.
+    SQLAlchemyTimeoutError,
+    DisconnectionError,  # pool detected a dropped/invalid connection — transient
     TimeoutError,  # builtin; asyncio.TimeoutError aliases this on 3.11+
     ConnectionError,  # builtin connection failures (reset/broken-pipe/refused)
 )
+
+
+def _is_transient_write_error(exc: BaseException) -> bool:
+    """True for infra failures that a retry can clear (→ 5xx), vs deterministic
+    data errors that a retry repeats (→ 422). Beyond the concrete classes,
+    SQLAlchemy flags a mid-statement disconnect that invalidated the pooled
+    connection via ``connection_invalidated`` — transient regardless of the
+    concrete ``DBAPIError`` subtype, so honor that too."""
+    if isinstance(exc, _TRANSIENT_WRITE_ERRORS):
+        return True
+    return bool(getattr(exc, "connection_invalidated", False))
+
+
 _canonical_repo = observation_repository()
 
 # SECURITY-004: bound the number of samples in a single batch so an unbounded
@@ -335,7 +359,7 @@ async def apple_batch(
         if isinstance(exc, HTTPException):
             raise
         # Transient infra errors are retry-worthy → 5xx (client retries).
-        if isinstance(exc, _TRANSIENT_WRITE_ERRORS):
+        if _is_transient_write_error(exc):
             raise
         # Everything else is deterministic: a retry fails identically. Return 422
         # so the frozen client retires the batch instead of wedging on a 5xx.
