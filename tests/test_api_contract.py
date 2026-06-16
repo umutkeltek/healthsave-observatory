@@ -1514,6 +1514,197 @@ async def test_sync_coverage_separates_receipt_time_from_destination_sample_fres
     assert metric["freshness_state"] == "stale_payload"
 
 
+class SyncCoverageGH14Session(FakeSession):
+    """Coverage rows shaped like the post-GH#14 query for metrics that used to
+    perpetually resend: daily_activity rollups (destination stored at midnight,
+    plus the day-grain ``adjusted_latest_destination_sample_at``), a dedicated
+    table (body_temperature), and a rollup the client sent but that was never
+    stored (no destination row -> adjusted stays NULL).
+    """
+
+    async def execute(self, statement, params=None):
+        sql = " ".join(str(statement).split())
+        self.calls.append((sql, params or {}))
+        if "WITH receipt_coverage AS" in sql and "destination_coverage AS" in sql:
+            return FakeResult(
+                rows=[
+                    # Rollup metric: destination row exists at midnight, client
+                    # uploaded a within-day sample. Adjusted = GREATEST(midnight,
+                    # receipt) = the within-day receipt time.
+                    {
+                        "metric": "step_count",
+                        "batches_seen": 5,
+                        "batches_processed": 5,
+                        "batches_empty": 0,
+                        "batches_failed": 0,
+                        "records_received": 500,
+                        "records_accepted": 500,
+                        "records_skipped": 0,
+                        "newest_receipt_at": "2026-06-15T18:00:00Z",
+                        "receipt_sample_min_at": "2026-06-15T00:01:00Z",
+                        "receipt_sample_max_at": "2026-06-15T17:38:00Z",
+                        "destination_row_count": 1,
+                        "latest_destination_sample_at": "2026-06-15T00:00:00Z",
+                        "adjusted_latest_destination_sample_at": "2026-06-15T17:38:00Z",
+                    },
+                    # Dedicated table with real per-sample timestamps: no
+                    # adjustment, destination already >= receipt.
+                    {
+                        "metric": "body_temperature",
+                        "batches_seen": 2,
+                        "batches_processed": 2,
+                        "batches_empty": 0,
+                        "batches_failed": 0,
+                        "records_received": 4,
+                        "records_accepted": 4,
+                        "records_skipped": 0,
+                        "newest_receipt_at": "2026-06-15T08:00:00Z",
+                        "receipt_sample_min_at": "2026-06-14T22:00:00Z",
+                        "receipt_sample_max_at": "2026-06-15T07:30:00Z",
+                        "destination_row_count": 4,
+                        "latest_destination_sample_at": "2026-06-15T07:30:00Z",
+                        "adjusted_latest_destination_sample_at": "2026-06-15T07:30:00Z",
+                    },
+                    # Rollup metric the client sent but that was never stored:
+                    # no destination row, so the NOT-NULL guard keeps adjusted
+                    # NULL and the client correctly keeps retrying.
+                    {
+                        "metric": "flights_climbed",
+                        "batches_seen": 1,
+                        "batches_processed": 1,
+                        "batches_empty": 0,
+                        "batches_failed": 0,
+                        "records_received": 10,
+                        "records_accepted": 10,
+                        "records_skipped": 0,
+                        "newest_receipt_at": "2026-06-15T18:00:00Z",
+                        "receipt_sample_min_at": "2026-06-15T09:00:00Z",
+                        "receipt_sample_max_at": "2026-06-15T16:00:00Z",
+                        "destination_row_count": 0,
+                        "latest_destination_sample_at": None,
+                        "adjusted_latest_destination_sample_at": None,
+                    },
+                ]
+            )
+        return await super().execute(statement, params)
+
+
+@pytest.mark.asyncio
+async def test_sync_coverage_day_rollup_metric_reports_fresh_via_adjusted_timestamp():
+    """GH#14: a daily_activity rollup whose destination is stored at midnight
+    must report ``latest_destination_sample_time`` >= the client's within-day
+    sample (the field iOS reads) so the client stops resending."""
+    from storage.timescale import sync_receipts
+
+    result = await sync_receipts.sync_coverage(SyncCoverageGH14Session())
+    by_metric = {row["metric"]: row for row in result["metrics"]}
+
+    step = by_metric["step_count"]
+    # The reported destination sample is the adjusted (day-grain) value, NOT the
+    # raw midnight timestamp — otherwise the client sees destination < its upload.
+    assert step["latest_destination_sample_time"] == "2026-06-15T17:38:00Z"
+    assert step["freshness_state"] == "fresh"
+    assert step["destination_row_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_sync_coverage_dedicated_table_metric_is_fresh_without_adjustment():
+    """body_temperature stores real per-sample timestamps; once it has a
+    destination entry it reports fresh (the missing-entry bug is gone)."""
+    from storage.timescale import sync_receipts
+
+    result = await sync_receipts.sync_coverage(SyncCoverageGH14Session())
+    body = {row["metric"]: row for row in result["metrics"]}["body_temperature"]
+
+    assert body["destination_row_count"] == 4
+    assert body["latest_destination_sample_time"] == "2026-06-15T07:30:00Z"
+    assert body["freshness_state"] == "fresh"
+
+
+@pytest.mark.asyncio
+async def test_sync_coverage_unstored_rollup_metric_stays_receipt_only():
+    """The GREATEST() guard must NOT mask genuinely-unwritten data: a rollup
+    metric with no destination row reports receipt_only so the client keeps
+    retrying (resending is correct when the data really is missing)."""
+    from storage.timescale import sync_receipts
+
+    result = await sync_receipts.sync_coverage(SyncCoverageGH14Session())
+    flights = {row["metric"]: row for row in result["metrics"]}["flights_climbed"]
+
+    assert flights["destination_row_count"] == 0
+    assert flights["latest_destination_sample_time"] is None
+    assert flights["freshness_state"] == "receipt_only"
+
+
+def test_sync_coverage_union_mirrors_ingest_routing():
+    """GH#14 drift guard: every metric the ingest path routes to a destination
+    other than the quantity_samples catch-all keyed by its own name MUST appear
+    in destination_union, or its receipts never match a destination row and the
+    frozen client resends forever. Derived from the routing source of truth so a
+    future dedicated/daily destination added without a coverage entry fails here
+    instead of silently shipping a resend loop."""
+    from normalization.mappers import DAILY_ACTIVITY_QUANTITY_FIELDS, DEDICATED_TABLES
+    from storage.timescale import sync_receipts
+
+    union_sql = sync_receipts._destination_union_sql()
+
+    # Dedicated tables: check the destination TABLE is queried (multiple metric
+    # names can alias one table, e.g. blood_oxygen/oxygen_saturation).
+    for metric, spec in DEDICATED_TABLES.items():
+        assert f"FROM {spec['table']}" in union_sql, (
+            f"dedicated {metric!r} -> table {spec['table']!r} not in destination_union"
+        )
+
+    # daily_activity rollups: each wire metric + its column filter must be present.
+    for metric, (column, _converter) in DAILY_ACTIVITY_QUANTITY_FIELDS.items():
+        assert f"'{metric}'" in union_sql, f"daily rollup {metric!r} missing from destination_union"
+        assert f"WHERE {column} IS NOT NULL" in union_sql, (
+            f"daily rollup {metric!r} not filtered on its column {column!r}"
+        )
+
+    # Special-case routes handled outside the catch-all (and ECG's divergent name).
+    for metric in (
+        "activity_summaries",
+        "sleep_analysis",
+        "workouts",
+        "ecg",
+        "medication_dose_event",
+    ):
+        assert f"'{metric}'" in union_sql, (
+            f"special-case metric {metric!r} missing from destination_union"
+        )
+
+
+def test_sync_coverage_gh14_looping_metrics_all_have_destination_entries():
+    """Explicit regression pin for the 10 iOS-emitted metrics that looped (the
+    original issue listed only 6 — this also covers active_energy_burned,
+    apple_exercise_time, ecg, and medication_dose_event)."""
+    from storage.timescale import sync_receipts
+
+    union_sql = sync_receipts._destination_union_sql()
+    looping = (
+        "step_count",
+        "distance_walking_running",
+        "flights_climbed",
+        "active_energy_burned",
+        "basal_energy_burned",
+        "apple_exercise_time",
+        "body_temperature",
+        "wrist_temperature",
+        "ecg",
+        "medication_dose_event",
+    )
+    missing = sorted(m for m in looping if f"'{m}'" not in union_sql)
+    assert missing == [], f"destination_union still missing GH#14 metrics: {missing}"
+
+    # The date-rollup adjustment must apply to exactly the daily_activity-keyed
+    # metrics (so within-day uploads are not falsely flagged stale).
+    assert "activity_summaries" in sync_receipts.DATE_ROLLUP_METRICS
+    assert "step_count" in sync_receipts.DATE_ROLLUP_METRICS
+    # Dedicated-table metrics store real timestamps and must NOT be adjusted.
+    assert "body_temperature" not in sync_receipts.DATE_ROLLUP_METRICS
+
+
 @pytest.mark.asyncio
 async def test_sleep_stage_batches_upsert_sessions_and_write_stage_rows():
     session = FakeSession()
