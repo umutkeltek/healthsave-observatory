@@ -79,3 +79,58 @@ def test_golden_batches_flow_v1_to_v2() -> None:
             headers=_headers(),
         ).json()
         assert series["points"], "v2 heart_rate series came back empty after ingest"
+
+
+def test_sync_coverage_closes_resend_loop_for_dedicated_and_rollup_metrics() -> None:
+    """GH#14 end-to-end: metrics that land in dedicated tables or daily_activity
+    columns (not the quantity_samples catch-all keyed by their own name) must show
+    a destination row and report ``fresh`` on /api/v2/sync/coverage — otherwise the
+    frozen client reads them as receipt_only/stale_payload and resends forever.
+
+    Exercises the real Postgres path (destination_union + the day-grain GREATEST
+    adjustment) that the mocked-DB unit tests cannot cover.
+    """
+    with httpx.Client(base_url=BASE_URL, timeout=30) as client:
+        assert client.get("/ready").json().get("database") == "ok"
+
+        # Dedicated-table metrics that used to show zero destination rows.
+        for name in ("body_temperature_batch.json", "medication_dose_event_batch.json"):
+            _post_fixture(client, name)
+
+        # A daily_activity rollup with a WITHIN-DAY sample: the destination is
+        # stored at midnight, so before the fix this reported stale_payload
+        # (midnight < within-day) and looped. The day-grain GREATEST adjustment
+        # must surface the within-day sample instead.
+        within_day_step = {
+            "metric": "step_count",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [{"date": "2026-04-11T17:38:00.000Z", "qty": 1234, "source": "Apple Watch"}],
+        }
+        resp = client.post("/api/apple/batch", json=within_day_step, headers=_headers())
+        assert resp.status_code in (200, 201, 202), (
+            f"step_count: {resp.status_code} {resp.text[:300]}"
+        )
+
+        coverage = client.get("/api/v2/sync/coverage", headers=_headers()).json()
+        rows = {m["metric"]: m for m in coverage["metrics"]}
+
+        for metric in ("step_count", "body_temperature", "medication_dose_event"):
+            assert metric in rows, f"{metric} absent from coverage: {sorted(rows)}"
+            row = rows[metric]
+            # destination_row_count arrives as a string (Postgres sum() -> NUMERIC
+            # -> JSON), so coerce before the numeric check.
+            assert int(row["destination_row_count"]) >= 1, (
+                f"{metric} shows 0 destination rows -> receipt_only resend loop"
+            )
+            assert row["latest_destination_sample_time"] is not None
+            assert row["freshness_state"] == "fresh", (
+                f"{metric} freshness={row['freshness_state']} (expected fresh; client would resend)"
+            )
+
+        # The day-grain adjustment must surface the within-day sample, not the
+        # midnight rollup timestamp the client would otherwise read as "behind".
+        step_dest = str(rows["step_count"]["latest_destination_sample_time"])
+        assert step_dest >= "2026-04-11T17:38:00", (
+            f"step_count destination still midnight-truncated: {step_dest}"
+        )
