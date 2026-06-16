@@ -11,11 +11,13 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy.exc import (
     DataError,
+    DisconnectionError,
     IntegrityError,
     InterfaceError,
     OperationalError,
     ProgrammingError,
 )
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -1058,6 +1060,53 @@ async def test_batch_reraises_builtin_timeout_error_as_transient():
         await server.apple_batch(request, session)
 
     _assert_failed_receipt(session)
+
+
+@pytest.mark.asyncio
+async def test_batch_reraises_pool_checkout_timeout_as_transient_not_422():
+    """CONTRACT-001 gap: SQLAlchemy's connection-POOL checkout timeout is
+    ``sqlalchemy.exc.TimeoutError``, which only shares the NAME with the builtin
+    TimeoutError (it subclasses SQLAlchemyError, not the builtin). Under load /
+    overlapping syncs the pool exhausts and this fires; it is transient infra, so
+    it MUST propagate as a 5xx the client retries — never a 422 that the frozen
+    iOS/Android clients would park as a permanent ``failedTerminal`` block."""
+    session = FakeSession()
+    request = _request_with_raising_plugin(
+        SQLAlchemyTimeoutError("QueuePool limit of size 5 overflow 10 reached")
+    )
+
+    with pytest.raises(SQLAlchemyTimeoutError, match="QueuePool limit"):
+        await server.apple_batch(request, session)
+
+    _assert_failed_receipt(session)
+
+
+@pytest.mark.asyncio
+async def test_batch_reraises_disconnection_error_as_transient_not_422():
+    """A pool-detected dropped/invalid connection (``DisconnectionError``) is
+    transient and not an OperationalError subclass — it must stay 5xx, not 422."""
+    session = FakeSession()
+    request = _request_with_raising_plugin(DisconnectionError("server closed the connection"))
+
+    with pytest.raises(DisconnectionError, match="server closed the connection"):
+        await server.apple_batch(request, session)
+
+    _assert_failed_receipt(session)
+
+
+def test_connection_invalidated_dbapi_error_classifies_as_transient():
+    """A mid-statement disconnect can surface as a DBAPIError subtype that is not
+    in the concrete transient set, but SQLAlchemy flags it ``connection_invalidated``.
+    The classifier must honor that flag so it stays retryable (5xx), not 422."""
+    from server.api.ingest import _is_transient_write_error
+
+    invalidated = ProgrammingError("INSERT ...", {}, Exception("connection lost"))
+    invalidated.connection_invalidated = True
+    assert _is_transient_write_error(invalidated) is True
+
+    # A genuine deterministic ProgrammingError (not connection-invalidated) stays 422.
+    deterministic = ProgrammingError("INSERT ...", {}, Exception('column "qty" does not exist'))
+    assert _is_transient_write_error(deterministic) is False
 
 
 @pytest.mark.asyncio
