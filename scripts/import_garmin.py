@@ -1,4 +1,4 @@
-"""Import Garmin Connect exports into Health Data Hub.
+"""Import Garmin Connect exports into HealthSave Observatory.
 
 Reads Garmin Connect "Export Your Data" archives (or individual files) and
 POSTs the contents to ``/api/apple/batch`` using the same payload shape the
@@ -312,7 +312,7 @@ def collect_samples(args: argparse.Namespace) -> list[Sample]:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="import_garmin",
-        description="Import Garmin Connect exports into Health Data Hub.",
+        description="Import Garmin Connect exports into HealthSave Observatory.",
     )
     parser.add_argument("--zip", help="Garmin Connect bulk export ZIP")
     parser.add_argument("--fit", help="Single FIT activity file (heart rate)")
@@ -322,7 +322,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--server",
         default=os.environ.get("HDH_SERVER", "http://localhost:8000"),
-        help="Health Data Hub base URL (default: http://localhost:8000)",
+        help="HealthSave Observatory base URL (default: http://localhost:8000)",
     )
     parser.add_argument(
         "--api-key",

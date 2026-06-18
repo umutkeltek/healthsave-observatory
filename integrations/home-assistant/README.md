@@ -1,7 +1,7 @@
 # Home Assistant examples
 
 This folder contains public, copyable Home Assistant examples for using
-Health Data Hub metrics in dashboards and room automations.
+HealthSave Observatory metrics in dashboards and room automations.
 
 The recommended path is MQTT:
 
