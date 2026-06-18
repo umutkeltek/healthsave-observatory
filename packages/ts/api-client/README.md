@@ -1,6 +1,6 @@
 # @hdh/api-client
 
-Generated TypeScript types for the Health Data Hub API.
+Generated TypeScript types for the HealthSave Observatory API.
 
 ## What lives here
 

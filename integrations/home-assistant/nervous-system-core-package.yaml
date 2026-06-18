@@ -14,7 +14,7 @@
 # ─────────────────────────────────────────────────────────────────────
 #
 # Requirements:
-# - The Health Data Hub MQTT bridge is enabled.
+# - The HealthSave Observatory MQTT bridge is enabled.
 # - MQTT discovery has created the default sensor.healthsave_* entities.
 
 input_boolean:

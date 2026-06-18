@@ -1,7 +1,7 @@
 # integrations/
 
 Third-party-system integration examples. These are *examples*, not
-core product surfaces. They show how to plug `health-data-hub` into
+core product surfaces. They show how to plug HealthSave Observatory into
 an existing self-hosted stack.
 
 | path | what it integrates | populated |

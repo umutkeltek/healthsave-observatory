@@ -1,4 +1,4 @@
-"""Import Samsung Health / Huawei Health CSV exports into Health Data Hub.
+"""Import Samsung Health / Huawei Health CSV exports into HealthSave Observatory.
 
 Reads the directory layout that the `Health Sync` app on Android produces,
 parses each CSV into HealthSave-shaped samples, and POSTs them to
@@ -423,13 +423,13 @@ def _payload_hash(batch: dict[str, Any]) -> str:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="import_samsung",
-        description="Import Samsung / Huawei Health Sync CSV exports into Health Data Hub.",
+        description="Import Samsung / Huawei Health Sync CSV exports into HealthSave Observatory.",
     )
     parser.add_argument("data_dir", help="Directory containing the Health Sync subfolders")
     parser.add_argument(
         "--server",
         default=os.environ.get("HDH_SERVER", "http://localhost:8000"),
-        help="Base URL of the Health Data Hub API (default: http://localhost:8000)",
+        help="Base URL of the HealthSave Observatory API (default: http://localhost:8000)",
     )
     parser.add_argument(
         "--api-key",

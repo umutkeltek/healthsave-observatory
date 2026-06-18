@@ -1,6 +1,6 @@
 # Remote VM Deployment
 
-This deploys Health Data Hub as a reference server on a remote Docker host over SSH.
+This deploys HealthSave Observatory as a reference server on a remote Docker host over SSH.
 Use it when you want a small, repeatable VM install without handing Docker Compose
 files around manually.
 
