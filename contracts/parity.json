@@ -999,8 +999,7 @@
     },
     "home_assistant_integration": {
       "ios": true,
-      "android": "planned",
-      "planned_since": "2026-06-10",
+      "android": true,
       "pro": true
     },
     "background_auto_sync": {
