@@ -650,8 +650,8 @@
     },
     "medication_dose_event": {
       "ios": "available",
-      "android": "planned",
-      "planned_since": "2026-06-13"
+      "android": "unavailable",
+      "reason": "Health Connect has no medication or dose record type; no Android source exists to read from."
     },
     "mindful_session": {
       "ios": "available",
