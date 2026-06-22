@@ -41,6 +41,7 @@ from plugin_sdk import (  # noqa: E402
     PluginNotFoundError,
     PluginPermissions,
     PluginSdkVersionMismatch,
+    SourceCapability,
     Source,
     assert_sdk_compatible,
     build_registry,
@@ -78,6 +79,7 @@ def test_public_surface_exposes_documented_names():
         "PluginManifest",
         "PluginCapability",
         "PluginPermissions",
+        "SourceCapability",
         "assert_sdk_compatible",
         "is_sdk_compatible",
         "DiscoveredPlugin",
@@ -122,6 +124,78 @@ def test_plugin_manifest_validates_a_good_manifest():
     assert m.kind == "source"
     assert m.sdk_version == ">=0.1,<0.2"
     assert "measurement.heart_rate" in m.emits
+
+
+def test_source_capability_preserves_legacy_singular_delivery():
+    cap = SourceCapability.model_validate(
+        {
+            "plugin_id": "legacy-source",
+            "metrics": ["measurement.heart_rate"],
+            "delivery": "polling",
+        }
+    )
+
+    assert cap.delivery == "polling"
+    assert cap.delivery_modes == ["polling"]
+    assert cap.credential_ownership == "none"
+
+
+def test_plugin_manifest_accepts_source_operational_semantics():
+    manifest = PluginManifest.model_validate(
+        _good_manifest_dict(
+            source_capabilities=[
+                {
+                    "plugin_id": "polar-accesslink",
+                    "metrics": ["measurement.workouts"],
+                    "delivery": "polling",
+                    "delivery_modes": ["polling"],
+                    "record_shape": "session",
+                    "aggregation_scope": "interval_component",
+                    "credential_ownership": "owner",
+                    "identity_priority": [
+                        "provider_subject_id",
+                        "provider_object_id",
+                        "device_identity_link",
+                    ],
+                }
+            ]
+        )
+    )
+
+    cap = manifest.source_capabilities[0]
+    assert cap.record_shape == "session"
+    assert cap.aggregation_scope == "interval_component"
+    assert cap.delivery_modes == ["polling"]
+    assert cap.credential_ownership == "owner"
+    assert cap.identity_priority == [
+        "provider_subject_id",
+        "provider_object_id",
+        "device_identity_link",
+    ]
+
+
+def test_first_party_source_manifests_declare_operational_semantics():
+    source_root = Path(__file__).resolve().parents[1] / "plugins" / "sources"
+    missing: list[str] = []
+    incomplete: list[str] = []
+
+    for manifest_path in sorted(source_root.glob("*/plugin.yaml")):
+        manifest = load_manifest(manifest_path)
+        if not manifest.source_capabilities:
+            missing.append(manifest.id)
+            continue
+        for cap in manifest.source_capabilities:
+            if (
+                cap.plugin_id != manifest.id
+                or cap.record_shape is None
+                or cap.aggregation_scope is None
+                or not cap.delivery_modes
+                or not cap.identity_priority
+            ):
+                incomplete.append(f"{manifest.id}:{cap.metrics}")
+
+    assert missing == []
+    assert incomplete == []
 
 
 def test_plugin_manifest_rejects_unknown_kind():
@@ -288,6 +362,38 @@ def test_build_registry_is_sorted_and_carries_sdk_version(tmp_path: Path):
     # Compatibility flag derived for each.
     assert all("compatible_with_running_sdk" in p for p in registry["plugins"])
     assert registry["plugins"][0]["plugin_dir"] == "plugins/sources/alpha"
+
+
+def test_build_registry_carries_source_operational_semantics(tmp_path: Path):
+    plugins = tmp_path / "plugins"
+    _write_plugin(
+        plugins / "sources" / "polar",
+        _good_manifest_dict(
+            id="polar",
+            kind="source",
+            source_capabilities=[
+                {
+                    "plugin_id": "polar",
+                    "metrics": ["measurement.workouts"],
+                    "delivery": "polling",
+                    "record_shape": "session",
+                    "aggregation_scope": "interval_component",
+                    "credential_ownership": "owner",
+                    "identity_priority": ["provider_object_id", "device_identity_link"],
+                }
+            ],
+        ),
+    )
+
+    registry = build_registry(discover(plugins))
+
+    manifest = registry["plugins"][0]["manifest"]
+    cap = manifest["source_capabilities"][0]
+    assert cap["record_shape"] == "session"
+    assert cap["aggregation_scope"] == "interval_component"
+    assert cap["delivery_modes"] == ["polling"]
+    assert cap["credential_ownership"] == "owner"
+    assert cap["identity_priority"] == ["provider_object_id", "device_identity_link"]
 
 
 def test_write_and_load_registry_roundtrip(tmp_path: Path):
