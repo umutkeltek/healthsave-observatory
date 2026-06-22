@@ -140,6 +140,8 @@ class WhoopSource(Source):
         side via the existing ``INGEST_REJECTED`` Prometheus counter
         the storage layer bumps when it skips an invalid sample.
         """
+        from storage.timescale.observations import default_repository as default_canonical_repo
+
         from .fetch import (
             fetch_body_measurement,
             fetch_cycles,
@@ -148,6 +150,7 @@ class WhoopSource(Source):
             fetch_workouts,
         )
         from .normalize import (
+            canonical_session_observations,
             normalize_body_measurement,
             normalize_cycles,
             normalize_recovery,
@@ -166,6 +169,7 @@ class WhoopSource(Source):
         if token_store is None:
             from storage.timescale import oauth_tokens as token_store  # type: ignore[no-redef]
 
+        canonical_repository = payload.get("canonical_repository") or default_canonical_repo
         oauth_config: WhoopClientConfig | None = payload.get("oauth_config")
 
         # 1. Load token. No token = nothing to do until operator authorizes.
@@ -220,6 +224,19 @@ class WhoopSource(Source):
         for metric, samples in per_metric.items():
             written = await storage.ingest_metric(session, device_id, metric, samples, owner_id)
             accepted += written
+
+        provider_subject_id = (
+            token.metadata.get("provider_subject_id")
+            or token.metadata.get("whoop_user_id")
+            or token.metadata.get("user_id")
+        )
+        canonical_observations = canonical_session_observations(
+            workout_items,
+            owner_id=owner_id,
+            provider_subject_id=provider_subject_id,
+        )
+        if canonical_observations:
+            accepted += await canonical_repository.insert_many(session, canonical_observations)
 
         log.info(
             "whoop poll complete owner=%s accepted=%d metrics=%d since=%s",

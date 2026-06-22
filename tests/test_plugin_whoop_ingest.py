@@ -227,6 +227,7 @@ _WORKOUT_RECORDS = [
             "average_heart_rate": 145,
             "max_heart_rate": 178,
             "kilojoule": 1500.0,
+            "distance_meter": 10000.0,
             "altitude_gain_meter": 123.4,
             "zone_durations": {
                 "zone_one_milli": 600_000,
@@ -293,6 +294,7 @@ async def test_ingest_happy_path_with_fresh_token():
             "http_client": http,
             "token_store": token_store,
             "oauth_config": _oauth_config(),
+            "canonical_repository": _CanonicalRepo(),
         }
     )
 
@@ -366,6 +368,7 @@ async def test_ingest_writes_canonical_workout_session_for_fusion():
     assert obs.value.summary["provider_subject_id"] == "whoop-user-123"
     assert obs.value.summary["provider_object_id"] == "1"
     assert obs.value.summary["activity_type"] == "Running"
+    assert obs.value.summary["provider_sport_id"] == 0
     assert obs.value.summary["duration_seconds"] == 2700
     assert obs.value.summary["calories"] == 358.51
     assert obs.value.summary["distance_m"] == 10000.0
@@ -410,6 +413,7 @@ async def test_ingest_refreshes_expired_token_and_audits_refreshed_event():
             "http_client": http,
             "token_store": token_store,
             "oauth_config": _oauth_config(),
+            "canonical_repository": _CanonicalRepo(),
         }
     )
 

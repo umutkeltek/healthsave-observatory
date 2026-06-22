@@ -45,8 +45,20 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID
+
+from contracts._base import DEFAULT_WORKSPACE_ID, Provenance
+from contracts.observation import Observation, build_dedup_key
+from contracts.values import EventValue
+from normalization import identity
+from normalization.fusion import exact_ingest_key
 
 SOURCE_TAG = "Whoop"
+ORIGIN_PROVIDER = "whoop-healthsave"
+VENDOR_FAMILY = "whoop"
+NORMALIZER_ID = "whoop-healthsave"
+NORMALIZER_VERSION = "0.1.0"
+WORKOUT_SESSION_METRIC = "workout.session"
 
 # Whoop sport_id -> human name. The full table is in Whoop's developer
 # docs; we ship the common ones and fall back to ``sport_<id>`` for
@@ -114,6 +126,22 @@ def _duration_seconds(start: str | None, end: str | None) -> int | None:
     except ValueError:
         return None
     return int((e - s).total_seconds())
+
+
+def _parse_ts(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+
+
+def _provider_subject_id(raw: Any, owner_id: UUID) -> str:
+    if raw is None or str(raw).strip() == "":
+        return str(owner_id)
+    return str(raw)
 
 
 def _kj_to_kcal(kj: float | None) -> float | None:
@@ -347,6 +375,112 @@ def normalize_workouts(items: list[dict[str, Any]]) -> dict[str, list[dict[str, 
         samples.append(sample)
 
     return {"workouts": samples, **out}
+
+
+def canonical_session_observations(
+    items: list[dict[str, Any]],
+    *,
+    owner_id: UUID,
+    provider_subject_id: str | int | None = None,
+    captured_at: datetime | None = None,
+) -> list[Observation]:
+    """Normalize Whoop workouts into canonical workout session observations."""
+
+    source_id = identity.source_uuid(owner_id, ORIGIN_PROVIDER)
+    subject_id = _provider_subject_id(provider_subject_id, owner_id)
+    stream_id = identity.stream_id(
+        owner_id,
+        ORIGIN_PROVIDER,
+        identity.normalize_origin(SOURCE_TAG),
+    )
+    provenance = Provenance(
+        source_plugin_id=ORIGIN_PROVIDER,
+        sdk_version=NORMALIZER_VERSION,
+        captured_at=captured_at or datetime.now(UTC),
+    )
+    observations: list[Observation] = []
+    for item in items:
+        if not _is_scored(item):
+            continue
+        workout_id = item.get("id")
+        start = _parse_ts(item.get("start"))
+        end = _parse_ts(item.get("end"))
+        if not workout_id or start is None or end is None:
+            continue
+
+        duration = int((end - start).total_seconds())
+        if duration < 0:
+            continue
+
+        score = item["score"]
+        provider_object_id = str(workout_id)
+        activity_type = _sport_name(item.get("sport_id"))
+        calories = _kj_to_kcal(score.get("kilojoule"))
+        distance_m = score.get("distance_meter")
+        summary: dict[str, Any] = {
+            "vendor_family": VENDOR_FAMILY,
+            "origin_provider": ORIGIN_PROVIDER,
+            "provider_subject_id": subject_id,
+            "provider_object_id": provider_object_id,
+            "activity_type": activity_type,
+            "duration_seconds": duration,
+        }
+        if (sport_id := item.get("sport_id")) is not None:
+            summary["provider_sport_id"] = sport_id
+        if calories is not None:
+            summary["calories"] = calories
+        if distance_m is not None:
+            summary["distance_m"] = float(distance_m)
+        if (avg_hr := score.get("average_heart_rate")) is not None:
+            summary["average_heart_rate"] = int(avg_hr)
+        if (max_hr := score.get("max_heart_rate")) is not None:
+            summary["max_heart_rate"] = int(max_hr)
+        if (altitude := score.get("altitude_gain_meter")) is not None:
+            summary["altitude_gain_m"] = float(altitude)
+
+        value = EventValue(
+            type="event",
+            label=activity_type,
+            status="completed",
+            summary=summary,
+        )
+        exact_key = exact_ingest_key(
+            owner_id,
+            source_id,
+            "exercise",
+            provider_object_id=provider_object_id,
+        )
+        observations.append(
+            Observation(
+                owner_id=owner_id,
+                workspace_id=DEFAULT_WORKSPACE_ID,
+                metric_id=WORKOUT_SESSION_METRIC,
+                value=value,
+                interval_start=start,
+                interval_end=end,
+                recorded_at=start,
+                source_id=source_id,
+                stream_id=stream_id,
+                exact_ingest_key=exact_key,
+                aggregation_scope="interval_component",
+                source_record_uid=provider_object_id,
+                provenance=provenance,
+                normalizer_id=NORMALIZER_ID,
+                normalizer_version=NORMALIZER_VERSION,
+                dedup_key=build_dedup_key(
+                    owner_id=owner_id,
+                    workspace_id=DEFAULT_WORKSPACE_ID,
+                    source_id=source_id,
+                    metric_id=WORKOUT_SESSION_METRIC,
+                    interval_start=start,
+                    interval_end=end,
+                    device_id=None,
+                    source_record_uid=provider_object_id,
+                    value_repr=value.model_dump_json(),
+                ),
+            )
+        )
+    return observations
 
 
 def normalize_cycles(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:

@@ -6,8 +6,9 @@ sdk_version: ">=0.1,<0.2"
 language: python
 entrypoint: "plugins.sources.whoop:WhoopSource"
 emits:
-  - measurement.heart_rate
-  - measurement.hrv
+- workout.session
+- measurement.heart_rate
+- measurement.hrv
   - measurement.sleep_analysis
   - measurement.workouts
   - measurement.recovery
@@ -44,6 +45,7 @@ source_capabilities:
       - time_interval
   - plugin_id: whoop-healthsave
     metrics:
+      - workout.session
       - measurement.sleep_analysis
       - measurement.workouts
     delivery: polling
