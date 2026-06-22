@@ -14,6 +14,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from storage.timescale.fusion import default_repository as default_fusion_repository
+
+from contracts import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID, PluginManifest
+
 log = logging.getLogger("healthsave.worker.sources")
 
 WHOOP_DEFAULT_CRON = "*/30 * * * *"
@@ -68,10 +72,55 @@ def _load_entrypoint(entrypoint: str):
     return getattr(module, attr)
 
 
+def _has_session_capability(manifest: PluginManifest) -> bool:
+    return any(
+        capability.record_shape == "session"
+        and capability.aggregation_scope == "interval_component"
+        for capability in manifest.source_capabilities
+    )
+
+
+async def reconcile_source_poll_sessions(
+    session: Any,
+    *,
+    manifest: PluginManifest,
+    fusion_repository: Any = default_fusion_repository,
+    owner_id=DEFAULT_OWNER_ID,
+    workspace_id=DEFAULT_WORKSPACE_ID,
+) -> int:
+    """Run reversible session fusion after a source poll.
+
+    This consumes manifest semantics and confirmed device links; it does not
+    create identity links or mutate raw observations.
+    """
+
+    if not _has_session_capability(manifest):
+        return 0
+
+    pairs = await fusion_repository.find_session_candidate_pairs(
+        session,
+        owner_id=owner_id,
+        workspace_id=workspace_id,
+    )
+    for pair in pairs:
+        await fusion_repository.reconcile_session_pair(
+            session,
+            owner_id=owner_id,
+            workspace_id=workspace_id,
+            provider_subject_id=pair.provider_subject_id,
+            direct=pair.direct,
+            relayed=pair.relayed,
+            device_link=pair.device_link,
+            decided_by=f"source-poll:{manifest.id}",
+        )
+    return len(pairs)
+
+
 def make_source_poll(
     session_factory: Any,
     *,
     spec: SourcePollSpec,
+    fusion_repository: Any = default_fusion_repository,
 ) -> Callable[[], Awaitable[None]]:
     """Return an awaitable APScheduler can invoke for one source adapter."""
 
@@ -98,6 +147,22 @@ def make_source_poll(
                     }
                 )
                 await session.commit()
+                try:
+                    reconciled = await reconcile_source_poll_sessions(
+                        session,
+                        manifest=manifest,
+                        fusion_repository=fusion_repository,
+                    )
+                    if reconciled:
+                        await session.commit()
+                        log.info(
+                            "%s fusion reconciliation: %d candidate pair(s)",
+                            spec.log_label,
+                            reconciled,
+                        )
+                except Exception:
+                    await session.rollback()
+                    log.exception("%s fusion reconciliation failed", spec.log_label)
                 log.info("%s poll: %s", spec.log_label, result)
             except Exception:
                 await session.rollback()
