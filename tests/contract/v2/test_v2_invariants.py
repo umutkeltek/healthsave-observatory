@@ -179,6 +179,21 @@ def test_extra_forbid_rejects_unknown_fields() -> None:
         PluginManifest.model_validate({**valid, "unknown_field_xyz": "boom"})
 
 
+def test_source_capability_rejects_conflicting_delivery_modes() -> None:
+    """The legacy singular delivery field must agree with delivery_modes."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="delivery_modes"):
+        contracts.SourceCapability.model_validate(
+            {
+                "plugin_id": "demo-source",
+                "metrics": ["measurement.heart_rate"],
+                "delivery": "polling",
+                "delivery_modes": ["webhook"],
+            }
+        )
+
+
 def test_all_models_in_init_match_directory() -> None:
     """``ALL_MODELS`` enumerates every public type — adding one to a
     submodule without registering it in __init__.py is a drift."""
