@@ -11,7 +11,6 @@ from datetime import UTC, datetime
 from uuid import NAMESPACE_DNS, UUID, uuid5
 
 import pytest
-
 from normalization.fusion import DeviceLinkConfidence, VariantTier
 from storage.timescale.fusion import (
     FusionReconciliationRepository,
@@ -29,7 +28,7 @@ T1 = datetime(2026, 6, 1, 8, 30, tzinfo=UTC)
 
 
 class _FakeResult:
-    def mappings(self) -> "_FakeResult":
+    def mappings(self) -> _FakeResult:
         return self
 
     def all(self) -> list[dict]:
