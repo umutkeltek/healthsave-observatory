@@ -49,6 +49,43 @@ def test_source_plugin_runtime_docs_match_amazfit_ingest_state():
     assert "until the H-ingest commit lands" not in combined
 
 
+def test_source_plugin_capabilities_cover_manifest_emits():
+    required_fields = {
+        "delivery",
+        "record_shape",
+        "aggregation_scope",
+        "credential_ownership",
+        "identity_priority",
+    }
+    manifest_paths = sorted((ROOT / "plugins" / "sources").glob("*/plugin.yaml"))
+    assert manifest_paths
+
+    for path in manifest_paths:
+        manifest = yaml.safe_load(path.read_text())
+        rel = path.relative_to(ROOT)
+        assert manifest["kind"] == "source"
+
+        capabilities = manifest.get("source_capabilities") or []
+        assert capabilities, f"{rel} missing source_capabilities"
+
+        covered_metrics: set[str] = set()
+        for capability in capabilities:
+            assert capability["plugin_id"] == manifest["id"], rel
+            assert capability.get("metrics"), f"{rel} has a capability without metrics"
+            assert required_fields <= set(capability), (
+                f"{rel} has incomplete source capability metadata"
+            )
+            assert capability["identity_priority"], f"{rel} has empty identity_priority"
+            covered_metrics.update(capability["metrics"])
+
+        emitted_metrics = set(manifest.get("emits") or [])
+        assert covered_metrics == emitted_metrics, (
+            f"{rel} source_capabilities must exactly cover emits; "
+            f"missing={sorted(emitted_metrics - covered_metrics)} "
+            f"extra={sorted(covered_metrics - emitted_metrics)}"
+        )
+
+
 def test_source_plugin_docs_use_docker_safe_operator_commands():
     docs = [
         ROOT / ".env.example",
