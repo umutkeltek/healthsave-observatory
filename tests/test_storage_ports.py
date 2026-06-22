@@ -671,6 +671,29 @@ class _InMemoryTimeSeriesQueryService:
         out.sort(key=lambda p: p.t)
         return out[:limit]
 
+    async def query_fused_series(
+        self,
+        session: Any,
+        *,
+        owner_id: Any,
+        workspace_id: Any,
+        metric_id: str,
+        start: datetime,
+        end: datetime,
+        limit: int = 5000,
+        stream_id: str | None = None,
+    ) -> list[SeriesPoint]:
+        return await self.query_series(
+            session,
+            owner_id=owner_id,
+            workspace_id=workspace_id,
+            metric_id=metric_id,
+            start=start,
+            end=end,
+            limit=limit,
+            stream_id=stream_id,
+        )
+
 
 def test_in_memory_timeseries_query_service_satisfies_protocol() -> None:
     """The whole point of the port — a fake reference impl conforms."""

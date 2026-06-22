@@ -49,6 +49,26 @@ def _metric_summary(metric: MetricDefinition) -> dict:
     }
 
 
+async def _query_metric_points(
+    session: AsyncSession,
+    *,
+    metric_id: str,
+    start: datetime,
+    end: datetime,
+    stream_id: UUID | None,
+):
+    query = _REPO.query_series if stream_id is not None else _REPO.query_fused_series
+    return await query(
+        session,
+        owner_id=DEFAULT_OWNER_ID,
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        metric_id=metric_id,
+        start=start,
+        end=end,
+        stream_id=stream_id,
+    )
+
+
 @router.get("/metrics")
 async def list_metrics() -> list[dict]:
     """The full canonical metric catalog (ontology-driven, no DB hit)."""
@@ -83,10 +103,8 @@ async def metric_series(
 
     end = datetime.now(UTC)
     start = end - window
-    points = await _REPO.query_series(
+    points = await _query_metric_points(
         session,
-        owner_id=DEFAULT_OWNER_ID,
-        workspace_id=DEFAULT_WORKSPACE_ID,
         metric_id=metric_id,
         start=start,
         end=end,
@@ -111,6 +129,9 @@ def _point_dicts(points) -> list[dict]:
             "source_id": point.source_id,
             "stream_id": point.stream_id,
             "confidence": point.confidence,
+            "semantic_key": point.semantic_key,
+            "aggregation_scope": point.aggregation_scope,
+            "is_primary": point.is_primary,
         }
         for point in points
     ]
@@ -154,10 +175,8 @@ async def metric_series_batch(
         if metric is None:
             series.append({"metric_id": metric_id, "error": "unknown metric"})
             continue
-        points = await _REPO.query_series(
+        points = await _query_metric_points(
             session,
-            owner_id=DEFAULT_OWNER_ID,
-            workspace_id=DEFAULT_WORKSPACE_ID,
             metric_id=metric_id,
             start=start,
             end=end,

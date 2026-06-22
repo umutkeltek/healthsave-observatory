@@ -17,6 +17,9 @@ export type SeriesPoint = {
   source_id: string;
   stream_id: string | null;
   confidence: number | null;
+  semantic_key?: string | null;
+  aggregation_scope?: string;
+  is_primary?: boolean;
 };
 
 export type MetricSeries = {

@@ -38,6 +38,9 @@ class SeriesPoint:
     source_id: str
     confidence: float | None
     stream_id: str | None = None
+    semantic_key: str | None = None
+    aggregation_scope: str = "interval_component"
+    is_primary: bool = True
 
 
 def observation_columns(obs: Observation) -> dict[str, Any]:
@@ -79,6 +82,11 @@ def observation_columns(obs: Observation) -> dict[str, Any]:
         "source_id": str(obs.source_id),
         "device_id": str(obs.device_id) if obs.device_id else None,
         "stream_id": str(obs.stream_id) if obs.stream_id else None,
+        "exact_ingest_key": obs.exact_ingest_key,
+        "semantic_key": obs.semantic_key,
+        "semantic_key_version": obs.semantic_key_version,
+        "aggregation_scope": obs.aggregation_scope,
+        "is_primary": obs.is_primary,
         "raw_payload_id": str(obs.raw_payload_id) if obs.raw_payload_id else None,
         "source_record_uid": obs.source_record_uid,
         "confidence": obs.confidence,
@@ -94,6 +102,7 @@ def observation_columns(obs: Observation) -> dict[str, Any]:
 def row_to_series_point(row: dict[str, Any]) -> SeriesPoint:
     """Map a query row mapping to a SeriesPoint (pure)."""
     stream = row.get("stream_id")
+    semantic_key = row.get("semantic_key")
     return SeriesPoint(
         t=row["interval_start"],
         interval_end=row["interval_end"],
@@ -103,6 +112,9 @@ def row_to_series_point(row: dict[str, Any]) -> SeriesPoint:
         source_id=str(row["source_id"]),
         confidence=row["confidence"],
         stream_id=str(stream) if stream else None,
+        semantic_key=str(semantic_key) if semantic_key else None,
+        aggregation_scope=row.get("aggregation_scope") or "interval_component",
+        is_primary=bool(row.get("is_primary", True)),
     )
 
 
@@ -111,14 +123,17 @@ _INSERT_SQL = text(
     INSERT INTO canonical_observations (
         id, owner_id, workspace_id, metric_id, ontology_version, value_type,
         numeric_value, canonical_unit, code, components, value_json,
-        interval_start, interval_end, recorded_at, source_id, device_id, stream_id,
-        raw_payload_id, source_record_uid, confidence, quality_flags, provenance,
+    interval_start, interval_end, recorded_at, source_id, device_id, stream_id,
+    exact_ingest_key, semantic_key, semantic_key_version, aggregation_scope, is_primary,
+    raw_payload_id, source_record_uid, confidence, quality_flags, provenance,
         normalizer_id, normalizer_version, normalization_run_id, dedup_key
     ) VALUES (
         :id, :owner_id, :workspace_id, :metric_id, :ontology_version, :value_type,
         :numeric_value, :canonical_unit, :code, CAST(:components AS JSONB),
         CAST(:value_json AS JSONB), :interval_start, :interval_end, :recorded_at,
-        :source_id, :device_id, :stream_id, :raw_payload_id, :source_record_uid, :confidence,
+    :source_id, :device_id, :stream_id, :exact_ingest_key, :semantic_key,
+    :semantic_key_version, :aggregation_scope, :is_primary,
+    :raw_payload_id, :source_record_uid, :confidence,
         :quality_flags, CAST(:provenance AS JSONB), :normalizer_id,
         :normalizer_version, :normalization_run_id, :dedup_key
     )
@@ -129,7 +144,7 @@ _INSERT_SQL = text(
 _SERIES_SQL = text(
     """
     SELECT interval_start, interval_end, numeric_value, code, canonical_unit,
-           source_id, stream_id, confidence
+           source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary
     FROM canonical_observations
     WHERE owner_id = :owner_id
       AND workspace_id = :workspace_id
@@ -138,6 +153,34 @@ _SERIES_SQL = text(
       AND interval_start < :end
       AND status = 'active'
       AND (CAST(:stream_id AS uuid) IS NULL OR stream_id = CAST(:stream_id AS uuid))
+    ORDER BY interval_start ASC
+    LIMIT :limit
+    """
+)
+
+_FUSED_SERIES_SQL = text(
+    """
+    WITH ranked AS (
+      SELECT
+        interval_start, interval_end, numeric_value, code, canonical_unit,
+        source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary,
+        ROW_NUMBER() OVER (
+          PARTITION BY COALESCE(semantic_key, id::text)
+          ORDER BY is_primary DESC, recorded_at DESC NULLS LAST, created_at DESC, id
+        ) AS fusion_rank
+      FROM canonical_observations
+      WHERE owner_id = :owner_id
+        AND workspace_id = :workspace_id
+        AND metric_id = :metric_id
+        AND interval_start >= :start
+        AND interval_start < :end
+        AND status = 'active'
+        AND (CAST(:stream_id AS uuid) IS NULL OR stream_id = CAST(:stream_id AS uuid))
+    )
+    SELECT interval_start, interval_end, numeric_value, code, canonical_unit,
+           source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary
+    FROM ranked
+    WHERE fusion_rank = 1
     ORDER BY interval_start ASC
     LIMIT :limit
     """
@@ -174,6 +217,38 @@ class CanonicalObservationRepository:
         """
         result = await session.execute(
             _SERIES_SQL,
+            {
+                "owner_id": str(owner_id),
+                "workspace_id": str(workspace_id),
+                "metric_id": metric_id,
+                "start": start,
+                "end": end,
+                "limit": limit,
+                "stream_id": str(stream_id) if stream_id else None,
+            },
+        )
+        return [row_to_series_point(dict(row)) for row in result.mappings().all()]
+
+    async def query_fused_series(
+        self,
+        session: AsyncSession,
+        *,
+        owner_id: UUID,
+        workspace_id: UUID,
+        metric_id: str,
+        start: datetime,
+        end: datetime,
+        limit: int = 5000,
+        stream_id: str | None = None,
+    ) -> list[SeriesPoint]:
+        """Read series collapsed by ``semantic_key`` when fusion metadata exists.
+
+        Rows without a ``semantic_key`` remain independent observations. Rows in
+        the same semantic group keep one variant, preferring the row marked
+        ``is_primary``.
+        """
+        result = await session.execute(
+            _FUSED_SERIES_SQL,
             {
                 "owner_id": str(owner_id),
                 "workspace_id": str(workspace_id),
