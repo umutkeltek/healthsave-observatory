@@ -35,6 +35,11 @@ class Observation(WithOwnership):
     source_id: SourceId
     device_id: DeviceId | None = None
     stream_id: UUID | None = None
+    exact_ingest_key: str | None = None
+    semantic_key: str | None = None
+    semantic_key_version: str | None = None
+    aggregation_scope: str = "interval_component"
+    is_primary: bool = True
     raw_payload_id: UUID | None = None
     source_record_uid: str | None = None
     provenance: Provenance

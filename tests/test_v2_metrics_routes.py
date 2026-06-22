@@ -32,8 +32,10 @@ class _FakeResult:
 class _FakeSession:
     def __init__(self, rows=None):
         self.rows = rows or []
+        self.calls = []
 
     async def execute(self, statement, params=None):
+        self.calls.append((statement, params))
         return _FakeResult(self.rows)
 
 
@@ -97,6 +99,24 @@ async def test_metric_series_accepts_stream_id_param() -> None:
         "vital.heart_rate", range="7d", stream_id=str(_SOURCE), session=_FakeSession([])
     )
     assert body["points"] == []
+
+
+@pytest.mark.asyncio
+async def test_metric_series_without_stream_id_uses_fused_read() -> None:
+    session = _FakeSession([])
+    await metric_series("vital.heart_rate", range="7d", session=session)
+
+    sql, _params = session.calls[0]
+    assert "COALESCE(semantic_key, id::text)" in str(sql)
+
+
+@pytest.mark.asyncio
+async def test_metric_series_with_stream_id_uses_raw_read() -> None:
+    session = _FakeSession([])
+    await metric_series("vital.heart_rate", range="7d", stream_id=_SOURCE, session=session)
+
+    sql, _params = session.calls[0]
+    assert "COALESCE(semantic_key, id::text)" not in str(sql)
 
 
 @pytest.mark.asyncio

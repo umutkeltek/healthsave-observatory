@@ -304,6 +304,19 @@ class TimeSeriesQueryService(Protocol):
         stream_id: str | None = None,
     ) -> list[SeriesPoint]: ...
 
+    async def query_fused_series(
+        self,
+        session: AsyncSession,
+        *,
+        owner_id: UUID,
+        workspace_id: UUID,
+        metric_id: str,
+        start: datetime,
+        end: datetime,
+        limit: int = 5000,
+        stream_id: str | None = None,
+    ) -> list[SeriesPoint]: ...
+
 
 @runtime_checkable
 class ObservationRepository(TimeSeriesQueryService, Protocol):
