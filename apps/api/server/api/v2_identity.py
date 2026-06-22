@@ -8,14 +8,16 @@ missing. These are keyed (they expose device/stream metadata). The SQL lives in
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from contracts._base import DEFAULT_OWNER_ID
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from normalization.fusion import DeviceLinkConfidence
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.timescale import registry
+from storage.timescale.fusion import default_repository as fusion_repository
 
 from .deps import get_session, verify_api_key
 
@@ -44,6 +46,28 @@ class DeviceView(BaseModel):
     stream_count: int
     first_seen_at: datetime
     last_seen_at: datetime
+
+
+# Operator-facing write model for confirmed direct-vendor -> relayed-stream links.
+class DeviceIdentityLinkCreate(BaseModel):
+    direct_stream_id: UUID
+    relayed_stream_id: UUID
+    status: Literal["confirmed"] = "confirmed"
+    confidence: Literal["medium", "strong"] = "strong"
+    evidence: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def require_distinct_streams(self) -> DeviceIdentityLinkCreate:
+        if self.direct_stream_id == self.relayed_stream_id:
+            raise ValueError("direct_stream_id and relayed_stream_id must differ")
+        return self
+
+
+class DeviceIdentityLinkResponse(BaseModel):
+    direct_stream_id: UUID
+    relayed_stream_id: UUID
+    status: Literal["confirmed"]
+    confidence: Literal["medium", "strong"]
 
 
 # `total` is additive: the full row count when paginating (count = page size).
@@ -116,3 +140,34 @@ async def get_stream(stream_id: UUID, session: AsyncSession = Depends(get_sessio
     if row is None:
         raise HTTPException(status_code=404, detail="stream not found")
     return StreamView(**row)
+
+
+@router.post(
+    "/device-identity-links",
+    response_model=DeviceIdentityLinkResponse,
+    status_code=201,
+)
+async def create_device_identity_link(
+    payload: DeviceIdentityLinkCreate,
+    session: AsyncSession = Depends(get_session),
+) -> DeviceIdentityLinkResponse:
+    confidence = DeviceLinkConfidence(payload.confidence)
+    try:
+        await fusion_repository.upsert_device_identity_link(
+            session,
+            owner_id=DEFAULT_OWNER_ID,
+            direct_stream_id=payload.direct_stream_id,
+            relayed_stream_id=payload.relayed_stream_id,
+            status=payload.status,
+            confidence=confidence,
+            evidence=payload.evidence,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    await session.commit()
+    return DeviceIdentityLinkResponse(
+        direct_stream_id=payload.direct_stream_id,
+        relayed_stream_id=payload.relayed_stream_id,
+        status=payload.status,
+        confidence=payload.confidence,
+    )

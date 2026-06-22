@@ -323,6 +323,7 @@ The identity model, **typed** (R2). Populated as batches arrive (the ingest path
 - `GET /api/v2/devices` — distinct emitters (derived from streams).
 - `GET /api/v2/streams` — the join "device via integration" (the same band via HealthKit vs a direct poll = two streams).
 - `GET /api/v2/streams/{stream_id}` — one stream (`404` if unknown).
+- `POST /api/v2/device-identity-links` — operator-confirmed direct-vendor → relayed-stream link for session fusion. Accepts only `confirmed` links with `medium` or `strong` confidence.
 
 All three list endpoints take optional **`limit`** (1–1000) + **`offset`** pagination; omitted = full list, unchanged. When paginating, the additive `total` field carries the full row count (`count` = page size). Ordering is part of the contract: sources by `plugin_id`, streams by `last_seen_at` DESC, devices by `device_label`.
 
@@ -336,7 +337,15 @@ All three list endpoints take optional **`limit`** (1–1000) + **`offset`** pag
     "first_seen_at": "…", "last_seen_at": "…" } ] }
 // GET /api/v2/devices
 { "count": 2, "total": 2, "devices": [ { "device_label": "Apple Watch", "stream_count": 1,
-    "first_seen_at": "…", "last_seen_at": "…" } ] }
+"first_seen_at": "…", "last_seen_at": "…" } ] }
+
+// POST /api/v2/device-identity-links
+{ "direct_stream_id": "3de17cc1-a369-5a9b-92ac-01c75e85d8dc",
+  "relayed_stream_id": "1a506ee4-3143-5bf0-a11e-4537f8c5635b",
+  "confidence": "strong",
+  "evidence": { "vendor_family": "polar",
+    "provider_subject_id": "polar-user-10579",
+    "reason": "operator confirmed same physical device" } }
 ```
 
 ### `GET /api/v2/insights/narratives` — keyed
