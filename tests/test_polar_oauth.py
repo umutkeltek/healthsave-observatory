@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 import base64
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-import sys
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "py"))
 
 from auth import DEFAULT_OWNER_ID  # noqa: E402
+
 from plugins.sources.polar.oauth import (  # noqa: E402
     OAUTH_AUTH_URL,
     OAUTH_TOKEN_URL,

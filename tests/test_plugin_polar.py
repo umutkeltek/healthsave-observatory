@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
-
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "py"))
 
-from plugin_sdk import PluginManifest, Source, discover, is_sdk_compatible, load_manifest  # noqa: E402
+from plugin_sdk import (  # noqa: E402
+    PluginManifest,
+    Source,
+    discover,
+    is_sdk_compatible,
+    load_manifest,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_DIR = REPO_ROOT / "plugins" / "sources" / "polar"

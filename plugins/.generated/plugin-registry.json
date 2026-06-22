@@ -140,6 +140,59 @@
     },
     {
       "compatible_with_running_sdk": true,
+      "id": "polar-accesslink",
+      "kind": "source",
+      "manifest": {
+        "config_schema": null,
+        "consumes": [],
+        "emits": [
+          "measurement.workouts",
+          "measurement.exercise_duration_seconds"
+        ],
+        "entrypoint": "plugins.sources.polar:PolarSource",
+        "id": "polar-accesslink",
+        "kind": "source",
+        "language": "python",
+        "name": "Polar AccessLink",
+        "permissions": {
+          "capabilities": [
+            {
+              "description": "Persist the per-owner Polar OAuth access token.",
+              "name": "write:oauth_tokens"
+            },
+            {
+              "description": "Insert Polar exercises through the existing IngestStorage port.",
+              "name": "write:measurements"
+            },
+            {
+              "description": "Outbound HTTPS to Polar AccessLink v3 data API.",
+              "name": "network:www.polaraccesslink.com"
+            },
+            {
+              "description": "Outbound HTTPS to Polar OAuth token endpoint.",
+              "name": "network:polarremote.com"
+            },
+            {
+              "description": "Browser authorization endpoint for operator account binding.",
+              "name": "network:flow.polar.com"
+            }
+          ],
+          "network": true,
+          "secrets": [
+            "POLAR_CLIENT_ID",
+            "POLAR_CLIENT_SECRET",
+            "POLAR_REDIRECT_URI",
+            "HDH_TOKEN_ENC_KEY"
+          ]
+        },
+        "requires": [],
+        "sdk_version": ">=0.1,<0.2",
+        "version": "0.1.0"
+      },
+      "plugin_dir": "plugins/sources/polar"
+    },
+    {
+      "compatible_with_running_sdk": true,
       "id": "whoop-healthsave",
       "kind": "source",
       "manifest": {
@@ -151,7 +204,8 @@
           "measurement.sleep_analysis",
           "measurement.workouts",
           "measurement.recovery",
-          "measurement.strain"
+          "measurement.strain",
+          "measurement.body_measurement"
         ],
         "entrypoint": "plugins.sources.whoop:WhoopSource",
         "id": "whoop-healthsave",

@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
-
-import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "py"))

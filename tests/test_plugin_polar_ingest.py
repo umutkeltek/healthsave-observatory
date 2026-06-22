@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-import sys
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "py"))
 
 from auth import DEFAULT_OWNER_ID, OAuthToken  # noqa: E402
 from plugin_sdk import load_manifest  # noqa: E402
+
 from plugins.sources.polar import POLAR_PROVIDER, PolarSource  # noqa: E402
 from plugins.sources.polar.fetch import PATH_EXERCISES  # noqa: E402
 

@@ -40,6 +40,7 @@ WHOOP_DEFAULT_CRON = "*/30 * * * *"
 # limit; a 30-minute cadence keeps single-account data fresh without
 # aggressive polling. Override via the AMAZFIT_POLL_CRON env var.
 AMAZFIT_DEFAULT_CRON = "*/30 * * * *"
+POLAR_DEFAULT_CRON = "*/30 * * * *"
 
 
 def _plugin_yaml(slug: str) -> Path:
@@ -125,6 +126,11 @@ def _amazfit_plugin_yaml() -> Path:
     return _plugin_yaml("amazfit")
 
 
+def _polar_plugin_yaml() -> Path:
+    """Locate the Polar plugin manifest. Same layout as Whoop."""
+    return _plugin_yaml("polar")
+
+
 def make_amazfit_poll(session_factory: Any) -> Callable[[], Awaitable[None]]:
     """Return an awaitable APScheduler can invoke on every tick.
 
@@ -179,6 +185,64 @@ def register_amazfit_poll(
 
     scheduler.add_job(
         make_amazfit_poll(session_factory),
+        CronTrigger.from_crontab(cron),
+        id=job_id,
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    log.info("registered %s cron=%s", job_id, cron)
+    return job_id
+
+
+def make_polar_poll(session_factory: Any) -> Callable[[], Awaitable[None]]:
+    """Return an awaitable APScheduler can invoke on every tick."""
+
+    async def _run() -> None:
+        import httpx
+        from plugin_sdk import load_manifest
+        from storage.timescale.ingest import PostgresIngestStorage
+
+        from plugins.sources.polar import PolarSource
+
+        manifest = load_manifest(_polar_plugin_yaml())
+        plugin = PolarSource(manifest)
+        storage = PostgresIngestStorage()
+
+        async with (
+            httpx.AsyncClient(timeout=30.0) as http,
+            session_factory() as session,
+        ):
+            try:
+                result = await plugin.ingest(
+                    {
+                        "storage": storage,
+                        "session": session,
+                        "http_client": http,
+                    }
+                )
+                await session.commit()
+                log.info("polar poll: %s", result)
+            except Exception:
+                await session.rollback()
+                log.exception("polar poll failed")
+                raise
+
+    return _run
+
+
+def register_polar_poll(
+    scheduler: Any,
+    session_factory: Any,
+    *,
+    cron: str = POLAR_DEFAULT_CRON,
+    job_id: str = "polar_poll",
+) -> str:
+    """Register Polar poll on ``scheduler``. Returns job id."""
+    from apscheduler.triggers.cron import CronTrigger
+
+    scheduler.add_job(
+        make_polar_poll(session_factory),
         CronTrigger.from_crontab(cron),
         id=job_id,
         max_instances=1,
