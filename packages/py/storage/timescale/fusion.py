@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -30,6 +31,7 @@ SEMANTIC_KEY_VERSION = "matcher:session:v1"
 MATCHER_ID = "session"
 MATCHER_VERSION = "v1"
 OBJECT_TYPE_EXERCISE = "exercise"
+DEVICE_LINK_STATUSES = {"proposed", "confirmed", "rejected", "expired"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +130,7 @@ _SELECT_SESSION_CANDIDATE_PAIRS_SQL = text(
        AND direct.workspace_id = CAST(:workspace_id AS UUID)
        AND relayed.workspace_id = CAST(:workspace_id AS UUID)
        AND link.status = 'confirmed'
+       AND link.confidence IN ('medium', 'strong')
        AND (link.valid_to IS NULL OR link.valid_to > now())
        AND direct.status = 'active'
        AND relayed.status = 'active'
@@ -135,7 +138,8 @@ _SELECT_SESSION_CANDIDATE_PAIRS_SQL = text(
        AND relayed.metric_id = :metric_id
        AND direct.aggregation_scope = 'interval_component'
        AND relayed.aggregation_scope = 'interval_component'
-       AND (direct.semantic_key IS NULL OR relayed.semantic_key IS NULL)
+       AND direct.semantic_key IS NULL
+       AND relayed.semantic_key IS NULL
        AND direct.stream_id IS NOT NULL
        AND relayed.stream_id IS NOT NULL
        AND ABS(EXTRACT(EPOCH FROM direct.interval_start - relayed.interval_start))
@@ -147,7 +151,6 @@ _SELECT_SESSION_CANDIDATE_PAIRS_SQL = text(
     """
 )
 
-
 _UPDATE_VARIANTS_SQL = text(
     """
     UPDATE canonical_observations
@@ -158,6 +161,37 @@ _UPDATE_VARIANTS_SQL = text(
      WHERE owner_id = CAST(:owner_id AS UUID)
        AND workspace_id = CAST(:workspace_id AS UUID)
        AND id = ANY(CAST(:variant_ids AS UUID[]))
+    """
+)
+
+_UPSERT_DEVICE_IDENTITY_LINK_SQL = text(
+    """
+    INSERT INTO device_identity_links (
+        owner_id,
+        direct_stream_id,
+        relayed_stream_id,
+        status,
+        confidence,
+        evidence,
+        valid_from,
+        valid_to
+    ) VALUES (
+        CAST(:owner_id AS UUID),
+        CAST(:direct_stream_id AS UUID),
+        CAST(:relayed_stream_id AS UUID),
+        :status,
+        :confidence,
+        CAST(:evidence AS JSONB),
+        COALESCE(CAST(:valid_from AS TIMESTAMPTZ), now()),
+        CAST(:valid_to AS TIMESTAMPTZ)
+    )
+    ON CONFLICT (owner_id, direct_stream_id, relayed_stream_id)
+    DO UPDATE SET
+        status = EXCLUDED.status,
+        confidence = EXCLUDED.confidence,
+        evidence = EXCLUDED.evidence,
+        valid_from = EXCLUDED.valid_from,
+        valid_to = EXCLUDED.valid_to
     """
 )
 
@@ -196,6 +230,39 @@ _INSERT_DECISION_SQL = text(
 
 class FusionReconciliationRepository:
     """Persist session-level fusion decisions for canonical observations."""
+
+    async def upsert_device_identity_link(
+        self,
+        session: AsyncSession,
+        *,
+        owner_id: UUID,
+        direct_stream_id: UUID,
+        relayed_stream_id: UUID,
+        status: str,
+        confidence: DeviceLinkConfidence,
+        evidence: dict[str, object],
+        valid_from: datetime | None = None,
+        valid_to: datetime | None = None,
+    ) -> None:
+        """Record a directional direct-vendor -> relayed-stream identity link."""
+
+        if direct_stream_id == relayed_stream_id:
+            raise ValueError("device identity link requires two distinct streams")
+        if status not in DEVICE_LINK_STATUSES:
+            raise ValueError(f"invalid device identity link status: {status}")
+        await session.execute(
+            _UPSERT_DEVICE_IDENTITY_LINK_SQL,
+            {
+                "owner_id": str(owner_id),
+                "direct_stream_id": str(direct_stream_id),
+                "relayed_stream_id": str(relayed_stream_id),
+                "status": status,
+                "confidence": confidence.value,
+                "evidence": json.dumps(evidence, sort_keys=True),
+                "valid_from": valid_from.isoformat() if valid_from else None,
+                "valid_to": valid_to.isoformat() if valid_to else None,
+            },
+        )
 
     async def find_session_candidate_pairs(
         self,
