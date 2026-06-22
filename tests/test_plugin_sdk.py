@@ -45,6 +45,7 @@ from plugin_sdk import (  # noqa: E402
     assert_sdk_compatible,
     build_registry,
     discover,
+    find_plugin_manifest,
     is_sdk_compatible,
     load_manifest,
     load_plugin,
@@ -214,6 +215,30 @@ def test_discover_skips_directories_without_a_manifest(tmp_path: Path):
 
     found = discover(plugins)
     assert [p.plugin_id for p in found] == ["alpha"]
+
+
+def test_find_plugin_manifest_uses_explicit_plugins_dir(tmp_path: Path):
+    plugins = tmp_path / "plugins"
+    _write_plugin(plugins / "sources" / "whoop", _good_manifest_dict(id="whoop", kind="source"))
+
+    manifest_path = find_plugin_manifest("whoop", kind="source", plugins_dir=plugins)
+
+    assert manifest_path == plugins / "sources" / "whoop" / "plugin.yaml"
+
+
+def test_find_plugin_manifest_walks_from_flattened_docker_module(tmp_path: Path):
+    image_root = tmp_path / "app"
+    _write_plugin(
+        image_root / "plugins" / "sources" / "whoop",
+        _good_manifest_dict(id="whoop", kind="source"),
+    )
+    route_file = image_root / "server" / "api" / "v2_sources.py"
+    route_file.parent.mkdir(parents=True)
+    route_file.write_text("# route module")
+
+    manifest_path = find_plugin_manifest("whoop", kind="source", start=route_file)
+
+    assert manifest_path == image_root / "plugins" / "sources" / "whoop" / "plugin.yaml"
 
 
 def test_discover_rejects_kind_directory_mismatch(tmp_path: Path):
