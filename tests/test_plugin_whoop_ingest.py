@@ -28,6 +28,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "py"))
 
 from auth import DEFAULT_OWNER_ID, OAuthToken  # noqa: E402
+from normalization import identity  # noqa: E402
+from normalization.fusion import exact_ingest_key  # noqa: E402
 from plugin_sdk import load_manifest  # noqa: E402
 
 from plugins.sources.whoop import PROVIDER, WhoopSource  # noqa: E402
@@ -116,6 +118,15 @@ class _RecordingStorage:
         return len(samples)
 
 
+class _CanonicalRepo:
+    def __init__(self) -> None:
+        self.insert_calls: list[tuple[Any, list]] = []
+
+    async def insert_many(self, session, observations):
+        self.insert_calls.append((session, observations))
+        return len(observations)
+
+
 @dataclass
 class _TokenStore:
     """In-memory token store mimicking the storage.timescale.oauth_tokens module."""
@@ -146,6 +157,7 @@ def _fresh_token() -> OAuthToken:
         refresh_token="RT-fresh",
         expires_at=datetime.now(UTC) + timedelta(hours=1),
         scopes=("read:recovery", "offline"),
+        metadata={"provider_subject_id": "whoop-user-123"},
     )
 
 
@@ -313,6 +325,61 @@ async def test_ingest_happy_path_with_fresh_token():
     assert "height_meters" in written_metrics
     assert "weight_kg" in written_metrics
     assert "recovery_calibrating" in written_metrics
+
+
+@pytest.mark.asyncio
+async def test_ingest_writes_canonical_workout_session_for_fusion():
+    storage = _RecordingStorage()
+    canonical_repo = _CanonicalRepo()
+    session = object()
+    token_store = _TokenStore(initial_token=_fresh_token())
+    http = _HttpClient(get_responses=_default_get_responses())
+    plugin = WhoopSource(load_manifest(PLUGIN_DIR / "plugin.yaml"))
+
+    result = await plugin.ingest(
+        {
+            "storage": storage,
+            "session": session,
+            "http_client": http,
+            "token_store": token_store,
+            "oauth_config": _oauth_config(),
+            "canonical_repository": canonical_repo,
+        }
+    )
+
+    legacy_accepted = sum(len(call.samples) for call in storage.ingest_calls)
+    assert result == {"accepted": legacy_accepted + 1, "rejected": 0}
+    assert len(canonical_repo.insert_calls) == 1
+    inserted_session, observations = canonical_repo.insert_calls[0]
+    assert inserted_session is session
+    assert len(observations) == 1
+
+    obs = observations[0]
+    expected_source_id = identity.source_uuid(DEFAULT_OWNER_ID, "whoop-healthsave")
+    expected_stream = identity.stream_id(DEFAULT_OWNER_ID, "whoop-healthsave", "whoop")
+    assert obs.metric_id == "workout.session"
+    assert obs.value.type == "event"
+    assert obs.value.status == "completed"
+    assert obs.value.label == "Running"
+    assert obs.value.summary["vendor_family"] == "whoop"
+    assert obs.value.summary["origin_provider"] == "whoop-healthsave"
+    assert obs.value.summary["provider_subject_id"] == "whoop-user-123"
+    assert obs.value.summary["provider_object_id"] == "1"
+    assert obs.value.summary["activity_type"] == "Running"
+    assert obs.value.summary["duration_seconds"] == 2700
+    assert obs.value.summary["calories"] == 358.51
+    assert obs.value.summary["distance_m"] == 10000.0
+    assert obs.source_id == expected_source_id
+    assert obs.stream_id == expected_stream
+    assert obs.source_record_uid == "1"
+    assert obs.exact_ingest_key == exact_ingest_key(
+        DEFAULT_OWNER_ID,
+        expected_source_id,
+        "exercise",
+        provider_object_id="1",
+    )
+    assert obs.aggregation_scope == "interval_component"
+    assert obs.normalizer_id == "whoop-healthsave"
 
 
 @pytest.mark.asyncio
