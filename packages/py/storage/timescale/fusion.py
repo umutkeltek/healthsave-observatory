@@ -64,6 +64,90 @@ class FusionReconciliationResult:
     variant_observation_ids: tuple[UUID, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class SessionCandidatePair:
+    provider_subject_id: str
+    direct: SessionObservationCandidate
+    relayed: SessionObservationCandidate
+    device_link: DeviceLinkConfidence
+
+
+SESSION_METRIC_ID = "workout.session"
+BOUNDARY_TOLERANCE_S = 5.0
+
+
+_SELECT_SESSION_CANDIDATE_PAIRS_SQL = text(
+    """
+    SELECT
+        COALESCE(
+            direct.value_json->'summary'->>'provider_subject_id',
+            link.evidence->>'provider_subject_id'
+        ) AS provider_subject_id,
+        direct.id AS direct_observation_id,
+        direct.stream_id AS direct_stream_id,
+        COALESCE(
+            direct.value_json->'summary'->>'vendor_family',
+            link.evidence->>'vendor_family'
+        ) AS direct_vendor_family,
+        COALESCE(
+            direct.value_json->'summary'->>'activity_type',
+            direct.value_json->>'label'
+        ) AS direct_activity_type,
+        EXTRACT(EPOCH FROM direct.interval_start) AS direct_start_epoch_s,
+        EXTRACT(EPOCH FROM direct.interval_end) AS direct_end_epoch_s,
+        COALESCE(
+            direct.value_json->'summary'->>'provider_object_id',
+            direct.source_record_uid
+        ) AS direct_provider_object_id,
+        relayed.id AS relayed_observation_id,
+        relayed.stream_id AS relayed_stream_id,
+        COALESCE(
+            relayed.value_json->'summary'->>'vendor_family',
+            direct.value_json->'summary'->>'vendor_family',
+            link.evidence->>'vendor_family'
+        ) AS relayed_vendor_family,
+        COALESCE(
+            relayed.value_json->'summary'->>'activity_type',
+            relayed.value_json->>'label'
+        ) AS relayed_activity_type,
+        EXTRACT(EPOCH FROM relayed.interval_start) AS relayed_start_epoch_s,
+        EXTRACT(EPOCH FROM relayed.interval_end) AS relayed_end_epoch_s,
+        COALESCE(
+            relayed.value_json->'summary'->>'provider_object_id',
+            relayed.source_record_uid
+        ) AS relayed_provider_object_id,
+        link.confidence AS device_link_confidence
+      FROM device_identity_links link
+      JOIN canonical_observations direct
+        ON direct.owner_id = link.owner_id
+       AND direct.stream_id = link.direct_stream_id
+      JOIN canonical_observations relayed
+        ON relayed.owner_id = link.owner_id
+       AND relayed.stream_id = link.relayed_stream_id
+     WHERE link.owner_id = CAST(:owner_id AS UUID)
+       AND direct.workspace_id = CAST(:workspace_id AS UUID)
+       AND relayed.workspace_id = CAST(:workspace_id AS UUID)
+       AND link.status = 'confirmed'
+       AND (link.valid_to IS NULL OR link.valid_to > now())
+       AND direct.status = 'active'
+       AND relayed.status = 'active'
+       AND direct.metric_id = :metric_id
+       AND relayed.metric_id = :metric_id
+       AND direct.aggregation_scope = 'interval_component'
+       AND relayed.aggregation_scope = 'interval_component'
+       AND (direct.semantic_key IS NULL OR relayed.semantic_key IS NULL)
+       AND direct.stream_id IS NOT NULL
+       AND relayed.stream_id IS NOT NULL
+       AND ABS(EXTRACT(EPOCH FROM direct.interval_start - relayed.interval_start))
+           <= :boundary_tolerance_s
+       AND ABS(EXTRACT(EPOCH FROM direct.interval_end - relayed.interval_end))
+           <= :boundary_tolerance_s
+     ORDER BY direct.interval_start DESC
+     LIMIT :limit
+    """
+)
+
+
 _UPDATE_VARIANTS_SQL = text(
     """
     UPDATE canonical_observations
@@ -112,6 +196,31 @@ _INSERT_DECISION_SQL = text(
 
 class FusionReconciliationRepository:
     """Persist session-level fusion decisions for canonical observations."""
+
+    async def find_session_candidate_pairs(
+        self,
+        session: AsyncSession,
+        *,
+        owner_id: UUID,
+        workspace_id: UUID,
+        limit: int = 100,
+    ) -> list[SessionCandidatePair]:
+        result = await session.execute(
+            _SELECT_SESSION_CANDIDATE_PAIRS_SQL,
+            {
+                "owner_id": str(owner_id),
+                "workspace_id": str(workspace_id),
+                "metric_id": SESSION_METRIC_ID,
+                "boundary_tolerance_s": BOUNDARY_TOLERANCE_S,
+                "limit": limit,
+            },
+        )
+        pairs: list[SessionCandidatePair] = []
+        for row in result.mappings().all():
+            pair = _row_to_session_candidate_pair(dict(row))
+            if pair is not None:
+                pairs.append(pair)
+        return pairs
 
     async def reconcile_session_pair(
         self,
@@ -244,3 +353,62 @@ class FusionReconciliationRepository:
 
 
 default_repository = FusionReconciliationRepository()
+
+
+def _as_uuid(value: object) -> UUID:
+    if isinstance(value, UUID):
+        return value
+    return UUID(str(value))
+
+
+def _row_to_session_candidate_pair(row: dict) -> SessionCandidatePair | None:
+    provider_subject_id = row.get("provider_subject_id")
+    direct_provider_object_id = row.get("direct_provider_object_id")
+    if not provider_subject_id or not direct_provider_object_id:
+        return None
+
+    direct_vendor_family = row.get("direct_vendor_family")
+    relayed_vendor_family = row.get("relayed_vendor_family")
+    direct_activity_type = row.get("direct_activity_type")
+    relayed_activity_type = row.get("relayed_activity_type")
+    if not (
+        direct_vendor_family
+        and relayed_vendor_family
+        and direct_activity_type
+        and relayed_activity_type
+    ):
+        return None
+
+    try:
+        device_link = DeviceLinkConfidence(str(row["device_link_confidence"]))
+    except (KeyError, ValueError):
+        return None
+
+    direct = SessionObservationCandidate(
+        observation_id=_as_uuid(row["direct_observation_id"]),
+        stream_id=_as_uuid(row["direct_stream_id"]),
+        vendor_family=str(direct_vendor_family),
+        activity_type=str(direct_activity_type),
+        start_epoch_s=float(row["direct_start_epoch_s"]),
+        end_epoch_s=float(row["direct_end_epoch_s"]),
+        provider_object_id=str(direct_provider_object_id),
+        variant_tier=VariantTier.DIRECT_WITH_PROVIDER_ID,
+    )
+    relayed = SessionObservationCandidate(
+        observation_id=_as_uuid(row["relayed_observation_id"]),
+        stream_id=_as_uuid(row["relayed_stream_id"]),
+        vendor_family=str(relayed_vendor_family),
+        activity_type=str(relayed_activity_type),
+        start_epoch_s=float(row["relayed_start_epoch_s"]),
+        end_epoch_s=float(row["relayed_end_epoch_s"]),
+        provider_object_id=str(row["relayed_provider_object_id"])
+        if row.get("relayed_provider_object_id")
+        else None,
+        variant_tier=VariantTier.HC_PACKAGE_AND_DEVICE,
+    )
+    return SessionCandidatePair(
+        provider_subject_id=str(provider_subject_id),
+        direct=direct,
+        relayed=relayed,
+        device_link=device_link,
+    )
