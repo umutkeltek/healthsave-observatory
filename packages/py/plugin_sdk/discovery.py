@@ -35,6 +35,7 @@ _KIND_TO_SINGULAR: dict[str, str] = {
     "narrators": "narrator",
     "agents": "agent",
 }
+_SINGULAR_TO_KIND: dict[str, str] = {v: k for k, v in _KIND_TO_SINGULAR.items()}
 
 
 def _default_plugins_dir() -> Path:
@@ -60,6 +61,64 @@ def _default_plugins_dir() -> Path:
 
 
 _DEFAULT_PLUGINS_DIR = _default_plugins_dir()
+
+
+def _kind_dir(kind: str) -> str:
+    if kind in _KINDS:
+        return kind
+    try:
+        return _SINGULAR_TO_KIND[kind]
+    except KeyError as exc:
+        raise ValueError(f"unknown plugin kind {kind!r}") from exc
+
+
+def _ancestor_roots(start: Path) -> list[Path]:
+    base = start.resolve()
+    if base.is_file():
+        base = base.parent
+    return [base, *base.parents]
+
+
+def find_plugin_manifest(
+    plugin_id: str,
+    *,
+    kind: str,
+    plugins_dir: Path | None = None,
+    start: Path | None = None,
+) -> Path:
+    """Locate ``plugins/<kind>/<plugin_id>/plugin.yaml`` across runtime layouts.
+
+    ``plugins_dir`` is deterministic for tests and explicit runtime overrides.
+    ``start`` lets flattened modules such as ``/app/server/api/v2_sources.py``
+    walk upward to ``/app/plugins`` without hard-coding parent depth.
+    """
+
+    rel = Path(_kind_dir(kind)) / plugin_id / "plugin.yaml"
+
+    if plugins_dir is not None:
+        candidate = plugins_dir / rel
+        if candidate.is_file():
+            return candidate
+        raise FileNotFoundError(f"plugin manifest not found: {candidate}")
+
+    env_path = os.getenv("HDH_PLUGINS_DIR")
+    if env_path:
+        candidate = Path(env_path) / rel
+        if candidate.is_file():
+            return candidate
+        raise FileNotFoundError(f"plugin manifest not found: {candidate}")
+
+    if start is not None:
+        for root in _ancestor_roots(start):
+            candidate = root / "plugins" / rel
+            if candidate.is_file():
+                return candidate
+
+    candidate = _DEFAULT_PLUGINS_DIR / rel
+    if candidate.is_file():
+        return candidate
+
+    raise FileNotFoundError(f"plugin manifest not found: {rel}")
 
 
 @dataclass(frozen=True, slots=True)

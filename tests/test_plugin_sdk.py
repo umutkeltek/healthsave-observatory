@@ -82,6 +82,7 @@ def test_public_surface_exposes_documented_names():
         "is_sdk_compatible",
         "DiscoveredPlugin",
         "discover",
+        "find_plugin_manifest",
         "load_manifest",
         "build_registry",
         "write_registry",

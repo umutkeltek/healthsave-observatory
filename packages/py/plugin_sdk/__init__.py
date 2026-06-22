@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from .__about__ import SDK_VERSION, SDK_VERSION_TUPLE
 from .base import Agent, Narrator, Plugin, Source
-from .discovery import DiscoveredPlugin, discover, load_manifest
+from .discovery import DiscoveredPlugin, discover, find_plugin_manifest, load_manifest
 from .errors import (
     PluginEntrypointError,
     PluginError,
