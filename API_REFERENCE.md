@@ -324,6 +324,7 @@ The identity model, **typed** (R2). Populated as batches arrive (the ingest path
 - `GET /api/v2/streams` — the join "device via integration" (the same band via HealthKit vs a direct poll = two streams).
 - `GET /api/v2/streams/{stream_id}` — one stream (`404` if unknown).
 - `POST /api/v2/device-identity-links` — operator-confirmed direct-vendor → relayed-stream link for session fusion. Accepts only `confirmed` links with `medium` or `strong` confidence.
+- `POST /api/v2/device-identity-links/session-reconciliations` — operator-triggered session fusion over confirmed device identity links. Accepts `limit` (1–1000, default 100) and returns counts only.
 
 All three list endpoints take optional **`limit`** (1–1000) + **`offset`** pagination; omitted = full list, unchanged. When paginating, the additive `total` field carries the full row count (`count` = page size). Ordering is part of the contract: sources by `plugin_id`, streams by `last_seen_at` DESC, devices by `device_label`.
 
@@ -346,6 +347,8 @@ All three list endpoints take optional **`limit`** (1–1000) + **`offset`** pag
   "evidence": { "vendor_family": "polar",
     "provider_subject_id": "polar-user-10579",
     "reason": "operator confirmed same physical device" } }
+// POST /api/v2/device-identity-links/session-reconciliations?limit=25
+{ "matched_pairs": 2, "assigned": 1, "rejected": 1 }
 ```
 
 ### `GET /api/v2/insights/narratives` — keyed
