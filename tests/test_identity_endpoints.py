@@ -19,11 +19,14 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import server  # noqa: E402
+from contracts import DEFAULT_OWNER_ID  # noqa: E402
 from server.api import v2_identity  # noqa: E402
 from server.api.deps import get_session  # noqa: E402
 
 NOW = datetime(2026, 6, 9, 8, 0, 0, tzinfo=UTC)
 SID = UUID("5fd4a041-f371-51be-8b1e-8d6275534c60")
+DIRECT_SID = UUID("3de17cc1-a369-5a9b-92ac-01c75e85d8dc")
+RELAYED_SID = UUID("1a506ee4-3143-5bf0-a11e-4537f8c5635b")
 _STREAM = {
     "id": SID,
     "source_plugin_id": "apple-healthkit-ios",
@@ -34,10 +37,29 @@ _STREAM = {
 }
 
 
+class _Session:
+    def __init__(self) -> None:
+        self.commits = 0
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+
+class _LinkRepo:
+    def __init__(self) -> None:
+        self.calls: list[tuple[object, dict]] = []
+
+    async def upsert_device_identity_link(self, session, **kwargs):
+        self.calls.append((session, kwargs))
+
+
 @pytest.fixture
 def client(monkeypatch):
+    session = _Session()
+    link_repo = _LinkRepo()
+
     async def fake_session():
-        yield object()
+        yield session
 
     async def list_sources(_session, _owner, *, limit=None, offset=0):
         return [
@@ -70,9 +92,12 @@ def client(monkeypatch):
     monkeypatch.setattr(v2_identity.registry, "list_streams", list_streams)
     monkeypatch.setattr(v2_identity.registry, "list_devices", list_devices)
     monkeypatch.setattr(v2_identity.registry, "get_stream", get_stream)
+    monkeypatch.setattr(v2_identity, "fusion_repository", link_repo, raising=False)
     server.app.dependency_overrides[get_session] = fake_session
     try:
         with TestClient(server.app) as c:
+            c._identity_session = session
+            c._identity_link_repo = link_repo
             yield c
     finally:
         server.app.dependency_overrides.clear()
@@ -108,3 +133,67 @@ def test_get_stream_found_and_missing(client):
 
     missing = client.get("/api/v2/streams/11111111-1111-1111-1111-111111111111")
     assert missing.status_code == 404
+
+
+def test_create_confirmed_device_identity_link(client):
+    response = client.post(
+        "/api/v2/device-identity-links",
+        json={
+            "direct_stream_id": str(DIRECT_SID),
+            "relayed_stream_id": str(RELAYED_SID),
+            "confidence": "strong",
+            "evidence": {
+                "vendor_family": "polar",
+                "provider_subject_id": "polar-user-10579",
+                "reason": "operator confirmed same physical device",
+            },
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["direct_stream_id"] == str(DIRECT_SID)
+    assert body["relayed_stream_id"] == str(RELAYED_SID)
+    assert body["status"] == "confirmed"
+    assert body["confidence"] == "strong"
+    assert client._identity_session.commits == 1
+    [(session, kwargs)] = client._identity_link_repo.calls
+    assert session is client._identity_session
+    assert kwargs["owner_id"] == DEFAULT_OWNER_ID
+    assert kwargs["direct_stream_id"] == DIRECT_SID
+    assert kwargs["relayed_stream_id"] == RELAYED_SID
+    assert kwargs["status"] == "confirmed"
+    assert kwargs["confidence"].value == "strong"
+    assert kwargs["evidence"]["vendor_family"] == "polar"
+
+
+def test_create_device_identity_link_rejects_weak_confidence(client):
+    response = client.post(
+        "/api/v2/device-identity-links",
+        json={
+            "direct_stream_id": str(DIRECT_SID),
+            "relayed_stream_id": str(RELAYED_SID),
+            "confidence": "weak",
+            "evidence": {"reason": "not enough"},
+        },
+    )
+
+    assert response.status_code == 422
+    assert client._identity_link_repo.calls == []
+    assert client._identity_session.commits == 0
+
+
+def test_create_device_identity_link_rejects_same_stream(client):
+    response = client.post(
+        "/api/v2/device-identity-links",
+        json={
+            "direct_stream_id": str(DIRECT_SID),
+            "relayed_stream_id": str(DIRECT_SID),
+            "confidence": "strong",
+            "evidence": {"reason": "bad request"},
+        },
+    )
+
+    assert response.status_code == 422
+    assert client._identity_link_repo.calls == []
+    assert client._identity_session.commits == 0
