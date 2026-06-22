@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from contracts._base import DEFAULT_OWNER_ID
+from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from normalization.fusion import DeviceLinkConfidence
 from pydantic import BaseModel, Field, model_validator
@@ -68,6 +68,12 @@ class DeviceIdentityLinkResponse(BaseModel):
     relayed_stream_id: UUID
     status: Literal["confirmed"]
     confidence: Literal["medium", "strong"]
+
+
+class SessionFusionReconciliationResponse(BaseModel):
+    matched_pairs: int
+    assigned: int
+    rejected: int
 
 
 # `total` is additive: the full row count when paginating (count = page size).
@@ -170,4 +176,48 @@ async def create_device_identity_link(
         relayed_stream_id=payload.relayed_stream_id,
         status=payload.status,
         confidence=payload.confidence,
+    )
+
+
+@router.post(
+    "/device-identity-links/session-reconciliations",
+    response_model=SessionFusionReconciliationResponse,
+    status_code=201,
+)
+async def reconcile_device_identity_link_sessions(
+    limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+    session: AsyncSession = Depends(get_session),
+) -> SessionFusionReconciliationResponse:
+    pairs = await fusion_repository.find_session_candidate_pairs(
+        session,
+        owner_id=DEFAULT_OWNER_ID,
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        limit=limit,
+    )
+
+    assigned = 0
+    rejected = 0
+    for pair in pairs:
+        result = await fusion_repository.reconcile_session_pair(
+            session,
+            owner_id=DEFAULT_OWNER_ID,
+            workspace_id=DEFAULT_WORKSPACE_ID,
+            provider_subject_id=pair.provider_subject_id,
+            direct=pair.direct,
+            relayed=pair.relayed,
+            device_link=pair.device_link,
+            decided_by="operator-api",
+        )
+        if result.assigned:
+            assigned += 1
+        else:
+            rejected += 1
+
+    if pairs:
+        await session.commit()
+
+    return SessionFusionReconciliationResponse(
+        matched_pairs=len(pairs),
+        assigned=assigned,
+        rejected=rejected,
     )
