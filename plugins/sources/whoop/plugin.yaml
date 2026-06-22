@@ -27,3 +27,43 @@ permissions:
       description: "Insert recovery, sleep, workout, and HRV samples into the per-metric Timescale tables."
     - name: "network:api.prod.whoop.com"
       description: "Outbound HTTPS to Whoop's developer API for OAuth + data fetch."
+source_capabilities:
+  - plugin_id: whoop-healthsave
+    metrics:
+      - measurement.heart_rate
+      - measurement.hrv
+      - measurement.body_measurement
+    delivery: polling
+    record_shape: sample
+    aggregation_scope: interval_component
+    credential_ownership: owner
+    identity_priority:
+      - provider_subject_id
+      - provider_object_id
+      - device_identity_link
+      - time_interval
+  - plugin_id: whoop-healthsave
+    metrics:
+      - measurement.sleep_analysis
+      - measurement.workouts
+    delivery: polling
+    record_shape: session
+    aggregation_scope: interval_component
+    credential_ownership: owner
+    identity_priority:
+      - provider_subject_id
+      - provider_object_id
+      - device_identity_link
+      - time_interval
+  - plugin_id: whoop-healthsave
+    metrics:
+      - measurement.recovery
+      - measurement.strain
+    delivery: polling
+    record_shape: daily_total
+    aggregation_scope: provider_account_day_total
+    credential_ownership: owner
+    identity_priority:
+      - provider_subject_id
+      - provider_object_id
+      - time_interval

@@ -47,6 +47,7 @@ from .manifest import (
     PluginCapability,
     PluginManifest,
     PluginPermissions,
+    SourceCapability,
     assert_sdk_compatible,
     is_sdk_compatible,
 )
@@ -80,6 +81,7 @@ __all__ = [
     "PluginManifest",
     "PluginCapability",
     "PluginPermissions",
+    "SourceCapability",
     "assert_sdk_compatible",
     "is_sdk_compatible",
     # discovery + registry

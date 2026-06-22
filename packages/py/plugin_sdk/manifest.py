@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import re
 
+from contracts.data import SourceCapability
 from contracts.plugins import (
     PluginCapability,
     PluginManifest,
@@ -42,6 +43,7 @@ __all__ = [
     "PluginCapability",
     "PluginManifest",
     "PluginPermissions",
+    "SourceCapability",
     "assert_sdk_compatible",
     "is_sdk_compatible",
 ]

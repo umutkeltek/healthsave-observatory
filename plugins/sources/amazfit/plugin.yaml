@@ -29,3 +29,41 @@ permissions:
       description: "Outbound HTTPS for the EU-region Zepp data API."
     - name: "network:api-mifit.zepp.com"
       description: "Outbound HTTPS for the CN-region Zepp data API."
+source_capabilities:
+  - plugin_id: amazfit-zepp
+    metrics:
+      - measurement.heart_rate
+      - measurement.blood_oxygen
+      - measurement.stress
+    delivery: polling
+    record_shape: sample
+    aggregation_scope: interval_component
+    credential_ownership: operator
+    identity_priority:
+      - provider_subject_id
+      - source_record_uid
+      - device_external_id
+      - time_interval
+  - plugin_id: amazfit-zepp
+    metrics:
+      - measurement.sleep_analysis
+    delivery: polling
+    record_shape: session
+    aggregation_scope: interval_component
+    credential_ownership: operator
+    identity_priority:
+      - provider_subject_id
+      - source_record_uid
+      - device_external_id
+      - time_interval
+  - plugin_id: amazfit-zepp
+    metrics:
+      - measurement.daily_activity
+    delivery: polling
+    record_shape: daily_total
+    aggregation_scope: provider_account_day_total
+    credential_ownership: operator
+    identity_priority:
+      - provider_subject_id
+      - source_record_uid
+      - time_interval

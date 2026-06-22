@@ -25,3 +25,15 @@ permissions:
       description: "Outbound HTTPS to Google OAuth token endpoint."
     - name: "network:accounts.google.com"
       description: "Browser authorization endpoint for operator account binding."
+source_capabilities:
+  - plugin_id: google-health-api
+    metrics:
+      - measurement.step_count
+    delivery: polling
+    record_shape: daily_total
+    aggregation_scope: provider_account_day_total
+    credential_ownership: owner
+    identity_priority:
+      - provider_subject_id
+      - provider_object_id
+      - time_interval

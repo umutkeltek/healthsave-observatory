@@ -2,19 +2,84 @@
   "additionalProperties": false,
   "description": "What a Source plugin claims it can produce.\n\nDeclared in the plugin manifest; used by the ingestion runtime\nfor scheduling and by the dashboard for \"available sources\" UI.",
   "properties": {
+    "aggregation_scope": {
+      "anyOf": [
+        {
+          "enum": [
+            "interval_component",
+            "device_day_total",
+            "provider_account_day_total",
+            "provider_reconciled_day_total",
+            "owner_all_source_day_total"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Aggregation Scope"
+    },
     "auth_required": {
       "default": false,
       "title": "Auth Required",
       "type": "boolean"
     },
+    "credential_ownership": {
+      "default": "none",
+      "enum": [
+        "none",
+        "operator",
+        "owner",
+        "client"
+      ],
+      "title": "Credential Ownership",
+      "type": "string"
+    },
     "delivery": {
       "enum": [
         "polling",
         "webhook",
-        "stream"
+        "stream",
+        "client_push",
+        "manual_import"
       ],
       "title": "Delivery",
       "type": "string"
+    },
+    "delivery_modes": {
+      "default": [],
+      "items": {
+        "enum": [
+          "polling",
+          "webhook",
+          "stream",
+          "client_push",
+          "manual_import"
+        ],
+        "type": "string"
+      },
+      "title": "Delivery Modes",
+      "type": "array"
+    },
+    "identity_priority": {
+      "default": [],
+      "items": {
+        "enum": [
+          "provider_subject_id",
+          "provider_object_id",
+          "source_record_uid",
+          "device_identity_link",
+          "device_external_id",
+          "client_generated_id",
+          "package_name",
+          "time_interval"
+        ],
+        "type": "string"
+      },
+      "title": "Identity Priority",
+      "type": "array"
     },
     "metrics": {
       "items": {
@@ -38,6 +103,25 @@
       ],
       "default": null,
       "title": "Rate Limit Per Minute"
+    },
+    "record_shape": {
+      "anyOf": [
+        {
+          "enum": [
+            "sample",
+            "interval",
+            "session",
+            "daily_total",
+            "aggregate"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Record Shape"
     }
   },
   "required": [
