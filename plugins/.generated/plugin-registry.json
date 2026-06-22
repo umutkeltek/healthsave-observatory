@@ -33,6 +33,7 @@
         },
         "requires": [],
         "sdk_version": ">=0.1,<0.2",
+        "source_capabilities": [],
         "version": "0.1.0"
       },
       "plugin_dir": "plugins/agents/anomaly_watcher"
@@ -89,6 +90,72 @@
         },
         "requires": [],
         "sdk_version": ">=0.1,<0.2",
+        "source_capabilities": [
+          {
+            "aggregation_scope": "interval_component",
+            "auth_required": false,
+            "credential_ownership": "operator",
+            "delivery": "polling",
+            "delivery_modes": [
+              "polling"
+            ],
+            "identity_priority": [
+              "provider_subject_id",
+              "source_record_uid",
+              "device_external_id",
+              "time_interval"
+            ],
+            "metrics": [
+              "measurement.heart_rate",
+              "measurement.blood_oxygen",
+              "measurement.stress"
+            ],
+            "plugin_id": "amazfit-zepp",
+            "rate_limit_per_minute": null,
+            "record_shape": "sample"
+          },
+          {
+            "aggregation_scope": "interval_component",
+            "auth_required": false,
+            "credential_ownership": "operator",
+            "delivery": "polling",
+            "delivery_modes": [
+              "polling"
+            ],
+            "identity_priority": [
+              "provider_subject_id",
+              "source_record_uid",
+              "device_external_id",
+              "time_interval"
+            ],
+            "metrics": [
+              "measurement.sleep_analysis"
+            ],
+            "plugin_id": "amazfit-zepp",
+            "rate_limit_per_minute": null,
+            "record_shape": "session"
+          },
+          {
+            "aggregation_scope": "provider_account_day_total",
+            "auth_required": false,
+            "credential_ownership": "operator",
+            "delivery": "polling",
+            "delivery_modes": [
+              "polling"
+            ],
+            "identity_priority": [
+              "provider_subject_id",
+              "source_record_uid",
+              "time_interval"
+            ],
+            "metrics": [
+              "measurement.daily_activity"
+            ],
+            "plugin_id": "amazfit-zepp",
+            "rate_limit_per_minute": null,
+            "record_shape": "daily_total"
+          }
+        ],
         "version": "0.2.0"
       },
       "plugin_dir": "plugins/sources/amazfit"
@@ -134,6 +201,78 @@
         },
         "requires": [],
         "sdk_version": ">=0.1,<0.2",
+        "source_capabilities": [
+          {
+            "aggregation_scope": "interval_component",
+            "auth_required": false,
+            "credential_ownership": "client",
+            "delivery": "client_push",
+            "delivery_modes": [
+              "client_push"
+            ],
+            "identity_priority": [
+              "source_record_uid",
+              "client_generated_id",
+              "device_external_id",
+              "time_interval"
+            ],
+            "metrics": [
+              "measurement.heart_rate",
+              "measurement.hrv",
+              "measurement.blood_oxygen",
+              "measurement.quantity_samples"
+            ],
+            "plugin_id": "apple-health-healthsave",
+            "rate_limit_per_minute": null,
+            "record_shape": "sample"
+          },
+          {
+            "aggregation_scope": "interval_component",
+            "auth_required": false,
+            "credential_ownership": "client",
+            "delivery": "client_push",
+            "delivery_modes": [
+              "client_push"
+            ],
+            "identity_priority": [
+              "source_record_uid",
+              "client_generated_id",
+              "device_external_id",
+              "time_interval"
+            ],
+            "metrics": [
+              "measurement.sleep_analysis",
+              "measurement.workouts"
+            ],
+            "plugin_id": "apple-health-healthsave",
+            "rate_limit_per_minute": null,
+            "record_shape": "session"
+          },
+          {
+            "aggregation_scope": "owner_all_source_day_total",
+            "auth_required": false,
+            "credential_ownership": "client",
+            "delivery": "client_push",
+            "delivery_modes": [
+              "client_push"
+            ],
+            "identity_priority": [
+              "source_record_uid",
+              "client_generated_id",
+              "time_interval"
+            ],
+            "metrics": [
+              "measurement.activity_summaries",
+              "measurement.daily_step_count",
+              "measurement.daily_active_energy",
+              "measurement.daily_distance",
+              "measurement.daily_flights_climbed"
+            ],
+            "plugin_id": "apple-health-healthsave",
+            "rate_limit_per_minute": null,
+            "record_shape": "daily_total"
+          }
+        ],
         "version": "1.0.0"
       },
       "plugin_dir": "plugins/sources/apple_health_healthsave"
@@ -186,6 +325,28 @@
         },
         "requires": [],
         "sdk_version": ">=0.1,<0.2",
+        "source_capabilities": [
+          {
+            "aggregation_scope": "provider_account_day_total",
+            "auth_required": false,
+            "credential_ownership": "owner",
+            "delivery": "polling",
+            "delivery_modes": [
+              "polling"
+            ],
+            "identity_priority": [
+              "provider_subject_id",
+              "provider_object_id",
+              "time_interval"
+            ],
+            "metrics": [
+              "measurement.step_count"
+            ],
+            "plugin_id": "google-health-api",
+            "rate_limit_per_minute": null,
+            "record_shape": "daily_total"
+          }
+        ],
         "version": "0.1.0"
       },
       "plugin_dir": "plugins/sources/google_health"
@@ -239,6 +400,30 @@
         },
         "requires": [],
         "sdk_version": ">=0.1,<0.2",
+        "source_capabilities": [
+          {
+            "aggregation_scope": "interval_component",
+            "auth_required": false,
+            "credential_ownership": "owner",
+            "delivery": "polling",
+            "delivery_modes": [
+              "polling"
+            ],
+            "identity_priority": [
+              "provider_subject_id",
+              "provider_object_id",
+              "device_identity_link",
+              "time_interval"
+            ],
+            "metrics": [
+              "measurement.workouts",
+              "measurement.exercise_duration_seconds"
+            ],
+            "plugin_id": "polar-accesslink",
+            "rate_limit_per_minute": null,
+            "record_shape": "session"
+          }
+        ],
         "version": "0.1.0"
       },
       "plugin_dir": "plugins/sources/polar"
@@ -289,6 +474,74 @@
         },
         "requires": [],
         "sdk_version": ">=0.1,<0.2",
+        "source_capabilities": [
+          {
+            "aggregation_scope": "interval_component",
+            "auth_required": false,
+            "credential_ownership": "owner",
+            "delivery": "polling",
+            "delivery_modes": [
+              "polling"
+            ],
+            "identity_priority": [
+              "provider_subject_id",
+              "provider_object_id",
+              "device_identity_link",
+              "time_interval"
+            ],
+            "metrics": [
+              "measurement.heart_rate",
+              "measurement.hrv",
+              "measurement.body_measurement"
+            ],
+            "plugin_id": "whoop-healthsave",
+            "rate_limit_per_minute": null,
+            "record_shape": "sample"
+          },
+          {
+            "aggregation_scope": "interval_component",
+            "auth_required": false,
+            "credential_ownership": "owner",
+            "delivery": "polling",
+            "delivery_modes": [
+              "polling"
+            ],
+            "identity_priority": [
+              "provider_subject_id",
+              "provider_object_id",
+              "device_identity_link",
+              "time_interval"
+            ],
+            "metrics": [
+              "measurement.sleep_analysis",
+              "measurement.workouts"
+            ],
+            "plugin_id": "whoop-healthsave",
+            "rate_limit_per_minute": null,
+            "record_shape": "session"
+          },
+          {
+            "aggregation_scope": "provider_account_day_total",
+            "auth_required": false,
+            "credential_ownership": "owner",
+            "delivery": "polling",
+            "delivery_modes": [
+              "polling"
+            ],
+            "identity_priority": [
+              "provider_subject_id",
+              "provider_object_id",
+              "time_interval"
+            ],
+            "metrics": [
+              "measurement.recovery",
+              "measurement.strain"
+            ],
+            "plugin_id": "whoop-healthsave",
+            "rate_limit_per_minute": null,
+            "record_shape": "daily_total"
+          }
+        ],
         "version": "0.1.0"
       },
       "plugin_dir": "plugins/sources/whoop"

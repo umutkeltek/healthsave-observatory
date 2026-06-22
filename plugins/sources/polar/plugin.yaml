@@ -26,3 +26,17 @@ permissions:
       description: "Outbound HTTPS to Polar OAuth token endpoint."
     - name: "network:flow.polar.com"
       description: "Browser authorization endpoint for operator account binding."
+source_capabilities:
+  - plugin_id: polar-accesslink
+    metrics:
+      - measurement.workouts
+      - measurement.exercise_duration_seconds
+    delivery: polling
+    record_shape: session
+    aggregation_scope: interval_component
+    credential_ownership: owner
+    identity_priority:
+      - provider_subject_id
+      - provider_object_id
+      - device_identity_link
+      - time_interval

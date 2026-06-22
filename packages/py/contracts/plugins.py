@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Literal
 
 from ._base import V2Model
+from .data import SourceCapability
 
 
 class PluginCapability(V2Model):
@@ -56,3 +57,4 @@ class PluginManifest(V2Model):
     emits: list[str] = []
     consumes: list[str] = []
     requires: list[str] = []
+    source_capabilities: list[SourceCapability] = []

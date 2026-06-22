@@ -10,10 +10,10 @@ into the data plane is always a ``NormalizedMeasurement``.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Self
 from uuid import UUID, uuid4
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from ._base import (
     DeviceId,
@@ -92,6 +92,28 @@ class Measurement(WithOwnership):
     normalization_version: str = "v1"
 
 
+SourceDeliveryMode = Literal["polling", "webhook", "stream", "client_push", "manual_import"]
+SourceRecordShape = Literal["sample", "interval", "session", "daily_total", "aggregate"]
+SourceAggregationScope = Literal[
+    "interval_component",
+    "device_day_total",
+    "provider_account_day_total",
+    "provider_reconciled_day_total",
+    "owner_all_source_day_total",
+]
+SourceCredentialOwnership = Literal["none", "operator", "owner", "client"]
+SourceIdentityAnchor = Literal[
+    "provider_subject_id",
+    "provider_object_id",
+    "source_record_uid",
+    "device_identity_link",
+    "device_external_id",
+    "client_generated_id",
+    "package_name",
+    "time_interval",
+]
+
+
 class SourceCapability(V2Model):
     """What a Source plugin claims it can produce.
 
@@ -101,9 +123,22 @@ class SourceCapability(V2Model):
 
     plugin_id: str
     metrics: list[str]
-    delivery: Literal["polling", "webhook", "stream"]
+    delivery: SourceDeliveryMode
+    delivery_modes: list[SourceDeliveryMode] = []
+    record_shape: SourceRecordShape | None = None
+    aggregation_scope: SourceAggregationScope | None = None
+    credential_ownership: SourceCredentialOwnership = "none"
+    identity_priority: list[SourceIdentityAnchor] = []
     auth_required: bool = False
     rate_limit_per_minute: int | None = None
+
+    @model_validator(mode="after")
+    def default_delivery_modes(self) -> Self:
+        """Preserve old singular-delivery manifests while exposing the new list."""
+
+        if not self.delivery_modes:
+            self.delivery_modes = [self.delivery]
+        return self
 
 
 class IngestionRun(WithOwnership):
