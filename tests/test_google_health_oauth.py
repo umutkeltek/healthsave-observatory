@@ -14,11 +14,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "py"))
 
 from auth import DEFAULT_OWNER_ID  # noqa: E402
+
 from plugins.sources.google_health.oauth import (  # noqa: E402
+    DEFAULT_SCOPES,
     GOOGLE_HEALTH_PROVIDER,
     OAUTH_AUTH_URL,
     OAUTH_TOKEN_URL,
-    DEFAULT_SCOPES,
     GoogleHealthClientConfig,
     build_authorization_url,
     exchange_code_for_token,
@@ -110,7 +111,9 @@ async def test_exchange_code_for_token_uses_google_token_endpoint() -> None:
 
 
 @pytest.mark.asyncio
-async def test_refresh_access_token_keeps_existing_refresh_token_when_google_omits_new_one() -> None:
+async def test_refresh_access_token_keeps_existing_refresh_token_when_google_omits_new_one() -> (
+    None
+):
     now = datetime(2026, 6, 1, tzinfo=UTC)
     client = _HttpClient(
         _Response(

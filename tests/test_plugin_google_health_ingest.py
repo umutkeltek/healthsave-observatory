@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "py"))
 
 from auth import DEFAULT_OWNER_ID, OAuthToken  # noqa: E402
 from plugin_sdk import load_manifest  # noqa: E402
+
 from plugins.sources.google_health import GOOGLE_HEALTH_PROVIDER, GoogleHealthSource  # noqa: E402
 from plugins.sources.google_health.fetch import DATA_TYPE_STEPS  # noqa: E402
 

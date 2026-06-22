@@ -18,7 +18,7 @@ New here? Start with the [overview](docs/overview.md) or jump to the [quick star
 
 | Area | Shipped today | In progress / next |
 |---|---|---|
-| **Capture** | Apple Health via HealthSave iOS; early Whoop/Amazfit poll plugins; Garmin/Samsung importers | Android Health Connect; HMAC-signed generic ingest |
+| **Capture** | Apple Health via HealthSave iOS; early Whoop/Amazfit/Polar and experimental Google Health poll plugins; Garmin/Samsung importers | Android Health Connect; HMAC-signed generic ingest |
 | **Surfaces** | Grafana dashboards bundled; pre-release Observatory web app (runnable manually) | Observatory web app in the default Docker stack; Grafana as optional power-user view |
 | **Findings** | daily briefing, HR/HRV anomalies, trends, weekly rollups, correlations | weekly Body Brief; first-class finding-card schema |
 | **API / agents** | frozen v1 Apple ingest; evolving `/api/v2` read API | `healthsave` CLI; local MCP server; scoped read tokens |
@@ -38,6 +38,8 @@ The canonical ingest model is **source-agnostic** — Apple Health is the most p
 | **Apple Health** (Apple Watch, iPhone, and anything that writes to HealthKit) | Push, via the [HealthSave](https://apps.apple.com/app/id6759843047) iOS app | Shipped |
 | **Whoop** | Direct poll plugin (OAuth to the Whoop API) | Shipped (early) |
 | **Amazfit / Zepp** | Direct poll plugin | Shipped (early) |
+| **Polar AccessLink** | Direct poll plugin | Shipped (early) |
+| **Google Health API** | Direct poll plugin, steps-only experimental slice | Experimental |
 | **Garmin Connect** | CLI importer | Shipped |
 | **Samsung / Huawei Health** | CLI importer, via the Health Sync app | Shipped |
 | **Android Health Connect** | Native capture into the generic ingest API | Planned |

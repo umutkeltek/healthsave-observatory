@@ -58,7 +58,10 @@ def test_normalize_step_points_skips_rows_without_name_interval_or_count() -> No
             {"steps": {"interval": {"startTime": "2026-06-01T08:00:00Z"}, "count": "42"}},
             {"name": "missing-start", "steps": {"count": "42"}},
             {"name": "missing-count", "steps": {"interval": {"startTime": "2026-06-01T08:00:00Z"}}},
-            {"name": "bad-count", "steps": {"interval": {"startTime": "2026-06-01T08:00:00Z"}, "count": "nope"}},
+            {
+                "name": "bad-count",
+                "steps": {"interval": {"startTime": "2026-06-01T08:00:00Z"}, "count": "nope"},
+            },
         ]
     )
 
