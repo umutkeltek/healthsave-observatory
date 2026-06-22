@@ -43,23 +43,10 @@ AMAZFIT_DEFAULT_CRON = "*/30 * * * *"
 
 
 def _plugin_yaml(slug: str) -> Path:
-    """Locate a source plugin manifest across layouts.
+    """Locate a source plugin manifest through the shared SDK resolver."""
+    from plugin_sdk import find_plugin_manifest
 
-    Repo checkout: ``apps/worker/worker/sources.py`` -> ``<repo>/plugins/...``.
-    Docker image: ``/app/worker/sources.py`` -> ``/app/plugins/...`` (the
-    Dockerfile flattens ``apps/worker/worker/`` to ``/app/worker/`` and
-    ``plugins/`` to ``/app/plugins/``). Walking up to the first ancestor that
-    actually contains the manifest avoids hard-coding a depth that differs
-    between the two layouts (the old ``parents[3]`` raised IndexError in the
-    container, so the poll never found its manifest).
-    """
-    here = Path(__file__).resolve()
-    rel = Path("plugins") / "sources" / slug / "plugin.yaml"
-    for ancestor in here.parents:
-        candidate = ancestor / rel
-        if candidate.exists():
-            return candidate
-    raise FileNotFoundError(f"plugin manifest not found for source {slug!r}: {rel}")
+    return find_plugin_manifest(slug, kind="source", start=Path(__file__))
 
 
 def _whoop_plugin_yaml() -> Path:

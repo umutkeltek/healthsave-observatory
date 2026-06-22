@@ -32,7 +32,7 @@ from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
-from plugin_sdk import load_manifest
+from plugin_sdk import find_plugin_manifest, load_manifest
 from storage.timescale.ingest import PostgresIngestStorage
 
 from plugins.sources.whoop import WhoopSource
@@ -75,7 +75,7 @@ def _verify_whoop_signature(raw_body: bytes, headers: Any) -> None:
 
 
 def _whoop_plugin_yaml() -> Path:
-    return Path(__file__).resolve().parents[4] / "plugins" / "sources" / "whoop" / "plugin.yaml"
+    return find_plugin_manifest("whoop", kind="source", start=Path(__file__))
 
 
 @router.post("/sources/whoop/webhook")
