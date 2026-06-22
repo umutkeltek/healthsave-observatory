@@ -9,7 +9,7 @@ only by persisted fusion metadata.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import NAMESPACE_DNS, UUID, uuid5
 
 import pytest
 from normalization.fusion import (
@@ -22,10 +22,10 @@ from normalization.fusion import (
 )
 from storage.timescale.observations import CanonicalObservationRepository
 
-OWNER = UUID("00000000-0000-0000-0000-000000000001")
-WORKSPACE = UUID("00000000-0000-0000-0000-000000000001")
-POLAR_SOURCE = UUID("11111111-1111-4111-8111-111111111111")
-HC_SOURCE = UUID("22222222-2222-4222-8222-222222222222")
+OWNER = uuid5(NAMESPACE_DNS, "healthsave.test.owner")
+WORKSPACE = uuid5(NAMESPACE_DNS, "healthsave.test.workspace")
+POLAR_SOURCE = uuid5(NAMESPACE_DNS, "healthsave.test.source.polar")
+HC_SOURCE = uuid5(NAMESPACE_DNS, "healthsave.test.source.health-connect")
 T0 = datetime(2026, 6, 1, 8, 0, tzinfo=UTC)
 T1 = datetime(2026, 6, 1, 8, 30, tzinfo=UTC)
 
