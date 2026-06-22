@@ -22,7 +22,7 @@ import server  # noqa: E402
 from server.api import v2_identity  # noqa: E402
 from server.api.deps import get_session  # noqa: E402
 
-from contracts import DEFAULT_OWNER_ID  # noqa: E402
+from contracts import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID  # noqa: E402
 
 NOW = datetime(2026, 6, 9, 8, 0, 0, tzinfo=UTC)
 SID = UUID("5fd4a041-f371-51be-8b1e-8d6275534c60")
@@ -49,9 +49,36 @@ class _Session:
 class _LinkRepo:
     def __init__(self) -> None:
         self.calls: list[tuple[object, dict]] = []
+        self.find_calls: list[tuple[object, dict]] = []
+        self.reconcile_calls: list[tuple[object, dict]] = []
 
     async def upsert_device_identity_link(self, session, **kwargs):
         self.calls.append((session, kwargs))
+
+    async def find_session_candidate_pairs(self, session, **kwargs):
+        self.find_calls.append((session, kwargs))
+        return [_PAIR_ASSIGNED, _PAIR_REJECTED]
+
+    async def reconcile_session_pair(self, session, **kwargs):
+        self.reconcile_calls.append((session, kwargs))
+        return _ReconciliationResult(assigned=kwargs["provider_subject_id"] == "polar-user-10579")
+
+
+class _Pair:
+    def __init__(self, *, provider_subject_id: str) -> None:
+        self.provider_subject_id = provider_subject_id
+        self.direct = object()
+        self.relayed = object()
+        self.device_link = object()
+
+
+class _ReconciliationResult:
+    def __init__(self, *, assigned: bool) -> None:
+        self.assigned = assigned
+
+
+_PAIR_ASSIGNED = _Pair(provider_subject_id="polar-user-10579")
+_PAIR_REJECTED = _Pair(provider_subject_id="polar-user-rejected")
 
 
 @pytest.fixture
@@ -198,3 +225,29 @@ def test_create_device_identity_link_rejects_same_stream(client):
     assert response.status_code == 422
     assert client._identity_link_repo.calls == []
     assert client._identity_session.commits == 0
+
+
+def test_reconcile_device_identity_link_sessions(client):
+    response = client.post("/api/v2/device-identity-links/session-reconciliations?limit=25")
+
+    assert response.status_code == 201
+    assert response.json() == {"matched_pairs": 2, "assigned": 1, "rejected": 1}
+    [(session, find_kwargs)] = client._identity_link_repo.find_calls
+    assert session is client._identity_session
+    assert find_kwargs == {
+        "owner_id": DEFAULT_OWNER_ID,
+        "workspace_id": DEFAULT_WORKSPACE_ID,
+        "limit": 25,
+    }
+    assert [call[0] for call in client._identity_link_repo.reconcile_calls] == [
+        client._identity_session,
+        client._identity_session,
+    ]
+    assert [
+        call[1]["provider_subject_id"] for call in client._identity_link_repo.reconcile_calls
+    ] == ["polar-user-10579", "polar-user-rejected"]
+    assert all(
+        call[1]["decided_by"] == "operator-api"
+        for call in client._identity_link_repo.reconcile_calls
+    )
+    assert client._identity_session.commits == 1
