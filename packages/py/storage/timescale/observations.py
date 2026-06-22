@@ -260,3 +260,6 @@ class CanonicalObservationRepository:
             },
         )
         return [row_to_series_point(dict(row)) for row in result.mappings().all()]
+
+
+default_repository = CanonicalObservationRepository()

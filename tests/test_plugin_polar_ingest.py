@@ -114,6 +114,7 @@ async def test_polar_ingest_returns_zero_when_no_token_stored():
 @pytest.mark.asyncio
 async def test_polar_ingest_fetches_exercises_and_writes_existing_storage_port():
     storage = _Storage()
+    canonical_repo = _CanonicalRepo()
     http = _HttpClient(
         _Response(
             200,
@@ -137,10 +138,11 @@ async def test_polar_ingest_fetches_exercises_and_writes_existing_storage_port()
             "session": object(),
             "http_client": http,
             "token_store": _TokenStore(_token()),
+            "canonical_repository": canonical_repo,
         }
     )
 
-    assert result == {"accepted": 2, "rejected": 0}
+    assert result == {"accepted": 3, "rejected": 0}
     assert http.calls[0]["url"].endswith(PATH_EXERCISES)
     assert [call.metric for call in storage.ingest_calls] == [
         "workouts",
@@ -199,7 +201,7 @@ async def test_polar_ingest_writes_canonical_workout_session_for_fusion():
     assert obs.value.label == "RUNNING"
     assert obs.value.summary["vendor_family"] == "polar"
     assert obs.value.summary["origin_provider"] == "polar-accesslink"
-    assert obs.value.summary["provider_subject_id"] == str(DEFAULT_OWNER_ID)
+    assert obs.value.summary["provider_subject_id"] == "10579"
     assert obs.value.summary["provider_object_id"] == "2AC312F"
     assert obs.value.summary["provider_device_id"] == "1111AAAA"
     assert obs.value.summary["activity_type"] == "RUNNING"
