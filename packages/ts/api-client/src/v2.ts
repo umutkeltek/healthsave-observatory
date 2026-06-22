@@ -170,6 +170,34 @@ export type Network = boolean;
 export type Secrets = string[];
 export type Requires = string[];
 export type SdkVersion1 = string;
+export type AggregationScope =
+  | (
+      | "interval_component"
+      | "device_day_total"
+      | "provider_account_day_total"
+      | "provider_reconciled_day_total"
+      | "owner_all_source_day_total"
+    )
+  | null;
+export type AuthRequired = boolean;
+export type CredentialOwnership = "none" | "operator" | "owner" | "client";
+export type Delivery = "polling" | "webhook" | "stream" | "client_push" | "manual_import";
+export type DeliveryModes = ("polling" | "webhook" | "stream" | "client_push" | "manual_import")[];
+export type IdentityPriority = (
+  | "provider_subject_id"
+  | "provider_object_id"
+  | "source_record_uid"
+  | "device_identity_link"
+  | "device_external_id"
+  | "client_generated_id"
+  | "package_name"
+  | "time_interval"
+)[];
+export type Metrics = string[];
+export type PluginId2 = string;
+export type RateLimitPerMinute = number | null;
+export type RecordShape = ("sample" | "interval" | "session" | "daily_total" | "aggregate") | null;
+export type SourceCapabilities = SourceCapability[];
 export type Version1 = string;
 export type Id13 = string;
 export type OwnerId14 = string;
@@ -181,13 +209,8 @@ export type DisplayName = string;
 export type Id14 = string;
 export type Kind6 = "sensor" | "manual" | "computed" | "external_api";
 export type OwnerId15 = string;
-export type PluginId2 = string;
-export type WorkspaceId15 = string;
-export type AuthRequired = boolean;
-export type Delivery = "polling" | "webhook" | "stream";
-export type Metrics = string[];
 export type PluginId3 = string;
-export type RateLimitPerMinute = number | null;
+export type WorkspaceId15 = string;
 
 
 /**
@@ -544,6 +567,7 @@ export interface PluginManifest {
   permissions?: PluginPermissions;
   requires?: Requires;
   sdk_version: SdkVersion1;
+  source_capabilities?: SourceCapabilities;
   version: Version1;
 }
 /**
@@ -553,6 +577,24 @@ export interface PluginPermissions {
   capabilities?: Capabilities1;
   network?: Network;
   secrets?: Secrets;
+}
+/**
+ * What a Source plugin claims it can produce.
+ *
+ * Declared in the plugin manifest; used by the ingestion runtime
+ * for scheduling and by the dashboard for "available sources" UI.
+ */
+export interface SourceCapability {
+  aggregation_scope?: AggregationScope;
+  auth_required?: AuthRequired;
+  credential_ownership?: CredentialOwnership;
+  delivery: Delivery;
+  delivery_modes?: DeliveryModes;
+  identity_priority?: IdentityPriority;
+  metrics: Metrics;
+  plugin_id: PluginId2;
+  rate_limit_per_minute?: RateLimitPerMinute;
+  record_shape?: RecordShape;
 }
 /**
  * Runtime permissions a plugin requests.
@@ -587,19 +629,6 @@ export interface Source {
   id: Id14;
   kind: Kind6;
   owner_id?: OwnerId15;
-  plugin_id: PluginId2;
-  workspace_id?: WorkspaceId15;
-}
-/**
- * What a Source plugin claims it can produce.
- *
- * Declared in the plugin manifest; used by the ingestion runtime
- * for scheduling and by the dashboard for "available sources" UI.
- */
-export interface SourceCapability {
-  auth_required?: AuthRequired;
-  delivery: Delivery;
-  metrics: Metrics;
   plugin_id: PluginId3;
-  rate_limit_per_minute?: RateLimitPerMinute;
+  workspace_id?: WorkspaceId15;
 }
