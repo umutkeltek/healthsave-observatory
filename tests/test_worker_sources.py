@@ -1,20 +1,13 @@
-"""Tests for the worker's source-plugin poll registration.
+"""Tests worker source-plugin poll registration.
 
-The job callable returned by :func:`make_whoop_poll` does live work
-(opens an httpx client, creates a session, instantiates the plugin)
-and is covered transitively by ``tests/test_plugin_whoop_ingest.py``;
-re-running that integration via heavyweight mocks here would only
-test the mocks. Instead, these tests pin the registration contract:
-
-  * the job uses Whoop's id and a CronTrigger built from the supplied
-    cron expression,
-  * max_instances=1 + coalesce=True + replace_existing=True (defenses
-    against overlapping ticks),
-  * the default cron is sensible.
+The adapter-specific jobs should keep their public wrappers, but the runtime
+poll lifecycle should have one shared seam so new source adapters do not copy
+session/http/storage/commit/rollback boilerplate.
 """
 
 from __future__ import annotations
 
+import inspect
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -25,10 +18,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "py"))
 
 from worker.sources import (  # noqa: E402
     AMAZFIT_DEFAULT_CRON,
+    GOOGLE_HEALTH_DEFAULT_CRON,
+    POLAR_DEFAULT_CRON,
     WHOOP_DEFAULT_CRON,
+    SourcePollSpec,
     make_amazfit_poll,
+    make_google_health_poll,
+    make_polar_poll,
+    make_source_poll,
     make_whoop_poll,
     register_amazfit_poll,
+    register_google_health_poll,
+    register_polar_poll,
     register_whoop_poll,
 )
 
@@ -41,91 +42,72 @@ class _RecordingScheduler:
         self.add_job_calls.append({"func": func, "trigger": trigger, "kwargs": kwargs})
 
 
-def test_register_whoop_poll_uses_default_cron_when_not_overridden():
-    scheduler = _RecordingScheduler()
-    register_whoop_poll(scheduler, session_factory=lambda: None)
-    assert len(scheduler.add_job_calls) == 1
-    call = scheduler.add_job_calls[0]
-    assert call["kwargs"]["id"] == "whoop_poll"
-    assert call["kwargs"]["max_instances"] == 1
-    assert call["kwargs"]["coalesce"] is True
-    assert call["kwargs"]["replace_existing"] is True
-    # The trigger is a CronTrigger built from the default cron expression.
-    from apscheduler.triggers.cron import CronTrigger
-
-    assert isinstance(call["trigger"], CronTrigger)
-
-
-def test_register_whoop_poll_honors_custom_cron_and_job_id():
-    scheduler = _RecordingScheduler()
-    register_whoop_poll(
-        scheduler,
-        session_factory=lambda: None,
-        cron="0 */6 * * *",
-        job_id="whoop_poll_custom",
+def test_source_poll_helper_is_the_single_runtime_poll_seam() -> None:
+    spec = SourcePollSpec(
+        slug="polar",
+        entrypoint="plugins.sources.polar:PolarSource",
+        log_label="polar",
     )
-    call = scheduler.add_job_calls[0]
-    assert call["kwargs"]["id"] == "whoop_poll_custom"
 
+    job = make_source_poll(session_factory=lambda: None, spec=spec)
 
-def test_default_cron_is_a_valid_crontab_expression():
-    # If WHOOP_DEFAULT_CRON breaks CronTrigger.from_crontab, every Whoop
-    # poll deploy explodes on worker startup; lock the constant.
-    from apscheduler.triggers.cron import CronTrigger
-
-    CronTrigger.from_crontab(WHOOP_DEFAULT_CRON)
-
-
-def test_make_whoop_poll_returns_an_async_callable():
-    """Sanity: returned thing is awaitable. We do not invoke it here —
-    that would require live httpx + a session + the plugin manifest;
-    the end-to-end behaviour lives in test_plugin_whoop_ingest.py.
-    """
-    import inspect
-
-    job = make_whoop_poll(session_factory=lambda: None)
     assert callable(job)
     assert inspect.iscoroutinefunction(job)
 
 
-# ─── Amazfit ────────────────────────────────────────────────────────────
+def test_all_source_poll_registrations_share_scheduler_contract() -> None:
+    cases = [
+        (register_whoop_poll, "whoop_poll"),
+        (register_amazfit_poll, "amazfit_poll"),
+        (register_polar_poll, "polar_poll"),
+        (register_google_health_poll, "google_health_poll"),
+    ]
+
+    for register, expected_job_id in cases:
+        scheduler = _RecordingScheduler()
+        result = register(scheduler, session_factory=lambda: None)
+        call = scheduler.add_job_calls[0]
+
+        assert result == expected_job_id
+        assert call["kwargs"]["id"] == expected_job_id
+        assert call["kwargs"]["max_instances"] == 1
+        assert call["kwargs"]["coalesce"] is True
+        assert call["kwargs"]["replace_existing"] is True
 
 
-def test_register_amazfit_poll_uses_default_cron_when_not_overridden():
+def test_register_poll_honors_custom_cron_and_job_id() -> None:
     scheduler = _RecordingScheduler()
-    register_amazfit_poll(scheduler, session_factory=lambda: None)
-    assert len(scheduler.add_job_calls) == 1
-    call = scheduler.add_job_calls[0]
-    assert call["kwargs"]["id"] == "amazfit_poll"
-    assert call["kwargs"]["max_instances"] == 1
-    assert call["kwargs"]["coalesce"] is True
-    assert call["kwargs"]["replace_existing"] is True
-    from apscheduler.triggers.cron import CronTrigger
 
-    assert isinstance(call["trigger"], CronTrigger)
-
-
-def test_register_amazfit_poll_honors_custom_cron_and_job_id():
-    scheduler = _RecordingScheduler()
-    register_amazfit_poll(
+    register_polar_poll(
         scheduler,
         session_factory=lambda: None,
         cron="0 */6 * * *",
-        job_id="amazfit_poll_custom",
+        job_id="polar_poll_custom",
     )
+
     call = scheduler.add_job_calls[0]
-    assert call["kwargs"]["id"] == "amazfit_poll_custom"
+    assert call["kwargs"]["id"] == "polar_poll_custom"
 
 
-def test_amazfit_default_cron_is_a_valid_crontab_expression():
+def test_all_source_default_crons_are_valid_crontab_expressions() -> None:
     from apscheduler.triggers.cron import CronTrigger
 
-    CronTrigger.from_crontab(AMAZFIT_DEFAULT_CRON)
+    for cron in (
+        WHOOP_DEFAULT_CRON,
+        AMAZFIT_DEFAULT_CRON,
+        POLAR_DEFAULT_CRON,
+        GOOGLE_HEALTH_DEFAULT_CRON,
+    ):
+        CronTrigger.from_crontab(cron)
 
 
-def test_make_amazfit_poll_returns_an_async_callable():
-    import inspect
-
-    job = make_amazfit_poll(session_factory=lambda: None)
-    assert callable(job)
-    assert inspect.iscoroutinefunction(job)
+def test_all_source_poll_factories_return_async_callables() -> None:
+    for factory in (
+        make_whoop_poll,
+        make_amazfit_poll,
+        make_polar_poll,
+        make_google_health_poll,
+    ):
+        job = factory(session_factory=lambda: None)
+        assert callable(job)
+        assert inspect.iscoroutinefunction(job)
