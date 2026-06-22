@@ -13,6 +13,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "py"))
 
 from auth import DEFAULT_OWNER_ID, OAuthToken  # noqa: E402
+from normalization import identity  # noqa: E402
+from normalization.fusion import exact_ingest_key  # noqa: E402
 from plugin_sdk import load_manifest  # noqa: E402
 
 from plugins.sources.polar import POLAR_PROVIDER, PolarSource  # noqa: E402
@@ -61,6 +63,15 @@ class _Storage:
             _IngestCall(metric=metric, samples=samples, device_id=device_id, owner_id=owner_id)
         )
         return len(samples)
+
+
+class _CanonicalRepo:
+    def __init__(self):
+        self.insert_calls: list[tuple[Any, list]] = []
+
+    async def insert_many(self, session, observations):
+        self.insert_calls.append((session, observations))
+        return len(observations)
 
 
 @dataclass
@@ -137,3 +148,72 @@ async def test_polar_ingest_fetches_exercises_and_writes_existing_storage_port()
     ]
     assert storage.ingest_calls[0].device_id == "device:Polar"
     assert storage.ingest_calls[0].samples[0]["provider_object_id"] == "2AC312F"
+
+
+@pytest.mark.asyncio
+async def test_polar_ingest_writes_canonical_workout_session_for_fusion():
+    storage = _Storage()
+    canonical_repo = _CanonicalRepo()
+    session = object()
+    http = _HttpClient(
+        _Response(
+            200,
+            {
+                "exercises": [
+                    {
+                        "id": "2AC312F",
+                        "device_id": "1111AAAA",
+                        "start_time": "2008-10-13T10:40:02Z",
+                        "duration": "PT30M",
+                        "sport": "RUNNING",
+                        "calories": 321,
+                        "distance": 5123.4,
+                    }
+                ]
+            },
+        )
+    )
+
+    result = await _plugin().ingest(
+        {
+            "storage": storage,
+            "session": session,
+            "http_client": http,
+            "token_store": _TokenStore(_token()),
+            "canonical_repository": canonical_repo,
+        }
+    )
+
+    assert result == {"accepted": 3, "rejected": 0}
+    assert len(canonical_repo.insert_calls) == 1
+    inserted_session, observations = canonical_repo.insert_calls[0]
+    assert inserted_session is session
+    assert len(observations) == 1
+
+    obs = observations[0]
+    expected_source_id = identity.source_uuid(DEFAULT_OWNER_ID, "polar-accesslink")
+    expected_stream = identity.stream_id(DEFAULT_OWNER_ID, "polar-accesslink", "1111aaaa")
+    assert obs.metric_id == "workout.session"
+    assert obs.value.type == "event"
+    assert obs.value.status == "completed"
+    assert obs.value.label == "RUNNING"
+    assert obs.value.summary["vendor_family"] == "polar"
+    assert obs.value.summary["origin_provider"] == "polar-accesslink"
+    assert obs.value.summary["provider_subject_id"] == str(DEFAULT_OWNER_ID)
+    assert obs.value.summary["provider_object_id"] == "2AC312F"
+    assert obs.value.summary["provider_device_id"] == "1111AAAA"
+    assert obs.value.summary["activity_type"] == "RUNNING"
+    assert obs.value.summary["duration_seconds"] == 1800
+    assert obs.value.summary["calories"] == 321.0
+    assert obs.value.summary["distance_m"] == 5123.4
+    assert obs.source_id == expected_source_id
+    assert obs.stream_id == expected_stream
+    assert obs.source_record_uid == "2AC312F"
+    assert obs.exact_ingest_key == exact_ingest_key(
+        DEFAULT_OWNER_ID,
+        expected_source_id,
+        "exercise",
+        provider_object_id="2AC312F",
+    )
+    assert obs.aggregation_scope == "interval_component"
+    assert obs.normalizer_id == "polar-accesslink"
