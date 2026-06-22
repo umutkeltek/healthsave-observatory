@@ -257,3 +257,22 @@ END $$;
     assert "DO $$ BEGIN" in migration_queries[0]
     assert "EXCEPTION WHEN duplicate_object THEN NULL;" in migration_queries[0]
     assert "END $$;" in migration_queries[0]
+
+
+def test_canonical_fusion_metadata_migration_is_additive() -> None:
+    migration = Path("db/migrations/020_canonical_fusion_metadata.sql")
+    text = migration.read_text()
+
+    for column in (
+        "exact_ingest_key",
+        "semantic_key",
+        "semantic_key_version",
+        "aggregation_scope",
+        "is_primary",
+    ):
+        assert f"ADD COLUMN IF NOT EXISTS {column}" in text
+
+    assert "CREATE TABLE IF NOT EXISTS fusion_decisions" in text
+    assert "CREATE TABLE IF NOT EXISTS device_identity_links" in text
+    assert "idx_canonical_obs_semantic_key" in text
+    assert "DROP " not in text.upper()

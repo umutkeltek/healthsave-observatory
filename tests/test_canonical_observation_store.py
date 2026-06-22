@@ -74,6 +74,23 @@ def test_observation_columns_stream_id_none_when_absent() -> None:
     assert cols["stream_id"] is None
 
 
+def test_observation_columns_include_fusion_metadata() -> None:
+    obs = _quantity_obs()
+    obs.exact_ingest_key = "xik:v1:polar-E1"
+    obs.semantic_key = "sem:v1:polar:user:exercise:E1"
+    obs.semantic_key_version = "matcher:session:v1"
+    obs.aggregation_scope = "device_day_total"
+    obs.is_primary = False
+
+    cols = observation_columns(obs)
+
+    assert cols["exact_ingest_key"] == "xik:v1:polar-E1"
+    assert cols["semantic_key"] == "sem:v1:polar:user:exercise:E1"
+    assert cols["semantic_key_version"] == "matcher:session:v1"
+    assert cols["aggregation_scope"] == "device_day_total"
+    assert cols["is_primary"] is False
+
+
 def test_categorical_observation_flattens_to_code_column() -> None:
     cols = observation_columns(_categorical_obs())
     assert cols["value_type"] == "categorical"
@@ -92,12 +109,20 @@ def test_row_to_series_point_maps_fields() -> None:
             "canonical_unit": "bpm",
             "source_id": _SOURCE,
             "confidence": 0.9,
+            "stream_id": "5fd4a041-f371-51be-8b1e-8d6275534c60",
+            "semantic_key": "sem:v1:polar:user:exercise:E1",
+            "aggregation_scope": "interval_component",
+            "is_primary": False,
         }
     )
     assert point.value == 61.0
     assert point.unit == "bpm"
     assert point.source_id == str(_SOURCE)
     assert point.confidence == 0.9
+    assert point.stream_id == "5fd4a041-f371-51be-8b1e-8d6275534c60"
+    assert point.semantic_key == "sem:v1:polar:user:exercise:E1"
+    assert point.aggregation_scope == "interval_component"
+    assert point.is_primary is False
 
 
 class _FakeResult:
@@ -176,3 +201,40 @@ async def test_query_series_maps_rows_to_points() -> None:
         end=_T,
     )
     assert [p.value for p in points] == [61.0, 64.0]
+
+
+@pytest.mark.asyncio
+async def test_query_fused_series_groups_by_semantic_key_and_prefers_primary() -> None:
+    repo = CanonicalObservationRepository()
+    rows = [
+        {
+            "interval_start": _T,
+            "interval_end": _T,
+            "numeric_value": 61.0,
+            "code": None,
+            "canonical_unit": "bpm",
+            "source_id": _SOURCE,
+            "stream_id": "direct-stream",
+            "confidence": None,
+            "semantic_key": "sem:v1:polar:user:exercise:E1",
+            "aggregation_scope": "interval_component",
+            "is_primary": True,
+        }
+    ]
+    session = _FakeSession(rows)
+
+    points = await repo.query_fused_series(
+        session,
+        owner_id=_SOURCE,
+        workspace_id=_SOURCE,
+        metric_id="vital.heart_rate",
+        start=_T,
+        end=_T,
+    )
+
+    sql, params = session.calls[0]
+    assert "COALESCE(semantic_key, id::text)" in str(sql)
+    assert "is_primary DESC" in str(sql)
+    assert params["stream_id"] is None
+    assert [p.semantic_key for p in points] == ["sem:v1:polar:user:exercise:E1"]
+    assert points[0].is_primary is True
