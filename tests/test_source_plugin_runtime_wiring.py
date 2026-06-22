@@ -48,6 +48,10 @@ def test_api_and_worker_receive_source_plugin_environment():
         "POLAR_CLIENT_SECRET": "${POLAR_CLIENT_SECRET:-}",
         "POLAR_REDIRECT_URI": "${POLAR_REDIRECT_URI:-}",
         "POLAR_POLL_CRON": "${POLAR_POLL_CRON:-}",
+        "GOOGLE_HEALTH_CLIENT_ID": "${GOOGLE_HEALTH_CLIENT_ID:-}",
+        "GOOGLE_HEALTH_CLIENT_SECRET": "${GOOGLE_HEALTH_CLIENT_SECRET:-}",
+        "GOOGLE_HEALTH_REDIRECT_URI": "${GOOGLE_HEALTH_REDIRECT_URI:-}",
+        "GOOGLE_HEALTH_POLL_CRON": "${GOOGLE_HEALTH_POLL_CRON:-}",
         "AMAZFIT_APP_TOKEN": "${AMAZFIT_APP_TOKEN:-}",
         "AMAZFIT_USER_ID": "${AMAZFIT_USER_ID:-}",
         "AMAZFIT_REGION": "${AMAZFIT_REGION:-us}",
@@ -66,6 +70,7 @@ def test_authorize_scripts_are_runnable_without_manual_pythonpath():
 
     for script in (
         "scripts/amazfit_authorize.py",
+        "scripts/google_health_authorize.py",
         "scripts/polar_authorize.py",
         "scripts/whoop_authorize.py",
     ):
