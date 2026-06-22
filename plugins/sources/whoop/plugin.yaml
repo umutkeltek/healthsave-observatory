@@ -6,9 +6,9 @@ sdk_version: ">=0.1,<0.2"
 language: python
 entrypoint: "plugins.sources.whoop:WhoopSource"
 emits:
-- workout.session
-- measurement.heart_rate
-- measurement.hrv
+  - workout.session
+  - measurement.heart_rate
+  - measurement.hrv
   - measurement.sleep_analysis
   - measurement.workouts
   - measurement.recovery
