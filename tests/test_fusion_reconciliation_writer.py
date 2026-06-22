@@ -14,6 +14,7 @@ import pytest
 from normalization.fusion import DeviceLinkConfidence, VariantTier
 from storage.timescale.fusion import (
     FusionReconciliationRepository,
+    SessionCandidatePair,
     SessionObservationCandidate,
 )
 
@@ -42,6 +43,27 @@ class _FakeSession:
     async def execute(self, statement, params=None):
         self.calls.append((str(statement), params))
         return _FakeResult()
+
+
+class _FakeRowsResult:
+    def __init__(self, rows: list[dict]):
+        self._rows = rows
+
+    def mappings(self) -> _FakeRowsResult:
+        return self
+
+    def all(self) -> list[dict]:
+        return self._rows
+
+
+class _FakeRowsSession:
+    def __init__(self, rows: list[dict]):
+        self.rows = rows
+        self.calls: list[tuple[str, object]] = []
+
+    async def execute(self, statement, params=None):
+        self.calls.append((str(statement), params))
+        return _FakeRowsResult(self.rows)
 
 
 def _candidate(
@@ -149,3 +171,89 @@ async def test_reconcile_session_pair_rejects_weak_device_link_without_variant_u
     assert insert_params["primary_observation_id"] is None
     assert insert_params["variant_observation_ids"] == [str(DIRECT_OBS), str(RELAYED_OBS)]
     assert "device link too weak" in insert_params["evidence"]
+
+
+@pytest.mark.asyncio
+async def test_find_session_candidate_pairs_uses_confirmed_device_links() -> None:
+    repo = FusionReconciliationRepository()
+    row = {
+        "provider_subject_id": "polar-user-10579",
+        "direct_observation_id": DIRECT_OBS,
+        "direct_stream_id": DIRECT_STREAM,
+        "direct_vendor_family": "polar",
+        "direct_activity_type": "RUNNING",
+        "direct_start_epoch_s": T0.timestamp(),
+        "direct_end_epoch_s": T1.timestamp(),
+        "direct_provider_object_id": "polar-exercise-1",
+        "relayed_observation_id": RELAYED_OBS,
+        "relayed_stream_id": RELAYED_STREAM,
+        "relayed_vendor_family": "polar",
+        "relayed_activity_type": "RUNNING",
+        "relayed_start_epoch_s": T0.timestamp(),
+        "relayed_end_epoch_s": T1.timestamp(),
+        "relayed_provider_object_id": None,
+        "device_link_confidence": "strong",
+    }
+    session = _FakeRowsSession([row])
+
+    pairs = await repo.find_session_candidate_pairs(
+        session,
+        owner_id=OWNER,
+        workspace_id=WORKSPACE,
+        limit=25,
+    )
+
+    assert len(pairs) == 1
+    pair = pairs[0]
+    assert isinstance(pair, SessionCandidatePair)
+    assert pair.provider_subject_id == "polar-user-10579"
+    assert pair.device_link == DeviceLinkConfidence.STRONG
+    assert pair.direct.provider_object_id == "polar-exercise-1"
+    assert pair.relayed.provider_object_id is None
+    assert pair.direct.variant_tier == VariantTier.DIRECT_WITH_PROVIDER_ID
+    assert pair.relayed.variant_tier == VariantTier.HC_PACKAGE_AND_DEVICE
+
+    sql, params = session.calls[0]
+    assert "device_identity_links" in sql
+    assert "link.status = 'confirmed'" in sql
+    assert "workout.session" not in sql
+    assert params["metric_id"] == "workout.session"
+    assert params["owner_id"] == str(OWNER)
+    assert params["workspace_id"] == str(WORKSPACE)
+    assert params["limit"] == 25
+
+
+@pytest.mark.asyncio
+async def test_find_session_candidate_pairs_skips_rows_without_provider_anchor() -> None:
+    repo = FusionReconciliationRepository()
+    session = _FakeRowsSession(
+        [
+            {
+                "provider_subject_id": "polar-user-10579",
+                "direct_observation_id": DIRECT_OBS,
+                "direct_stream_id": DIRECT_STREAM,
+                "direct_vendor_family": "polar",
+                "direct_activity_type": "RUNNING",
+                "direct_start_epoch_s": T0.timestamp(),
+                "direct_end_epoch_s": T1.timestamp(),
+                "direct_provider_object_id": None,
+                "relayed_observation_id": RELAYED_OBS,
+                "relayed_stream_id": RELAYED_STREAM,
+                "relayed_vendor_family": "polar",
+                "relayed_activity_type": "RUNNING",
+                "relayed_start_epoch_s": T0.timestamp(),
+                "relayed_end_epoch_s": T1.timestamp(),
+                "relayed_provider_object_id": None,
+                "device_link_confidence": "strong",
+            }
+        ]
+    )
+
+    assert (
+        await repo.find_session_candidate_pairs(
+            session,
+            owner_id=OWNER,
+            workspace_id=WORKSPACE,
+        )
+        == []
+    )
