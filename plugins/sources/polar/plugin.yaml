@@ -1,0 +1,28 @@
+id: polar-accesslink
+name: Polar AccessLink
+kind: source
+version: "0.1.0"
+sdk_version: ">=0.1,<0.2"
+language: python
+entrypoint: "plugins.sources.polar:PolarSource"
+emits:
+  - measurement.workouts
+  - measurement.exercise_duration_seconds
+permissions:
+  network: true
+  secrets:
+    - POLAR_CLIENT_ID
+    - POLAR_CLIENT_SECRET
+    - POLAR_REDIRECT_URI
+    - HDH_TOKEN_ENC_KEY
+  capabilities:
+    - name: "write:oauth_tokens"
+      description: "Persist the per-owner Polar OAuth access token."
+    - name: "write:measurements"
+      description: "Insert Polar exercises through the existing IngestStorage port."
+    - name: "network:www.polaraccesslink.com"
+      description: "Outbound HTTPS to Polar AccessLink v3 data API."
+    - name: "network:polarremote.com"
+      description: "Outbound HTTPS to Polar OAuth token endpoint."
+    - name: "network:flow.polar.com"
+      description: "Browser authorization endpoint for operator account binding."
