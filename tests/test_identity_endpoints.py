@@ -19,9 +19,10 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import server  # noqa: E402
-from contracts import DEFAULT_OWNER_ID  # noqa: E402
 from server.api import v2_identity  # noqa: E402
 from server.api.deps import get_session  # noqa: E402
+
+from contracts import DEFAULT_OWNER_ID  # noqa: E402
 
 NOW = datetime(2026, 6, 9, 8, 0, 0, tzinfo=UTC)
 SID = UUID("5fd4a041-f371-51be-8b1e-8d6275534c60")
