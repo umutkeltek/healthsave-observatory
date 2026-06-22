@@ -1,77 +1,88 @@
 """Source-plugin poll registration for the worker scheduler.
 
-Source plugins such as Whoop and Amazfit are poll-based: the worker
-invokes their ``ingest()`` on a cron schedule. This module exposes:
-
-  * :func:`make_whoop_poll` — builds the awaitable APScheduler invokes
-    each tick. Opens a session, instantiates an httpx client + an
-    IngestStorage, runs ``WhoopSource.ingest``, commits or rolls back.
-    Failures are logged + re-raised so the existing pipeline_runs
-    listener marks the run as failed.
-  * :func:`register_whoop_poll` — adds the job to a given APScheduler
-    with ``max_instances=1`` + ``coalesce=True`` (Whoop polls overlap
-    safely thanks to dedup unique indexes, but we still avoid
-    backed-up duplicates).
-  * :func:`register_amazfit_poll` — adds the Zepp/Amazfit token-based
-    poll job with the same scheduler discipline.
-
-The wiring in :mod:`worker.main` is intentionally env-gated
-(``WHOOP_POLL_CRON`` / ``AMAZFIT_POLL_CRON``) rather than
-config.yaml-gated for v1 — the analysis config schema does not yet
-have a sources section. A future slice can lift this into the config
-layer once the source surface stabilises.
+Each source adapter still exposes a small named wrapper, but the runtime poll
+lifecycle is owned by :func:`make_source_poll`: locate manifest, instantiate
+plugin, open HTTP/session resources, call ``ingest()``, commit or rollback.
 """
 
 from __future__ import annotations
 
+import importlib
 import logging
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 log = logging.getLogger("healthsave.worker.sources")
 
-# Default cron — every 30 minutes. Whoop's rate limit is 100 req/min
-# and a 30-minute cadence is plenty for a single-user poll. Override
-# via the WHOOP_POLL_CRON env var.
 WHOOP_DEFAULT_CRON = "*/30 * * * *"
-
-# Amazfit / Zepp: same cadence as Whoop. Zepp does not publish a rate
-# limit; a 30-minute cadence keeps single-account data fresh without
-# aggressive polling. Override via the AMAZFIT_POLL_CRON env var.
 AMAZFIT_DEFAULT_CRON = "*/30 * * * *"
 POLAR_DEFAULT_CRON = "*/30 * * * *"
 GOOGLE_HEALTH_DEFAULT_CRON = "*/30 * * * *"
 
 
+@dataclass(frozen=True, slots=True)
+class SourcePollSpec:
+    """Adapter-specific inputs for the shared source poll lifecycle."""
+
+    slug: str
+    entrypoint: str
+    log_label: str
+
+
+WHOOP_SPEC = SourcePollSpec(
+    slug="whoop",
+    entrypoint="plugins.sources.whoop:WhoopSource",
+    log_label="whoop",
+)
+AMAZFIT_SPEC = SourcePollSpec(
+    slug="amazfit",
+    entrypoint="plugins.sources.amazfit:AmazfitSource",
+    log_label="amazfit",
+)
+POLAR_SPEC = SourcePollSpec(
+    slug="polar",
+    entrypoint="plugins.sources.polar:PolarSource",
+    log_label="polar",
+)
+GOOGLE_HEALTH_SPEC = SourcePollSpec(
+    slug="google_health",
+    entrypoint="plugins.sources.google_health:GoogleHealthSource",
+    log_label="google health",
+)
+
+
 def _plugin_yaml(slug: str) -> Path:
-    """Locate a source plugin manifest through the shared SDK resolver."""
+    """Locate a source plugin manifest without hard-coding repo depth."""
     from plugin_sdk import find_plugin_manifest
 
     return find_plugin_manifest(slug, kind="source", start=Path(__file__))
 
 
-def _whoop_plugin_yaml() -> Path:
-    return _plugin_yaml("whoop")
+def _load_entrypoint(entrypoint: str):
+    module_name, sep, attr = entrypoint.partition(":")
+    if not sep or not module_name or not attr:
+        raise ValueError(f"invalid source plugin entrypoint: {entrypoint!r}")
+    module = importlib.import_module(module_name)
+    return getattr(module, attr)
 
 
-def make_whoop_poll(session_factory: Any) -> Callable[[], Awaitable[None]]:
-    """Return an awaitable APScheduler can invoke on every tick.
-
-    ``session_factory`` is an ``async_sessionmaker``-shaped callable —
-    each call returns a fresh ``AsyncSession`` that the wrapper opens
-    inside an ``async with`` for transaction discipline.
-    """
+def make_source_poll(
+    session_factory: Any,
+    *,
+    spec: SourcePollSpec,
+) -> Callable[[], Awaitable[None]]:
+    """Return an awaitable APScheduler can invoke for one source adapter."""
 
     async def _run() -> None:
         import httpx
         from plugin_sdk import load_manifest
         from storage.timescale.ingest import PostgresIngestStorage
 
-        from plugins.sources.whoop import WhoopSource
-
-        manifest = load_manifest(_whoop_plugin_yaml())
-        plugin = WhoopSource(manifest)
+        manifest = load_manifest(_plugin_yaml(spec.slug))
+        plugin_cls = _load_entrypoint(spec.entrypoint)
+        plugin = plugin_cls(manifest)
         storage = PostgresIngestStorage()
 
         async with (
@@ -87,13 +98,39 @@ def make_whoop_poll(session_factory: Any) -> Callable[[], Awaitable[None]]:
                     }
                 )
                 await session.commit()
-                log.info("whoop poll: %s", result)
+                log.info("%s poll: %s", spec.log_label, result)
             except Exception:
                 await session.rollback()
-                log.exception("whoop poll failed")
+                log.exception("%s poll failed", spec.log_label)
                 raise
 
     return _run
+
+
+def _register_source_poll(
+    scheduler: Any,
+    session_factory: Any,
+    *,
+    spec: SourcePollSpec,
+    cron: str,
+    job_id: str,
+) -> str:
+    from apscheduler.triggers.cron import CronTrigger
+
+    scheduler.add_job(
+        make_source_poll(session_factory, spec=spec),
+        CronTrigger.from_crontab(cron),
+        id=job_id,
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    log.info("registered %s cron=%s", job_id, cron)
+    return job_id
+
+
+def make_whoop_poll(session_factory: Any) -> Callable[[], Awaitable[None]]:
+    return make_source_poll(session_factory, spec=WHOOP_SPEC)
 
 
 def register_whoop_poll(
@@ -103,80 +140,17 @@ def register_whoop_poll(
     cron: str = WHOOP_DEFAULT_CRON,
     job_id: str = "whoop_poll",
 ) -> str:
-    """Register the Whoop poll on ``scheduler``. Returns the job id.
-
-    APScheduler import is deferred so module import stays cheap for
-    pytest collection without a running event loop.
-    """
-    from apscheduler.triggers.cron import CronTrigger
-
-    scheduler.add_job(
-        make_whoop_poll(session_factory),
-        CronTrigger.from_crontab(cron),
-        id=job_id,
-        max_instances=1,
-        coalesce=True,
-        replace_existing=True,
+    return _register_source_poll(
+        scheduler,
+        session_factory,
+        spec=WHOOP_SPEC,
+        cron=cron,
+        job_id=job_id,
     )
-    log.info("registered %s cron=%s", job_id, cron)
-    return job_id
-
-
-def _amazfit_plugin_yaml() -> Path:
-    """Locate the Amazfit plugin manifest. Same layout as Whoop."""
-    return _plugin_yaml("amazfit")
-
-
-def _polar_plugin_yaml() -> Path:
-    """Locate the Polar plugin manifest. Same layout as Whoop."""
-    return _plugin_yaml("polar")
-
-
-def _google_health_plugin_yaml() -> Path:
-    """Locate the Google Health plugin manifest. Same layout as Whoop."""
-    return _plugin_yaml("google_health")
 
 
 def make_amazfit_poll(session_factory: Any) -> Callable[[], Awaitable[None]]:
-    """Return an awaitable APScheduler can invoke on every tick.
-
-    Lifecycle matches make_whoop_poll: open httpx + session, instantiate
-    plugin, run ingest, commit/rollback. AmazfitSource.ingest fails loud
-    on expired token (no refresh primitive), so the worker's
-    pipeline_runs ledger picks up the failure.
-    """
-
-    async def _run() -> None:
-        import httpx
-        from plugin_sdk import load_manifest
-        from storage.timescale.ingest import PostgresIngestStorage
-
-        from plugins.sources.amazfit import AmazfitSource
-
-        manifest = load_manifest(_amazfit_plugin_yaml())
-        plugin = AmazfitSource(manifest)
-        storage = PostgresIngestStorage()
-
-        async with (
-            httpx.AsyncClient(timeout=30.0) as http,
-            session_factory() as session,
-        ):
-            try:
-                result = await plugin.ingest(
-                    {
-                        "storage": storage,
-                        "session": session,
-                        "http_client": http,
-                    }
-                )
-                await session.commit()
-                log.info("amazfit poll: %s", result)
-            except Exception:
-                await session.rollback()
-                log.exception("amazfit poll failed")
-                raise
-
-    return _run
+    return make_source_poll(session_factory, spec=AMAZFIT_SPEC)
 
 
 def register_amazfit_poll(
@@ -186,55 +160,17 @@ def register_amazfit_poll(
     cron: str = AMAZFIT_DEFAULT_CRON,
     job_id: str = "amazfit_poll",
 ) -> str:
-    """Register the Amazfit poll on ``scheduler``. Returns the job id."""
-    from apscheduler.triggers.cron import CronTrigger
-
-    scheduler.add_job(
-        make_amazfit_poll(session_factory),
-        CronTrigger.from_crontab(cron),
-        id=job_id,
-        max_instances=1,
-        coalesce=True,
-        replace_existing=True,
+    return _register_source_poll(
+        scheduler,
+        session_factory,
+        spec=AMAZFIT_SPEC,
+        cron=cron,
+        job_id=job_id,
     )
-    log.info("registered %s cron=%s", job_id, cron)
-    return job_id
 
 
 def make_polar_poll(session_factory: Any) -> Callable[[], Awaitable[None]]:
-    """Return an awaitable APScheduler can invoke on every tick."""
-
-    async def _run() -> None:
-        import httpx
-        from plugin_sdk import load_manifest
-        from storage.timescale.ingest import PostgresIngestStorage
-
-        from plugins.sources.polar import PolarSource
-
-        manifest = load_manifest(_polar_plugin_yaml())
-        plugin = PolarSource(manifest)
-        storage = PostgresIngestStorage()
-
-        async with (
-            httpx.AsyncClient(timeout=30.0) as http,
-            session_factory() as session,
-        ):
-            try:
-                result = await plugin.ingest(
-                    {
-                        "storage": storage,
-                        "session": session,
-                        "http_client": http,
-                    }
-                )
-                await session.commit()
-                log.info("polar poll: %s", result)
-            except Exception:
-                await session.rollback()
-                log.exception("polar poll failed")
-                raise
-
-    return _run
+    return make_source_poll(session_factory, spec=POLAR_SPEC)
 
 
 def register_polar_poll(
@@ -244,55 +180,17 @@ def register_polar_poll(
     cron: str = POLAR_DEFAULT_CRON,
     job_id: str = "polar_poll",
 ) -> str:
-    """Register Polar poll on ``scheduler``. Returns job id."""
-    from apscheduler.triggers.cron import CronTrigger
-
-    scheduler.add_job(
-        make_polar_poll(session_factory),
-        CronTrigger.from_crontab(cron),
-        id=job_id,
-        max_instances=1,
-        coalesce=True,
-        replace_existing=True,
+    return _register_source_poll(
+        scheduler,
+        session_factory,
+        spec=POLAR_SPEC,
+        cron=cron,
+        job_id=job_id,
     )
-    log.info("registered %s cron=%s", job_id, cron)
-    return job_id
 
 
 def make_google_health_poll(session_factory: Any) -> Callable[[], Awaitable[None]]:
-    """Return an awaitable APScheduler can invoke on every tick."""
-
-    async def _run() -> None:
-        import httpx
-        from plugin_sdk import load_manifest
-        from storage.timescale.ingest import PostgresIngestStorage
-
-        from plugins.sources.google_health import GoogleHealthSource
-
-        manifest = load_manifest(_google_health_plugin_yaml())
-        plugin = GoogleHealthSource(manifest)
-        storage = PostgresIngestStorage()
-
-        async with (
-            httpx.AsyncClient(timeout=30.0) as http,
-            session_factory() as session,
-        ):
-            try:
-                result = await plugin.ingest(
-                    {
-                        "storage": storage,
-                        "session": session,
-                        "http_client": http,
-                    }
-                )
-                await session.commit()
-                log.info("google health poll: %s", result)
-            except Exception:
-                await session.rollback()
-                log.exception("google health poll failed")
-                raise
-
-    return _run
+    return make_source_poll(session_factory, spec=GOOGLE_HEALTH_SPEC)
 
 
 def register_google_health_poll(
@@ -302,16 +200,10 @@ def register_google_health_poll(
     cron: str = GOOGLE_HEALTH_DEFAULT_CRON,
     job_id: str = "google_health_poll",
 ) -> str:
-    """Register Google Health poll on ``scheduler``. Returns job id."""
-    from apscheduler.triggers.cron import CronTrigger
-
-    scheduler.add_job(
-        make_google_health_poll(session_factory),
-        CronTrigger.from_crontab(cron),
-        id=job_id,
-        max_instances=1,
-        coalesce=True,
-        replace_existing=True,
+    return _register_source_poll(
+        scheduler,
+        session_factory,
+        spec=GOOGLE_HEALTH_SPEC,
+        cron=cron,
+        job_id=job_id,
     )
-    log.info("registered %s cron=%s", job_id, cron)
-    return job_id
