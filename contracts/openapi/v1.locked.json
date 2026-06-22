@@ -440,6 +440,86 @@
         "title": "DecideResponse",
         "type": "object"
       },
+      "DeviceIdentityLinkCreate": {
+        "properties": {
+          "confidence": {
+            "default": "strong",
+            "enum": [
+              "medium",
+              "strong"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "direct_stream_id": {
+            "format": "uuid",
+            "title": "Direct Stream Id",
+            "type": "string"
+          },
+          "evidence": {
+            "title": "Evidence",
+            "type": "object"
+          },
+          "relayed_stream_id": {
+            "format": "uuid",
+            "title": "Relayed Stream Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "confirmed",
+            "default": "confirmed",
+            "enum": [
+              "confirmed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "direct_stream_id",
+          "relayed_stream_id"
+        ],
+        "title": "DeviceIdentityLinkCreate",
+        "type": "object"
+      },
+      "DeviceIdentityLinkResponse": {
+        "properties": {
+          "confidence": {
+            "enum": [
+              "medium",
+              "strong"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "direct_stream_id": {
+            "format": "uuid",
+            "title": "Direct Stream Id",
+            "type": "string"
+          },
+          "relayed_stream_id": {
+            "format": "uuid",
+            "title": "Relayed Stream Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "confirmed",
+            "enum": [
+              "confirmed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "direct_stream_id",
+          "relayed_stream_id",
+          "status",
+          "confidence"
+        ],
+        "title": "DeviceIdentityLinkResponse",
+        "type": "object"
+      },
       "DeviceView": {
         "properties": {
           "device_label": {
@@ -1259,6 +1339,29 @@
           }
         },
         "title": "RunsListResponse",
+        "type": "object"
+      },
+      "SessionFusionReconciliationResponse": {
+        "properties": {
+          "assigned": {
+            "title": "Assigned",
+            "type": "integer"
+          },
+          "matched_pairs": {
+            "title": "Matched Pairs",
+            "type": "integer"
+          },
+          "rejected": {
+            "title": "Rejected",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "matched_pairs",
+          "assigned",
+          "rejected"
+        ],
+        "title": "SessionFusionReconciliationResponse",
         "type": "object"
       },
       "SourceView": {
@@ -2402,6 +2505,108 @@
           }
         },
         "summary": "Changes"
+      }
+    },
+    "/api/v2/device-identity-links": {
+      "post": {
+        "operationId": "create_device_identity_link_api_v2_device_identity_links_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceIdentityLinkCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceIdentityLinkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Device Identity Link"
+      }
+    },
+    "/api/v2/device-identity-links/session-reconciliations": {
+      "post": {
+        "operationId": "reconcile_device_identity_link_sessions_api_v2_device_identity_links_session_reconciliations_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionFusionReconciliationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reconcile Device Identity Link Sessions"
       }
     },
     "/api/v2/devices": {

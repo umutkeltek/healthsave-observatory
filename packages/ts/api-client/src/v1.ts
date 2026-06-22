@@ -317,6 +317,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/device-identity-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Device Identity Link */
+        post: operations["create_device_identity_link_api_v2_device_identity_links_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/device-identity-links/session-reconciliations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reconcile Device Identity Link Sessions */
+        post: operations["reconcile_device_identity_link_sessions_api_v2_device_identity_links_session_reconciliations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/devices": {
         parameters: {
             query?: never;
@@ -1203,6 +1237,58 @@ export interface components {
              */
             proposal_id: string;
         };
+        /** DeviceIdentityLinkCreate */
+        DeviceIdentityLinkCreate: {
+            /**
+             * Confidence
+             * @default strong
+             * @enum {string}
+             */
+            confidence: "medium" | "strong";
+            /**
+             * Direct Stream Id
+             * Format: uuid
+             */
+            direct_stream_id: string;
+            /** Evidence */
+            evidence?: Record<string, never>;
+            /**
+             * Relayed Stream Id
+             * Format: uuid
+             */
+            relayed_stream_id: string;
+            /**
+             * Status
+             * @default confirmed
+             * @constant
+             * @enum {string}
+             */
+            status: "confirmed";
+        };
+        /** DeviceIdentityLinkResponse */
+        DeviceIdentityLinkResponse: {
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "medium" | "strong";
+            /**
+             * Direct Stream Id
+             * Format: uuid
+             */
+            direct_stream_id: string;
+            /**
+             * Relayed Stream Id
+             * Format: uuid
+             */
+            relayed_stream_id: string;
+            /**
+             * Status
+             * @constant
+             * @enum {string}
+             */
+            status: "confirmed";
+        };
         /** DeviceView */
         DeviceView: {
             /** Device Label */
@@ -1474,6 +1560,15 @@ export interface components {
             count: number;
             /** Runs */
             runs?: components["schemas"]["RunSummaryResponse"][];
+        };
+        /** SessionFusionReconciliationResponse */
+        SessionFusionReconciliationResponse: {
+            /** Assigned */
+            assigned: number;
+            /** Matched Pairs */
+            matched_pairs: number;
+            /** Rejected */
+            rejected: number;
         };
         /** SourceView */
         SourceView: {
@@ -2049,6 +2144,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_device_identity_link_api_v2_device_identity_links_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceIdentityLinkCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceIdentityLinkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reconcile_device_identity_link_sessions_api_v2_device_identity_links_session_reconciliations_post: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionFusionReconciliationResponse"];
                 };
             };
             /** @description Validation Error */
