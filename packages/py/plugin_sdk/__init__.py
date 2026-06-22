@@ -85,6 +85,7 @@ __all__ = [
     # discovery + registry
     "DiscoveredPlugin",
     "discover",
+    "find_plugin_manifest",
     "load_manifest",
     "build_registry",
     "write_registry",
