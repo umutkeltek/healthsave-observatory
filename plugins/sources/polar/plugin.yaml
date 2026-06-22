@@ -6,6 +6,7 @@ sdk_version: ">=0.1,<0.2"
 language: python
 entrypoint: "plugins.sources.polar:PolarSource"
 emits:
+  - workout.session
   - measurement.workouts
   - measurement.exercise_duration_seconds
 permissions:
@@ -29,6 +30,7 @@ permissions:
 source_capabilities:
   - plugin_id: polar-accesslink
     metrics:
+      - workout.session
       - measurement.workouts
       - measurement.exercise_duration_seconds
     delivery: polling

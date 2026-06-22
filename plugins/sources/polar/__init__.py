@@ -28,9 +28,10 @@ class PolarSource(Source):
 
     async def ingest(self, payload: dict[str, Any]) -> dict[str, int]:
         from storage.timescale import oauth_tokens as default_token_store
+        from storage.timescale.observations import default_repository as default_canonical_repo
 
         from .fetch import fetch_exercises
-        from .normalize import normalize_exercises
+        from .normalize import canonical_session_observations, normalize_exercises
 
         storage = payload["storage"]
         session = payload["session"]
@@ -38,6 +39,7 @@ class PolarSource(Source):
         owner_id = payload.get("owner_id", DEFAULT_OWNER_ID)
         since: datetime | None = payload.get("since")
         token_store = payload.get("token_store") or default_token_store
+        canonical_repository = payload.get("canonical_repository") or default_canonical_repo
 
         token = await token_store.get_token(session, provider=POLAR_PROVIDER, owner_id=owner_id)
         if token is None:
@@ -66,6 +68,17 @@ class PolarSource(Source):
                 continue
             written = await storage.ingest_metric(session, device_id, metric, samples, owner_id)
             accepted += int(written)
+
+        provider_subject_id = token.metadata.get("x_user_id") or token.metadata.get(
+            "provider_subject_id"
+        )
+        canonical_observations = canonical_session_observations(
+            exercises,
+            owner_id=owner_id,
+            provider_subject_id=provider_subject_id,
+        )
+        if canonical_observations:
+            accepted += await canonical_repository.insert_many(session, canonical_observations)
 
         log.info(
             "polar poll complete owner=%s accepted=%d metrics=%d since=%s",
