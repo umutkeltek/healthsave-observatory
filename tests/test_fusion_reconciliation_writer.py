@@ -12,6 +12,7 @@ from uuid import NAMESPACE_DNS, UUID, uuid5
 
 import pytest
 from normalization.fusion import DeviceLinkConfidence, VariantTier
+from storage.timescale import fusion as fusion_module
 from storage.timescale.fusion import (
     FusionReconciliationRepository,
     SessionCandidatePair,
@@ -257,3 +258,59 @@ async def test_find_session_candidate_pairs_skips_rows_without_provider_anchor()
         )
         == []
     )
+
+
+def test_candidate_pair_sql_uses_executable_confirmed_device_link_filters() -> None:
+    sql = str(fusion_module._SELECT_SESSION_CANDIDATE_PAIRS_SQL)
+
+    assert ") AS direct_vendor_family" in sql
+    assert ") AS direct_activity_type" in sql
+    assert ") AS relayed_vendor_family" in sql
+    assert ") AS relayed_activity_type" in sql
+    assert "EXTRACT(EPOCH FROM direct.interval_start) AS direct_start_epoch_s" in sql
+    assert "EXTRACT(EPOCH FROM relayed.interval_end) AS relayed_end_epoch_s" in sql
+    assert "link.status = 'confirmed'" in sql
+    assert "link.confidence IN ('medium', 'strong')" in sql
+    assert "AND direct.semantic_key IS NULL" in sql
+    assert "AND relayed.semantic_key IS NULL" in sql
+    assert "AND direct.stream_id IS NOT NULL" in sql
+    assert "AND relayed.stream_id IS NOT NULL" in sql
+
+
+def test_variant_update_sql_has_where_clause_and_case_assignment() -> None:
+    sql = str(fusion_module._UPDATE_VARIANTS_SQL)
+
+    assert "is_primary = CASE WHEN" in sql
+    assert "WHERE owner_id = CAST(:owner_id AS UUID)" in sql
+    assert "AND id = ANY(CAST(:variant_ids AS UUID[]))" in sql
+
+
+@pytest.mark.asyncio
+async def test_upsert_device_identity_link_records_directional_confirmed_link() -> None:
+    repo = FusionReconciliationRepository()
+    session = _FakeSession()
+
+    await repo.upsert_device_identity_link(
+        session,
+        owner_id=OWNER,
+        direct_stream_id=DIRECT_STREAM,
+        relayed_stream_id=RELAYED_STREAM,
+        status="confirmed",
+        confidence=DeviceLinkConfidence.STRONG,
+        evidence={
+            "vendor_family": "polar",
+            "provider_subject_id": "polar-user-10579",
+            "reason": "operator confirmed same physical device",
+        },
+    )
+
+    assert len(session.calls) == 1
+    sql, params = session.calls[0]
+    assert "INSERT INTO device_identity_links" in sql
+    assert "ON CONFLICT (owner_id, direct_stream_id, relayed_stream_id)" in sql
+    assert params["owner_id"] == str(OWNER)
+    assert params["direct_stream_id"] == str(DIRECT_STREAM)
+    assert params["relayed_stream_id"] == str(RELAYED_STREAM)
+    assert params["status"] == "confirmed"
+    assert params["confidence"] == "strong"
+    assert "operator confirmed" in params["evidence"]
