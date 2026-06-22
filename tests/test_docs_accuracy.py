@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -123,6 +124,19 @@ def test_generated_plugin_registry_uses_repo_relative_paths():
     assert local_home not in text
     assert "plugin_dir" in text
     assert "plugins/sources/apple_health_healthsave" in text
+
+
+def test_generated_plugin_registry_carries_source_operational_semantics():
+    registry_path = ROOT / "plugins" / ".generated" / "plugin-registry.json"
+    registry = json.loads(registry_path.read_text())
+
+    missing = [
+        entry["id"]
+        for entry in registry["plugins"]
+        if entry["kind"] == "source" and not entry["manifest"].get("source_capabilities")
+    ]
+
+    assert missing == []
 
 
 def test_tracked_public_files_do_not_leak_absolute_local_paths():
