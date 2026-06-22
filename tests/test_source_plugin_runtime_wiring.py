@@ -44,6 +44,10 @@ def test_api_and_worker_receive_source_plugin_environment():
         "WHOOP_CLIENT_SECRET": "${WHOOP_CLIENT_SECRET:-}",
         "WHOOP_REDIRECT_URI": "${WHOOP_REDIRECT_URI:-}",
         "WHOOP_POLL_CRON": "${WHOOP_POLL_CRON:-}",
+        "POLAR_CLIENT_ID": "${POLAR_CLIENT_ID:-}",
+        "POLAR_CLIENT_SECRET": "${POLAR_CLIENT_SECRET:-}",
+        "POLAR_REDIRECT_URI": "${POLAR_REDIRECT_URI:-}",
+        "POLAR_POLL_CRON": "${POLAR_POLL_CRON:-}",
         "AMAZFIT_APP_TOKEN": "${AMAZFIT_APP_TOKEN:-}",
         "AMAZFIT_USER_ID": "${AMAZFIT_USER_ID:-}",
         "AMAZFIT_REGION": "${AMAZFIT_REGION:-us}",
@@ -60,7 +64,11 @@ def test_authorize_scripts_are_runnable_without_manual_pythonpath():
     env = os.environ.copy()
     env.pop("PYTHONPATH", None)
 
-    for script in ("scripts/amazfit_authorize.py", "scripts/whoop_authorize.py"):
+    for script in (
+        "scripts/amazfit_authorize.py",
+        "scripts/polar_authorize.py",
+        "scripts/whoop_authorize.py",
+    ):
         result = subprocess.run(
             [sys.executable, script, "--help"],
             cwd=ROOT,
