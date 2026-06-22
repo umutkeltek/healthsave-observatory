@@ -25,7 +25,12 @@ from analysis.scheduler import AnalysisScheduler
 from server.db.session import async_session, engine
 
 from .listener import listener_event_mask, make_listener
-from .sources import register_amazfit_poll, register_polar_poll, register_whoop_poll
+from .sources import (
+    register_amazfit_poll,
+    register_google_health_poll,
+    register_polar_poll,
+    register_whoop_poll,
+)
 
 log = logging.getLogger("healthsave.worker")
 
@@ -63,7 +68,8 @@ async def run() -> None:
     whoop_cron = os.environ.get("WHOOP_POLL_CRON")
     amazfit_cron = os.environ.get("AMAZFIT_POLL_CRON")
     polar_cron = os.environ.get("POLAR_POLL_CRON")
-    if whoop_cron or amazfit_cron or polar_cron:
+    google_health_cron = os.environ.get("GOOGLE_HEALTH_POLL_CRON")
+    if whoop_cron or amazfit_cron or polar_cron or google_health_cron:
         if scheduler.scheduler is not None:
             target_scheduler = scheduler.scheduler
         else:
@@ -77,6 +83,8 @@ async def run() -> None:
             register_amazfit_poll(target_scheduler, async_session, cron=amazfit_cron)
         if polar_cron:
             register_polar_poll(target_scheduler, async_session, cron=polar_cron)
+        if google_health_cron:
+            register_google_health_poll(target_scheduler, async_session, cron=google_health_cron)
         if source_scheduler is not None:
             source_scheduler.start()
             log.info("source-only AsyncIOScheduler started (analysis jobs all disabled)")

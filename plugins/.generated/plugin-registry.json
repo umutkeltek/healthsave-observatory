@@ -140,6 +140,58 @@
     },
     {
       "compatible_with_running_sdk": true,
+      "id": "google-health-api",
+      "kind": "source",
+      "manifest": {
+        "config_schema": null,
+        "consumes": [],
+        "emits": [
+          "measurement.step_count"
+        ],
+        "entrypoint": "plugins.sources.google_health:GoogleHealthSource",
+        "id": "google-health-api",
+        "kind": "source",
+        "language": "python",
+        "name": "Google Health API",
+        "permissions": {
+          "capabilities": [
+            {
+              "description": "Persist and refresh per-owner Google Health OAuth tokens.",
+              "name": "write:oauth_tokens"
+            },
+            {
+              "description": "Insert Google Health steps through the existing IngestStorage port.",
+              "name": "write:measurements"
+            },
+            {
+              "description": "Outbound HTTPS to Google Health API v4.",
+              "name": "network:health.googleapis.com"
+            },
+            {
+              "description": "Outbound HTTPS to Google OAuth token endpoint.",
+              "name": "network:oauth2.googleapis.com"
+            },
+            {
+              "description": "Browser authorization endpoint for operator account binding.",
+              "name": "network:accounts.google.com"
+            }
+          ],
+          "network": true,
+          "secrets": [
+            "GOOGLE_HEALTH_CLIENT_ID",
+            "GOOGLE_HEALTH_CLIENT_SECRET",
+            "GOOGLE_HEALTH_REDIRECT_URI",
+            "HDH_TOKEN_ENC_KEY"
+          ]
+        },
+        "requires": [],
+        "sdk_version": ">=0.1,<0.2",
+        "version": "0.1.0"
+      },
+      "plugin_dir": "plugins/sources/google_health"
+    },
+    {
+      "compatible_with_running_sdk": true,
       "id": "polar-accesslink",
       "kind": "source",
       "manifest": {
