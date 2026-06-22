@@ -138,6 +138,8 @@ class SourceCapability(V2Model):
 
         if not self.delivery_modes:
             self.delivery_modes = [self.delivery]
+        elif self.delivery not in self.delivery_modes:
+            raise ValueError("delivery_modes must include delivery")
         return self
 
 
