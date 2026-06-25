@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "description": "Self-hosted HealthSave Observatory monorepo: API, web app, and client packages for a private health-data backend.",
   "workspaces": [
-    "packages/ts/*"
+    "packages/ts/*",
+    "packages/npm/*"
   ],
   "engines": {
     "bun": ">=1.3.0"

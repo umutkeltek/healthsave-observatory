@@ -1,0 +1,37 @@
+{
+  "name": "healthsave",
+  "version": "0.1.0",
+  "description": "npx bootstrapper and control CLI for the self-hosted HealthSave Observatory Docker Compose stack.",
+  "license": "Elastic-2.0",
+  "type": "module",
+  "homepage": "https://github.com/umutkeltek/healthsave-observatory#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/umutkeltek/healthsave-observatory.git",
+    "directory": "packages/npm/healthsave-observatory"
+  },
+  "bugs": {
+    "url": "https://github.com/umutkeltek/healthsave-observatory/issues"
+  },
+  "bin": {
+    "healthsave-observatory": "bin/healthsave-observatory.mjs",
+    "healthsave": "bin/healthsave-observatory.mjs"
+  },
+  "files": [
+    "bin/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "healthsave",
+    "observatory",
+    "self-hosted",
+    "docker-compose",
+    "health-data"
+  ]
+}
