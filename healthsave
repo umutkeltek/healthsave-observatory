@@ -412,7 +412,7 @@ preview_basic_setup() {
 DRY RUN: Basic setup
 
 Would:
-1. Check Docker is installed and running.
+1. Check that Docker is installed and running.
 2. Create .env with generated DB and Grafana passwords if missing.
 3. Create config.yaml from config.yaml.example if missing.
 4. Keep local AI disabled unless already configured.
@@ -420,7 +420,7 @@ Would:
 6. Wait for API readiness.
 7. Print HealthSave app URL, Observatory web URL, and Grafana login.
 
-No files would be changed and Docker would not be started.
+No files would be changed, and Docker would not be started.
 EOF
 }
 
@@ -429,14 +429,14 @@ preview_advanced_setup() {
 DRY RUN: Advanced setup
 
 Would:
-1. Check Docker is installed and running.
+1. Check that Docker is installed and running.
 2. Prompt for DB password, Grafana password, and optional API key.
 3. Prompt for local AI/Ollama enablement.
 4. Detect RAM/GPU and recommend an Ollama model if AI is enabled.
 5. Start Docker services and pull the selected model if needed.
 6. Print HealthSave app URL, Observatory web URL, and Grafana login.
 
-No files would be changed and Docker would not be started.
+No files would be changed, and Docker would not be started.
 EOF
 }
 
