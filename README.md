@@ -12,13 +12,12 @@ HealthSave Observatory is the self-hosted backend for HealthSave. The iOS app ca
 
 Raw observations stay on hardware you control unless you enable an egress route.
 
-## Recommended Install
+## Quick Install
 
-Use the CLI if you already have Node.js:
+If Node.js is already available:
 
 ```bash
-npm i -g healthsave
-healthsave onboard
+npm i -g healthsave && healthsave onboard
 ```
 
 No global install:
@@ -27,48 +26,55 @@ No global install:
 npx healthsave
 ```
 
-The command opens the guided control center. Use Basic setup for the first run. Use Advanced setup when you want to set passwords, an API key, local AI/Ollama, or optional layers yourself.
-
-## One-Line Installer
-
-Use this path on servers or clean machines where Node may not be installed.
-
-macOS, Linux, WSL2:
+Server or clean-machine installer:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/install.sh | bash
 ```
 
-Windows PowerShell:
+Windows PowerShell, using WSL2:
 
 ```powershell
 irm https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/install.ps1 | iex
 ```
 
-Windows support uses WSL2 today. Install Docker Desktop, enable WSL integration for your Linux distro, then run the PowerShell installer or run the Unix command inside WSL2.
+Windows support uses WSL2 today. Install Docker Desktop, enable WSL integration for your Linux distro, then run the PowerShell handoff or the Unix command inside WSL2.
+
+## Guided CLI
+
+`healthsave onboard` opens the guided control center with arrow-key navigation:
+
+- Basic setup and Advanced setup.
+- Stack start/stop and optional layer toggles.
+- Doctor/status checks, logs, and verification.
+- CLI install and uninstall helpers.
+
+Basic setup is the recommended first run. Advanced setup lets you choose passwords, API key, local AI/Ollama, model, and optional layers.
 
 ## What You Get
 
-- **Capture without a new silo.** HealthSave iOS syncs Apple Health data into your server. Wearable plugins and file importers follow the same canonical model.
+- **Capture without a new silo.** HealthSave iOS syncs Apple Health data into your server. Early Whoop, Amazfit, and Polar plugins plus Garmin/Samsung importers follow the same canonical model. Android Health Connect and generic HMAC-signed ingest are planned.
 - **One record you own.** Source / Device / Stream identity keeps integrations, physical devices, and metric streams separate without fragmenting your history.
 - **Two surfaces.** Observatory web is the product surface for daily use. Grafana stays bundled for raw SQL-backed dashboards and builder workflows.
-- **Evidence-linked findings.** The worker computes findings from your stored history. Local AI can narrate those findings, but it does not invent health facts.
+- **Evidence-linked findings.** Statistics compute anomalies, trends, summaries, and correlations. Local AI can narrate those findings, but it does not invent health facts.
 - **Private routes.** Scripts, notebooks, agents, Home Assistant, MQTT, and exports can consume selected signals under your policy.
 
-## Default Stack
-
-Basic setup starts TimescaleDB, migrations, the FastAPI API, worker jobs, Observatory web, and Grafana.
+## Layers
 
 ```text
-HealthSave iOS / Apple Health
-        |
-        v
-FastAPI API -> TimescaleDB -> worker findings
-        |
-        +-> Observatory web
-        +-> Grafana
-        +-> Private API / CLI / agents
-        +-> Home Assistant / MQTT / export
+Capture sources
+  HealthSave iOS / Apple Health
+  Wearable plugins and importers
+  Planned Health Connect and generic ingest
+
+Core stack
+  FastAPI API -> TimescaleDB -> worker findings
+
+Surfaces and routes
+  Observatory web
+  Grafana
+  Private API / CLI / agents
+  Home Assistant / MQTT / export
 ```
 
 ## Connect HealthSave iOS
@@ -79,31 +85,33 @@ FastAPI API -> TimescaleDB -> worker findings
 4. Set the API key if you configured one.
 5. Tap **Sync New Data**.
 
-Do not use `localhost` from the phone. `localhost` would point at the phone itself.
+Do not use `localhost` from the phone. `localhost` would point at the phone itself. The iOS app sends Apple Health data through the frozen v1 ingest contract: `POST /api/apple/batch`.
 
 HealthSave iOS also works without Observatory: on-device dashboard, trends, and CSV/JSON/PDF export do not need an account or a cloud server.
 
 ## Automation
 
-Humans should start with `healthsave onboard` or `npx healthsave`. Agents and CI should use named commands:
+Human setup should start with `healthsave onboard` or `npx healthsave`. Agents and CI should use named commands:
 
 ```bash
-healthsave setup basic --no-input
-healthsave doctor --json
-healthsave status --json
-healthsave layers --json
-healthsave logs api
+healthsave setup basic --no-input && healthsave doctor --json
 ```
 
 ## Manual Checkout
 
-Use this when you want to inspect the repo before setup:
-
 ```bash
-git clone https://github.com/umutkeltek/healthsave-observatory.git
-cd healthsave-observatory
-./healthsave onboard
+git clone https://github.com/umutkeltek/healthsave-observatory.git && cd healthsave-observatory && ./healthsave onboard
 ```
+
+## CLI Lifecycle
+
+- npm package name: `healthsave`
+- global install path: `npm i -g healthsave && healthsave onboard`
+- no-install path: `npx healthsave`
+- repo-local fallback: `./healthsave onboard`
+- local wrapper install: `./healthsave install-cli`
+- local wrapper uninstall: `./healthsave uninstall-cli`
+- Homebrew formula template: `packaging/homebrew/healthsave.rb.template`
 
 ## Compatibility
 
@@ -111,13 +119,19 @@ HealthSave Observatory runs on macOS, Linux, and WSL2 with Docker Compose v2. Na
 
 ## Documentation
 
+- [Overview](docs/overview.md) - product layers, data flow, and what ships today.
 - [Zero To Ready](docs/zero-to-ready.md) - clean-machine path from install to synced iOS data.
 - [Quick Start](docs/quick-start.md) - short setup path and health checks.
-- [Deployment](docs/operations/deployment.md) - run on a laptop, VM, NAS, or homelab box.
-- [CLI distribution](docs/operations/cli-distribution.md) - npm/npx, installers, repo-local launcher, and Homebrew release shape.
-- [Web vs Grafana](docs/surfaces/web-vs-grafana.md) - product surface versus power-user dashboard.
+- [Connect HealthSave](docs/connect-healthsave.md) - pair the iOS app with the self-hosted backend.
+- [Capture sources](docs/capture/index.md) - Apple Health, plugins, importers, and planned ingest paths.
+- [Observatory web](docs/surfaces/observatory-web.md) - primary daily-use product surface.
+- [Grafana](docs/surfaces/grafana.md) - bundled SQL-backed power-user dashboard.
+- [Web vs Grafana](docs/surfaces/web-vs-grafana.md) - product surface versus raw dashboard boundary.
 - [Home Assistant & MQTT](docs/integrations/home-assistant.md) - bridge HealthSave signals into Home Assistant.
-- [API](docs/api/index.md) - ingest/read API and app connection details.
+- [API](docs/api/index.md) - stable ingest and evolving read/query APIs.
+- [Deployment](docs/operations/deployment.md) - run on a laptop, VM, NAS, Proxmox VM, or homelab box.
+- [CLI distribution](docs/operations/cli-distribution.md) - npm/npx, installers, repo-local launcher, and Homebrew release shape.
+- [Development](docs/development/dev-setup.md) - local development and verification.
 
 ## License
 

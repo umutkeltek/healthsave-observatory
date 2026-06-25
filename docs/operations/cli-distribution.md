@@ -9,8 +9,7 @@ Package managers install a thin bootstrapper. Stack operations live in the check
 Install once:
 
 ```bash
-npm i -g healthsave
-healthsave onboard
+npm i -g healthsave && healthsave onboard
 ```
 
 No global install:
@@ -28,7 +27,7 @@ Implemented package:
 - npm package: `healthsave`
 - primary binary: `healthsave`
 - alias binary: `healthsave-observatory`
-- package location: `packages/npm/healthsave-observatory`
+- package source: `packages/npm/healthsave-observatory`
 
 The npm bootstrapper:
 
@@ -38,16 +37,30 @@ The npm bootstrapper:
 4. Installs the local wrapper when possible.
 5. Delegates to checkout-local `./healthsave`.
 
+Version checks:
+
+```bash
+healthsave version && healthsave --version
+```
+
+Uninstall the global npm package:
+
+```bash
+npm uninstall -g healthsave
+```
+
+Remove a checkout-local wrapper:
+
+```bash
+healthsave uninstall-cli
+```
+
 ## Scriptable Commands
 
 Agents, CI, and remote automation should use named commands:
 
 ```bash
-healthsave setup basic --no-input
-healthsave doctor --json
-healthsave status --json
-healthsave layers --json
-healthsave logs api
+healthsave setup basic --no-input && healthsave doctor --json && healthsave status --json && healthsave layers --json && healthsave logs api
 ```
 
 No-install automation on a clean machine:
@@ -63,15 +76,13 @@ That command belongs in automation docs. It should not be the main human install
 From the repository root:
 
 ```bash
-node --check packages/npm/healthsave-observatory/bin/healthsave-observatory.mjs
-uv run --extra dev python -m pytest -q tests/test_npx_cli.py tests/test_healthsave_cli.py
+node --check packages/npm/healthsave-observatory/bin/healthsave-observatory.mjs && uv run --extra dev python -m pytest -q tests/test_npx_cli.py tests/test_healthsave_cli.py
 ```
 
 From the npm package directory:
 
 ```bash
-npm pack --dry-run
-npm publish --dry-run
+npm pack --dry-run && npm publish --dry-run
 ```
 
 Smoke test from outside the repository:
@@ -83,10 +94,7 @@ npx --yes --package ./packages/npm/healthsave-observatory healthsave --version
 Publish checklist:
 
 ```bash
-npm login
-npm publish --access public
-npm view healthsave name version
-npx --yes healthsave --version
+npm login && npm publish --access public && npm view healthsave name version && npx --yes healthsave --version
 ```
 
 Before publishing, run the verification suite and scan the diff for secrets.
@@ -96,9 +104,7 @@ Before publishing, run the verification suite and scan the diff for secrets.
 Manual checkout works without npm:
 
 ```bash
-git clone https://github.com/umutkeltek/healthsave-observatory.git
-cd healthsave-observatory
-./healthsave onboard
+git clone https://github.com/umutkeltek/healthsave-observatory.git && cd healthsave-observatory && ./healthsave onboard
 ```
 
 `./healthsave` is the product-owned launcher. Package-manager wrappers call it after they create or find a checkout.
@@ -108,8 +114,7 @@ cd healthsave-observatory
 After checkout exists:
 
 ```bash
-./healthsave install-cli
-healthsave doctor
+./healthsave install-cli && healthsave doctor
 ```
 
 This installs a small wrapper into `~/.local/bin` that calls checkout-local `./healthsave`. It avoids sudo and keeps stack operation independent from npm global state.
@@ -121,14 +126,12 @@ Homebrew is the planned macOS/Linux package-manager path after tagged GitHub rel
 Target flow:
 
 ```bash
-brew tap healthsave/observatory
-brew install healthsave
-healthsave onboard
+brew tap healthsave/observatory && brew install healthsave && healthsave onboard
 ```
 
 Required before enabling the tap:
 
-- GitHub release tag and tarball checksum.
+- GitHub release tag tarball checksum.
 - Formula installs `healthsave` and `healthsave-observatory`.
 - `brew test healthsave` runs `healthsave --version` and `healthsave --help`.
 - Upgrade behavior preserves existing stack directories.

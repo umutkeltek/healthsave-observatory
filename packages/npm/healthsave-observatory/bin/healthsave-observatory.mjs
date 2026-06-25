@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-const VERSION = "0.1.1";
+const VERSION = "0.1.2";
 const PRIMARY_COMMAND = "healthsave";
 const ALIAS_COMMAND = "healthsave-observatory";
 const DEFAULT_REPO =
@@ -22,6 +22,7 @@ function usage() {
 Usage:
   ${PRIMARY_COMMAND} [dir]
   ${PRIMARY_COMMAND} onboard [dir]
+  ${PRIMARY_COMMAND} version
   ${PRIMARY_COMMAND} tui [dir]
   ${PRIMARY_COMMAND} init [dir] [flags]
   ${PRIMARY_COMMAND} setup [basic|advanced] [dir] [flags]
@@ -34,10 +35,10 @@ Usage:
   ${PRIMARY_COMMAND} verify [dir]
 
 Examples:
-  npm i -g healthsave
-  healthsave onboard
+  npm i -g healthsave && healthsave onboard
   npx healthsave
   healthsave doctor
+  healthsave version
   healthsave setup basic --no-input
   npx healthsave init /srv/healthsave-observatory
   npx healthsave doctor --dir /srv/healthsave-observatory --json
@@ -391,6 +392,9 @@ function main() {
   }
 
   switch (command) {
+    case "version":
+      process.stdout.write(`${PRIMARY_COMMAND} ${VERSION}\n`);
+      return;
     case "init":
       commandInit(positionals, options);
       return;
@@ -411,6 +415,7 @@ function main() {
     case "down":
     case "verify":
     case "install-cli":
+    case "uninstall-cli":
       commandDelegate(command, positionals, options, passthrough);
       return;
     default:

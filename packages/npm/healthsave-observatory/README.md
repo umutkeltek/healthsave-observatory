@@ -5,8 +5,7 @@ Bootstrap and control the self-hosted HealthSave Observatory Docker Compose stac
 ## Install
 
 ```bash
-npm i -g healthsave
-healthsave onboard
+npm i -g healthsave && healthsave onboard
 ```
 
 No global install:
@@ -21,6 +20,7 @@ Both commands create or reuse `~/healthsave-observatory`, install the local wrap
 
 ```bash
 healthsave onboard [dir]
+healthsave version
 healthsave init [dir]
 healthsave setup [basic|advanced] [dir]
 healthsave doctor [dir] --json
@@ -30,11 +30,17 @@ healthsave logs [dir] [layer]
 healthsave up [dir]
 healthsave down [dir]
 healthsave verify [dir]
+healthsave install-cli [dir]
+healthsave uninstall-cli [dir]
 ```
 
-Use `healthsave onboard` for humans. Use named commands for scripts and agents.
+Use `healthsave onboard` for humans. Use named commands for scripts and agents. This package also exposes `healthsave-observatory` as a longer alias.
 
-This package also exposes `healthsave-observatory` as a longer alias.
+Uninstall:
+
+```bash
+npm uninstall -g healthsave
+```
 
 ## Platform
 
