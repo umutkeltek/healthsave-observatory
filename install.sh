@@ -54,13 +54,6 @@ check_platform() {
   fi
 }
 
-node_npx_ready() {
-  have node || return 1
-  have npx || return 1
-  major="$(node -p "Number(process.versions.node.split('.')[0])" 2>/dev/null || printf '0')"
-  [ "${major:-0}" -ge 18 ]
-}
-
 is_checkout() {
   [ -x "$1/healthsave" ] && [ -f "$1/setup.sh" ] && [ -f "$1/docker-compose.yml" ]
 }
@@ -112,13 +105,6 @@ launch_checkout() {
 main() {
   check_platform
   info "HealthSave Observatory guided installer"
-
-  if node_npx_ready; then
-    restore_tty_stdin
-    exec npx --yes healthsave
-  fi
-
-  warn "Node.js 18+/npx not found. Falling back to direct checkout installer."
   launch_checkout
 }
 
