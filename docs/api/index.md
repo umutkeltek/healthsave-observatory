@@ -36,7 +36,7 @@ The server is given the **base URL only** — clients append the paths themselve
 http://your-server-ip:8000
 ```
 
-Run `./setup.sh doctor` to print the exact URL to paste into the HealthSave app under Settings → Server Sync. Don't expose plain HTTP to the internet; put it behind a reverse proxy and a long random `API_KEY` (see [Reverse proxy](../operations/reverse-proxy.md)).
+Run `./healthsave doctor` to print the exact URL to paste into the HealthSave app under Settings -> Server Sync. Do not expose plain HTTP to the internet; put it behind a reverse proxy and a long random `API_KEY` (see [Reverse proxy](../operations/reverse-proxy.md)).
 
 ## Licensing of the API surface
 

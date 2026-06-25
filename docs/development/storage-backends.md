@@ -1,6 +1,6 @@
 # Storage backends
 
-The ingest path in HealthSave Observatory is pluggable. The default backend is TimescaleDB (a Postgres extension), which is what `setup.sh` provisions — but if you already run a different time-series store and don't want to add a second one, you can write a Python module that implements the `IngestStorage` protocol, register it, and point the server at it via environment variables.
+The ingest path in HealthSave Observatory is pluggable. The default backend is TimescaleDB (a Postgres extension), which is what `healthsave setup` provisions. If you already run a different time-series store and do not want to add a second one, you can write a Python module that implements the `IngestStorage` protocol, register it, and point the server at it via environment variables.
 
 The ingest API is intentionally simple so anyone can build a compatible backend. This page covers selecting a backend, writing your own, the community list, and how idempotent ingest works.
 

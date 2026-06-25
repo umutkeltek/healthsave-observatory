@@ -59,8 +59,8 @@ collapsed single value.
 3. (Optional) Set your API key if you configured one.
 4. Tap **Sync New Data**.
 
-Running `./setup.sh doctor` on the server prints the exact URL to paste into the
-app. See [Quick start](../quick-start.md) for bringing the stack up.
+Running `./healthsave doctor` on the server prints the exact URL to paste into
+the app. See [Quick start](../quick-start.md) for bringing the stack up.
 
 ## Notes
 

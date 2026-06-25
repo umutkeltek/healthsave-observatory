@@ -1,0 +1,21 @@
+class Healthsave < Formula
+  desc "Bootstrapper and control CLI for self-hosted HealthSave Observatory"
+  homepage "https://github.com/umutkeltek/healthsave-observatory"
+  url "https://github.com/umutkeltek/healthsave-observatory/archive/refs/tags/vVERSION.tar.gz"
+  sha256 "FILL_IN_RELEASE_TARBALL_SHA256"
+  license "Elastic-2.0"
+
+  depends_on "node"
+  depends_on "git"
+
+  def install
+    libexec.install Dir["packages/npm/healthsave-observatory/*"]
+    bin.install_symlink libexec/"bin/healthsave-observatory.mjs" => "healthsave"
+    bin.install_symlink libexec/"bin/healthsave-observatory.mjs" => "healthsave-observatory"
+  end
+
+  test do
+    assert_match "healthsave ", shell_output("#{bin}/healthsave --version")
+    assert_match "HealthSave CLI", shell_output("#{bin}/healthsave --help")
+  end
+end

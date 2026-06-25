@@ -1,63 +1,97 @@
-# Development setup
+# Development Setup
 
-HealthSave Observatory is a Python 3.12 project — FastAPI + TimescaleDB at the core, async SQLAlchemy with asyncpg, `ruff` for lint and format, and `pytest` for tests. Local verification uses the exact same commands as CI, so a green run on your machine is a green run on the pipeline.
+HealthSave Observatory is a Python 3.12 project with FastAPI, TimescaleDB, async SQLAlchemy/asyncpg, `ruff`, `pytest`, a generated TypeScript client, and the Observatory web app. Local verification uses the same commands CI uses.
 
-Before contributing, skim [`CONTRIBUTING.md`](../../CONTRIBUTING.md) — it covers the DCO sign-off, the architecture boundaries the test suite enforces, and the PR workflow.
+Before contributing, skim [`CONTRIBUTING.md`](../../CONTRIBUTING.md). It covers DCO sign-off, architecture boundaries, the test suite, and PR workflow.
 
 ## Prerequisites
 
-- **Python 3.12** — the project targets 3.12, matching the Docker image and the CI runtime. Use that version to avoid surprises.
-- **Docker** — for the `docker build` step and for running the full stack via Docker Compose.
+- **Python 3.12** - matches the Docker image and CI runtime.
+- **uv** - local Python dependency runner used by the Makefile.
+- **Docker** - required for image build, compose stack, and E2E.
+- **bun** - required for the TypeScript client and Observatory web checks.
+
+macOS and Linux run natively. On Windows, use WSL2 with Docker Desktop WSL integration enabled.
 
 ## Install
 
-Install the package with its dev extras (editable):
-
 ```bash
-python3.12 -m pip install -e ".[dev]"
+uv sync --extra dev
 ```
 
-## Verify locally (same as CI)
+## Verify Locally
 
-Run the same four checks CI runs:
+Preferred full local verification:
 
 ```bash
-python3.12 -m ruff format --check .   # formatting
-python3.12 -m ruff check .            # lint
-python3.12 -m pytest -q               # tests
-docker build -t healthsave-observatory-dev . # image builds
+./healthsave verify
 ```
 
-The test suite runs **without a live database** (async sessions are mocked), so `pytest` works on a clean checkout. Ruff is configured with the `E`, `F`, `I`, `UP`, `B`, and `SIM` rule sets; run `ruff format .` (without `--check`) to auto-fix formatting before committing.
-
-## CI
-
-The GitHub Actions workflow runs formatting, linting, tests, and a Docker build on **every push and pull request to `main`**. Keep all four green locally before opening a PR.
-
-## Architecture boundaries (enforced by tests)
-
-A few rules keep the architecture honest, and CI goes red if you break them — so they matter while you develop, not just at review:
-
-- **The v1 ingest contract is frozen.** Never change the shape of `/api/apple/batch`, `/api/apple/status`, or `/api/health`, or their OpenAPI lock. New client-facing surfaces go under `/api/v2/`. (See the [v1 Apple contract](../api/v1-apple-contract.md).)
-- **DB access lives only in `packages/py/storage/`.** Nothing else imports `sqlalchemy`.
-- **The two brains stay separate.** The statistical engine computes findings (pure — no DB, no HTTP); the LLM narrator only narrates them.
-- **Raw health rows never leave the host.** Cloud egress carries only derived findings/aggregates, opt-in.
-
-Adding a `/api/v2/*` route changes the OpenAPI snapshot — regenerate the lock and confirm the diff is **v2-only** (no v1 drift). Full rationale and the per-rule guard tests are in [`CONTRIBUTING.md`](../../CONTRIBUTING.md) (and the repo's `AGENTS.md` / `CLAUDE.md`).
-
-## Running the stack while you develop
-
-To bring the full stack up locally (TimescaleDB on 5432, FastAPI on 8000, Grafana on 3000):
+Faster inner-loop checks:
 
 ```bash
-cp .env.example .env   # set DB_PASSWORD and GRAFANA_PASSWORD
+make lint
+make test
+make web-test
+make web-typecheck
+make e2e
+```
+
+Lower-level CI-equivalent commands:
+
+```bash
+uv run --extra dev python -m ruff format --check .
+uv run --extra dev python -m ruff check .
+uv run --extra dev python -m pytest -q
+docker build -t healthsave-observatory-dev .
+```
+
+The unit test suite runs without a live database; async sessions are mocked, so `make test` works on a clean checkout. Run `make format` to apply ruff formatting and safe fixes before committing.
+
+## Running The Stack
+
+Use the CLI for the full local stack:
+
+```bash
+./healthsave setup basic
+./healthsave doctor
+./healthsave status
+```
+
+Default layers are TimescaleDB, migrations, API, worker, Observatory web, and Grafana. See the complete layer map:
+
+```bash
+./healthsave layers
+```
+
+Manual compose still works if you need it:
+
+```bash
+cp .env.example .env
+# Set DB_PASSWORD and GRAFANA_PASSWORD.
+cp config.yaml.example config.yaml
 docker compose up -d
 ```
 
-`./setup.sh` is the easier path — it generates the passwords for you. For deployment specifics, see [Deployment](../operations/deployment.md).
+For deployment specifics, see [Deployment](../operations/deployment.md).
+
+## CI
+
+GitHub Actions runs formatting, linting, tests, Docker build, TypeScript checks, web checks, and E2E on pushes and pull requests. Keep `./healthsave verify` green before opening a PR.
+
+## Architecture Boundaries
+
+These rules keep the architecture honest and are enforced by tests:
+
+- **The v1 ingest contract is frozen.** Do not change `/api/apple/batch`, `/api/apple/status`, `/api/health`, or the v1 OpenAPI lock. New client-facing surfaces go under `/api/v2/`.
+- **DB access lives only in `packages/py/storage/`.** Nothing else imports `sqlalchemy`.
+- **The two brains stay separate.** The statistical engine computes findings; the LLM narrator only narrates them.
+- **Raw health rows never leave host.** Cloud egress carries only derived findings or aggregates, and only when explicitly enabled.
+
+Adding a `/api/v2/*` route changes OpenAPI snapshots. Regenerate the lock and confirm the diff is v2-only. Full rationale lives in [`CONTRIBUTING.md`](../../CONTRIBUTING.md), repo `AGENTS.md`, and `CLAUDE.md`.
 
 ## Related
 
-- [`CONTRIBUTING.md`](../../CONTRIBUTING.md) — DCO, boundaries, PR workflow
-- [Storage backends](storage-backends.md) — the pluggable ingest layer and how to write your own
-- [`API_REFERENCE.md`](../../API_REFERENCE.md) — payload-level API reference
+- [`CONTRIBUTING.md`](../../CONTRIBUTING.md) - DCO, boundaries, PR workflow
+- [Storage backends](storage-backends.md) - pluggable ingest layer
+- [`API_REFERENCE.md`](../../API_REFERENCE.md) - payload-level API reference
