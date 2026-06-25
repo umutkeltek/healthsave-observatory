@@ -9,9 +9,6 @@ control, Grafana/web/MQTT logic, and verification stay in the checkout-local
 ## npm / npx
 
 Implemented in this repo under `packages/npm/healthsave-observatory`.
-In the local HealthSave product workspace, that path is
-`datahub/packages/npm/healthsave-observatory` because `datahub/` is the
-Observatory repository.
 
 Public flow after the npm package is published:
 
@@ -52,12 +49,7 @@ npm pack --dry-run
 Publish checklist:
 
 ```bash
-# From the HealthSave product workspace:
-cd datahub/packages/npm/healthsave-observatory
-
-# From a standalone healthsave-observatory checkout:
-# cd packages/npm/healthsave-observatory
-
+cd packages/npm/healthsave-observatory
 npm login
 npm publish --access public
 npm view healthsave name version
