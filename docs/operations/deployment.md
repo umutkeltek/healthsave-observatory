@@ -6,7 +6,7 @@ HealthSave Observatory is a Docker Compose stack. It can run on a laptop, NUC, M
 
 - macOS: Docker Desktop.
 - Linux: Docker Engine or Docker Desktop.
-- WSL2: Docker Desktop with WSL integration enabled.
+- WSL2: Docker Desktop WSL integration enabled.
 - Native Windows: use WSL2 today.
 - Termux: not supported because Docker Compose is required.
 
@@ -21,8 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/m
 Package-manager path:
 
 ```bash
-npm i -g healthsave
-healthsave onboard
+npm i -g healthsave && healthsave onboard
 ```
 
 No global install:
@@ -48,33 +47,29 @@ Advanced setup adds guided choices for database password, Grafana password, API 
 ## Manual Checkout
 
 ```bash
-git clone https://github.com/umutkeltek/healthsave-observatory.git
-cd healthsave-observatory
-./healthsave onboard
+git clone https://github.com/umutkeltek/healthsave-observatory.git && cd healthsave-observatory && ./healthsave onboard
 ```
 
-`./setup.sh` remains a compatibility wrapper. New docs and agent instructions should use `healthsave onboard` for humans and named `healthsave ...` commands for automation.
+`./setup.sh` remains a compatibility wrapper. Public docs and agent instructions should use `healthsave onboard` for humans and named `healthsave ...` commands for automation.
 
 ## Manual Compose
 
 If you do not want guided setup:
 
 ```bash
-cp .env.example .env
-cp config.yaml.example config.yaml
-docker compose up -d
+cp .env.example .env && cp config.yaml.example config.yaml && docker compose up -d
 ```
 
-Edit `.env` first and set at least `DB_PASSWORD` and `GRAFANA_PASSWORD`. HealthSave does not ship guessable production defaults for those secrets.
+Edit `.env` first and set at least `DB_PASSWORD` and `GRAFANA_PASSWORD`. HealthSave does not ship guessable production default secrets.
 
-Database, Grafana, and Observatory web bind loopback by default where applicable. To reach web or Grafana from another device on your LAN, set the bind addresses deliberately:
+Database, Grafana, and Observatory web bind to loopback by default where applicable. To reach web or Grafana from another device on your LAN, set bind addresses deliberately:
 
 ```bash
 GRAFANA_BIND=0.0.0.0
 WEB_BIND=0.0.0.0
 ```
 
-Do not expose plain HTTP directly to the internet. For remote access, put the API, Observatory web, and Grafana behind HTTPS and deliberate auth; see [Reverse proxy](reverse-proxy.md).
+Do not expose plain HTTP directly to the internet. For remote access, put the API, Observatory web, and Grafana behind HTTPS with deliberate auth; see [Reverse proxy](reverse-proxy.md).
 
 ## Optional Local AI
 
@@ -90,11 +85,11 @@ Manual path:
 cp docker-compose.override.yml.example docker-compose.override.yml
 ```
 
-Then edit `.env` and `config.yaml` for `OLLAMA_MODEL` and analysis settings. See [Local LLM](local-llm.md) for model sizing by RAM/GPU.
+Then edit `.env`, `config.yaml`, `OLLAMA_MODEL`, and analysis settings. See [Local LLM](local-llm.md) for model sizing by RAM/GPU.
 
 ## Proxmox, NAS, Homelab
 
-For first install, use a small Debian 12 or Ubuntu 22.04+ VM. A reasonable baseline is 2 vCPU and 4 GB RAM for ingest, TimescaleDB, API, web, and Grafana. Add RAM/GPU only if you want local AI briefing.
+For a first install, use a small Debian 12 or Ubuntu 22.04+ VM. A reasonable baseline is 2 vCPU and 4 GB RAM for ingest, TimescaleDB, API, web, and Grafana. Add RAM/GPU only if you want local AI briefing.
 
 Docker-capable LXC can work, but Docker-in-LXC often needs privileged container settings. A VM is simpler for most users.
 

@@ -19,12 +19,12 @@ print_cli_usage() {
 HealthSave Observatory CLI
 
 Run from this checkout with ./healthsave, or install a global command with:
-healthsave install-cli
+  healthsave install-cli
 
 Examples:
   healthsave
   healthsave onboard
-  healthsave tui
+  healthsave version
   healthsave setup basic
   healthsave setup advanced
   healthsave doctor
@@ -33,29 +33,33 @@ Examples:
   healthsave status
   healthsave logs web
   healthsave install-cli
+  healthsave uninstall-cli
 
-Usage: healthsave <command> [args]
-       healthsave [global flags] <command> [args]
+Usage:
+  healthsave <command> [args]
+  healthsave [global flags] <command> [args]
 
 Commands:
-  onboard                      Open guided installer/control center
-  tui, menu                    Open arrow-key control center
-  setup [basic|advanced]       Install or update HealthSave Observatory
-  install [basic|advanced]     Alias for setup
-  install-cli                  Install this checkout's healthsave command on PATH
-  layers                       Explain API, DB, worker, web, Grafana, AI layers
-  doctor                       Check platform, config, services, and URLs
-  verify                       Run lint, tests, TS/web checks, Docker E2E
-  status                       Show layer-aware Docker Compose service status
-  logs [layer|service]         Show recent Docker Compose logs
-  up [flags]                   Start the stack
-  down                         Stop the stack
-  help                         Show help
+  onboard                   Open guided installer/control center
+  tui, menu                 Open arrow-key control center
+  setup [basic|advanced]    Install or update HealthSave Observatory
+  install [basic|advanced]  Alias for setup
+  install-cli               Install this checkout's healthsave command on PATH
+  uninstall-cli             Remove this checkout's healthsave command from PATH
+  version                   Print CLI version
+  layers                    Explain API, DB, worker, web, Grafana, AI layers
+  doctor                    Check platform, config, services, and URLs
+  verify                    Run lint, tests, TS/web checks, Docker E2E
+  status                    Show layer-aware Docker Compose service status
+  logs [layer|service]      Show recent Docker Compose logs
+  up [flags]                Start stack
+  down                      Stop stack
+  help                      Show help
 
 Global flags:
-  -h, --help                   Show help
-  --version                    Print CLI version
-  --json                       Machine-readable output for doctor/status/layers
+  -h, --help                Show help
+  --version                 Print CLI version
+  --json                    Machine-readable output for doctor/status/layers
 
 Run `healthsave setup --help` for Basic vs Advanced setup options.
 Run `healthsave logs --help` for layer aliases.
@@ -76,19 +80,19 @@ Usage:
   healthsave setup [basic|advanced] [flags]
 
 Modes:
-  basic       Recommended. Generate safe local defaults, skip AI questions,
-              start DB, API, worker, Observatory web, and Grafana.
-  advanced    Guided setup. Choose passwords, API key, local AI/Ollama,
-              and model. Existing .env and config.yaml are preserved.
+  basic     Recommended. Generate safe local defaults, skip AI questions,
+            then start DB, API, worker, Observatory web, and Grafana.
+  advanced  Guided setup. Choose passwords, API key, local AI/Ollama,
+            and model. Existing .env and config.yaml are preserved.
 
 Flags:
-  --dry-run   Preview what would happen; do not write files or start Docker.
-  --no-input  Never prompt. Works with `setup basic`; advanced requires prompts.
-  -h, --help  Show help
+  --dry-run  Preview what would happen; do not write files or start Docker.
+  --no-input Never prompt. Works for `setup basic`; advanced requires prompts.
+  -h, --help Show help
 
 Platform:
   macOS and Linux run natively. On Windows, use WSL2 with Docker Desktop
-  integration enabled, then run this CLI inside the WSL2 shell.
+  integration enabled, then run this CLI inside a WSL2 shell.
 EOF
 }
 
@@ -107,21 +111,21 @@ Usage:
   healthsave logs [layer|service] [docker compose logs flags]
 
 Layer aliases:
-  database, db             -> db
-  migrations, migrate      -> migrate
-  api                      -> api
-  worker, jobs             -> worker
-  web, frontend, obs       -> web
-  grafana                  -> grafana
-  ai, local-ai, ollama     -> ollama
-  agents, agent            -> agents
-  mqtt, mosquitto          -> mqtt
-  ha, home-assistant       -> homeassistant-mqtt
+  database, db          -> db
+  migrations, migrate   -> migrate
+  api                   -> api
+  worker, jobs          -> worker
+  web, frontend, obs    -> web
+  grafana               -> grafana
+  ai, local-ai, ollama  -> ollama
+  agents, agent         -> agents
+  mqtt, mosquitto       -> mqtt
+  ha, home-assistant    -> homeassistant-mqtt
 EOF
 }
 
 print_up_usage() {
-  cat <<'EOF'
+    cat <<'EOF'
 HealthSave up
 
 Examples:
@@ -133,37 +137,37 @@ Usage:
   healthsave up [flags]
 
 Flags:
-  --ai, --local-ai     Include the local-ai profile (Ollama sidecar)
-  --agents             Include the agents profile
-  --mqtt               Include the mosquitto profile
-  --home-assistant     Include the Home Assistant MQTT bridge profile
-  --all-optional       Include all optional profiles
-  -h, --help           Show help
+  --ai, --local-ai  Include local-ai profile (Ollama sidecar)
+  --agents          Include agents profile
+  --mqtt            Include mosquitto profile
+  --home-assistant  Include Home Assistant MQTT bridge profile
+  --all-optional    Include all optional profiles
+  -h, --help        Show help
 EOF
 }
 
 print_verify_usage() {
-  cat <<'EOF'
+    cat <<'EOF'
 HealthSave verify
 
-Runs the local verification gate:
-1. shell syntax, shellcheck, and formatting/lint checks
+Runs local verification gate:
+1. shell syntax, shellcheck, formatting/lint checks
 2. Python tests
 3. generated TypeScript client check
 4. TypeScript typecheck
-5. Observatory web tests and typecheck
+5. Observatory web tests typecheck
 6. Docker E2E stack boot and API readiness test
 
 Usage:
   healthsave verify
   healthsave verify --help
 
-Use this before a release or after changing setup, Docker, API, worker, or web code.
+Use before a release after changing setup, Docker, API, worker, or web code.
 EOF
 }
 
 print_install_cli_usage() {
-  cat <<'EOF'
+    cat <<'EOF'
 HealthSave install-cli
 
 Examples:
@@ -175,14 +179,38 @@ Usage:
   healthsave install-cli [flags]
 
 Flags:
-  --bin-dir DIR   Install wrapper here (default: ~/.local/bin)
-  --name NAME     Command name (default: healthsave)
-  --force         Replace an existing command at the target path
-  --dry-run       Show what would be installed
-  -h, --help      Show help
+  --bin-dir DIR  Install wrapper (default: ~/.local/bin)
+  --name NAME    Command name (default: healthsave)
+  --force        Replace existing command at target path
+  --dry-run      Show what would be installed
+  -h, --help     Show help
 
 This installs a small wrapper that runs this checkout's ./healthsave from any
-directory. It does not require npm, npx, Homebrew, sudo, or a published package.
+other directory. It does not require npm, npx, Homebrew, sudo, or a published package.
+EOF
+}
+
+print_uninstall_cli_usage() {
+    cat <<'EOF'
+HealthSave uninstall-cli
+
+Examples:
+  healthsave uninstall-cli
+  healthsave uninstall-cli --dry-run
+  healthsave uninstall-cli --name healthsave-observatory
+
+Usage:
+  healthsave uninstall-cli [flags]
+
+Flags:
+  --bin-dir DIR  Remove wrapper from directory (default: ~/.local/bin)
+  --name NAME    Command name (default: healthsave)
+  --force        Remove target even if it does not look like this checkout's wrapper
+  --dry-run      Show what would be removed
+  -h, --help     Show help
+
+Only removes wrapper scripts created by this checkout's install-cli command.
+Use `npm uninstall -g healthsave` to remove the npm package.
 EOF
 }
 
@@ -1135,6 +1163,69 @@ cmd_install_cli() {
     fi
 }
 
+cmd_uninstall_cli() {
+    local bin_dir="${HOME}/.local/bin"
+    local name="healthsave"
+    local force=0
+    local dry_run=0
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --bin-dir)
+                shift
+                if [ "$#" -eq 0 ]; then
+                    log_error "--bin-dir needs a value"
+                    exit 2
+                fi
+                bin_dir="$1"
+                ;;
+            --name)
+                shift
+                if [ "$#" -eq 0 ]; then
+                    log_error "--name needs a value"
+                    exit 2
+                fi
+                name="$1"
+                ;;
+            --force)
+                force=1
+                ;;
+            --dry-run)
+                dry_run=1
+                ;;
+            -h|--help)
+                print_uninstall_cli_usage
+                return 0
+                ;;
+            *)
+                log_error "Unknown uninstall-cli flag: $1"
+                print_uninstall_cli_usage
+                exit 2
+                ;;
+        esac
+        shift
+    done
+
+    local target="${bin_dir}/${name}"
+    if [ "$dry_run" = "1" ]; then
+        echo "Would remove wrapper: ${target}"
+        return 0
+    fi
+
+    if [ ! -e "$target" ]; then
+        log_warn "${target} does not exist."
+        return 0
+    fi
+
+    if [ "$force" != "1" ] && ! grep -F "$CLI_DIR/healthsave" "$target" >/dev/null 2>&1; then
+        log_error "${target} does not look like a wrapper created by this checkout. Use --force to remove it anyway."
+        exit 1
+    fi
+
+    rm -f "$target"
+    log_ok "Removed ${target}"
+}
+
 TUI_CURSOR_HIDDEN=0
 TUI_CHOICE=0
 
@@ -1419,18 +1510,20 @@ cmd_menu() {
         tui_select "Control Center" \
             "Setup HealthSave Observatory" \
             "Control stack and optional layers" \
-            "Diagnose and verify" \
-            "Logs" \
-            "Install CLI on PATH" \
-            "Quit"
+"Diagnose and verify" \
+"Logs" \
+"Install CLI on PATH" \
+"Uninstall CLI wrapper" \
+"Quit"
         choice="$TUI_CHOICE"
         case "$choice" in
             0) tui_setup_menu ;;
             1) tui_stack_menu ;;
-            2) tui_diagnose_menu ;;
-            3) tui_logs_menu ;;
-            4) tui_run cmd_install_cli ;;
-            *) tui_show_cursor; tui_clear; return 0 ;;
+2) tui_diagnose_menu ;;
+3) tui_logs_menu ;;
+4) tui_run cmd_install_cli ;;
+5) tui_run cmd_uninstall_cli ;;
+*) tui_show_cursor; tui_clear; return 0 ;;
         esac
     done
 }
@@ -1464,6 +1557,9 @@ cmd="$1"
 shift
 
 case "$cmd" in
+    version)
+        printf 'healthsave %s\n' "$VERSION"
+        ;;
     onboard|tui|menu)
         if [ "$json_mode" = "1" ]; then
             log_error "--json is not supported for onboard/tui."
@@ -1484,6 +1580,13 @@ case "$cmd" in
             exit 2
         fi
         cmd_install_cli "$@"
+        ;;
+    uninstall-cli)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for uninstall-cli."
+            exit 2
+        fi
+        cmd_uninstall_cli "$@"
         ;;
     layers)
         if [ "${1:-}" = "--json" ]; then

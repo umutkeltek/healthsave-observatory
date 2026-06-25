@@ -17,8 +17,7 @@ This guide takes a clean machine from no checkout to a running HealthSave Observ
 Recommended when Node.js is available:
 
 ```bash
-npm i -g healthsave
-healthsave onboard
+npm i -g healthsave && healthsave onboard
 ```
 
 No global install:
@@ -58,7 +57,7 @@ Default services:
 | Database | `db` | TimescaleDB canonical health record | `127.0.0.1:5432` |
 | Migrations | `migrate` | Schema migration job | n/a |
 | API | `api` | FastAPI ingest/read API | `http://localhost:8000` |
-| Worker | `worker` | Findings, summaries, recovery jobs | n/a |
+| Worker | `worker` | Findings, summaries, and recovery jobs | n/a |
 | Observatory web | `web` | Primary product surface | `http://localhost:4173` |
 | Grafana | `grafana` | Power-user dashboard | `http://localhost:3000` |
 
@@ -74,9 +73,7 @@ Optional layers:
 ## 4. Verify Local Health
 
 ```bash
-healthsave doctor
-healthsave status
-healthsave layers
+healthsave doctor && healthsave status && healthsave layers
 ```
 
 Expected local URLs:
@@ -117,7 +114,7 @@ Use [Grafana](surfaces/grafana.md) for raw SQL-backed chart exploration:
 http://localhost:3000
 ```
 
-The web app explains what changed, which data exists, and where it came from. Grafana serves power users, custom dashboards, and debugging. See [Web vs Grafana](surfaces/web-vs-grafana.md).
+The web app explains what changed, what data exists, and where it came from. Grafana serves power users, custom dashboards, and debugging. See [Web vs Grafana](surfaces/web-vs-grafana.md).
 
 ## 7. Optional Local AI
 
@@ -134,9 +131,7 @@ Advanced setup detects RAM/GPU, recommends an Ollama model, starts the local AI 
 If you already run an MQTT broker:
 
 ```bash
-HA_MQTT_ENABLED=true \
-HA_MQTT_BROKER=<your-mqtt-host> \
-healthsave up --home-assistant
+HA_MQTT_ENABLED=true HA_MQTT_BROKER=<your-mqtt-host> healthsave up --home-assistant
 ```
 
 If you want HealthSave to run a bundled broker too:
@@ -152,23 +147,17 @@ The bridge publishes MQTT discovery and state topics so Home Assistant can creat
 Agents and CI should use scriptable commands instead of the TUI:
 
 ```bash
-healthsave setup basic --no-input
-healthsave doctor --json
-healthsave status --json
-healthsave layers --json
-healthsave logs api
+healthsave setup basic --no-input && healthsave doctor --json && healthsave status --json && healthsave layers --json && healthsave logs api
 ```
 
-For a fresh machine without global install, `npx --yes healthsave setup basic --no-input` is available, but it is an automation command, not the main human install path.
+Fresh machines without a global install can use `npx --yes healthsave setup basic --no-input`. That is an automation command, not the main human install path.
 
 ## 10. Manual Checkout
 
 Use this when npm is unavailable or you want to inspect the checkout first:
 
 ```bash
-git clone https://github.com/umutkeltek/healthsave-observatory.git
-cd healthsave-observatory
-./healthsave onboard
+git clone https://github.com/umutkeltek/healthsave-observatory.git && cd healthsave-observatory && ./healthsave onboard
 ```
 
 `./healthsave` is the repo-local launcher. The installed command is `healthsave`.
@@ -176,14 +165,11 @@ cd healthsave-observatory
 ## 11. Stop Or Inspect
 
 ```bash
-healthsave logs api
-healthsave logs web
-healthsave down
+healthsave logs api && healthsave logs web && healthsave down
 ```
 
 If anything fails, start with:
 
 ```bash
-healthsave doctor
-healthsave logs <layer>
+healthsave doctor && healthsave logs <layer>
 ```

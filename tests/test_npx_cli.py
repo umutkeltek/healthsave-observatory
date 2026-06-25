@@ -41,13 +41,28 @@ def test_node_cli_help_explains_onboard_flow() -> None:
         check=True,
     )
 
-    assert "npm i -g healthsave" in proc.stdout
-    assert "healthsave onboard" in proc.stdout
+    assert "npm i -g healthsave && healthsave onboard" in proc.stdout
     assert "npx healthsave" in proc.stdout
     assert "healthsave tui" in proc.stdout
     assert "healthsave init" in proc.stdout
+    assert "healthsave version" in proc.stdout
     assert "healthsave-observatory is installed by the same npm package" in proc.stdout
     assert "--dir DIR" in proc.stdout
+
+
+def test_node_cli_version_command() -> None:
+    _require_node()
+
+    proc = subprocess.run(
+        ["node", str(BIN), "version"],
+        cwd="/tmp",
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=True,
+    )
+
+    assert proc.stdout.strip() == "healthsave 0.1.2"
 
 
 def test_node_cli_init_dry_run_is_non_mutating(tmp_path: Path) -> None:
@@ -126,7 +141,7 @@ def test_npm_exec_runs_packaged_healthsave_bin() -> None:
         check=True,
     )
 
-    assert proc.stdout.strip() == "healthsave 0.1.1"
+    assert proc.stdout.strip() == "healthsave 0.1.2"
 
 
 def test_npx_package_delegates_to_existing_checkout_layers_json() -> None:
@@ -237,4 +252,32 @@ def test_node_cli_delegates_onboard_command(tmp_path: Path) -> None:
 
     assert (stack / "delegated-args.txt").read_text(encoding="utf-8").splitlines() == [
         "onboard",
+    ]
+
+
+def test_node_cli_delegates_uninstall_cli_command(tmp_path: Path) -> None:
+    _require_node()
+
+    stack = tmp_path / "stack"
+    stack.mkdir()
+    (stack / "setup.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    (stack / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+    healthsave = stack / "healthsave"
+    healthsave.write_text(
+        "#!/usr/bin/env bash\nprintf '%s\\n' \"$@\" > delegated-args.txt\n",
+        encoding="utf-8",
+    )
+    healthsave.chmod(healthsave.stat().st_mode | stat.S_IXUSR)
+
+    subprocess.run(
+        ["node", str(BIN), "uninstall-cli", "--dir", str(stack)],
+        cwd="/tmp",
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=True,
+    )
+
+    assert (stack / "delegated-args.txt").read_text(encoding="utf-8").splitlines() == [
+        "uninstall-cli",
     ]

@@ -22,11 +22,7 @@ Home Assistant does not need database credentials. The HealthSave bridge reads t
 Use this when you already run Mosquitto, EMQX, Home Assistant's MQTT add-on, or another broker:
 
 ```bash
-HA_MQTT_ENABLED=true \
-HA_MQTT_BROKER=<your-mqtt-host> \
-HA_MQTT_USERNAME=<optional-user> \
-HA_MQTT_PASSWORD=<optional-password> \
-healthsave up --home-assistant
+HA_MQTT_ENABLED=true HA_MQTT_BROKER=<your-mqtt-host> HA_MQTT_USERNAME=<optional-user> HA_MQTT_PASSWORD=<optional-password> healthsave up --home-assistant
 ```
 
 Bridge service: `homeassistant-mqtt`.
@@ -120,7 +116,7 @@ Example files:
 - `integrations/home-assistant/nervous-system-core-package.yaml`
 - `integrations/home-assistant/dashboards/nervous-system-core.raw-lovelace.json`
 
-The example dashboard shows HRV against 7-day baseline, derived recovery/readiness signals, recent sleep, resting HR, SpO2, and source attribution.
+The example dashboard shows HRV against a 7-day baseline, derived recovery/readiness signals, recent sleep, resting HR, SpO2, and source attribution.
 
 Example automations are disabled by default. Edit entity IDs such as `light.your_room_light`, review thresholds, and enable them manually.
 

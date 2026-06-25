@@ -44,11 +44,27 @@ def test_healthsave_help_works_from_other_directory() -> None:
         check=True,
     )
 
-    assert "Usage: healthsave <command>" in proc.stdout
+    assert "Run from this checkout with ./healthsave" in proc.stdout
+    assert "Usage:\n  healthsave <command>" in proc.stdout
     assert "setup" in proc.stdout
     assert "onboard" in proc.stdout
     assert "doctor" in proc.stdout
     assert "verify" in proc.stdout
+    assert "version" in proc.stdout
+    assert "uninstall-cli" in proc.stdout
+
+
+def test_healthsave_version_command() -> None:
+    proc = subprocess.run(
+        [str(CLI), "version"],
+        cwd="/tmp",
+        text=True,
+        capture_output=True,
+        timeout=2,
+        check=True,
+    )
+
+    assert proc.stdout.strip() == "healthsave 0.3.0"
 
 
 def test_healthsave_bare_command_opens_interactive_menu() -> None:
@@ -251,6 +267,52 @@ def test_healthsave_install_cli_dry_run_is_discoverable() -> None:
     assert str(CLI) in proc.stdout
 
 
+def test_healthsave_install_and_uninstall_cli_wrapper(tmp_path: Path) -> None:
+    proc = subprocess.run(
+        [str(CLI), "install-cli", "--bin-dir", str(tmp_path), "--name", "healthsave-test"],
+        cwd="/tmp",
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=True,
+    )
+
+    wrapper = tmp_path / "healthsave-test"
+    assert "Installed healthsave-test" in proc.stdout
+    assert wrapper.exists()
+    assert str(CLI) in wrapper.read_text(encoding="utf-8")
+
+    proc = subprocess.run(
+        [str(CLI), "uninstall-cli", "--bin-dir", str(tmp_path), "--name", "healthsave-test"],
+        cwd="/tmp",
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=True,
+    )
+
+    assert "Removed" in proc.stdout
+    assert not wrapper.exists()
+
+
+def test_healthsave_uninstall_cli_refuses_unrelated_file(tmp_path: Path) -> None:
+    wrapper = tmp_path / "healthsave"
+    wrapper.write_text("#!/usr/bin/env bash\necho unrelated\n", encoding="utf-8")
+    wrapper.chmod(0o755)
+
+    proc = subprocess.run(
+        [str(CLI), "uninstall-cli", "--bin-dir", str(tmp_path)],
+        cwd="/tmp",
+        text=True,
+        capture_output=True,
+        timeout=5,
+    )
+
+    assert proc.returncode == 1
+    assert "does not look like a wrapper" in proc.stderr
+    assert wrapper.exists()
+
+
 def test_healthsave_unknown_command_exits_with_help() -> None:
     proc = subprocess.run(
         [str(CLI), "wat"],
@@ -262,4 +324,4 @@ def test_healthsave_unknown_command_exits_with_help() -> None:
 
     assert proc.returncode == 2
     assert "Unknown command: wat" in proc.stderr
-    assert "Usage: healthsave <command>" in proc.stdout
+    assert "Usage:\n  healthsave <command>" in proc.stdout
