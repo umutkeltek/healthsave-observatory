@@ -1,4 +1,11 @@
-.PHONY: help setup regen-lock check-lock regen-v2-schemas check-v2-schemas regen-ts-client check-ts-client typecheck-ts regen-response-corpus check-response-corpus test e2e lint format doctor compose-up compose-down
+PYTHON ?= uv run --extra dev python
+E2E_DB_PASSWORD ?= healthsave-e2e
+E2E_GRAFANA_PASSWORD ?= healthsave-e2e
+E2E_API_PORT ?= 18000
+E2E_DB_HOST_PORT ?= 25434
+E2E_COMPOSE_ENV = COMPOSE_FILE=docker-compose.yml DB_PASSWORD=$(E2E_DB_PASSWORD) GRAFANA_PASSWORD=$(E2E_GRAFANA_PASSWORD) API_HOST_PORT=$(E2E_API_PORT) DB_HOST_PORT=$(E2E_DB_HOST_PORT)
+
+.PHONY: help setup install-cli regen-lock check-lock regen-v2-schemas check-v2-schemas regen-ts-client check-ts-client typecheck-ts web-test web-typecheck regen-response-corpus check-response-corpus test e2e lint format verify-local doctor compose-up compose-down
 
 help:
 	@echo "Targets:"
@@ -10,13 +17,17 @@ help:
 	@echo "  regen-ts-client    Regenerate packages/ts/api-client/src/v[12].ts from the v1 lock + v2 bundle"
 	@echo "  check-ts-client    Verify TS client generated files match committed (no drift)"
 	@echo "  typecheck-ts       Run tsc --noEmit on the api-client package"
+	@echo "  web-test           Run Observatory web Bun tests"
+	@echo "  web-typecheck      Run Observatory web TypeScript check"
 	@echo "  regen-response-corpus  Regenerate tests/fixtures/apple_healthsave_responses/ (iOS response corpus)"
 	@echo "  check-response-corpus  Verify the iOS response corpus matches the live handlers (no drift)"
 	@echo "  test               Run the full pytest suite"
 	@echo "  e2e                Boot an ephemeral compose stack and run the e2e suite"
 	@echo "  lint               ruff check + ruff format --check"
 	@echo "  format             ruff format (writes)"
+	@echo "  verify-local       Run lint, tests, TS/web checks, and Docker compose E2E"
 	@echo "  doctor             Run post-install stack health checks"
+	@echo "  install-cli        Install healthsave command wrapper into ~/.local/bin"
 	@echo "  compose-up         docker compose up -d"
 	@echo "  compose-down       docker compose down"
 
@@ -31,7 +42,7 @@ regen-lock:
 	@git diff --stat contracts/openapi/v1.locked.json || true
 
 check-lock:
-	@python3 -m scripts.generate_v1_lock --check
+	@$(PYTHON) -m scripts.generate_v1_lock --check
 
 regen-v2-schemas:
 	@echo "Building Docker image (pinned FastAPI/Pydantic/Python)..."
@@ -46,7 +57,7 @@ regen-v2-schemas:
 	@git diff --stat contracts/json-schema/ || true
 
 check-v2-schemas:
-	@python3 -m scripts.generate_v2_schemas --check
+	@$(PYTHON) -m scripts.generate_v2_schemas --check
 
 regen-ts-client:
 	@cd packages/ts/api-client && bun run generate
@@ -57,41 +68,61 @@ check-ts-client:
 typecheck-ts:
 	@cd packages/ts/api-client && bun run typecheck
 
+web-test:
+	@cd apps/web && bun run test
+
+web-typecheck:
+	@cd apps/web && bun run typecheck
+
 regen-response-corpus:
-	@python3 -m scripts.generate_ios_response_corpus
+	@$(PYTHON) -m scripts.generate_ios_response_corpus
 	@echo "Mirror to the iOS repo and re-run its BackendResponseCorpusTests:"
 	@echo "  cp tests/fixtures/apple_healthsave_responses/*.json ../ios_app/Tests/HealthSyncTests/Fixtures/Responses/"
 
 check-response-corpus:
-	@python3 -m scripts.generate_ios_response_corpus --check
+	@$(PYTHON) -m scripts.generate_ios_response_corpus --check
 
 test:
-	@python3 -m pytest -q
+	@$(PYTHON) -m pytest -q
 
 # Black-box end-to-end: boot an isolated compose stack (own project + volume),
 # replay the golden iOS batches through it, assert v1 + v2 read surfaces, then
 # tear it down. Self-cleaning; preserves the pytest exit code.
 e2e:
 	@echo "Booting ephemeral e2e stack (project hdh-e2e)..."
-	@docker compose -p hdh-e2e up -d --build db migrate api
+	@$(E2E_COMPOSE_ENV) docker compose -p hdh-e2e up -d --build db migrate api
 	@echo "Waiting for api readiness..."
-	@for i in $$(seq 1 60); do curl -fsS http://localhost:8000/ready >/dev/null 2>&1 && break || sleep 2; done
-	@E2E_BASE_URL=http://localhost:8000 python3 -m pytest -m e2e -q tests/e2e; rc=$$?; \
-		docker compose -p hdh-e2e down -v >/dev/null 2>&1; exit $$rc
+	@ready=0; for i in $$(seq 1 60); do \
+		if curl -fsS http://localhost:$(E2E_API_PORT)/ready >/dev/null 2>&1; then ready=1; break; fi; \
+		sleep 2; \
+	done; \
+	if [ "$$ready" != "1" ]; then \
+		echo "API did not become ready; recent logs:"; \
+		$(E2E_COMPOSE_ENV) docker compose -p hdh-e2e logs --tail=80 api; \
+		$(E2E_COMPOSE_ENV) docker compose -p hdh-e2e down -v >/dev/null 2>&1; \
+		exit 1; \
+	fi
+	@E2E_BASE_URL=http://localhost:$(E2E_API_PORT) $(PYTHON) -m pytest -m e2e -q tests/e2e; rc=$$?; \
+		$(E2E_COMPOSE_ENV) docker compose -p hdh-e2e down -v >/dev/null 2>&1; exit $$rc
 
 lint:
-	@python3 -m ruff format --check .
-	@python3 -m ruff check .
+	@$(PYTHON) -m ruff format --check .
+	@$(PYTHON) -m ruff check .
 
 format:
-	@python3 -m ruff format .
-	@python3 -m ruff check --fix .
+	@$(PYTHON) -m ruff format .
+	@$(PYTHON) -m ruff check --fix .
+
+verify-local: lint test check-ts-client typecheck-ts web-test web-typecheck e2e
 
 doctor:
-	@./setup.sh doctor
+	@./healthsave doctor
 
 setup:
-	@./setup.sh
+	@./healthsave setup
+
+install-cli:
+	@./healthsave install-cli
 
 compose-up:
 	@docker compose up -d
