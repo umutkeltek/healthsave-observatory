@@ -5,20 +5,23 @@ import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-const VERSION = "0.1.0";
+const VERSION = "0.1.1";
 const PRIMARY_COMMAND = "healthsave";
 const ALIAS_COMMAND = "healthsave-observatory";
 const DEFAULT_REPO =
   process.env.HEALTHSAVE_OBSERVATORY_REPO ||
   "https://github.com/umutkeltek/healthsave-observatory.git";
+const DEFAULT_HOME = process.env.HOME || process.env.USERPROFILE || process.cwd();
 const DEFAULT_DIR =
   process.env.HEALTHSAVE_OBSERVATORY_HOME ||
-  path.join(process.cwd(), "healthsave-observatory");
+  path.join(DEFAULT_HOME, "healthsave-observatory");
 
 function usage() {
   return `HealthSave CLI
 
 Usage:
+  ${PRIMARY_COMMAND} [dir]
+  ${PRIMARY_COMMAND} onboard [dir]
   ${PRIMARY_COMMAND} tui [dir]
   ${PRIMARY_COMMAND} init [dir] [flags]
   ${PRIMARY_COMMAND} setup [basic|advanced] [dir] [flags]
@@ -31,9 +34,11 @@ Usage:
   ${PRIMARY_COMMAND} verify [dir]
 
 Examples:
-  npx healthsave setup basic ~/healthsave-observatory
+  npm i -g healthsave
+  healthsave onboard
+  npx healthsave
   healthsave doctor
-  healthsave tui
+  healthsave setup basic --no-input
   npx healthsave init /srv/healthsave-observatory
   npx healthsave doctor --dir /srv/healthsave-observatory --json
 
@@ -304,8 +309,19 @@ function commandInit(positionals, options) {
   installWrapper(dir, options);
   if (!options.dryRun) {
     ok(`HealthSave Observatory stack ready at ${dir}`);
-    process.stdout.write(`Next:\n  cd ${dir}\n  ${options.installName} setup basic\n`);
+    process.stdout.write(`Next:\n  cd ${dir}\n  ${options.installName} onboard\n`);
   }
+}
+
+function commandOnboard(positionals, options) {
+  const dir = stackDirFromArgs(["onboard", ...positionals], options, 1);
+  ensureCheckout(dir, options);
+  installWrapper(dir, options, true);
+  if (options.dryRun) {
+    process.stdout.write(`Would open interactive control center: ${options.installName} onboard\n`);
+    return;
+  }
+  delegate(dir, ["onboard"], options);
 }
 
 function commandSetup(positionals, options, passthrough) {
@@ -357,7 +373,7 @@ function commandDelegate(command, positionals, options, passthrough) {
 
 function main() {
   const { options, positionals, passthrough } = parseArgs(process.argv.slice(2));
-  const command = positionals[0] || "help";
+  const command = positionals[0] || "";
 
   if (options.version) {
     process.stdout.write(`${PRIMARY_COMMAND} ${VERSION}\n`);
@@ -369,6 +385,11 @@ function main() {
     return;
   }
 
+  if (!command || looksLikePath(command)) {
+    commandOnboard(positionals, options);
+    return;
+  }
+
   switch (command) {
     case "init":
       commandInit(positionals, options);
@@ -376,6 +397,9 @@ function main() {
     case "setup":
     case "install":
       commandSetup(positionals, options, passthrough);
+      return;
+    case "onboard":
+      commandOnboard(positionals.slice(1), options);
       return;
     case "doctor":
     case "tui":

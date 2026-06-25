@@ -1,120 +1,144 @@
 # CLI Distribution
 
-HealthSave Observatory keeps one command contract: `healthsave`.
+HealthSave has one public command: `healthsave`.
 
-Package managers may bootstrap or install it, but Docker Compose setup, layer
-control, Grafana/web/MQTT logic, and verification stay in the checkout-local
-`./healthsave` CLI.
+Package managers install a thin bootstrapper. Stack operations live in the checkout-local `./healthsave` launcher, so npm, npx, future Homebrew, and manual checkout all delegate to the same setup, layer control, web/Grafana/MQTT logic, doctor checks, logs, and verification.
+
+## Human Commands
+
+Install once:
+
+```bash
+npm i -g healthsave
+healthsave onboard
+```
+
+No global install:
+
+```bash
+npx healthsave
+```
+
+Both commands open the guided onboarding/control center. Users should not need to type a long setup command for the normal path.
 
 ## npm / npx
 
-Implemented in this repo under `packages/npm/healthsave-observatory`.
+Implemented package:
 
-Public flow after the npm package is published:
+- npm package: `healthsave`
+- primary binary: `healthsave`
+- alias binary: `healthsave-observatory`
+- package location: `packages/npm/healthsave-observatory`
+
+The npm bootstrapper:
+
+1. Finds an existing checkout from the current directory upward.
+2. Uses `HEALTHSAVE_OBSERVATORY_HOME` or `~/healthsave-observatory` when no checkout is found.
+3. Clones `https://github.com/umutkeltek/healthsave-observatory.git` when the checkout is missing.
+4. Installs the local wrapper when possible.
+5. Delegates to checkout-local `./healthsave`.
+
+## Scriptable Commands
+
+Agents, CI, and remote automation should use named commands:
 
 ```bash
-npx healthsave setup basic ~/healthsave-observatory
-healthsave doctor
-healthsave tui
+healthsave setup basic --no-input
+healthsave doctor --json
+healthsave status --json
+healthsave layers --json
+healthsave logs api
 ```
 
-Advanced setup:
+No-install automation on a clean machine:
 
 ```bash
-npx healthsave setup advanced ~/healthsave-observatory
+npx --yes healthsave setup basic --no-input
 ```
 
-The npm package name is `healthsave`. It installs two binaries:
+That command belongs in automation docs. It should not be the main human install experience.
 
-- `healthsave` - primary user command.
-- `healthsave-observatory` - longer alias for disambiguation.
+## Local Verification Before npm Publish
 
-The npm package is a thin bootstrapper. It clones or reuses
-`https://github.com/umutkeltek/healthsave-observatory.git`, installs the local
-wrapper when possible, then delegates to the checkout's `./healthsave`.
-
-`healthsave tui` is the interactive human surface. It uses arrow keys and Enter
-for setup, stack control, optional layer toggles, doctor/status, logs,
-verification, and CLI installation. Scriptable subcommands remain the automation
-surface for agents and CI.
-
-Local verification before publish:
+From the repository root:
 
 ```bash
-npm exec --yes --package ./packages/npm/healthsave-observatory -- healthsave --version
-npx --yes --package ./packages/npm/healthsave-observatory healthsave layers --dir "$PWD" --json
+node --check packages/npm/healthsave-observatory/bin/healthsave-observatory.mjs
+uv run --extra dev python -m pytest -q tests/test_npx_cli.py tests/test_healthsave_cli.py
+```
+
+From the npm package directory:
+
+```bash
 npm pack --dry-run
+npm publish --dry-run
+```
+
+Smoke test from outside the repository:
+
+```bash
+npx --yes --package ./packages/npm/healthsave-observatory healthsave --version
 ```
 
 Publish checklist:
 
 ```bash
-cd packages/npm/healthsave-observatory
 npm login
 npm publish --access public
 npm view healthsave name version
 npx --yes healthsave --version
 ```
 
-Do not publish until `./healthsave verify`, package tests, and
-`npm pack --dry-run` pass.
+Before publishing, run the verification suite and scan the diff for secrets.
 
 ## Repo-Local Launcher
 
-Works from a checkout without npm:
+Manual checkout works without npm:
 
 ```bash
 git clone https://github.com/umutkeltek/healthsave-observatory.git
 cd healthsave-observatory
-./healthsave setup basic
-./healthsave doctor
-./healthsave tui
+./healthsave onboard
 ```
 
-`./healthsave` is the same pattern as `./setup.sh`, `./configure`, `./gradlew`,
-or `./mvnw`: a product-owned launcher that works before a global command exists.
+`./healthsave` is the product-owned launcher. Package-manager wrappers call it after they create or find a checkout.
 
-## Local Global Wrapper
+## Local Wrapper
 
-Works after a checkout exists:
+After checkout exists:
 
 ```bash
 ./healthsave install-cli
 healthsave doctor
 ```
 
-This installs a small wrapper into `~/.local/bin` that calls the checkout's
-`./healthsave`. It avoids sudo, Homebrew, and npm global installs.
+This installs a small wrapper into `~/.local/bin` that calls checkout-local `./healthsave`. It avoids sudo and keeps stack operation independent from npm global state.
 
 ## Homebrew
 
-Homebrew is the macOS/Linux package-manager release path after the first GitHub
-release artifact exists. It should install the same bootstrapper or a
-single-file wrapper, not a second setup implementation.
+Homebrew is the planned macOS/Linux package-manager path after tagged GitHub release artifacts exist. The formula should install the same bootstrapper, not a second setup implementation.
 
 Target flow:
 
 ```bash
 brew tap healthsave/observatory
 brew install healthsave
-healthsave setup basic ~/healthsave-observatory
-healthsave doctor
-healthsave tui
+healthsave onboard
 ```
 
 Required before enabling the tap:
 
 - GitHub release tag and tarball checksum.
 - Formula installs `healthsave` and `healthsave-observatory`.
-- `brew test healthsave` runs `healthsave --version` and a dry/read-only command.
+- `brew test healthsave` runs `healthsave --version` and `healthsave --help`.
 - Upgrade behavior preserves existing stack directories.
 
-Formula template lives in `packaging/homebrew/healthsave.rb.template`.
+Formula template: `packaging/homebrew/healthsave.rb.template`.
 
 ## Platform Notes
 
-- macOS: npm/npx, repo-local launcher, local wrapper, and Homebrew are viable.
-- Linux: npm/npx, repo-local launcher, and local wrapper are primary. Homebrew on
-  Linux is optional.
-- Windows: supported path is WSL2 with Docker Desktop WSL integration. Run npm,
-  npx, and `healthsave` inside WSL2, not native PowerShell.
+- macOS: installer, npm/npx, repo-local launcher, local wrapper, and future Homebrew are viable.
+- Linux: installer, npm/npx, repo-local launcher, and local wrapper are primary.
+- WSL2: supported with Docker Desktop WSL integration; run npm/npx and `healthsave` inside WSL2.
+- Native Windows: PowerShell installer is a WSL2 handoff today, not a native Docker Compose install.
+- Termux: unsupported because Docker Compose is required.

@@ -1,53 +1,57 @@
 # Zero To Ready
 
-This guide takes a clean machine from no checkout to a running HealthSave
-Observatory stack that the HealthSave iOS app can sync to.
+This guide takes a clean machine from no checkout to a running HealthSave Observatory stack that the HealthSave iOS app can sync to.
 
-## 1. Choose Platform Path
+## 1. Choose Platform
 
-- **macOS:** install Docker Desktop, start it, and use Terminal.
-- **Linux:** install Docker Engine or Docker Desktop, then use your shell.
-- **Windows:** install Docker Desktop, enable WSL2 integration, and run commands
-  inside a WSL2 Linux shell. Native PowerShell is not the supported install path
-  for the Docker Compose stack.
+| Platform | Use this path |
+|---|---|
+| macOS | Install Docker Desktop, start it, then use Terminal. |
+| Linux | Install Docker Engine or Docker Desktop, then use your shell. |
+| WSL2 | Install Docker Desktop on Windows, enable WSL integration, then run HealthSave commands inside WSL2. |
+| Native Windows | Use the PowerShell installer as a WSL2 handoff. Native Windows Compose install is not supported yet. |
+| Termux | Not supported because Docker Compose is required. |
 
-The recommended install uses `npx`, so the machine needs Node.js 18+ with npm
-and npx. If you do not want Node on the server, use the manual checkout fallback
-in section 9.
+## 2. Open Onboarding
 
-## 2. Install And Start
-
-```bash
-npx healthsave setup basic ~/healthsave-observatory
-healthsave doctor
-healthsave tui
-```
-
-`npx healthsave` clones or reuses the HealthSave Observatory checkout, installs
-the local `healthsave` wrapper when possible, then delegates to the same CLI
-inside the checkout.
-
-Use `healthsave tui` after install for the human control center. It supports
-arrow keys and Enter for setup, stack up/down, optional layer toggles,
-doctor/status, logs, verification, and CLI installation. Agents and automation
-should use the named subcommands shown in this guide.
-
-Choose one setup mode:
-
-- **Basic setup:** best first run. Generates local passwords, writes `.env`,
-  creates `config.yaml`, skips AI questions, and starts the default stack.
-- **Advanced setup:** guided prompts for passwords, API key, local AI/Ollama,
-  and model choice.
-
-Automation should use:
+Recommended when Node.js is available:
 
 ```bash
-npx healthsave setup basic ~/healthsave-observatory --no-input
+npm i -g healthsave
+healthsave onboard
 ```
 
-## 3. What Starts In Basic Setup
+No global install:
 
-Basic setup starts the default application stack:
+```bash
+npx healthsave
+```
+
+Server or clean-machine installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/install.sh | bash
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/install.ps1 | iex
+```
+
+All paths open the same guided control center. Use arrow keys and Enter. Choose Basic setup for the first run unless you already know you need custom passwords, an API key, local AI, or optional layers.
+
+## 3. Basic Setup
+
+Basic setup:
+
+- Creates or preserves `.env`.
+- Creates or preserves `config.yaml`.
+- Generates database and Grafana passwords when they are missing.
+- Starts the default Docker Compose stack.
+- Leaves local AI, agents, MQTT, and Home Assistant off until you choose them.
+
+Default services:
 
 | Layer | Service | Purpose | URL |
 |---|---|---|---|
@@ -55,19 +59,19 @@ Basic setup starts the default application stack:
 | Migrations | `migrate` | Schema migration job | n/a |
 | API | `api` | FastAPI ingest/read API | `http://localhost:8000` |
 | Worker | `worker` | Findings, summaries, recovery jobs | n/a |
-| Observatory web | `web` | Primary web surface | `http://localhost:4173` |
+| Observatory web | `web` | Primary product surface | `http://localhost:4173` |
 | Grafana | `grafana` | Power-user dashboard | `http://localhost:3000` |
 
-Optional layers are not started by Basic setup:
+Optional layers:
 
-| Layer | Service | Start With |
-|---|---|---|
-| Local AI / Ollama | `ollama` | `healthsave setup advanced` or `healthsave up --ai` |
-| Agents | `agents` | `healthsave up --agents` |
-| MQTT broker | `mqtt` | `healthsave up --mqtt` |
-| Home Assistant bridge | `homeassistant-mqtt` | `healthsave up --home-assistant` |
+| Layer | Start from CLI |
+|---|---|
+| Local AI / Ollama | `healthsave up --ai` |
+| Agents | `healthsave up --agents` |
+| MQTT broker | `healthsave up --mqtt` |
+| Home Assistant bridge | `healthsave up --home-assistant` |
 
-## 4. Verify
+## 4. Verify Local Health
 
 ```bash
 healthsave doctor
@@ -75,67 +79,57 @@ healthsave status
 healthsave layers
 ```
 
-`doctor` checks platform tools, config files, running services, and URLs.
-`status` shows Docker state by product layer. `layers` explains what every layer
-is for.
-
-Expected first-run URLs:
+Expected local URLs:
 
 - Observatory web: `http://localhost:4173`
 - API readiness: `localhost:8000/ready`
 - Grafana: `http://localhost:3000`
 
-The CLI also prints a LAN URL for iPhone, for example:
+`healthsave doctor` also prints the LAN URL to use from the iPhone, for example:
 
 ```text
-http://<your-lan-ip>:8000
+http://<server-lan-ip>:8000
 ```
 
-Use the LAN URL in the iOS app. Do not use `localhost` from the phone.
+Do not use `localhost` from the phone.
 
 ## 5. Connect HealthSave iOS
 
 1. Open HealthSave on iPhone.
 2. Go to Settings -> Server Sync.
 3. Set Server URL to the LAN URL printed by `healthsave doctor`.
-4. If you configured an API key in Advanced setup, set it in the app too.
+4. Set the API key if you configured one during Advanced setup.
 5. Tap **Sync New Data**.
 
-The app sends Apple Health data to the frozen v1 ingest contract. The backend
-normalizes it into the canonical record used by web, Grafana, findings, and
-integrations.
+The iOS app sends Apple Health data through the frozen v1 ingest contract. The backend normalizes readings into the canonical record used by web, Grafana, findings, integrations, and exports.
 
-## 6. Choose Daily Surface
+## 6. Choose The Right Surface
 
-Use [Observatory web](surfaces/observatory-web.md) for the normal product
-experience:
+Use [Observatory web](surfaces/observatory-web.md) for the normal product experience:
 
 ```text
 http://localhost:4173
 ```
 
-Use [Grafana](surfaces/grafana.md) when you want raw SQL-backed dashboards and
-chart exploration:
+Use [Grafana](surfaces/grafana.md) for raw SQL-backed chart exploration:
 
 ```text
 http://localhost:3000
 ```
 
-See [Web vs Grafana](surfaces/web-vs-grafana.md) for the separation.
+The web app explains what changed, which data exists, and where it came from. Grafana serves power users, custom dashboards, and debugging. See [Web vs Grafana](surfaces/web-vs-grafana.md).
 
-## 7. Optional: Local AI
+## 7. Optional Local AI
 
-Run:
+Run Advanced setup from the control center, or use:
 
 ```bash
 healthsave setup advanced
 ```
 
-Advanced setup detects RAM/GPU, recommends an Ollama model, starts the local AI
-layer, and pulls the model. Local AI narrates already-computed findings; it does
-not compute health facts. See [Local LLM](operations/local-llm.md).
+Advanced setup detects RAM/GPU, recommends an Ollama model, starts the local AI layer, and pulls the model. Local AI narrates already-computed findings; it does not compute medical facts. See [Local LLM](operations/local-llm.md).
 
-## 8. Optional: Home Assistant / MQTT
+## 8. Optional Home Assistant / MQTT
 
 If you already run an MQTT broker:
 
@@ -151,25 +145,35 @@ If you want HealthSave to run a bundled broker too:
 HA_MQTT_ENABLED=true healthsave up --mqtt --home-assistant
 ```
 
-See [Home Assistant](integrations/home-assistant.md) for topics, discovery
-entities, and safety notes.
+The bridge publishes MQTT discovery and state topics so Home Assistant can create entities without database credentials. See [Home Assistant & MQTT](integrations/home-assistant.md).
 
-## 9. Manual Checkout Fallback
+## 9. Automation Path
 
-Use this path when you do not want Node/npm/npx on the server:
+Agents and CI should use scriptable commands instead of the TUI:
+
+```bash
+healthsave setup basic --no-input
+healthsave doctor --json
+healthsave status --json
+healthsave layers --json
+healthsave logs api
+```
+
+For a fresh machine without global install, `npx --yes healthsave setup basic --no-input` is available, but it is an automation command, not the main human install path.
+
+## 10. Manual Checkout
+
+Use this when npm is unavailable or you want to inspect the checkout first:
 
 ```bash
 git clone https://github.com/umutkeltek/healthsave-observatory.git
 cd healthsave-observatory
-./healthsave setup basic
-./healthsave doctor
-./healthsave tui
-./healthsave install-cli
+./healthsave onboard
 ```
 
 `./healthsave` is the repo-local launcher. The installed command is `healthsave`.
 
-## 10. Stop Or Inspect
+## 11. Stop Or Inspect
 
 ```bash
 healthsave logs api

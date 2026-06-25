@@ -46,6 +46,7 @@ def test_healthsave_help_works_from_other_directory() -> None:
 
     assert "Usage: healthsave <command>" in proc.stdout
     assert "setup" in proc.stdout
+    assert "onboard" in proc.stdout
     assert "doctor" in proc.stdout
     assert "verify" in proc.stdout
 
@@ -81,6 +82,31 @@ def test_healthsave_bare_command_opens_interactive_menu() -> None:
         assert visible, f"menu did not return after q; output={output!r}"
         output, visible = _read_until(master_fd, "Enter select", timeout=2.0)
         assert visible, f"menu did not return after q; output={output!r}"
+        os.write(master_fd, b"q")
+        proc.wait(timeout=2)
+        assert proc.returncode == 0
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+        os.close(master_fd)
+
+
+def test_healthsave_onboard_command_opens_interactive_menu() -> None:
+    master_fd, slave_fd = pty.openpty()
+    proc = subprocess.Popen(
+        [str(CLI), "onboard"],
+        cwd="/tmp",
+        stdin=slave_fd,
+        stdout=slave_fd,
+        stderr=slave_fd,
+        text=False,
+        close_fds=True,
+    )
+    os.close(slave_fd)
+    try:
+        output, visible = _read_until(master_fd, "Enter select", timeout=2.0)
+        assert visible, f"menu was not visible; output={output!r}"
+        assert "Setup HealthSave Observatory" in output
         os.write(master_fd, b"q")
         proc.wait(timeout=2)
         assert proc.returncode == 0

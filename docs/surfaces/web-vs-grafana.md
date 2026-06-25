@@ -2,61 +2,62 @@
 
 HealthSave Observatory ships two web-visible surfaces in the default stack:
 
-- **Observatory web** on `http://localhost:4173`
-- **Grafana** on `http://localhost:3000`
+- Observatory web: `http://localhost:4173`
+- Grafana: `http://localhost:3000`
 
-They are not competing implementations of the same thing. They answer different questions.
+They are not competing implementations of the same product. They answer different questions.
 
-## Separation
+## Boundary
 
-| Surface | Use It For | Reads From | Audience |
+| Surface | Use it for | Reads from | Audience |
 |---|---|---|---|
-| Observatory web | Everyday interpretation: what changed, baseline, provenance, findings | FastAPI v2 read API | Normal users, first-run experience, product UX |
-| Grafana | Raw charting, SQL-backed exploration, custom dashboards | TimescaleDB datasource | Power users, builders, debugging, homelab dashboards |
+| Observatory web | Everyday interpretation, baseline, provenance, findings, sync state | FastAPI v2 read API | Normal users and first-run product UX |
+| Grafana | Raw charting, SQL-backed exploration, custom dashboards, debugging | TimescaleDB datasource | Power users, builders, homelab dashboards |
 
 ## Observatory Web Logic
 
-Observatory web is the primary product surface. It should lead with meaning:
+Observatory web is the primary product surface. It should explain:
 
-- today vs personal baseline
-- what changed recently
-- source coverage and provenance
-- findings and briefing cards
-- privacy and trust-boundary state
-- empty/no-data/backend-down states that are understandable
+- What changed recently.
+- How today compares with the user's own baseline.
+- Which sources are contributing data.
+- Which findings are evidence-backed.
+- Whether the backend is reachable and healthy.
+- Empty, no-data, and backend-down states in normal language.
 
-The web app should prefer API contracts over direct database access. It reads through the v2 API so the backend can keep ownership of data normalization, aggregation, privacy policy, and future auth boundaries.
+The web app should read through API contracts, not directly from the database. The backend owns normalization, aggregation, provenance, privacy policy, and future auth boundaries.
 
 ## Grafana Logic
 
-Grafana is the bundled power-user surface. It should expose data honestly and flexibly:
+Grafana is the bundled power-user surface. It should expose data flexibly:
 
-- SQL-backed dashboards
-- raw metric exploration
-- Prometheus/service health panels
-- custom panels for self-hosters
-- useful debugging and community dashboard examples
+- SQL-backed dashboards.
+- Raw metric exploration.
+- Prometheus/service health panels.
+- Community dashboard examples.
+- Debug views for builders and operators.
 
-Grafana may query TimescaleDB directly because that is its job. It is intentionally closer to the storage layer than Observatory web.
+Grafana may query TimescaleDB directly because that is its job. It intentionally sits closer to the storage layer than Observatory web.
 
 ## Why Both Ship
 
 Observatory web is the product direction: a friendly, insight-first surface for everyday use.
 
-Grafana is still valuable because the first HealthSave self-hosted pull came from people who wanted their health data in their own dashboards. Keeping Grafana bundled preserves that builder pathway without forcing every normal user into a chart editor.
+Grafana remains valuable because many self-hosters want health data inside their existing dashboard workflow. Keeping Grafana bundled preserves that builder path without forcing every normal user into a chart editor.
 
-## Security Posture
+## Security
 
 Both surfaces can reveal private health data.
 
 - API publishes on port `8000`.
 - Observatory web binds `127.0.0.1:4173` by default through `WEB_BIND`.
 - Grafana binds `127.0.0.1:3000` by default through `GRAFANA_BIND`.
-
-Only set `WEB_BIND=0.0.0.0` or `GRAFANA_BIND=0.0.0.0` when you deliberately want LAN access. Do not expose either surface directly to the internet over plain HTTP.
+- Keep them on a trusted network by default.
+- Do not expose either surface over plain HTTP to the internet.
+- Put remote access behind HTTPS and deliberate auth.
 
 ## Rule Of Thumb
 
-If the work changes the user experience, baseline explanation, findings, or provenance, it probably belongs in Observatory web.
+If work changes user experience, baseline explanation, findings, provenance, or first-run clarity, it probably belongs in Observatory web.
 
-If the work changes raw charting, custom SQL panels, or builder dashboards, it probably belongs in Grafana.
+If work changes raw charting, custom SQL panels, service dashboards, or builder debugging, it probably belongs in Grafana.
