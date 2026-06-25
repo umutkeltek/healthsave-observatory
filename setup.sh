@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 #
-# HealthSave Observatory - one-command bootstrap for non-technical users.
+# HealthSave Observatory - compatibility setup wrapper.
 #
-# Usage:
-#   ./setup.sh            # interactive setup
-#   ./setup.sh doctor     # post-install health checks
-#   ./setup.sh --help     # show usage
+# Preferred CLI:
+#   ./healthsave setup    # interactive setup
+#   ./healthsave doctor   # post-install health checks
 #
 # Designed to be idempotent: re-running preserves existing passwords and
 # updates only AI-related config based on the setup answers.
@@ -51,7 +50,11 @@ OLLAMA_URL_DEFAULT="http://localhost:11434"
 # ----------------------------------------------------------------- helpers
 print_usage() {
     cat <<'EOF'
-HealthSave Observatory bootstrap.
+HealthSave Observatory bootstrap compatibility wrapper.
+
+Preferred CLI:
+  ./healthsave setup
+  ./healthsave doctor
 
 Usage:
   ./setup.sh            Run interactive setup (default).
@@ -217,11 +220,23 @@ describe_model_size() {
     esac
 }
 
+run_with_timeout() {
+    local seconds="$1"
+    shift
+    if command -v timeout >/dev/null 2>&1; then
+        timeout --kill-after=1s "$seconds" "$@"
+    elif command -v gtimeout >/dev/null 2>&1; then
+        gtimeout --kill-after=1s "$seconds" "$@"
+    else
+        "$@"
+    fi
+}
+
 docker_available() {
     if ! command -v docker >/dev/null 2>&1; then
         return 1
     fi
-    if ! docker info >/dev/null 2>&1; then
+    if ! run_with_timeout 2 docker info >/dev/null 2>&1; then
         return 1
     fi
     return 0
@@ -237,7 +252,7 @@ prompt_default() {
     local default_value="$2"
     local answer=""
     if [ -t 0 ]; then
-        printf '%s [%s]: ' "$prompt" "$default_value"
+        printf '%s [%s]: ' "$prompt" "$default_value" >&2
         read -r answer || answer=""
     fi
     if [ -z "$answer" ]; then
@@ -253,7 +268,7 @@ prompt_yes_no() {
     local default="$2"
     local answer=""
     if [ -t 0 ]; then
-        printf '%s [%s]: ' "$prompt" "$default"
+        printf '%s [%s]: ' "$prompt" "$default" >&2
         read -r answer || answer=""
     fi
     if [ -z "$answer" ]; then
@@ -453,20 +468,34 @@ wait_for_ollama() {
     local max_attempts=40
     local attempt=0
     while [ "$attempt" -lt "$max_attempts" ]; do
-        if curl -fsS "${OLLAMA_URL_DEFAULT}/" >/dev/null 2>&1; then
+        if curl -fsS --connect-timeout 1 --max-time 3 "${OLLAMA_URL_DEFAULT}/" >/dev/null 2>&1; then
             return 0
         fi
         attempt=$((attempt + 1))
         sleep 3
     done
-    return 1
+return 1
+}
+
+wait_for_api_ready() {
+# Wait up 120s API /ready accept requests.
+local max_attempts=60
+local attempt=0
+while [ "$attempt" -lt "$max_attempts" ]; do
+        if curl -fsS --connect-timeout 1 --max-time 3 "${API_URL_DEFAULT}/ready" >/dev/null 2>&1; then
+return 0
+fi
+attempt=$((attempt + 1))
+sleep 2
+done
+return 1
 }
 
 check_endpoint() {
     # check_endpoint <label> <url>
     local label="$1"
     local url="$2"
-    if curl -fsS "$url" >/dev/null 2>&1; then
+    if curl -fsS --connect-timeout 1 --max-time 3 "$url" >/dev/null 2>&1; then
         log_ok "${label}: ${url} reachable"
         return 0
     fi
@@ -498,6 +527,7 @@ cmd_setup() {
         local api_key_default=""
 
         local db_pw grafana_pw api_key
+        log_info "Press Enter to accept generated defaults; type a value to override."
         db_pw="$(prompt_default 'Database password' "$generated_db_pw")"
         grafana_pw="$(prompt_default 'Grafana admin password' "$generated_grafana_pw")"
         api_key="$(prompt_default 'API key for X-API-Key header (leave empty for open access)' "$api_key_default")"
@@ -582,6 +612,12 @@ cmd_setup() {
     # --- bring the stack up --------------------------------------------
     log_info "Starting Docker services (this may take a few minutes on first run)..."
     compose up -d
+    log_info "Waiting for API readiness on ${API_URL_DEFAULT}/ready..."
+    if wait_for_api_ready; then
+        log_ok "API ready."
+    else
+        log_warn "API did not become ready within 120 seconds. Run 'healthsave logs api' if doctor fails."
+    fi
 
     # --- pull the Ollama model, if opted in ----------------------------
     if [ "$enable_ollama" -eq 1 ]; then
@@ -618,7 +654,7 @@ cmd_setup() {
     echo "  API:            ${API_URL_DEFAULT}   (health: /ready)"
     echo "  Grafana:        ${GRAFANA_URL_DEFAULT}  (optional power-user view — user: ${grafana_user}, pass: ${grafana_pw})"
     echo
-    log_info "Next step: ./setup.sh doctor   - verify every service is healthy."
+    log_info "Next step: ./healthsave doctor - verify every service is healthy."
 }
 
 # ------------------------------------------------------------------ doctor
@@ -635,7 +671,7 @@ cmd_doctor() {
     local ps_output
     ps_output="$(compose ps --format '{{.Service}} {{.State}}' 2>/dev/null || true)"
     if [ -z "$ps_output" ]; then
-        log_error "docker compose ps returned no services. Did you run ./setup.sh first?"
+        log_error "docker compose ps returned no services. Did you run ./healthsave setup first?"
         exit 1
     fi
 
@@ -693,6 +729,18 @@ cmd_doctor() {
 # --------------------------------------------------------------- dispatch
 if [ "${HEALTHSAVE_SETUP_TEST:-0}" != "1" ]; then
     cmd="${1:-setup}"
+    if [ -x "$SCRIPT_DIR/healthsave" ]; then
+        case "$cmd" in
+            setup|"") exec "$SCRIPT_DIR/healthsave" setup advanced ;;
+            doctor) exec "$SCRIPT_DIR/healthsave" doctor ;;
+            --help|-h|help) exec "$SCRIPT_DIR/healthsave" setup --help ;;
+            *)
+                log_error "Unknown command: ${cmd}"
+                "$SCRIPT_DIR/healthsave" setup --help
+                exit 2
+                ;;
+        esac
+    fi
     case "$cmd" in
         setup|"")     cmd_setup ;;
         doctor)       cmd_doctor ;;

@@ -1,0 +1,1540 @@
+#!/usr/bin/env bash
+#
+# HealthSave Observatory CLI.
+# Human-first entrypoint for setup, health checks, verification, and stack ops.
+
+set -euo pipefail
+
+VERSION="0.3.0"
+CLI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$CLI_DIR"
+
+# Reuse existing setup functions without running setup.sh dispatch.
+export HEALTHSAVE_SETUP_TEST=1
+# shellcheck source=./setup.sh disable=SC1091
+source "$CLI_DIR/setup.sh"
+
+print_cli_usage() {
+    cat <<'EOF'
+HealthSave Observatory CLI
+
+Run from this checkout with ./healthsave, or install a global command with:
+healthsave install-cli
+
+Examples:
+  healthsave
+  healthsave tui
+  healthsave setup basic
+  healthsave setup advanced
+  healthsave doctor
+  healthsave --json doctor
+  healthsave layers
+  healthsave status
+  healthsave logs web
+  healthsave install-cli
+
+Usage: healthsave <command> [args]
+       healthsave [global flags] <command> [args]
+
+Commands:
+  tui, menu                    Open arrow-key control center
+  setup [basic|advanced]       Install or update HealthSave Observatory
+  install [basic|advanced]     Alias for setup
+  install-cli                  Install this checkout's healthsave command on PATH
+  layers                       Explain API, DB, worker, web, Grafana, AI layers
+  doctor                       Check platform, config, services, and URLs
+  verify                       Run lint, tests, TS/web checks, Docker E2E
+  status                       Show layer-aware Docker Compose service status
+  logs [layer|service]         Show recent Docker Compose logs
+  up [flags]                   Start the stack
+  down                         Stop the stack
+  help                         Show help
+
+Global flags:
+  -h, --help                   Show help
+  --version                    Print CLI version
+  --json                       Machine-readable output for doctor/status/layers
+
+Run `healthsave setup --help` for Basic vs Advanced setup options.
+Run `healthsave logs --help` for layer aliases.
+EOF
+}
+
+print_setup_usage() {
+    cat <<'EOF'
+HealthSave setup
+
+Examples:
+  healthsave setup
+  healthsave setup basic
+  healthsave setup advanced
+  healthsave setup basic --dry-run --no-input
+
+Usage:
+  healthsave setup [basic|advanced] [flags]
+
+Modes:
+  basic       Recommended. Generate safe local defaults, skip AI questions,
+              start DB, API, worker, Observatory web, and Grafana.
+  advanced    Guided setup. Choose passwords, API key, local AI/Ollama,
+              and model. Existing .env and config.yaml are preserved.
+
+Flags:
+  --dry-run   Preview what would happen; do not write files or start Docker.
+  --no-input  Never prompt. Works with `setup basic`; advanced requires prompts.
+  -h, --help  Show help
+
+Platform:
+  macOS and Linux run natively. On Windows, use WSL2 with Docker Desktop
+  integration enabled, then run this CLI inside the WSL2 shell.
+EOF
+}
+
+print_logs_usage() {
+    cat <<'EOF'
+HealthSave logs
+
+Examples:
+  healthsave logs
+  healthsave logs api
+  healthsave logs web
+  healthsave logs grafana
+  healthsave logs ai
+
+Usage:
+  healthsave logs [layer|service] [docker compose logs flags]
+
+Layer aliases:
+  database, db             -> db
+  migrations, migrate      -> migrate
+  api                      -> api
+  worker, jobs             -> worker
+  web, frontend, obs       -> web
+  grafana                  -> grafana
+  ai, local-ai, ollama     -> ollama
+  agents, agent            -> agents
+  mqtt, mosquitto          -> mqtt
+  ha, home-assistant       -> homeassistant-mqtt
+EOF
+}
+
+print_up_usage() {
+  cat <<'EOF'
+HealthSave up
+
+Examples:
+  healthsave up
+  healthsave up --ai
+  healthsave up --agents --mqtt --home-assistant
+
+Usage:
+  healthsave up [flags]
+
+Flags:
+  --ai, --local-ai     Include the local-ai profile (Ollama sidecar)
+  --agents             Include the agents profile
+  --mqtt               Include the mosquitto profile
+  --home-assistant     Include the Home Assistant MQTT bridge profile
+  --all-optional       Include all optional profiles
+  -h, --help           Show help
+EOF
+}
+
+print_verify_usage() {
+  cat <<'EOF'
+HealthSave verify
+
+Runs the local verification gate:
+1. shell syntax, shellcheck, and formatting/lint checks
+2. Python tests
+3. generated TypeScript client check
+4. TypeScript typecheck
+5. Observatory web tests and typecheck
+6. Docker E2E stack boot and API readiness test
+
+Usage:
+  healthsave verify
+  healthsave verify --help
+
+Use this before a release or after changing setup, Docker, API, worker, or web code.
+EOF
+}
+
+print_install_cli_usage() {
+  cat <<'EOF'
+HealthSave install-cli
+
+Examples:
+  healthsave install-cli
+  healthsave install-cli --dry-run
+  healthsave install-cli --name healthsave-observatory
+
+Usage:
+  healthsave install-cli [flags]
+
+Flags:
+  --bin-dir DIR   Install wrapper here (default: ~/.local/bin)
+  --name NAME     Command name (default: healthsave)
+  --force         Replace an existing command at the target path
+  --dry-run       Show what would be installed
+  -h, --help      Show help
+
+This installs a small wrapper that runs this checkout's ./healthsave from any
+directory. It does not require npm, npx, Homebrew, sudo, or a published package.
+EOF
+}
+
+json_escape() {
+    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+json_bool() {
+    if [ "$1" = "1" ]; then
+        printf 'true'
+    else
+        printf 'false'
+    fi
+}
+
+json_string_or_null() {
+    if [ -n "$1" ]; then
+        printf '"%s"' "$(json_escape "$1")"
+    else
+        printf 'null'
+    fi
+}
+
+tool_flag() {
+    if command -v "$1" >/dev/null 2>&1; then
+        printf '1'
+    else
+        printf '0'
+    fi
+}
+
+docker_cli_flag() {
+    tool_flag docker
+}
+
+docker_daemon_flag() {
+    if docker_available_cached; then
+        printf '1'
+    else
+        printf '0'
+    fi
+}
+
+docker_compose_flag() {
+    if docker_available_cached && run_with_timeout 2 docker compose version >/dev/null 2>&1; then
+        printf '1'
+    else
+        printf '0'
+    fi
+}
+
+platform_id() {
+    local uname_s
+    uname_s="$(uname -s 2>/dev/null || printf 'unknown')"
+    case "$uname_s" in
+        Darwin)
+            printf 'macos'
+            ;;
+        Linux)
+            if [ -r /proc/version ] && grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; then
+                printf 'windows-wsl2'
+            else
+                printf 'linux'
+            fi
+            ;;
+        MINGW*|MSYS*|CYGWIN*)
+            printf 'windows-bash'
+            ;;
+        *)
+            printf '%s' "$uname_s"
+            ;;
+    esac
+}
+
+platform_note() {
+    case "$(platform_id)" in
+        macos)
+            printf 'Supported native path. Use Docker Desktop or another Docker daemon.'
+            ;;
+        linux)
+            printf 'Supported native path. Use Docker Engine or Docker Desktop.'
+            ;;
+        windows-wsl2)
+            printf 'Supported Windows path. Run inside WSL2 with Docker Desktop WSL integration enabled.'
+            ;;
+        windows-bash)
+            printf 'Use WSL2 for the supported Windows path; Git Bash/MSYS shells are best-effort.'
+            ;;
+        *)
+            printf 'Unknown platform. Docker Compose plus Bash are required.'
+            ;;
+    esac
+}
+
+require_docker() {
+    if ! docker_available; then
+        log_error "Docker is not running. Start Docker Desktop or Docker daemon first."
+        exit 1
+    fi
+}
+
+DOCKER_AVAILABLE_CACHE=""
+COMPOSE_PS_CACHE=""
+COMPOSE_PS_CACHE_LOADED=0
+docker_available_cached() {
+    if [ "$DOCKER_AVAILABLE_CACHE" = "1" ]; then
+        return 0
+    fi
+    if [ "$DOCKER_AVAILABLE_CACHE" = "0" ]; then
+        return 1
+    fi
+    if docker_available; then
+        DOCKER_AVAILABLE_CACHE=1
+        return 0
+    fi
+    DOCKER_AVAILABLE_CACHE=0
+    return 1
+}
+
+compose_ps_lines() {
+    if ! docker_available_cached; then
+        return 1
+    fi
+    if [ "$COMPOSE_PS_CACHE_LOADED" = "1" ]; then
+        printf '%s\n' "$COMPOSE_PS_CACHE"
+        return 0
+    fi
+    COMPOSE_PS_CACHE="$(run_with_timeout 0.5 docker compose ps -a --format '{{.Service}}|{{.State}}|{{.ExitCode}}' 2>/dev/null || true)"
+    COMPOSE_PS_CACHE_LOADED=1
+    printf '%s\n' "$COMPOSE_PS_CACHE"
+}
+
+prime_compose_status_cache() {
+    if docker_available_cached; then
+        compose_ps_lines >/dev/null 2>&1 || true
+    fi
+}
+
+service_row() {
+    local service="$1"
+    local output
+    output="$(compose_ps_lines 2>/dev/null || true)"
+    printf '%s\n' "$output" | awk -F'|' -v svc="$service" '$1 == svc { print; found = 1; exit } END { if (!found) exit 1 }'
+}
+
+service_state() {
+    local service="$1"
+    local row
+    if ! docker_available_cached; then
+        printf 'unavailable'
+        return
+    fi
+    row="$(service_row "$service" 2>/dev/null || true)"
+    if [ -z "$row" ]; then
+        printf 'not_created'
+    else
+        printf '%s' "$row" | awk -F'|' '{ print $2 }'
+    fi
+}
+
+service_exit_code() {
+    local service="$1"
+    local row
+    row="$(service_row "$service" 2>/dev/null || true)"
+    if [ -z "$row" ]; then
+        printf ''
+    else
+        printf '%s' "$row" | awk -F'|' '{ print $3 }'
+    fi
+}
+
+service_is_running() {
+    [ "$(service_state "$1")" = "running" ]
+}
+
+migration_is_ok() {
+    local state
+    local exit_code
+    state="$(service_state migrate)"
+    exit_code="$(service_exit_code migrate)"
+    [ "$state" = "running" ] || { [ "$state" = "exited" ] && [ "$exit_code" = "0" ]; }
+}
+
+endpoint_ok() {
+    local url="$1"
+    command -v curl >/dev/null 2>&1 && curl -fsS --connect-timeout 1 --max-time 1 "$url" >/dev/null 2>&1
+}
+
+ollama_service_ok() {
+    service_is_running ollama && compose exec -T ollama ollama list >/dev/null 2>&1
+}
+
+resolve_service_alias() {
+    case "$1" in
+        database|postgres|timescale|db) printf 'db' ;;
+        migrations|migration|migrate) printf 'migrate' ;;
+        api|server) printf 'api' ;;
+        worker|jobs|analysis) printf 'worker' ;;
+        web|frontend|observatory|obs|ui) printf 'web' ;;
+        grafana|dashboards) printf 'grafana' ;;
+        ai|local-ai|llm|ollama) printf 'ollama' ;;
+        agents|agent) printf 'agents' ;;
+        mqtt|mosquitto) printf 'mqtt' ;;
+        ha|home-assistant|homeassistant|homeassistant-mqtt) printf 'homeassistant-mqtt' ;;
+        *) printf '%s' "$1" ;;
+    esac
+}
+
+print_connection_summary() {
+    local lan_ip
+    local grafana_user="admin"
+    local grafana_pw
+
+    lan_ip="$(detect_lan_ip)"
+    grafana_pw="$(read_env_value GRAFANA_PASSWORD)"
+
+    echo
+    log_ok "HealthSave Observatory ready."
+    echo "  Observatory web: ${WEB_URL_DEFAULT}"
+    echo "  iOS app URL:     http://${lan_ip}:8000"
+    echo "  API health:      ${API_URL_DEFAULT}/ready"
+    echo "  Grafana:         ${GRAFANA_URL_DEFAULT} (user: ${grafana_user}, pass: ${grafana_pw})"
+    echo
+    log_info "Next step: healthsave doctor"
+}
+
+preview_basic_setup() {
+    cat <<EOF
+DRY RUN: Basic setup
+
+Would:
+1. Check Docker is installed and running.
+2. Create .env with generated DB and Grafana passwords if missing.
+3. Create config.yaml from config.yaml.example if missing.
+4. Keep local AI disabled unless already configured.
+5. Start default layers: database, migrations, API, worker, Observatory web, Grafana.
+6. Wait for API readiness.
+7. Print HealthSave app URL, Observatory web URL, and Grafana login.
+
+No files would be changed and Docker would not be started.
+EOF
+}
+
+preview_advanced_setup() {
+    cat <<EOF
+DRY RUN: Advanced setup
+
+Would:
+1. Check Docker is installed and running.
+2. Prompt for DB password, Grafana password, and optional API key.
+3. Prompt for local AI/Ollama enablement.
+4. Detect RAM/GPU and recommend an Ollama model if AI is enabled.
+5. Start Docker services and pull the selected model if needed.
+6. Print HealthSave app URL, Observatory web URL, and Grafana login.
+
+No files would be changed and Docker would not be started.
+EOF
+}
+
+cmd_setup_basic() {
+    local dry_run="$1"
+
+    if [ "$dry_run" = "1" ]; then
+        preview_basic_setup
+        return 0
+    fi
+
+    log_info "[1/5] Checking Docker"
+    require_docker
+
+    log_info "[2/5] Preparing local config"
+    if [ -f "$ENV_FILE" ]; then
+        log_warn "$ENV_FILE already exists - keeping existing values."
+    else
+        if [ ! -f "$ENV_EXAMPLE" ]; then
+            log_error "$ENV_EXAMPLE missing - cannot generate $ENV_FILE."
+            exit 1
+        fi
+        write_env_file "$(rand_hex)" "$(rand_hex)" ""
+        log_ok "Wrote $ENV_FILE with local defaults."
+    fi
+
+    if [ -f "$CONFIG_FILE" ]; then
+        log_warn "$CONFIG_FILE already exists - keeping existing values."
+    else
+        if [ ! -f "$CONFIG_EXAMPLE" ]; then
+            log_error "$CONFIG_EXAMPLE missing - cannot generate $CONFIG_FILE."
+            exit 1
+        fi
+        cp "$CONFIG_EXAMPLE" "$CONFIG_FILE"
+        log_ok "Wrote $CONFIG_FILE from $CONFIG_EXAMPLE."
+    fi
+
+    ensure_env_value "ANALYSIS_CONFIG_FILE" "./config.yaml"
+
+    log_info "[3/5] Using Basic mode"
+    log_info "Starting DB, API, worker, Observatory web, and Grafana. Local AI questions are skipped."
+
+    log_info "[4/5] Starting Docker services"
+    compose up -d
+    log_info "Waiting for API readiness on ${API_URL_DEFAULT}/ready..."
+    if wait_for_api_ready; then
+        log_ok "API ready."
+    else
+        log_warn "API did not become ready within 120 seconds. Run 'healthsave logs api' if doctor fails."
+    fi
+
+    log_info "[5/5] Setup summary"
+    print_connection_summary
+}
+
+cmd_setup_advanced() {
+    local dry_run="$1"
+    local no_input="$2"
+
+    if [ "$dry_run" = "1" ]; then
+        preview_advanced_setup
+        return 0
+    fi
+
+    if [ "$no_input" = "1" ]; then
+        log_error "Advanced setup needs prompts. Use 'healthsave setup basic --no-input' or remove --no-input."
+        exit 2
+    fi
+
+    if [ ! -t 0 ]; then
+        log_error "Advanced setup needs an interactive terminal. Use 'healthsave setup basic --no-input' for automation."
+        exit 2
+    fi
+
+    cmd_setup
+}
+
+cmd_setup_menu() {
+    tui_setup_menu
+}
+
+cmd_setup_cli() {
+    local mode="${1:-}"
+    local dry_run=0
+    local no_input=0
+
+    if [ "$mode" = "-h" ] || [ "$mode" = "--help" ] || [ "$mode" = "help" ]; then
+        print_setup_usage
+        return 0
+    fi
+
+    if [ "$mode" = "basic" ] || [ "$mode" = "advanced" ]; then
+        shift
+    else
+        mode=""
+    fi
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --dry-run)
+                dry_run=1
+                ;;
+            --no-input)
+                no_input=1
+                ;;
+            -h|--help)
+                print_setup_usage
+                return 0
+                ;;
+            *)
+                log_error "Unknown setup flag: $1"
+                print_setup_usage
+                exit 2
+                ;;
+        esac
+        shift
+    done
+
+    if [ -z "$mode" ]; then
+        if [ "$no_input" = "1" ] || [ ! -t 0 ]; then
+            log_error "Choose setup mode: healthsave setup basic or healthsave setup advanced."
+            print_setup_usage
+            exit 2
+        fi
+        tui_setup_menu
+        return 0
+    fi
+
+    case "$mode" in
+        basic)
+            cmd_setup_basic "$dry_run"
+            ;;
+        advanced)
+            cmd_setup_advanced "$dry_run" "$no_input"
+            ;;
+    esac
+}
+
+print_layer_table() {
+    cat <<EOF
+HealthSave Observatory layers
+
+Default stack:
+  database        service db                 TimescaleDB canonical health record
+  migrations      service migrate            Schema migration job
+  api             service api                FastAPI ingest/read API at ${API_URL_DEFAULT}
+  worker          service worker             Findings, summaries, recovery jobs
+  web             service web                Observatory web surface at ${WEB_URL_DEFAULT}
+  grafana         service grafana            Power-user dashboard at ${GRAFANA_URL_DEFAULT}
+
+Optional profiles:
+  local-ai        service ollama             Local LLM sidecar for narration
+  agents          service agents             Autonomous agent supervisor loop
+  mosquitto       service mqtt               MQTT broker for local automations
+  home-assistant  service homeassistant-mqtt Home Assistant discovery/state bridge
+
+Basic setup starts the default stack. Advanced setup can enable local AI.
+Use healthsave up --agents, --mqtt, or --home-assistant for optional profiles.
+EOF
+}
+
+json_layer_static() {
+    local key="$1"
+    local label="$2"
+    local service="$3"
+    local required="$4"
+    local profile="$5"
+    local url="$6"
+    local description="$7"
+
+    printf '"%s":{' "$(json_escape "$key")"
+    printf '"label":"%s",' "$(json_escape "$label")"
+    printf '"service":"%s",' "$(json_escape "$service")"
+    printf '"required":%s,' "$(json_bool "$required")"
+    printf '"profile":'
+    json_string_or_null "$profile"
+    printf ','
+    printf '"url":'
+    json_string_or_null "$url"
+    printf ','
+    printf '"description":"%s"' "$(json_escape "$description")"
+    printf '}'
+}
+
+cmd_layers_json() {
+    printf '{"layers":{'
+    json_layer_static "database" "Database" "db" 1 "" "127.0.0.1:5432" "TimescaleDB canonical health record"
+    printf ','
+    json_layer_static "migrations" "Migrations" "migrate" 1 "" "" "Schema migration job"
+    printf ','
+    json_layer_static "api" "API" "api" 1 "" "$API_URL_DEFAULT" "FastAPI ingest and read API"
+    printf ','
+    json_layer_static "worker" "Worker" "worker" 1 "" "" "Findings, summaries, and recovery jobs"
+    printf ','
+    json_layer_static "web" "Observatory web" "web" 1 "" "$WEB_URL_DEFAULT" "Primary insight-first web surface"
+    printf ','
+    json_layer_static "grafana" "Grafana" "grafana" 1 "" "$GRAFANA_URL_DEFAULT" "Power-user dashboard"
+    printf ','
+    json_layer_static "local_ai" "Local AI" "ollama" 0 "local-ai" "http://localhost:11434" "Optional Ollama sidecar for narration"
+    printf ','
+    json_layer_static "agents" "Agents" "agents" 0 "agents" "" "Optional autonomous agent supervisor"
+    printf ','
+    json_layer_static "mqtt" "MQTT" "mqtt" 0 "mosquitto" "localhost:1883" "Optional MQTT broker"
+    printf ','
+    json_layer_static "home_assistant" "Home Assistant bridge" "homeassistant-mqtt" 0 "home-assistant" "" "Optional MQTT discovery and state bridge"
+    printf '}}\n'
+}
+
+cmd_layers() {
+    local json_mode="${1:-0}"
+    if [ "$json_mode" = "1" ]; then
+        cmd_layers_json
+    else
+        print_layer_table
+    fi
+}
+
+layer_health_flag() {
+    local layer="$1"
+    case "$layer" in
+        database)
+            service_is_running db && printf '1' || printf '0'
+            ;;
+        migrations)
+            migration_is_ok && printf '1' || printf '0'
+            ;;
+        api)
+            service_is_running api && endpoint_ok "${API_URL_DEFAULT}/ready" && printf '1' || printf '0'
+            ;;
+        worker)
+            service_is_running worker && printf '1' || printf '0'
+            ;;
+        web)
+            service_is_running web && endpoint_ok "${WEB_URL_DEFAULT}/" && printf '1' || printf '0'
+            ;;
+        grafana)
+            service_is_running grafana && endpoint_ok "${GRAFANA_URL_DEFAULT}/" && printf '1' || printf '0'
+            ;;
+        local_ai)
+            ollama_service_ok && printf '1' || printf '0'
+            ;;
+        agents)
+            service_is_running agents && printf '1' || printf '0'
+            ;;
+        mqtt)
+            service_is_running mqtt && printf '1' || printf '0'
+            ;;
+        home_assistant)
+            service_is_running homeassistant-mqtt && printf '1' || printf '0'
+            ;;
+    esac
+}
+
+json_layer_status() {
+    local key="$1"
+    local service="$2"
+    local required="$3"
+    local profile="$4"
+    local url="$5"
+    local status
+    local healthy
+
+    status="$(service_state "$service")"
+    healthy="$(layer_health_flag "$key")"
+
+    printf '"%s":{' "$(json_escape "$key")"
+    printf '"service":"%s",' "$(json_escape "$service")"
+    printf '"required":%s,' "$(json_bool "$required")"
+    printf '"profile":'
+    json_string_or_null "$profile"
+    printf ','
+    printf '"status":"%s",' "$(json_escape "$status")"
+    printf '"healthy":%s,' "$(json_bool "$healthy")"
+    printf '"url":'
+    json_string_or_null "$url"
+    printf '}'
+}
+
+cmd_status_json() {
+    prime_compose_status_cache
+    printf '{"layers":{'
+    json_layer_status "database" "db" 1 "" "127.0.0.1:5432"
+    printf ','
+    json_layer_status "migrations" "migrate" 1 "" ""
+    printf ','
+    json_layer_status "api" "api" 1 "" "$API_URL_DEFAULT"
+    printf ','
+    json_layer_status "worker" "worker" 1 "" ""
+    printf ','
+    json_layer_status "web" "web" 1 "" "$WEB_URL_DEFAULT"
+    printf ','
+    json_layer_status "grafana" "grafana" 1 "" "$GRAFANA_URL_DEFAULT"
+    printf ','
+    json_layer_status "local_ai" "ollama" 0 "local-ai" "http://localhost:11434"
+    printf ','
+    json_layer_status "agents" "agents" 0 "agents" ""
+    printf ','
+    json_layer_status "mqtt" "mqtt" 0 "mosquitto" "localhost:1883"
+    printf ','
+    json_layer_status "home_assistant" "homeassistant-mqtt" 0 "home-assistant" ""
+    printf '}}\n'
+}
+
+cmd_status_human() {
+    require_docker
+    prime_compose_status_cache
+    printf '%-18s %-22s %-14s %s\n' "Layer" "Service" "State" "URL"
+    printf '%-18s %-22s %-14s %s\n' "database" "db" "$(service_state db)" "127.0.0.1:5432"
+    printf '%-18s %-22s %-14s %s\n' "migrations" "migrate" "$(service_state migrate)" ""
+    printf '%-18s %-22s %-14s %s\n' "api" "api" "$(service_state api)" "$API_URL_DEFAULT"
+    printf '%-18s %-22s %-14s %s\n' "worker" "worker" "$(service_state worker)" ""
+    printf '%-18s %-22s %-14s %s\n' "web" "web" "$(service_state web)" "$WEB_URL_DEFAULT"
+    printf '%-18s %-22s %-14s %s\n' "grafana" "grafana" "$(service_state grafana)" "$GRAFANA_URL_DEFAULT"
+    printf '%-18s %-22s %-14s %s\n' "local-ai" "ollama" "$(service_state ollama)" "optional"
+    printf '%-18s %-22s %-14s %s\n' "agents" "agents" "$(service_state agents)" "optional"
+    printf '%-18s %-22s %-14s %s\n' "mqtt" "mqtt" "$(service_state mqtt)" "optional"
+    printf '%-18s %-22s %-14s %s\n' "home-assistant" "homeassistant-mqtt" "$(service_state homeassistant-mqtt)" "optional"
+}
+
+cmd_status() {
+    local json_mode="$1"
+    if [ "$json_mode" = "1" ]; then
+        cmd_status_json
+    else
+        cmd_status_human
+    fi
+}
+
+print_check_line() {
+    local ok="$1"
+    local label="$2"
+    local detail="${3:-}"
+    if [ "$ok" = "1" ]; then
+        log_ok "$label${detail:+ - $detail}"
+    else
+        log_error "$label${detail:+ - $detail}"
+    fi
+}
+
+cmd_doctor_human() {
+    local failures=0
+    local docker_cli
+    local docker_daemon
+    local docker_compose
+    local curl_ok
+
+    docker_cli="$(docker_cli_flag)"
+    docker_daemon="$(docker_daemon_flag)"
+    docker_compose="$(docker_compose_flag)"
+    curl_ok="$(tool_flag curl)"
+    prime_compose_status_cache
+
+    log_info "HealthSave Observatory doctor"
+    log_info "Platform: $(platform_id) - $(platform_note)"
+
+    print_check_line "$docker_cli" "Docker CLI"
+    [ "$docker_cli" = "1" ] || failures=$((failures + 1))
+    print_check_line "$docker_daemon" "Docker daemon"
+    [ "$docker_daemon" = "1" ] || failures=$((failures + 1))
+    print_check_line "$docker_compose" "Docker Compose plugin"
+    [ "$docker_compose" = "1" ] || failures=$((failures + 1))
+    print_check_line "$curl_ok" "curl"
+    [ "$curl_ok" = "1" ] || failures=$((failures + 1))
+
+    if [ -f "$ENV_FILE" ]; then
+        log_ok "config .env"
+    else
+        log_error "config .env missing - run 'healthsave setup basic'"
+        failures=$((failures + 1))
+    fi
+
+    if [ -f "$CONFIG_FILE" ]; then
+        log_ok "config config.yaml"
+    else
+        log_error "config config.yaml missing - run 'healthsave setup basic'"
+        failures=$((failures + 1))
+    fi
+
+    if [ "$docker_daemon" = "1" ] && [ "$docker_compose" = "1" ]; then
+        echo
+        cmd_status_human
+        echo
+
+        if service_is_running db; then log_ok "layer database"; else log_error "layer database"; failures=$((failures + 1)); fi
+        if migration_is_ok; then log_ok "layer migrations"; else log_error "layer migrations"; failures=$((failures + 1)); fi
+        if service_is_running api; then log_ok "layer api service"; else log_error "layer api service"; failures=$((failures + 1)); fi
+        if service_is_running worker; then log_ok "layer worker"; else log_error "layer worker"; failures=$((failures + 1)); fi
+        if service_is_running web; then log_ok "layer Observatory web service"; else log_error "layer Observatory web service"; failures=$((failures + 1)); fi
+        if service_is_running grafana; then log_ok "layer Grafana service"; else log_error "layer Grafana service"; failures=$((failures + 1)); fi
+
+        if endpoint_ok "${API_URL_DEFAULT}/health"; then
+            log_ok "API /health"
+        else
+            log_error "API /health"
+            failures=$((failures + 1))
+        fi
+        if endpoint_ok "${API_URL_DEFAULT}/ready"; then
+            log_ok "API /ready"
+        else
+            log_error "API /ready"
+            failures=$((failures + 1))
+        fi
+        if endpoint_ok "${WEB_URL_DEFAULT}/"; then
+            log_ok "Observatory web ${WEB_URL_DEFAULT}"
+        else
+            log_error "Observatory web ${WEB_URL_DEFAULT}"
+            failures=$((failures + 1))
+        fi
+        if endpoint_ok "${GRAFANA_URL_DEFAULT}/"; then
+            log_ok "Grafana ${GRAFANA_URL_DEFAULT}"
+        else
+            log_error "Grafana ${GRAFANA_URL_DEFAULT}"
+            failures=$((failures + 1))
+        fi
+
+        if [ "$(service_state ollama)" != "not_created" ]; then
+            if ollama_service_ok; then
+                log_ok "optional local AI ollama"
+            else
+                log_warn "optional local AI ollama is present but not healthy"
+            fi
+        else
+            log_info "optional local AI: disabled"
+        fi
+    fi
+
+    echo
+    if [ "$failures" -gt 0 ]; then
+        log_error "Doctor found ${failures} issue(s). Run 'healthsave logs <layer>' for details."
+        exit 1
+    fi
+
+    print_connection_summary
+}
+
+cmd_doctor_json() {
+    local docker_cli
+    local docker_daemon
+    local docker_compose
+    local curl_ok
+    local env_file
+    local config_file
+    local api_ready
+    local web_ready
+    local grafana_ready
+    local required_ok=1
+    local ok=1
+
+    docker_cli="$(docker_cli_flag)"
+    docker_daemon="$(docker_daemon_flag)"
+    docker_compose="$(docker_compose_flag)"
+    curl_ok="$(tool_flag curl)"
+    prime_compose_status_cache
+    env_file=0
+    config_file=0
+    api_ready=0
+    web_ready=0
+    grafana_ready=0
+
+    [ -f "$ENV_FILE" ] && env_file=1
+    [ -f "$CONFIG_FILE" ] && config_file=1
+    endpoint_ok "${API_URL_DEFAULT}/ready" && api_ready=1
+    endpoint_ok "${WEB_URL_DEFAULT}/" && web_ready=1
+    endpoint_ok "${GRAFANA_URL_DEFAULT}/" && grafana_ready=1
+
+    service_is_running db || required_ok=0
+    migration_is_ok || required_ok=0
+    service_is_running api || required_ok=0
+    service_is_running worker || required_ok=0
+    service_is_running web || required_ok=0
+    service_is_running grafana || required_ok=0
+    [ "$api_ready" = "1" ] || required_ok=0
+    [ "$web_ready" = "1" ] || required_ok=0
+    [ "$grafana_ready" = "1" ] || required_ok=0
+
+    if [ "$docker_cli" != "1" ] || [ "$docker_daemon" != "1" ] || [ "$docker_compose" != "1" ] || [ "$curl_ok" != "1" ] || [ "$env_file" != "1" ] || [ "$config_file" != "1" ] || [ "$required_ok" != "1" ]; then
+        ok=0
+    fi
+
+    printf '{'
+    printf '"ok":%s,' "$(json_bool "$ok")"
+    printf '"version":"%s",' "$(json_escape "$VERSION")"
+    printf '"script_dir":"%s",' "$(json_escape "$CLI_DIR")"
+    printf '"platform":{"id":"%s","note":"%s"},' "$(json_escape "$(platform_id)")" "$(json_escape "$(platform_note)")"
+    printf '"tools":{'
+    printf '"docker_cli":%s,' "$(json_bool "$docker_cli")"
+    printf '"docker_daemon":%s,' "$(json_bool "$docker_daemon")"
+    printf '"docker_compose":%s,' "$(json_bool "$docker_compose")"
+    printf '"curl":%s,' "$(json_bool "$curl_ok")"
+    printf '"make":%s,' "$(json_bool "$(tool_flag make)")"
+    printf '"bun":%s,' "$(json_bool "$(tool_flag bun)")"
+    printf '"uv":%s,' "$(json_bool "$(tool_flag uv)")"
+    printf '"npx":%s,' "$(json_bool "$(tool_flag npx)")"
+    printf '"bunx":%s,' "$(json_bool "$(tool_flag bunx)")"
+    printf '"brew":%s' "$(json_bool "$(tool_flag brew)")"
+    printf '},'
+    printf '"config":{"env_file":%s,"config_file":%s},' "$(json_bool "$env_file")" "$(json_bool "$config_file")"
+    printf '"endpoints":{"api_ready":%s,"web":%s,"grafana":%s},' "$(json_bool "$api_ready")" "$(json_bool "$web_ready")" "$(json_bool "$grafana_ready")"
+    printf '"layers":'
+    cmd_status_json | sed 's/^{"layers"://; s/}$//'
+    printf '}\n'
+}
+
+cmd_doctor() {
+    local json_mode="$1"
+    if [ "$json_mode" = "1" ]; then
+        cmd_doctor_json
+    else
+        cmd_doctor_human
+    fi
+}
+
+cmd_logs() {
+    require_docker
+
+    if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "help" ]; then
+        print_logs_usage
+        return 0
+    fi
+
+    if [ "$#" -eq 0 ]; then
+        compose logs --tail=120
+        return 0
+    fi
+
+    if [[ "${1:-}" == -* ]]; then
+        compose logs "$@"
+        return 0
+    fi
+
+    local service
+    service="$(resolve_service_alias "$1")"
+    shift
+    compose logs --tail=120 "$service" "$@"
+}
+
+cmd_up() {
+  require_docker
+
+  local compose_args=()
+  local wants_home_assistant=0
+  local wants_mqtt=0
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --ai|--local-ai)
+        compose_args+=(--profile local-ai)
+        ;;
+      --agents)
+        compose_args+=(--profile agents)
+        ;;
+      --mqtt)
+        compose_args+=(--profile mosquitto)
+        wants_mqtt=1
+        ;;
+      --home-assistant|--ha)
+        compose_args+=(--profile home-assistant)
+        wants_home_assistant=1
+        ;;
+      --all-optional)
+        compose_args+=(--profile local-ai --profile agents --profile mosquitto --profile home-assistant)
+        wants_home_assistant=1
+        wants_mqtt=1
+        ;;
+            -h|--help)
+                print_up_usage
+                return 0
+                ;;
+            *)
+                log_error "Unknown up flag: $1"
+                print_up_usage
+                exit 2
+                ;;
+        esac
+    shift
+  done
+
+  if [ "$wants_home_assistant" = "1" ]; then
+    ensure_env_value "HA_MQTT_ENABLED" "true"
+    local broker
+    broker="$(read_env_value HA_MQTT_BROKER)"
+    if { [ -z "$broker" ] || [ "$broker" = "mqtt" ]; } && [ "$wants_mqtt" = "0" ]; then
+      log_info "Including bundled MQTT broker for Home Assistant bridge."
+      compose_args+=(--profile mosquitto)
+    fi
+  fi
+
+  compose "${compose_args[@]}" up -d
+    log_info "Waiting for API readiness on ${API_URL_DEFAULT}/ready..."
+    if wait_for_api_ready; then
+        log_ok "API ready."
+    else
+        log_warn "API did not become ready within 120 seconds. Run 'healthsave logs api'."
+    fi
+}
+
+cmd_down() {
+    require_docker
+    compose down
+}
+
+cmd_verify() {
+  if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "help" ]; then
+    print_verify_usage
+    return 0
+  fi
+
+  if [ "$#" -gt 0 ]; then
+    log_error "Unknown verify argument: $1"
+    print_verify_usage
+    exit 2
+  fi
+
+  exec make verify-local
+}
+
+cmd_install_cli() {
+    local bin_dir="${HOME}/.local/bin"
+    local name="healthsave"
+    local force=0
+    local dry_run=0
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --bin-dir)
+                shift
+                if [ "$#" -eq 0 ]; then
+                    log_error "--bin-dir needs a value"
+                    exit 2
+                fi
+                bin_dir="$1"
+                ;;
+            --name)
+                shift
+                if [ "$#" -eq 0 ]; then
+                    log_error "--name needs a value"
+                    exit 2
+                fi
+                name="$1"
+                ;;
+            --force)
+                force=1
+                ;;
+            --dry-run)
+                dry_run=1
+                ;;
+            -h|--help)
+                print_install_cli_usage
+                return 0
+                ;;
+            *)
+                log_error "Unknown install-cli flag: $1"
+                print_install_cli_usage
+                exit 2
+                ;;
+        esac
+        shift
+    done
+
+    local target="${bin_dir}/${name}"
+    local existing
+    existing="$(command -v "$name" 2>/dev/null || true)"
+
+    if [ "$dry_run" = "1" ]; then
+        echo "Would install wrapper: ${target}"
+        echo "Wrapper would execute: ${CLI_DIR}/healthsave"
+        if [ -n "$existing" ]; then
+            echo "Existing command on PATH: ${existing}"
+        fi
+        return 0
+    fi
+
+    if [ -n "$existing" ] && [ "$existing" != "$target" ] && [ "$force" != "1" ]; then
+        log_error "Command '${name}' already exists at ${existing}. Use --name healthsave-observatory or --force."
+        exit 1
+    fi
+
+    if [ -e "$target" ] && [ "$force" != "1" ]; then
+        if ! grep -F "$CLI_DIR/healthsave" "$target" >/dev/null 2>&1; then
+            log_error "${target} already exists. Use --force to replace it."
+            exit 1
+        fi
+    fi
+
+    mkdir -p "$bin_dir"
+    {
+        printf '#!/usr/bin/env bash\n'
+        printf 'exec "%s/healthsave" "$@"\n' "$CLI_DIR"
+    } >"$target"
+    chmod +x "$target"
+
+    log_ok "Installed ${name} -> ${CLI_DIR}/healthsave"
+    if ! printf ':%s:' "$PATH" | grep -F ":${bin_dir}:" >/dev/null 2>&1; then
+        log_warn "${bin_dir} is not on PATH. Add it to your shell profile or run ${target} directly."
+    fi
+}
+
+TUI_CURSOR_HIDDEN=0
+TUI_CHOICE=0
+
+tui_hide_cursor() {
+    [ "$TUI_CURSOR_HIDDEN" = "1" ] && return 0
+    printf '\033[?25l' >&2
+    TUI_CURSOR_HIDDEN=1
+}
+
+tui_show_cursor() {
+    [ "$TUI_CURSOR_HIDDEN" = "0" ] && return 0
+    printf '\033[?25h' >&2
+    TUI_CURSOR_HIDDEN=0
+}
+
+tui_clear() {
+    printf '\033[2J\033[H' >&2
+}
+
+tui_header() {
+    local title="$1"
+    tui_clear
+    printf '%sHealthSave Observatory%s\n' "$COLOR_INFO" "$COLOR_RESET" >&2
+    printf '%s%s%s\n\n' "$COLOR_OK" "$title" "$COLOR_RESET" >&2
+}
+
+tui_footer() {
+    printf '\n%s↑/↓ move · Enter select · q back/quit%s\n' "$COLOR_WARN" "$COLOR_RESET" >&2
+}
+
+tui_drain_pending_input() {
+    local _
+    while IFS= read -rsn1 -t 0 _; do
+        :
+    done
+}
+
+tui_pause() {
+    if [ ! -t 0 ]; then
+        return 0
+    fi
+    printf '\n%sPress Enter to continue%s' "$COLOR_WARN" "$COLOR_RESET" >&2
+    local _
+    read -r _ || true
+}
+
+tui_select() {
+    local title="$1"
+    shift
+    local selected=0
+    local count="$#"
+    local key
+    local key2
+    local i
+    local label
+    local old_stty=""
+
+    if [ "$count" -eq 0 ]; then
+        return 1
+    fi
+
+    if [ ! -t 0 ]; then
+        TUI_CHOICE=0
+        return 0
+    fi
+
+    old_stty="$(stty -g 2>/dev/null || true)"
+    if [ -n "$old_stty" ]; then
+        stty -echo -icanon min 1 time 0 2>/dev/null || true
+    fi
+
+    trap 'tui_show_cursor' RETURN
+    tui_hide_cursor
+
+    while true; do
+        tui_header "$title"
+        i=0
+        for label in "$@"; do
+            if [ "$i" -eq "$selected" ]; then
+                printf '  %s›%s %s%s%s\n' "$COLOR_OK" "$COLOR_RESET" "$COLOR_INFO" "$label" "$COLOR_RESET" >&2
+            else
+                printf '    %s\n' "$label" >&2
+            fi
+            i=$((i + 1))
+        done
+        tui_footer
+
+        IFS= read -rsn1 key || key=""
+        case "$key" in
+            "")
+                [ -n "$old_stty" ] && stty "$old_stty" 2>/dev/null || true
+                tui_show_cursor
+                TUI_CHOICE="$selected"
+                return 0
+                ;;
+            q|Q)
+                tui_drain_pending_input
+                [ -n "$old_stty" ] && stty "$old_stty" 2>/dev/null || true
+                tui_show_cursor
+                TUI_CHOICE=$((count - 1))
+                return 0
+                ;;
+            k|K)
+                selected=$((selected - 1))
+                ;;
+            j|J)
+                selected=$((selected + 1))
+                ;;
+            $'\033')
+                IFS= read -rsn2 -t 1 key2 || key2=""
+                case "$key2" in
+                    "[A")
+                        selected=$((selected - 1))
+                        ;;
+                    "[B")
+                        selected=$((selected + 1))
+                        ;;
+                esac
+                ;;
+        esac
+
+        if [ "$selected" -lt 0 ]; then
+            selected=$((count - 1))
+        elif [ "$selected" -ge "$count" ]; then
+            selected=0
+        fi
+    done
+}
+
+tui_run() {
+    tui_show_cursor
+    tui_clear
+    "$@"
+    local rc=$?
+    if [ "$rc" -ne 0 ]; then
+        log_warn "Command exited with status ${rc}."
+    fi
+    tui_pause
+    return "$rc"
+}
+
+tui_setup_menu() {
+    local choice
+    while true; do
+        tui_select "Setup" \
+            "Basic setup - generated local defaults, starts DB/API/web/Grafana" \
+            "Advanced setup - passwords, API key, local AI/Ollama, model" \
+            "Basic dry run - preview without writing files" \
+            "Back"
+        choice="$TUI_CHOICE"
+        case "$choice" in
+            0) tui_run cmd_setup_basic 0 ;;
+            1) tui_run cmd_setup_advanced 0 0 ;;
+            2) tui_run cmd_setup_basic 1 ;;
+            *) return 0 ;;
+        esac
+    done
+}
+
+tui_profile_menu() {
+    local ai=0
+    local agents=0
+    local mqtt=0
+    local ha=0
+    local choice
+    local ai_label
+    local agents_label
+    local mqtt_label
+    local ha_label
+    local args
+
+    while true; do
+        ai_label="[$([ "$ai" = "1" ] && printf x || printf ' ')] Local AI / Ollama"
+        agents_label="[$([ "$agents" = "1" ] && printf x || printf ' ')] Agents"
+        mqtt_label="[$([ "$mqtt" = "1" ] && printf x || printf ' ')] MQTT broker"
+        ha_label="[$([ "$ha" = "1" ] && printf x || printf ' ')] Home Assistant bridge"
+        tui_select "Start Stack With Optional Layers" \
+            "$ai_label" \
+            "$agents_label" \
+            "$mqtt_label" \
+            "$ha_label" \
+            "Start with selected layers" \
+            "Back"
+        choice="$TUI_CHOICE"
+        case "$choice" in
+            0) [ "$ai" = "1" ] && ai=0 || ai=1 ;;
+            1) [ "$agents" = "1" ] && agents=0 || agents=1 ;;
+            2) [ "$mqtt" = "1" ] && mqtt=0 || mqtt=1 ;;
+            3) [ "$ha" = "1" ] && ha=0 || ha=1 ;;
+            4)
+                args=()
+                [ "$ai" = "1" ] && args+=(--ai)
+                [ "$agents" = "1" ] && args+=(--agents)
+                [ "$mqtt" = "1" ] && args+=(--mqtt)
+                [ "$ha" = "1" ] && args+=(--home-assistant)
+                tui_run cmd_up "${args[@]}"
+                ;;
+            *) return 0 ;;
+        esac
+    done
+}
+
+tui_stack_menu() {
+    local choice
+    while true; do
+        tui_select "Stack Control" \
+            "Start default stack" \
+            "Start with optional layers" \
+            "Show status" \
+            "Stop stack" \
+            "Back"
+        choice="$TUI_CHOICE"
+        case "$choice" in
+            0) tui_run cmd_up ;;
+            1) tui_profile_menu ;;
+            2) tui_run cmd_status 0 ;;
+            3) tui_run cmd_down ;;
+            *) return 0 ;;
+        esac
+    done
+}
+
+tui_diagnose_menu() {
+    local choice
+    while true; do
+        tui_select "Diagnose And Verify" \
+            "Doctor - platform, config, services, URLs" \
+            "Status - layer-aware service state" \
+            "Layers - explain web, Grafana, API, MQTT, Home Assistant" \
+            "Verify - lint, tests, TypeScript/web, Docker E2E" \
+            "Back"
+        choice="$TUI_CHOICE"
+        case "$choice" in
+            0) tui_run cmd_doctor 0 ;;
+            1) tui_run cmd_status 0 ;;
+            2) tui_run cmd_layers 0 ;;
+            3) tui_run cmd_verify ;;
+            *) return 0 ;;
+        esac
+    done
+}
+
+tui_logs_menu() {
+    local choice
+    while true; do
+        tui_select "Logs" \
+            "All services" \
+            "API" \
+            "Worker" \
+            "Observatory web" \
+            "Grafana" \
+            "Database" \
+            "Local AI / Ollama" \
+            "MQTT" \
+            "Home Assistant bridge" \
+            "Back"
+        choice="$TUI_CHOICE"
+        case "$choice" in
+            0) tui_run cmd_logs ;;
+            1) tui_run cmd_logs api ;;
+            2) tui_run cmd_logs worker ;;
+            3) tui_run cmd_logs web ;;
+            4) tui_run cmd_logs grafana ;;
+            5) tui_run cmd_logs db ;;
+            6) tui_run cmd_logs ollama ;;
+            7) tui_run cmd_logs mqtt ;;
+            8) tui_run cmd_logs home-assistant ;;
+            *) return 0 ;;
+        esac
+    done
+}
+
+cmd_menu() {
+    local choice
+
+    if [ ! -t 0 ]; then
+        print_cli_usage
+        return 0
+    fi
+
+    while true; do
+        tui_select "Control Center" \
+            "Setup HealthSave Observatory" \
+            "Control stack and optional layers" \
+            "Diagnose and verify" \
+            "Logs" \
+            "Install CLI on PATH" \
+            "Quit"
+        choice="$TUI_CHOICE"
+        case "$choice" in
+            0) tui_setup_menu ;;
+            1) tui_stack_menu ;;
+            2) tui_diagnose_menu ;;
+            3) tui_logs_menu ;;
+            4) tui_run cmd_install_cli ;;
+            *) tui_show_cursor; tui_clear; return 0 ;;
+        esac
+    done
+}
+
+json_mode=0
+if [ "${1:-}" = "--json" ]; then
+    json_mode=1
+    shift
+fi
+
+if [ "${1:-}" = "--version" ]; then
+    printf 'healthsave %s\n' "$VERSION"
+    exit 0
+fi
+
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+    print_cli_usage
+    exit 0
+fi
+
+if [ "$#" -eq 0 ]; then
+    if [ -t 0 ]; then
+        cmd_menu
+    else
+        print_cli_usage
+    fi
+    exit 0
+fi
+
+cmd="$1"
+shift
+
+case "$cmd" in
+    tui|menu)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for tui."
+            exit 2
+        fi
+        cmd_menu
+        ;;
+    setup|install)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for setup."
+            exit 2
+        fi
+        cmd_setup_cli "$@"
+        ;;
+    install-cli)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for install-cli."
+            exit 2
+        fi
+        cmd_install_cli "$@"
+        ;;
+    layers)
+        if [ "${1:-}" = "--json" ]; then
+            json_mode=1
+        fi
+        cmd_layers "$json_mode"
+        ;;
+    doctor)
+        if [ "${1:-}" = "--json" ]; then
+            json_mode=1
+        fi
+        cmd_doctor "$json_mode"
+        ;;
+    verify)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for verify."
+            exit 2
+        fi
+        cmd_verify "$@"
+        ;;
+    status)
+        if [ "${1:-}" = "--json" ]; then
+            json_mode=1
+        fi
+        cmd_status "$json_mode"
+        ;;
+    logs)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for logs."
+            exit 2
+        fi
+        cmd_logs "$@"
+        ;;
+    up)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for up."
+            exit 2
+        fi
+        cmd_up "$@"
+        ;;
+    down)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for down."
+            exit 2
+        fi
+        cmd_down "$@"
+        ;;
+    help)
+        print_cli_usage
+        ;;
+    *)
+        log_error "Unknown command: ${cmd}"
+        print_cli_usage
+        exit 2
+        ;;
+esac
