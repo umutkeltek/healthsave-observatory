@@ -101,6 +101,7 @@ class _FakeSession:
         sleep_rows: list[tuple] | None = None,
         quantity_values: dict[str, Any] | None = None,
         medication_status: str | None = None,
+        medication_table_exists: bool = True,
         source_model: str | None = "HealthSave",
     ) -> None:
         self._hr = hr_rows or []
@@ -109,6 +110,7 @@ class _FakeSession:
         self._sleep = sleep_rows or []
         self._quantity_values = quantity_values or {}
         self._medication_status = medication_status
+        self._medication_table_exists = medication_table_exists
         self._source_model = source_model
         self.executed_queries: list[str] = []
 
@@ -136,6 +138,8 @@ class _FakeSession:
             return _FakeResult([])
         if "FROM blood_oxygen" in sql:
             return _FakeResult([])
+        if "to_regclass('public.medication_dose_events')" in sql:
+            return _FakeResult([(self._medication_table_exists,)])
         if "FROM medication_dose_events" in sql:
             return _FakeResult(
                 [(self._medication_status,)] if self._medication_status is not None else []
@@ -378,4 +382,23 @@ async def test_fetch_snapshot_includes_latest_medication_status() -> None:
     snapshot = await repo.fetch_snapshot(session)
 
     assert snapshot.latest_medication_status == "not_interacted"
+    assert any(
+        "to_regclass('public.medication_dose_events')" in query
+        for query in session.executed_queries
+    )
     assert any("FROM medication_dose_events" in query for query in session.executed_queries)
+
+
+@pytest.mark.asyncio
+async def test_fetch_snapshot_skips_missing_medication_table() -> None:
+    session = _FakeSession(medication_status="not_interacted", medication_table_exists=False)
+    repo = TimescaleHealthSnapshotRepository()
+
+    snapshot = await repo.fetch_snapshot(session)
+
+    assert snapshot.latest_medication_status is None
+    assert any(
+        "to_regclass('public.medication_dose_events')" in query
+        for query in session.executed_queries
+    )
+    assert not any("FROM medication_dose_events" in query for query in session.executed_queries)
