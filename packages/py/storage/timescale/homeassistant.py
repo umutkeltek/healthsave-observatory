@@ -265,18 +265,25 @@ class TimescaleHealthSnapshotRepository:
                 )
             )
         ).scalar_one_or_none() or "HealthSave"
-        latest_medication_status = (
+        medication_table_exists = (
             await session.execute(
-                text(
-                    """
-                    SELECT status
-                    FROM medication_dose_events
-                    ORDER BY coalesce(scheduled_time, time) DESC, time DESC
-                    LIMIT 1
-                    """
-                )
+                text("SELECT to_regclass('public.medication_dose_events') IS NOT NULL")
             )
         ).scalar_one_or_none()
+        latest_medication_status = None
+        if medication_table_exists:
+            latest_medication_status = (
+                await session.execute(
+                    text(
+                        """
+                        SELECT status
+                        FROM medication_dose_events
+                        ORDER BY coalesce(scheduled_time, time) DESC, time DESC
+                        LIMIT 1
+                        """
+                    )
+                )
+            ).scalar_one_or_none()
 
         snapshot = HealthSnapshot(
             collected_at=collected_at,
