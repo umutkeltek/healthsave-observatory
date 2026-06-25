@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import stat
 import subprocess
@@ -28,7 +29,7 @@ def _require_npx() -> None:
         pytest.skip("npx is required for npm CLI package tests")
 
 
-def test_node_cli_help_explains_npx_setup() -> None:
+def test_node_cli_help_explains_onboard_flow() -> None:
     _require_node()
 
     proc = subprocess.run(
@@ -40,7 +41,9 @@ def test_node_cli_help_explains_npx_setup() -> None:
         check=True,
     )
 
-    assert "npx healthsave setup basic" in proc.stdout
+    assert "npm i -g healthsave" in proc.stdout
+    assert "healthsave onboard" in proc.stdout
+    assert "npx healthsave" in proc.stdout
     assert "healthsave tui" in proc.stdout
     assert "healthsave init" in proc.stdout
     assert "healthsave-observatory is installed by the same npm package" in proc.stdout
@@ -65,6 +68,43 @@ def test_node_cli_init_dry_run_is_non_mutating(tmp_path: Path) -> None:
     assert not target.exists()
 
 
+def test_node_cli_bare_dry_run_opens_onboard_flow(tmp_path: Path) -> None:
+    _require_node()
+    target = tmp_path / "stack"
+    proc = subprocess.run(
+        ["node", str(BIN), "--dry-run"],
+        cwd="/tmp",
+        env={**os.environ, "HEALTHSAVE_OBSERVATORY_HOME": str(target)},
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=True,
+    )
+
+    assert "Would clone" in proc.stdout
+    assert str(target) in proc.stdout
+    assert "Would open interactive control center: healthsave onboard" in proc.stdout
+    assert not target.exists()
+
+
+def test_node_cli_onboard_dry_run_clones_before_opening_onboard(tmp_path: Path) -> None:
+    _require_node()
+    target = tmp_path / "stack"
+    proc = subprocess.run(
+        ["node", str(BIN), "onboard", "--dry-run", "--dir", str(target)],
+        cwd="/tmp",
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=True,
+    )
+
+    assert "Would clone" in proc.stdout
+    assert str(target) in proc.stdout
+    assert "Would open interactive control center: healthsave onboard" in proc.stdout
+    assert not target.exists()
+
+
 def test_npm_exec_runs_packaged_healthsave_bin() -> None:
     _require_npm()
 
@@ -86,7 +126,7 @@ def test_npm_exec_runs_packaged_healthsave_bin() -> None:
         check=True,
     )
 
-    assert proc.stdout.strip() == "healthsave 0.1.0"
+    assert proc.stdout.strip() == "healthsave 0.1.1"
 
 
 def test_npx_package_delegates_to_existing_checkout_layers_json() -> None:
@@ -170,4 +210,31 @@ def test_node_cli_delegates_tui_command(tmp_path: Path) -> None:
 
     assert (stack / "delegated-args.txt").read_text(encoding="utf-8").splitlines() == [
         "tui",
+    ]
+
+
+def test_node_cli_delegates_onboard_command(tmp_path: Path) -> None:
+    _require_node()
+    stack = tmp_path / "stack"
+    stack.mkdir()
+    (stack / "setup.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    (stack / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+    healthsave = stack / "healthsave"
+    healthsave.write_text(
+        "#!/usr/bin/env bash\nprintf '%s\\n' \"$@\" > delegated-args.txt\n",
+        encoding="utf-8",
+    )
+    healthsave.chmod(healthsave.stat().st_mode | stat.S_IXUSR)
+
+    subprocess.run(
+        ["node", str(BIN), "onboard", "--dir", str(stack)],
+        cwd="/tmp",
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=True,
+    )
+
+    assert (stack / "delegated-args.txt").read_text(encoding="utf-8").splitlines() == [
+        "onboard",
     ]

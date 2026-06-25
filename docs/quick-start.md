@@ -1,60 +1,50 @@
 # Quick Start
 
-You need Docker installed and running.
+HealthSave Observatory runs as a Docker Compose stack. Install Docker first, then let the CLI guide setup.
 
-- macOS: Docker Desktop is the easiest path.
-- Linux: Docker Engine or Docker Desktop works.
-- Windows: use WSL2 with Docker Desktop WSL integration enabled, then run the
-  commands inside the WSL2 shell. Native PowerShell is not the supported install
-  path for the Docker Compose stack.
+## Platform
 
-## Install
+- macOS: use Docker Desktop.
+- Linux: use Docker Engine or Docker Desktop.
+- WSL2: enable Docker Desktop WSL integration for your distro.
+- Native Windows: use WSL2 today; the stack does not install directly in PowerShell.
+- Termux: unsupported because Docker Compose is required.
 
-```bash
-npx healthsave setup basic ~/healthsave-observatory
-healthsave doctor
-healthsave tui
-```
-
-`npx healthsave` creates or finds the HealthSave Observatory checkout, installs
-the local `healthsave` command when possible, and delegates setup to that
-checkout.
-
-Basic setup generates passwords, writes `.env`, keeps local defaults, skips AI
-questions, and starts TimescaleDB, migrations, the API, the worker, Observatory
-web, and Grafana.
-
-Use `healthsave tui` after install for the arrow-key control center: setup,
-stack control, optional layer toggles, doctor/status, logs, verification, and
-local CLI installation.
-
-Use named subcommands for automation and agents.
-
-Advanced setup lets you choose passwords, an API key, local AI/Ollama, and the
-model:
+## Recommended Path
 
 ```bash
-npx healthsave setup advanced ~/healthsave-observatory
+npm i -g healthsave
+healthsave onboard
 ```
 
-Re-running setup is safe. Existing `.env` and `config.yaml` values are
-preserved.
-
-## Manual Checkout Fallback
+No global install:
 
 ```bash
-git clone https://github.com/umutkeltek/healthsave-observatory.git
-cd healthsave-observatory
-./healthsave setup basic
-./healthsave doctor
-./healthsave tui
+npx healthsave
 ```
 
-`./healthsave` is the repo-local launcher for development or manual installs.
-After checkout setup works, `./healthsave install-cli` installs the global
-`healthsave` wrapper.
+Server or clean-machine installer:
 
-## Confirm It Is Healthy
+```bash
+curl -fsSL https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/install.sh | bash
+```
+
+Windows PowerShell handoff to WSL2:
+
+```powershell
+irm https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/install.ps1 | iex
+```
+
+`healthsave onboard` opens the arrow-key control center for Basic setup, Advanced setup, stack control, optional layers, doctor/status, logs, verification, and CLI installation.
+
+## Setup Modes
+
+- Basic setup: generates local passwords, writes `.env`, creates `config.yaml`, skips AI questions, and starts TimescaleDB, API, worker, Observatory web, and Grafana.
+- Advanced setup: asks for passwords, API key, local AI/Ollama, and model choice.
+
+Re-running setup preserves existing `.env` and `config.yaml` values unless you edit them.
+
+## Confirm Health
 
 ```bash
 healthsave doctor
@@ -62,17 +52,33 @@ healthsave status
 healthsave layers
 ```
 
-`doctor` confirms platform tools, config files, default services, and URLs.
-`status` shows Docker state by product layer. `layers` explains the API,
-database, worker, web, Grafana, local AI, agents, MQTT, and Home Assistant
-layers.
+`doctor` checks platform tools, config files, service health, and URLs. `status` shows Docker state by product layer. `layers` explains API, database, worker, web, Grafana, local AI, agents, MQTT, and Home Assistant.
 
-## Next Steps
+## Automation
 
-- [Zero To Ready](zero-to-ready.md) - full clean-machine guide through iOS sync,
-  web, Grafana, local AI, and Home Assistant.
-- [Deployment](operations/deployment.md) - running on a VM, NAS, or homelab box.
-- [Local LLM](operations/local-llm.md) - choosing an optional AI briefing model
-  by RAM and GPU.
-- [Connect HealthSave](connect-healthsave.md) - pair the iOS app and start
-  syncing.
+Agents and CI should use named commands:
+
+```bash
+healthsave setup basic --no-input
+healthsave doctor --json
+healthsave status --json
+healthsave logs api
+```
+
+## Manual Checkout
+
+```bash
+git clone https://github.com/umutkeltek/healthsave-observatory.git
+cd healthsave-observatory
+./healthsave onboard
+```
+
+After checkout setup works, `./healthsave install-cli` installs the `healthsave` wrapper in `~/.local/bin`.
+
+## Next
+
+- [Zero To Ready](zero-to-ready.md) - full clean-machine guide through iOS sync, web, Grafana, optional AI, and Home Assistant.
+- [Deployment](operations/deployment.md) - run on a VM, NAS, or homelab box.
+- [Local LLM](operations/local-llm.md) - choose an optional AI briefing model by RAM and GPU.
+- [Connect HealthSave](connect-healthsave.md) - pair the iOS app and start syncing.
+- [Home Assistant & MQTT](integrations/home-assistant.md) - publish HealthSave signals into Home Assistant.

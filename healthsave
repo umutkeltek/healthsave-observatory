@@ -23,6 +23,7 @@ healthsave install-cli
 
 Examples:
   healthsave
+  healthsave onboard
   healthsave tui
   healthsave setup basic
   healthsave setup advanced
@@ -37,6 +38,7 @@ Usage: healthsave <command> [args]
        healthsave [global flags] <command> [args]
 
 Commands:
+  onboard                      Open guided installer/control center
   tui, menu                    Open arrow-key control center
   setup [basic|advanced]       Install or update HealthSave Observatory
   install [basic|advanced]     Alias for setup
@@ -1462,9 +1464,9 @@ cmd="$1"
 shift
 
 case "$cmd" in
-    tui|menu)
+    onboard|tui|menu)
         if [ "$json_mode" = "1" ]; then
-            log_error "--json is not supported for tui."
+            log_error "--json is not supported for onboard/tui."
             exit 2
         fi
         cmd_menu
