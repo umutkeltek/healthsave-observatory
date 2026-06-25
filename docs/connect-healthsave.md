@@ -13,8 +13,8 @@ HealthSave expects a **base server URL** and appends the API paths itself.
 3. *(Optional)* Set your **API key** if you configured one in `.env`.
 4. Tap **Sync New Data**.
 
-iOS won't sync to `localhost` from the phone — use the backend's LAN IP. Running
-`./setup.sh doctor` prints the exact URL to paste in.
+iOS will not sync to `localhost` from the phone; use the backend's LAN IP.
+Running `./healthsave doctor` prints the exact URL to paste in.
 
 Manual sync ("Sync New Data") works for testing without the Pro unlock; ongoing
 background uploads need the one-time Pro unlock in the iOS app.

@@ -1,23 +1,64 @@
-# Home Assistant
+# Home Assistant And MQTT
 
-HealthSave Observatory can route your canonical health data into Home Assistant so your wearables become first-class entities — usable in dashboards, templates, and (carefully) room automations. There are two supported paths.
+HealthSave Observatory can publish canonical health signals into Home Assistant so wearable data becomes dashboard and automation context.
 
-1. **HealthSave MQTT bridge (recommended).** The bridge reads TimescaleDB and publishes retained Home Assistant MQTT discovery + state topics. This keeps Home Assistant out of the database and works even when Grafana is deployed separately.
-2. **Direct SQL package (legacy / example).** Home Assistant queries TimescaleDB directly using `integrations/home-assistant/healthsave-package.yaml`. Useful for learning the schema, but MQTT is cleaner because Home Assistant never needs database credentials.
+The recommended path is MQTT:
 
-## How the HealthSave MQTT bridge publishes
+```text
+HealthSave Observatory -> MQTT -> Home Assistant
+```
 
-The bridge publishes in two layers each cycle.
+Home Assistant does not need database credentials. The bridge reads TimescaleDB, publishes retained MQTT discovery/state topics, and Home Assistant creates entities from MQTT discovery.
 
-### Aggregate parent device
+## Two Supported Paths
 
-One device, one state topic, the legacy shape:
+| Path | Recommended? | Why |
+|---|---|---|
+| HealthSave MQTT bridge | Yes | Home Assistant only talks to MQTT; no DB credentials; works with external or bundled broker |
+| Direct SQL package | Legacy/example | Useful for learning schema, but Home Assistant needs DB access |
 
-- Retained state topic: `healthsave/sensor/state`
+## Start With Existing MQTT Broker
+
+Use this when you already run Mosquitto, EMQX, Home Assistant's MQTT add-on, or another broker.
+
+```bash
+HA_MQTT_ENABLED=true \
+HA_MQTT_BROKER=<your-mqtt-host> \
+HA_MQTT_USERNAME=<optional-user> \
+HA_MQTT_PASSWORD=<optional-password> \
+./healthsave up --home-assistant
+```
+
+The bridge service is `homeassistant-mqtt`.
+
+## Start With Bundled Broker
+
+Use this when you want HealthSave to run Mosquitto in the same Docker Compose stack:
+
+```bash
+HA_MQTT_ENABLED=true ./healthsave up --mqtt --home-assistant
+```
+
+This starts:
+
+- `mqtt` - bundled Mosquitto broker, profile `mosquitto`
+- `homeassistant-mqtt` - HealthSave bridge, profile `home-assistant`
+
+The bundled broker publishes host port `1883` by default so a Home Assistant instance on the same LAN can connect to the host IP.
+
+The bundled broker defaults to anonymous-on-LAN. For a hardened deployment, add an override that disables anonymous access and mounts a password file. The base config lives at `deploy/mosquitto/mosquitto.conf`.
+
+## Published Topics
+
+The bridge publishes retained state and Home Assistant discovery topics.
+
+Aggregate parent device:
+
+- State topic: `healthsave/sensor/state`
 - Discovery topics: `homeassistant/sensor/healthsave/<metric>/config`
-- Availability: `healthsave/status`
+- Availability topic: `healthsave/status`
 
-Six entities on the parent device by default:
+Default parent entities:
 
 - `sensor.healthsave_heart_rate`
 - `sensor.healthsave_hrv_7d_avg`
@@ -26,79 +67,40 @@ Six entities on the parent device by default:
 - `sensor.healthsave_source_model`
 - `sensor.healthsave_room_health_state`
 
-### Per-source sub-devices
+Per-source sub-devices:
 
-One device per distinct `source_id` seen in recent data — Apple Watch, Whoop, iPhone, etc.:
-
-- Retained state topic: `healthsave/source/<slug>/state` (one JSON payload per source)
+- State topic: `healthsave/source/<slug>/state`
 - Discovery topics: `homeassistant/sensor/healthsave_<slug>/<metric>/config`
-- Linked to the parent via Home Assistant's `via_device`, so HA nests sub-devices under the parent.
-- Metrics carried per sub-device: `heart_rate`, `hrv_latest_ms`, `steps_today`, `last_sleep_hours`. Only metrics with a recent non-null value get a discovery message, so HA never sees ghost entities.
+- Metrics: `heart_rate`, `hrv_latest_ms`, `steps_today`, `last_sleep_hours`
 
-Example — a household running both an Apple Watch and a Whoop sees:
+Sub-devices are linked to the parent HealthSave device with Home Assistant `via_device`, so Apple Watch, Whoop, iPhone, or other sources can appear as separate devices under HealthSave.
 
-- `sensor.healthsave_apple_watch_heart_rate`, `_hrv_latest_ms`, `_steps_today`, `_last_sleep_hours`
-- `sensor.healthsave_whoop_heart_rate`, `_hrv_latest_ms`, `_last_sleep_hours` (no `_steps_today` if Whoop hasn't logged any)
+## Defaults
 
-Source attribution comes from `source_id` on the ingestion tables (added to `daily_activity` and `sleep_sessions` in migration 009; native to `heart_rate` / `hrv` since v1). Rows with NULL `source_id` collapse to a single `sensor.healthsave_unknown_*` sub-device so legacy data never fragments into empty entities.
+| Setting | Default |
+|---|---|
+| Discovery prefix | `homeassistant` |
+| State prefix | `healthsave` |
+| Device identifier | `healthsave` |
+| Device name | `HealthSave` |
+| Publish interval | `60` seconds |
 
-Both layers share `healthsave/status`, so HA marks every sub-device offline together if the bridge stops.
-
-## Legacy namespace migration
-
-Fresh installs should keep the primary `HA_MQTT_STATE_TOPIC_PREFIX`, `HA_MQTT_DEVICE_IDENTIFIER`, and `HA_MQTT_DEVICE_NAME` values on `healthsave` / `HealthSave`. If an existing Home Assistant install still has dashboards or automations on an older namespace, set `HA_MQTT_LEGACY_STATE_TOPIC_PREFIX` plus the matching legacy device identifier / name. The bridge then publishes both shapes from the same service, so Home Assistant can be migrated one entity at a time.
+If you have an older Home Assistant setup using a previous namespace, set the legacy variables so both shapes publish during migration:
 
 ```bash
-HA_MQTT_STATE_TOPIC_PREFIX=healthsave
-HA_MQTT_DEVICE_IDENTIFIER=healthsave
-HA_MQTT_DEVICE_NAME=HealthSave
 HA_MQTT_LEGACY_STATE_TOPIC_PREFIX=<old-prefix>
 HA_MQTT_LEGACY_DEVICE_IDENTIFIER=<old-device-id>
 HA_MQTT_LEGACY_DEVICE_NAME=<old-display-name>
 ```
 
-## Enabling the bridge
+## Direct SQL Example
 
-Enable it with Docker Compose. Two patterns:
-
-### (a) Bring your own broker
-
-Point the bridge at an MQTT server you already run:
-
-```bash
-HA_MQTT_ENABLED=true \
-HA_MQTT_BROKER=<your-mqtt-host> \
-HA_MQTT_USERNAME=<optional-user> \
-HA_MQTT_PASSWORD=<optional-password> \
-docker compose --profile home-assistant up -d homeassistant-mqtt
-```
-
-### (b) Use the bundled broker
-
-Add the `mosquitto` profile and the stack runs an `eclipse-mosquitto:2` container alongside the bridge. The bridge's default `HA_MQTT_BROKER=mqtt` resolves through docker DNS, and host port `1883` is published so a Home Assistant install on the same LAN can also connect by host IP. Persistence is on a docker volume so retained messages survive restarts.
-
-```bash
-HA_MQTT_ENABLED=true \
-docker compose --profile mosquitto --profile home-assistant up -d
-```
-
-The bundled broker defaults to anonymous-on-LAN. To require auth, overlay a `docker-compose.override.yml` that flips `allow_anonymous false` and mounts a password file — the conf at `deploy/mosquitto/mosquitto.conf` is read-only, so the override is the right seam.
-
-### Useful defaults
-
-- Discovery prefix: `homeassistant`
-- State prefix: `healthsave`
-- Device identifier: `healthsave`
-- Publish interval: `60` seconds
-
-## Direct SQL example
-
-For setups that prefer DB polling, the older direct-SQL example files remain available:
+The older direct-SQL examples remain available:
 
 - `integrations/home-assistant/healthsave-package.yaml`
 - `integrations/home-assistant/secrets.example.yaml`
 
-It is still useful for learning the Timescale schema, but the HealthSave MQTT bridge is cleaner because Home Assistant does not need database credentials. A minimal manual sensor query looks like this:
+Minimal example:
 
 ```yaml
 sensor:
@@ -110,18 +112,20 @@ sensor:
         column: "value"
 ```
 
-## Shareable dashboards
+Use this only if you deliberately want Home Assistant to connect to TimescaleDB.
 
-A polished example dashboard is included:
+## Dashboards And Automations
+
+Example files:
 
 - `integrations/home-assistant/README.md`
-- `integrations/home-assistant/nervous-system-core-package.yaml` — helper sensors and an example room-response automation
-- `integrations/home-assistant/dashboards/nervous-system-core.raw-lovelace.json` — the dashboard view
+- `integrations/home-assistant/nervous-system-core-package.yaml`
+- `integrations/home-assistant/dashboards/nervous-system-core.raw-lovelace.json`
 
-The Nervous-System Core dashboard shows HRV against a 7-day baseline, a derived nervous-load signal, recovery / readiness as a room-control signal, recent sleep / resting HR / SpO2, and source attribution. It needs the HACS custom cards `button-card`, `layout-card`, `apexcharts-card`, `mini-graph-card`, and `card-mod`. Its two room-response automations ship disabled by default — edit `light.your_room_light`, review the thresholds, then enable them manually.
+The example dashboard shows HRV against a 7-day baseline, nervous-load style derived signals, recovery/readiness context, recent sleep, resting HR, SpO2, and source attribution.
+
+The example automations are disabled by default. Edit entity IDs such as `light.your_room_light`, review thresholds, and enable manually.
 
 ## Safety
 
-These examples are for ambience and personal dashboards, not diagnosis. Keep automations reversible, keep manual controls in charge, and avoid using health signals for anything safety-critical.
-
-See the project [`README.md`](../../README.md) for the full integration reference, and [Findings & Body Briefs](../surfaces/findings-and-body-briefs.md) for the analysis that feeds derived signals like nervous load.
+Use HealthSave signals for personal dashboards and reversible comfort automations only. Do not use health signals for safety-critical automation, access control, medical decisions, or anything that could harm someone if the data is delayed, incomplete, or wrong.

@@ -1,52 +1,128 @@
 # Troubleshooting
 
-Common issues when running a self-hosted Observatory, and how to diagnose them. Most first-time problems are resource limits or a service that didn't come up — the logs say which.
+Most first-time problems are Docker not running, Docker lacking memory, a service failing to start, or the phone using the wrong URL.
 
-## The Ollama container won't start
+Start with:
 
 ```bash
-docker compose logs ollama
+./healthsave doctor
+./healthsave status
 ```
 
-The most common causes are:
-
-- **Not enough free RAM** — Ollama refuses to load a model that won't fit. Pick a smaller model (see [Local LLM](local-llm.md)) or free up memory.
-- **The override file is missing** — re-run `./setup.sh`; it copies the example.
-- **Another process is holding port 11434** — stop it, or edit `docker-compose.override.yml` to bind a different port.
-
-## My briefing came back empty (or said "not enough data")
-
-Two things to check:
-
-1. **Has HealthSave actually synced?** Hit `http://your-server-ip:8000/api/apple/status` — if the table counts are all zero, sync from your phone first.
-2. **How much history do you have?** The statistical engine needs at least ~24 hours of heart-rate data to compute anything. Newly-installed users typically see a real briefing on day 2.
-
-## I want to change the model after setup
-
-Edit the `OLLAMA_MODEL=` line in your `.env`, then pull the new tag and restart:
+Then inspect the failing layer:
 
 ```bash
-# Edit .env to set OLLAMA_MODEL=<new-tag>
+./healthsave logs api
+./healthsave logs web
+./healthsave logs grafana
+```
+
+## Docker Is Not Running
+
+`doctor` reports Docker CLI, daemon, and Compose plugin separately.
+
+- macOS: start Docker Desktop.
+- Linux: start Docker Engine or Docker Desktop.
+- Windows: run inside WSL2 with Docker Desktop WSL integration enabled.
+
+## A Service Is Not Running
+
+Use layer aliases:
+
+```bash
+./healthsave logs database
+./healthsave logs api
+./healthsave logs worker
+./healthsave logs web
+./healthsave logs grafana
+```
+
+Most first-time failures are Docker memory limits or missing config. If config is missing:
+
+```bash
+./healthsave setup basic
+```
+
+## App Cannot Reach Server
+
+The HealthSave iOS app syncs to the host's LAN IP on port `8000`, not `localhost`.
+
+Run:
+
+```bash
+./healthsave doctor
+```
+
+Use the printed iOS app URL, for example:
+
+```text
+http://<your-lan-ip>:8000
+```
+
+If you use a reverse proxy, use the `https://` hostname with no port. Check that the host firewall allows inbound `8000` on LAN, or `443` through the proxy.
+
+## Observatory Web Or Grafana Is Not Reachable From Another Device
+
+Observatory web and Grafana expose private health data, so they bind loopback by default.
+
+For deliberate LAN access, set:
+
+```bash
+WEB_BIND=0.0.0.0
+GRAFANA_BIND=0.0.0.0
+```
+
+Then restart:
+
+```bash
+./healthsave up
+```
+
+For anything beyond LAN, use a reverse proxy with HTTPS instead of binding services directly to the internet.
+
+## Ollama Container Will Not Start
+
+Check:
+
+```bash
+./healthsave logs ai
+```
+
+Common causes:
+
+- not enough free RAM for the selected model
+- another process using port `11434`
+- local AI was partially configured manually
+
+Use a smaller model or rerun:
+
+```bash
+./healthsave setup advanced
+```
+
+## Briefing Is Empty Or Says Not Enough Data
+
+Check two things:
+
+1. Has the phone synced? Open `http://your-server-ip:8000/api/apple/status`.
+2. Is there enough history? The statistical engine needs roughly a day of data before useful briefings appear.
+
+New installs usually get better results on day two.
+
+## Change Ollama Model
+
+Edit `OLLAMA_MODEL=` in `.env`, then pull the model and restart the worker:
+
+```bash
 docker compose exec ollama ollama pull <new-tag>
-docker compose restart api
+docker compose restart worker
 ```
 
-Any Ollama model tag works — the tier table in [Local LLM](local-llm.md) is a starting point, not a requirement. Browse [ollama.com/library](https://ollama.com/library) for the full list.
+See [Local LLM](local-llm.md) for sizing.
 
-## `./setup.sh doctor` says a service isn't running
+## See Also
 
-Run `docker compose logs <service>` (e.g. `docker compose logs api`) to see why. Most first-time failures are Docker not having enough memory allocated — bump it in Docker Desktop's preferences and re-run `./setup.sh`.
-
-## The app can't reach the server
-
-The HealthSave app syncs to the host's LAN IP on port 8000, **not** `localhost`. Run `./setup.sh doctor` to print the exact URL, and confirm the address in the app matches `http://your-server-ip:8000`. If you're going through a [reverse proxy](reverse-proxy.md), use the `https://` hostname with no port. Check that the host firewall allows inbound 8000 (or 443 behind a proxy) on your LAN.
-
-## The Observatory web app or Grafana isn't reachable from another device
-
-Grafana and the database port bind to `127.0.0.1` by default so they aren't exposed on your LAN. To reach Grafana from another device, set `GRAFANA_BIND=0.0.0.0` in `.env` and recreate the stack. For anything beyond your LAN, front it with a [reverse proxy](reverse-proxy.md) rather than binding services to all interfaces.
-
-## See also
-
-- [Local LLM](local-llm.md) — model sizing and changing the model
-- [Metrics](metrics.md) — alerting on failing briefings
-- [Deployment](deployment.md) — bringing the stack up correctly
+- [Zero To Ready](../zero-to-ready.md)
+- [Deployment](deployment.md)
+- [Local LLM](local-llm.md)
+- [Metrics](metrics.md)
