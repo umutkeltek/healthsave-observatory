@@ -113,8 +113,8 @@ Publish checklist:
 set -euo pipefail
 npm login
 npm publish --access public
-test "$(npm view healthsave@0.1.4 version)" = "0.1.4"
-npx --yes healthsave@0.1.4 --version
+test "$(npm view healthsave@0.1.5 version)" = "0.1.5"
+npx --yes healthsave@0.1.5 --version
 ```
 
 Before publishing, run the verification suite and scan the diff for secrets.
@@ -154,7 +154,7 @@ brew tap healthsave/observatory && brew install healthsave && healthsave onboard
 
 Required before enabling the tap:
 
-- GitHub release tag tarball checksum.
+- GitHub release tag and tarball checksum.
 - Formula installs `healthsave` and `healthsave-observatory`.
 - `brew test healthsave` runs `healthsave --version` and `healthsave --help`.
 - Upgrade behavior preserves existing stack directories.

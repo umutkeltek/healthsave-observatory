@@ -95,7 +95,7 @@ Manual path:
 cp docker-compose.override.yml.example docker-compose.override.yml
 ```
 
-Then edit `.env`, `config.yaml`, `OLLAMA_MODEL`, and analysis settings. See [Local LLM](local-llm.md) for model sizing by RAM/GPU.
+Then edit `.env` and `config.yaml` for `OLLAMA_MODEL` and analysis settings. See [Local LLM](local-llm.md) for model sizing by RAM/GPU.
 
 ## Proxmox, NAS, Homelab
 

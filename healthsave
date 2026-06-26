@@ -167,19 +167,19 @@ print_verify_usage() {
     cat <<'EOF'
 HealthSave verify
 
-Runs local verification gate:
+Runs the local verification gate:
 1. shell syntax, shellcheck, formatting/lint checks
 2. Python tests
 3. generated TypeScript client check
 4. TypeScript typecheck
-5. Observatory web tests typecheck
+5. Observatory web tests and typecheck
 6. Docker E2E stack boot and API readiness test
 
 Usage:
   healthsave verify
   healthsave verify --help
 
-Use before a release after changing setup, Docker, API, worker, or web code.
+Use before a release or after changing setup, Docker, API, worker, or web code.
 EOF
 }
 

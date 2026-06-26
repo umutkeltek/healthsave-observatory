@@ -175,6 +175,9 @@ def test_healthsave_verify_help_does_not_run_verification() -> None:
     )
 
     assert "HealthSave verify" in proc.stdout
+    assert "Runs the local verification gate" in proc.stdout
+    assert "Observatory web tests and typecheck" in proc.stdout
+    assert "before a release or after changing" in proc.stdout
     assert "Docker E2E stack" in proc.stdout
     assert "make verify-local" not in proc.stdout
 
