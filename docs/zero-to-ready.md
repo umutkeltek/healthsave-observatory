@@ -17,7 +17,8 @@ This guide takes a clean machine from no checkout to a running HealthSave Observ
 Recommended when Node.js is available:
 
 ```bash
-npm i -g healthsave && healthsave onboard
+npm i -g healthsave
+healthsave onboard
 ```
 
 No global install:
@@ -26,7 +27,7 @@ No global install:
 npx healthsave
 ```
 
-Server or clean-machine installer:
+Server or clean-machine installer. Docker Compose v2 still needs to be installed and running:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/install.sh | bash
@@ -73,7 +74,9 @@ Optional layers:
 ## 4. Verify Local Health
 
 ```bash
-healthsave doctor && healthsave status && healthsave layers
+healthsave doctor
+healthsave status
+healthsave layers
 ```
 
 Expected local URLs:
@@ -131,8 +134,10 @@ Advanced setup detects RAM/GPU, recommends an Ollama model, starts the local AI 
 If you already run an MQTT broker:
 
 ```bash
-HA_MQTT_ENABLED=true HA_MQTT_BROKER=<your-mqtt-host> healthsave up --home-assistant
+HA_MQTT_ENABLED=true HA_MQTT_BROKER=mqtt.home.arpa healthsave up --home-assistant
 ```
+
+Put `HA_MQTT_USERNAME` and `HA_MQTT_PASSWORD` in `.env` instead of shell history when the broker requires credentials.
 
 If you want HealthSave to run a bundled broker too:
 
@@ -147,7 +152,11 @@ The bridge publishes MQTT discovery and state topics so Home Assistant can creat
 Agents and CI should use scriptable commands instead of the TUI:
 
 ```bash
-healthsave setup basic --no-input && healthsave doctor --json && healthsave status --json && healthsave layers --json && healthsave logs api
+healthsave setup basic --no-input
+healthsave doctor --json
+healthsave status --json
+healthsave layers --json
+healthsave logs api
 ```
 
 Fresh machines without a global install can use `npx --yes healthsave setup basic --no-input`. That is an automation command, not the main human install path.
@@ -157,7 +166,9 @@ Fresh machines without a global install can use `npx --yes healthsave setup basi
 Use this when npm is unavailable or you want to inspect the checkout first:
 
 ```bash
-git clone https://github.com/umutkeltek/healthsave-observatory.git && cd healthsave-observatory && ./healthsave onboard
+git clone https://github.com/umutkeltek/healthsave-observatory.git
+cd healthsave-observatory
+./healthsave onboard
 ```
 
 `./healthsave` is the repo-local launcher. The installed command is `healthsave`.
@@ -165,11 +176,14 @@ git clone https://github.com/umutkeltek/healthsave-observatory.git && cd healths
 ## 11. Stop Or Inspect
 
 ```bash
-healthsave logs api && healthsave logs web && healthsave down
+healthsave logs api
+healthsave logs web
+healthsave down
 ```
 
 If anything fails, start with:
 
 ```bash
-healthsave doctor && healthsave logs <layer>
+healthsave doctor
+healthsave logs api
 ```

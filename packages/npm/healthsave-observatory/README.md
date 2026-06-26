@@ -5,7 +5,8 @@ Bootstrap and control the self-hosted HealthSave Observatory Docker Compose stac
 ## Install
 
 ```bash
-npm i -g healthsave && healthsave onboard
+npm i -g healthsave
+healthsave onboard
 ```
 
 No global install:
@@ -14,7 +15,7 @@ No global install:
 npx healthsave
 ```
 
-Both commands create or reuse `~/healthsave-observatory`, install the local wrapper when possible, and open the guided installer/control center.
+Both commands create or reuse `~/healthsave-observatory` and open the guided installer/control center. The npm package owns the public `healthsave` command; checkout-local wrapper install is explicit for manual checkouts.
 
 ## Commands
 
@@ -36,11 +37,19 @@ healthsave uninstall-cli [dir]
 
 Use `healthsave onboard` for humans. Use named commands for scripts and agents. This package also exposes `healthsave-observatory` as a longer alias.
 
-Uninstall:
+Uninstall the npm bootstrapper:
 
 ```bash
 npm uninstall -g healthsave
 ```
+
+Remove only the checkout-local wrapper:
+
+```bash
+healthsave uninstall-cli
+```
+
+Neither uninstall command removes the checkout directory, containers, volumes, config, or health data.
 
 ## Platform
 

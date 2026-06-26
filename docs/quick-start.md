@@ -13,7 +13,8 @@ HealthSave Observatory runs as a Docker Compose stack. Install Docker first, the
 ## Recommended Path
 
 ```bash
-npm i -g healthsave && healthsave onboard
+npm i -g healthsave
+healthsave onboard
 ```
 
 No global install:
@@ -22,7 +23,7 @@ No global install:
 npx healthsave
 ```
 
-Server or clean-machine installer:
+Server or clean-machine installer. Docker Compose v2 still needs to be installed and running:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/install.sh | bash
@@ -46,7 +47,9 @@ Re-running setup preserves existing `.env` and `config.yaml` values unless you e
 ## Confirm Health
 
 ```bash
-healthsave doctor && healthsave status && healthsave layers
+healthsave doctor
+healthsave status
+healthsave layers
 ```
 
 `doctor` checks platform tools, config files, service health, and URLs. `status` shows Docker state by product layer. `layers` explains API, database, worker, web, Grafana, local AI, agents, MQTT, and Home Assistant.
@@ -56,13 +59,18 @@ healthsave doctor && healthsave status && healthsave layers
 Agents and CI should use named commands:
 
 ```bash
-healthsave setup basic --no-input && healthsave doctor --json && healthsave status --json && healthsave logs api
+healthsave setup basic --no-input
+healthsave doctor --json
+healthsave status --json
+healthsave logs api
 ```
 
 ## Manual Checkout
 
 ```bash
-git clone https://github.com/umutkeltek/healthsave-observatory.git && cd healthsave-observatory && ./healthsave onboard
+git clone https://github.com/umutkeltek/healthsave-observatory.git
+cd healthsave-observatory
+./healthsave onboard
 ```
 
 After checkout setup works, `./healthsave install-cli` installs a `healthsave` wrapper in `~/.local/bin`.

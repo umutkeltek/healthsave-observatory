@@ -9,7 +9,8 @@ Package managers install a thin bootstrapper. Stack operations live in the check
 Install once:
 
 ```bash
-npm i -g healthsave && healthsave onboard
+npm i -g healthsave
+healthsave onboard
 ```
 
 No global install:
@@ -34,13 +35,17 @@ The npm bootstrapper:
 1. Finds an existing checkout from the current directory upward.
 2. Uses `HEALTHSAVE_OBSERVATORY_HOME` or `~/healthsave-observatory` when no checkout is found.
 3. Clones `https://github.com/umutkeltek/healthsave-observatory.git` when the checkout is missing.
-4. Installs the local wrapper when possible.
+4. Checks out the package release ref for new checkouts.
 5. Delegates to checkout-local `./healthsave`.
+
+Package-manager installs own the public `healthsave` command. A checkout-local wrapper is explicit and mainly for manual checkouts.
 
 Version checks:
 
 ```bash
-healthsave version && healthsave --version
+healthsave --version
+healthsave version --json
+./healthsave version
 ```
 
 Uninstall the global npm package:
@@ -55,12 +60,18 @@ Remove a checkout-local wrapper:
 healthsave uninstall-cli
 ```
 
+Neither command removes the checkout directory, running containers, Docker volumes, configuration, or health data.
+
 ## Scriptable Commands
 
 Agents, CI, and remote automation should use named commands:
 
 ```bash
-healthsave setup basic --no-input && healthsave doctor --json && healthsave status --json && healthsave layers --json && healthsave logs api
+healthsave setup basic --no-input
+healthsave doctor --json
+healthsave status --json
+healthsave layers --json
+healthsave logs api
 ```
 
 No-install automation on a clean machine:
@@ -76,13 +87,15 @@ That command belongs in automation docs. It should not be the main human install
 From the repository root:
 
 ```bash
-node --check packages/npm/healthsave-observatory/bin/healthsave-observatory.mjs && uv run --extra dev python -m pytest -q tests/test_npx_cli.py tests/test_healthsave_cli.py
+node --check packages/npm/healthsave-observatory/bin/healthsave-observatory.mjs
+uv run --extra dev python -m pytest -q tests/test_npx_cli.py tests/test_healthsave_cli.py
 ```
 
 From the npm package directory:
 
 ```bash
-npm pack --dry-run && npm publish --dry-run
+npm pack --dry-run
+npm publish --dry-run
 ```
 
 Smoke test from outside the repository:
@@ -94,7 +107,10 @@ npx --yes --package ./packages/npm/healthsave-observatory healthsave --version
 Publish checklist:
 
 ```bash
-npm login && npm publish --access public && npm view healthsave name version && npx --yes healthsave --version
+npm login
+npm publish --access public
+test "$(npm view healthsave@0.1.2 version)" = "0.1.2"
+npx --yes healthsave@0.1.2 --version
 ```
 
 Before publishing, run the verification suite and scan the diff for secrets.
@@ -104,7 +120,9 @@ Before publishing, run the verification suite and scan the diff for secrets.
 Manual checkout works without npm:
 
 ```bash
-git clone https://github.com/umutkeltek/healthsave-observatory.git && cd healthsave-observatory && ./healthsave onboard
+git clone https://github.com/umutkeltek/healthsave-observatory.git
+cd healthsave-observatory
+./healthsave onboard
 ```
 
 `./healthsave` is the product-owned launcher. Package-manager wrappers call it after they create or find a checkout.
@@ -114,7 +132,8 @@ git clone https://github.com/umutkeltek/healthsave-observatory.git && cd healths
 After checkout exists:
 
 ```bash
-./healthsave install-cli && healthsave doctor
+./healthsave install-cli
+healthsave doctor
 ```
 
 This installs a small wrapper into `~/.local/bin` that calls checkout-local `./healthsave`. It avoids sudo and keeps stack operation independent from npm global state.

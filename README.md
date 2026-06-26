@@ -17,7 +17,8 @@ Raw observations stay on hardware you control unless you enable an egress route.
 If Node.js is already available:
 
 ```bash
-npm i -g healthsave && healthsave onboard
+npm i -g healthsave
+healthsave onboard
 ```
 
 No global install:
@@ -26,7 +27,7 @@ No global install:
 npx healthsave
 ```
 
-Server or clean-machine installer:
+Server or clean-machine installer. Docker Compose v2 still needs to be installed and running:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/install.sh | bash
@@ -53,7 +54,7 @@ Basic setup is the recommended first run. Advanced setup lets you choose passwor
 
 ## What You Get
 
-- **Capture without a new silo.** HealthSave iOS syncs Apple Health data into your server. Early Whoop, Amazfit, and Polar plugins plus Garmin/Samsung importers follow the same canonical model. Android Health Connect and generic HMAC-signed ingest are planned.
+- **Capture without a new silo.** HealthSave iOS syncs Apple Health data into your server. Early Whoop and Amazfit plugins plus Garmin/Samsung importers follow the same canonical model. Android Health Connect and generic HMAC-signed ingest are planned.
 - **One record you own.** Source / Device / Stream identity keeps integrations, physical devices, and metric streams separate without fragmenting your history.
 - **Two surfaces.** Observatory web is the product surface for daily use. Grafana stays bundled for raw SQL-backed dashboards and builder workflows.
 - **Evidence-linked findings.** Statistics compute anomalies, trends, summaries, and correlations. Local AI can narrate those findings, but it does not invent health facts.
@@ -94,23 +95,27 @@ HealthSave iOS also works without Observatory: on-device dashboard, trends, and 
 Human setup should start with `healthsave onboard` or `npx healthsave`. Agents and CI should use named commands:
 
 ```bash
-healthsave setup basic --no-input && healthsave doctor --json
+healthsave setup basic --no-input
+healthsave doctor --json
 ```
 
 ## Manual Checkout
 
 ```bash
-git clone https://github.com/umutkeltek/healthsave-observatory.git && cd healthsave-observatory && ./healthsave onboard
+git clone https://github.com/umutkeltek/healthsave-observatory.git
+cd healthsave-observatory
+./healthsave onboard
 ```
 
 ## CLI Lifecycle
 
 - npm package name: `healthsave`
-- global install path: `npm i -g healthsave && healthsave onboard`
+- global install path: `npm i -g healthsave`, then `healthsave onboard`
 - no-install path: `npx healthsave`
 - repo-local fallback: `./healthsave onboard`
 - local wrapper install: `./healthsave install-cli`
 - local wrapper uninstall: `./healthsave uninstall-cli`
+- npm uninstall removes only the npm bootstrapper, not the checkout, containers, volumes, config, or health data
 - Homebrew formula template: `packaging/homebrew/healthsave.rb.template`
 
 ## Compatibility

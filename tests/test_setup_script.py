@@ -49,6 +49,40 @@ set_config_daily_briefing_enabled false
     assert data["analysis"]["daily_briefing"]["enabled"] is False
 
 
+def test_detect_lan_ip_prefers_windows_host_ip_under_wsl(tmp_path):
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    (fake_bin / "uname").write_text("#!/usr/bin/env bash\nprintf 'Linux\\n'\n", encoding="utf-8")
+    (fake_bin / "powershell.exe").write_text(
+        "#!/usr/bin/env bash\nprintf '192.168.1.50\\r\\n'\n",
+        encoding="utf-8",
+    )
+    (fake_bin / "hostname").write_text(
+        "#!/usr/bin/env bash\nprintf '172.20.10.2 10.0.0.2\\n'\n",
+        encoding="utf-8",
+    )
+    for executable in fake_bin.iterdir():
+        executable.chmod(0o755)
+
+    script = f"""
+    set -euo pipefail
+    export HEALTHSAVE_SETUP_TEST=1
+    export HEALTHSAVE_TEST_WSL=1
+    export PATH="{fake_bin}:$PATH"
+    source "{ROOT / "setup.sh"}"
+    detect_lan_ip
+    """
+
+    proc = subprocess.run(
+        ["bash", "-c", script],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert proc.stdout.strip() == "192.168.1.50"
+
+
 def test_setup_helpers_toggle_anomaly_detection_with_ai(tmp_path):
     config_path = tmp_path / "config.yaml"
     script = f"""

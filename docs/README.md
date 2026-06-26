@@ -47,7 +47,7 @@ New here? Start with [Zero To Ready](zero-to-ready.md), then [Connect HealthSave
 
 ## Operations
 
-- [Deployment](operations/deployment.md) - run the stack on a laptop, VM, NAS, Proxmox host, or homelab box.
+- [Deployment](operations/deployment.md) - run the stack on a laptop, VM, NAS, Proxmox VM, or homelab box.
 - [CLI distribution](operations/cli-distribution.md) - installer, npm/npx path, repo-local fallback, and Homebrew release shape.
 - [Local LLM](operations/local-llm.md) - choose and operate the optional Ollama narration model.
 - [Reverse proxy & HTTPS](operations/reverse-proxy.md) - expose API surfaces safely behind HTTPS.

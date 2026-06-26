@@ -4,6 +4,7 @@ import json
 import os
 import pty
 import select
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -199,11 +200,11 @@ def test_healthsave_json_doctor_is_machine_readable() -> None:
         text=True,
         capture_output=True,
         timeout=25,
-        check=True,
     )
 
     payload = json.loads(proc.stdout)
     assert payload["ok"] in {True, False}
+    assert proc.returncode == (0 if payload["ok"] else 1)
     assert payload["script_dir"] == str(ROOT)
     assert payload["platform"]["id"]
     assert isinstance(payload["tools"]["docker_cli"], bool)
@@ -309,8 +310,139 @@ def test_healthsave_uninstall_cli_refuses_unrelated_file(tmp_path: Path) -> None
     )
 
     assert proc.returncode == 1
-    assert "does not look like a wrapper" in proc.stderr
+    assert "does not look like" in proc.stderr
     assert wrapper.exists()
+
+
+def test_healthsave_install_cli_ignores_same_name_elsewhere_on_path(tmp_path: Path) -> None:
+    path_bin = tmp_path / "path-bin"
+    target_bin = tmp_path / "target-bin"
+    path_bin.mkdir()
+    target_bin.mkdir()
+    existing = path_bin / "healthsave"
+    existing.write_text("#!/usr/bin/env bash\necho npm shim\n", encoding="utf-8")
+    existing.chmod(0o755)
+
+    proc = subprocess.run(
+        [str(CLI), "install-cli", "--bin-dir", str(target_bin), "--name", "healthsave"],
+        cwd="/tmp",
+        env={**os.environ, "PATH": f"{path_bin}{os.pathsep}{os.environ['PATH']}"},
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=True,
+    )
+
+    wrapper = target_bin / "healthsave"
+    assert "Installed healthsave" in proc.stdout
+    assert wrapper.exists()
+    assert str(CLI) in wrapper.read_text(encoding="utf-8")
+
+
+def test_healthsave_uninstall_cli_requires_exact_wrapper_marker(tmp_path: Path) -> None:
+    wrapper = tmp_path / "healthsave"
+    wrapper.write_text(
+        f"#!/usr/bin/env bash\n# mentions {CLI} but is not generated\n",
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o755)
+
+    proc = subprocess.run(
+        [str(CLI), "uninstall-cli", "--bin-dir", str(tmp_path)],
+        cwd="/tmp",
+        text=True,
+        capture_output=True,
+        timeout=5,
+    )
+
+    assert proc.returncode == 1
+    assert "does not look like the wrapper" in proc.stderr
+    assert wrapper.exists()
+
+
+def test_healthsave_install_cli_rejects_path_command_name(tmp_path: Path) -> None:
+    proc = subprocess.run(
+        [str(CLI), "install-cli", "--bin-dir", str(tmp_path), "--name", "../healthsave"],
+        cwd="/tmp",
+        text=True,
+        capture_output=True,
+        timeout=5,
+    )
+
+    assert proc.returncode == 2
+    assert "simple executable name" in proc.stderr
+
+
+def test_healthsave_wrapper_commands_reject_symlinks_without_force(tmp_path: Path) -> None:
+    target = tmp_path / "healthsave"
+    target.symlink_to(tmp_path / "elsewhere")
+
+    install_proc = subprocess.run(
+        [str(CLI), "install-cli", "--bin-dir", str(tmp_path)],
+        cwd="/tmp",
+        text=True,
+        capture_output=True,
+        timeout=5,
+    )
+    uninstall_proc = subprocess.run(
+        [str(CLI), "uninstall-cli", "--bin-dir", str(tmp_path)],
+        cwd="/tmp",
+        text=True,
+        capture_output=True,
+        timeout=5,
+    )
+
+    assert install_proc.returncode == 1
+    assert "symlink" in install_proc.stderr
+    assert uninstall_proc.returncode == 1
+    assert "symlink" in uninstall_proc.stderr
+
+
+def test_healthsave_home_assistant_external_broker_skips_bundled_mosquitto(
+    tmp_path: Path,
+) -> None:
+    checkout = tmp_path / "checkout"
+    bin_dir = tmp_path / "bin"
+    calls = tmp_path / "docker-args.txt"
+    checkout.mkdir()
+    bin_dir.mkdir()
+    shutil.copy(ROOT / "healthsave", checkout / "healthsave")
+    shutil.copy(ROOT / "setup.sh", checkout / "setup.sh")
+    (checkout / ".env").write_text(
+        "HA_MQTT_ENABLED=false\nHA_MQTT_BROKER=mqtt\n",
+        encoding="utf-8",
+    )
+    docker = bin_dir / "docker"
+    docker.write_text(
+        "#!/usr/bin/env bash\n"
+        'if [ "$1" = "info" ]; then exit 0; fi\n'
+        f"printf '%s\\n' \"$*\" >> {calls}\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    docker.chmod(0o755)
+    curl = bin_dir / "curl"
+    curl.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    curl.chmod(0o755)
+
+    proc = subprocess.run(
+        [str(checkout / "healthsave"), "up", "--home-assistant"],
+        cwd="/tmp",
+        env={
+            **os.environ,
+            "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+            "HA_MQTT_BROKER": "mqtt.home.arpa",
+        },
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=True,
+    )
+
+    args = calls.read_text(encoding="utf-8")
+    assert "--profile home-assistant" in args
+    assert "--profile mosquitto" not in args
+    assert "Including bundled MQTT broker" not in proc.stdout
 
 
 def test_healthsave_unknown_command_exits_with_help() -> None:
