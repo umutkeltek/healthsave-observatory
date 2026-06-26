@@ -1268,11 +1268,6 @@ cmd_uninstall_cli() {
     validate_cli_command_name "$name"
 
     local target="${bin_dir}/${name}"
-    if [ "$dry_run" = "1" ]; then
-        echo "Would remove wrapper: ${target}"
-        return 0
-    fi
-
     if [ ! -e "$target" ] && [ ! -L "$target" ]; then
         log_warn "${target} does not exist."
         return 0
@@ -1286,6 +1281,11 @@ cmd_uninstall_cli() {
     if [ "$force" != "1" ] && ! wrapper_matches_checkout "$target"; then
         log_error "${target} does not look like the wrapper created by this checkout. Use --force to remove it anyway."
         exit 1
+    fi
+
+    if [ "$dry_run" = "1" ]; then
+        echo "Would remove wrapper: ${target}"
+        return 0
     fi
 
     rm -f "$target"

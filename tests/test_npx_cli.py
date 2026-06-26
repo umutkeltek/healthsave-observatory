@@ -79,6 +79,8 @@ def test_node_cli_help_explains_onboard_flow() -> None:
     assert "npx healthsave" in proc.stdout
     assert "healthsave init" in proc.stdout
     assert "healthsave version" in proc.stdout
+    assert "healthsave install-cli" in proc.stdout
+    assert "healthsave uninstall-cli" in proc.stdout
     assert "healthsave-observatory is installed by the same npm package" in proc.stdout
     assert "--dir DIR" in proc.stdout
 
@@ -95,7 +97,7 @@ def test_node_cli_version_command() -> None:
         check=True,
     )
 
-    assert proc.stdout.strip() == "healthsave 0.1.3"
+    assert proc.stdout.strip() == "healthsave 0.1.4"
 
     components = subprocess.run(
         ["node", str(BIN), "version", "--dir", str(ROOT), "--json"],
@@ -106,8 +108,8 @@ def test_node_cli_version_command() -> None:
         check=True,
     )
     payload = json.loads(components.stdout)
-    assert payload["bootstrapper"]["version"] == "0.1.3"
-    assert payload["bootstrapper"]["default_ref"] == "v0.1.3"
+    assert payload["bootstrapper"]["version"] == "0.1.4"
+    assert payload["bootstrapper"]["default_ref"] == "v0.1.4"
     assert payload["checkout"]["core_version"] == "healthsave 0.3.0"
 
 
@@ -125,7 +127,7 @@ def test_node_cli_init_dry_run_is_non_mutating(tmp_path: Path) -> None:
     )
 
     assert "Would clone" in proc.stdout
-    assert "Would checkout ref v0.1.3" in proc.stdout
+    assert "Would checkout ref v0.1.4" in proc.stdout
     assert "Would install wrapper command" not in proc.stdout
     assert not target.exists()
 
@@ -198,7 +200,7 @@ def test_npm_exec_runs_packaged_healthsave_bin() -> None:
         check=True,
     )
 
-    assert proc.stdout.strip() == "healthsave 0.1.3"
+    assert proc.stdout.strip() == "healthsave 0.1.4"
 
 
 def test_npm_packed_global_install_uses_real_healthsave_shim(tmp_path: Path) -> None:
@@ -240,7 +242,7 @@ def test_npm_packed_global_install_uses_real_healthsave_shim(tmp_path: Path) -> 
         check=True,
     )
 
-    assert proc.stdout.strip() == "healthsave 0.1.3"
+    assert proc.stdout.strip() == "healthsave 0.1.4"
 
     stack = _fake_checkout(tmp_path)
     subprocess.run(

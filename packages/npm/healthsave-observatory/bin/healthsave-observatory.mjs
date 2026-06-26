@@ -5,13 +5,13 @@ import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-const VERSION = "0.1.3";
+const VERSION = "0.1.4";
 const PRIMARY_COMMAND = "healthsave";
 const ALIAS_COMMAND = "healthsave-observatory";
 const DEFAULT_REPO =
   process.env.HEALTHSAVE_OBSERVATORY_REPO ||
   "https://github.com/umutkeltek/healthsave-observatory.git";
-const DEFAULT_REF = process.env.HEALTHSAVE_OBSERVATORY_REF || "v0.1.3";
+const DEFAULT_REF = process.env.HEALTHSAVE_OBSERVATORY_REF || "v0.1.4";
 const DEFAULT_HOME = process.env.HOME || process.env.USERPROFILE || process.cwd();
 const DEFAULT_DIR =
   process.env.HEALTHSAVE_OBSERVATORY_HOME ||
@@ -48,6 +48,8 @@ Usage:
   ${PRIMARY_COMMAND} down [dir]
   ${PRIMARY_COMMAND} verify [dir]
   ${PRIMARY_COMMAND} version
+  ${PRIMARY_COMMAND} install-cli [dir] [flags]
+  ${PRIMARY_COMMAND} uninstall-cli [dir] [flags]
 
 Examples:
   npm i -g healthsave
@@ -57,6 +59,8 @@ Examples:
   healthsave setup basic --no-input
   npx healthsave init /srv/healthsave-observatory
   npx healthsave doctor --dir /srv/healthsave-observatory --json
+  healthsave install-cli --help
+  healthsave uninstall-cli --help
 
 Flags:
   --dir DIR             Stack checkout directory. Defaults to ~/healthsave-observatory.
