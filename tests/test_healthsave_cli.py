@@ -449,7 +449,31 @@ def test_healthsave_uninstall_cli_requires_exact_wrapper_marker(tmp_path: Path) 
     )
 
     assert proc.returncode == 1
-    assert "does not look like the wrapper" in proc.stderr
+    assert "wrapper created by" in proc.stderr
+    assert wrapper.exists()
+
+
+def test_healthsave_uninstall_cli_dry_run_requires_exact_wrapper_marker(
+    tmp_path: Path,
+) -> None:
+    wrapper = tmp_path / "healthsave"
+    wrapper.write_text(
+        f"#!/usr/bin/env bash\n# mentions {CLI} but is not generated\n",
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o755)
+
+    proc = subprocess.run(
+        [str(CLI), "uninstall-cli", "--bin-dir", str(tmp_path), "--dry-run"],
+        cwd="/tmp",
+        text=True,
+        capture_output=True,
+        timeout=5,
+    )
+
+    assert proc.returncode == 1
+    assert "Would remove" not in proc.stdout
+    assert "wrapper created by" in proc.stderr
     assert wrapper.exists()
 
 
