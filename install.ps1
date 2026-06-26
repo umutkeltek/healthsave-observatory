@@ -23,6 +23,13 @@ if ($LASTEXITCODE -ne 0) {
   exit 1
 }
 
+$wslListRaw = (& wsl.exe -l -v 2>$null) -join "`n"
+$wslList = $wslListRaw -replace "`0", ""
+if ($LASTEXITCODE -ne 0 -or $wslList -notmatch "(?m)^\s*\*\s+\S+.*\s2\s*$") {
+    Write-Fail "Default WSL distro must be WSL2. Run 'wsl --set-default-version 2' and 'wsl --set-version <distro> 2', then rerun installer."
+    exit 1
+}
+
 Write-Info "HealthSave Observatory uses WSL2 + Docker Desktop WSL integration on Windows."
 Write-Info "Launching the Linux installer inside your default WSL distro."
 

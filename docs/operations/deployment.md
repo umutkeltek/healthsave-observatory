@@ -21,7 +21,8 @@ curl -fsSL https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/m
 Package-manager path:
 
 ```bash
-npm i -g healthsave && healthsave onboard
+npm i -g healthsave
+healthsave onboard
 ```
 
 No global install:
@@ -47,7 +48,9 @@ Advanced setup adds guided choices for database password, Grafana password, API 
 ## Manual Checkout
 
 ```bash
-git clone https://github.com/umutkeltek/healthsave-observatory.git && cd healthsave-observatory && ./healthsave onboard
+git clone https://github.com/umutkeltek/healthsave-observatory.git
+cd healthsave-observatory
+./healthsave onboard
 ```
 
 `./setup.sh` remains a compatibility wrapper. Public docs and agent instructions should use `healthsave onboard` for humans and named `healthsave ...` commands for automation.
@@ -57,10 +60,17 @@ git clone https://github.com/umutkeltek/healthsave-observatory.git && cd healths
 If you do not want guided setup:
 
 ```bash
-cp .env.example .env && cp config.yaml.example config.yaml && docker compose up -d
+cp .env.example .env
+cp config.yaml.example config.yaml
 ```
 
 Edit `.env` first and set at least `DB_PASSWORD` and `GRAFANA_PASSWORD`. HealthSave does not ship guessable production default secrets.
+
+Start the stack after secrets are set:
+
+```bash
+docker compose up -d
+```
 
 Database, Grafana, and Observatory web bind to loopback by default where applicable. To reach web or Grafana from another device on your LAN, set bind addresses deliberately:
 

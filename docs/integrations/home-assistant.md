@@ -22,8 +22,10 @@ Home Assistant does not need database credentials. The HealthSave bridge reads t
 Use this when you already run Mosquitto, EMQX, Home Assistant's MQTT add-on, or another broker:
 
 ```bash
-HA_MQTT_ENABLED=true HA_MQTT_BROKER=<your-mqtt-host> HA_MQTT_USERNAME=<optional-user> HA_MQTT_PASSWORD=<optional-password> healthsave up --home-assistant
+HA_MQTT_ENABLED=true HA_MQTT_BROKER=mqtt.home.arpa healthsave up --home-assistant
 ```
+
+Set `HA_MQTT_USERNAME` and `HA_MQTT_PASSWORD` in `.env` when your broker requires credentials. Avoid putting MQTT passwords directly in shell history.
 
 Bridge service: `homeassistant-mqtt`.
 
@@ -82,9 +84,9 @@ Sub-devices link to the parent HealthSave device through Home Assistant `via_dev
 If you have an older Home Assistant setup using a previous namespace, set legacy variables so both topic shapes publish during migration:
 
 ```bash
-HA_MQTT_LEGACY_STATE_TOPIC_PREFIX=<old-prefix>
-HA_MQTT_LEGACY_DEVICE_IDENTIFIER=<old-device-id>
-HA_MQTT_LEGACY_DEVICE_NAME=<old-display-name>
+HA_MQTT_LEGACY_STATE_TOPIC_PREFIX=old_healthsave
+HA_MQTT_LEGACY_DEVICE_IDENTIFIER=old_healthsave_device
+HA_MQTT_LEGACY_DEVICE_NAME=Old HealthSave
 ```
 
 ## Direct SQL Example

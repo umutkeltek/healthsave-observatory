@@ -85,8 +85,17 @@ detect_lan_ip() {
             fi
             ;;
         Linux)
+            if { [ "${HEALTHSAVE_TEST_WSL:-0}" = "1" ] || { [ -r /proc/version ] && grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; }; }; then
+                if command -v powershell.exe >/dev/null 2>&1; then
+                    ip="$(
+                        powershell.exe -NoProfile -Command \
+                            "Get-NetIPAddress -AddressFamily IPv4 | Where-Object { \$_.IPAddress -notlike '127.*' -and \$_.IPAddress -notlike '169.254.*' -and \$_.PrefixOrigin -ne 'WellKnown' } | Sort-Object InterfaceMetric | Select-Object -First 1 -ExpandProperty IPAddress" \
+                            2>/dev/null | tr -d '\r' | awk 'NF {print; exit}'
+                    )"
+                fi
+            fi
             if command -v hostname >/dev/null 2>&1; then
-                ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+                ip="${ip:-$(hostname -I 2>/dev/null | awk '{print $1}')}"
             fi
             ;;
     esac

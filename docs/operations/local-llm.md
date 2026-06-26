@@ -30,7 +30,8 @@ If the machine has less than 6 GB RAM, skip AI. Ingest, API, web, worker, and Gr
 You can change the model later. Edit `OLLAMA_MODEL=` in `.env`, pull the new tag, then restart the worker:
 
 ```bash
-docker compose exec ollama ollama pull <new-tag> && docker compose restart worker
+docker compose exec ollama ollama pull qwen3:8b
+docker compose restart worker
 ```
 
 The table is a starting point. Any Ollama model tag can work; browse [ollama.com/library](https://ollama.com/library) for the full list.
