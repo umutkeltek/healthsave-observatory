@@ -51,10 +51,13 @@ set_config_daily_briefing_enabled false
 
 def test_detect_lan_ip_prefers_windows_host_ip_under_wsl(tmp_path):
     fake_bin = tmp_path / "bin"
+    powershell_args = tmp_path / "powershell-args.txt"
     fake_bin.mkdir()
     (fake_bin / "uname").write_text("#!/usr/bin/env bash\nprintf 'Linux\\n'\n", encoding="utf-8")
     (fake_bin / "powershell.exe").write_text(
-        "#!/usr/bin/env bash\nprintf '192.168.1.50\\r\\n'\n",
+        "#!/usr/bin/env bash\n"
+        f"printf '%s\\n' \"$*\" > '{powershell_args}'\n"
+        "printf '192.168.1.50\\r\\n'\n",
         encoding="utf-8",
     )
     (fake_bin / "hostname").write_text(
@@ -81,6 +84,10 @@ def test_detect_lan_ip_prefers_windows_host_ip_under_wsl(tmp_path):
     )
 
     assert proc.stdout.strip() == "192.168.1.50"
+    command = powershell_args.read_text(encoding="utf-8")
+    assert "Get-NetIPConfiguration" in command
+    assert "Get-NetIPInterface" in command
+    assert "InterfaceMetric" in command
 
 
 def test_setup_helpers_toggle_anomaly_detection_with_ai(tmp_path):

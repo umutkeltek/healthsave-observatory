@@ -67,6 +67,7 @@ Neither command removes the checkout directory, running containers, Docker volum
 Agents, CI, and remote automation should use named commands:
 
 ```bash
+set -euo pipefail
 healthsave setup basic --no-input
 healthsave doctor --json
 healthsave status --json
@@ -87,6 +88,7 @@ That command belongs in automation docs. It should not be the main human install
 From the repository root:
 
 ```bash
+set -euo pipefail
 node --check packages/npm/healthsave-observatory/bin/healthsave-observatory.mjs
 uv run --extra dev python -m pytest -q tests/test_npx_cli.py tests/test_healthsave_cli.py
 ```
@@ -94,6 +96,7 @@ uv run --extra dev python -m pytest -q tests/test_npx_cli.py tests/test_healthsa
 From the npm package directory:
 
 ```bash
+set -euo pipefail
 npm pack --dry-run
 npm publish --dry-run
 ```
@@ -107,10 +110,11 @@ npx --yes --package ./packages/npm/healthsave-observatory healthsave --version
 Publish checklist:
 
 ```bash
+set -euo pipefail
 npm login
 npm publish --access public
-test "$(npm view healthsave@0.1.2 version)" = "0.1.2"
-npx --yes healthsave@0.1.2 --version
+test "$(npm view healthsave@0.1.3 version)" = "0.1.3"
+npx --yes healthsave@0.1.3 --version
 ```
 
 Before publishing, run the verification suite and scan the diff for secrets.

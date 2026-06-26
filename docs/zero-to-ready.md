@@ -152,6 +152,7 @@ The bridge publishes MQTT discovery and state topics so Home Assistant can creat
 Agents and CI should use scriptable commands instead of the TUI:
 
 ```bash
+set -euo pipefail
 healthsave setup basic --no-input
 healthsave doctor --json
 healthsave status --json

@@ -55,6 +55,21 @@ def test_healthsave_help_works_from_other_directory() -> None:
     assert "uninstall-cli" in proc.stdout
 
 
+def test_healthsave_doctor_help_does_not_run_checks() -> None:
+    proc = subprocess.run(
+        [str(CLI), "doctor", "--help"],
+        cwd="/tmp",
+        text=True,
+        capture_output=True,
+        timeout=2,
+        check=True,
+    )
+
+    assert "HealthSave doctor" in proc.stdout
+    assert "Usage:" in proc.stdout
+    assert "HealthSave Observatory doctor" not in proc.stdout
+
+
 def test_healthsave_version_command() -> None:
     proc = subprocess.run(
         [str(CLI), "version"],
@@ -294,6 +309,84 @@ def test_healthsave_install_and_uninstall_cli_wrapper(tmp_path: Path) -> None:
 
     assert "Removed" in proc.stdout
     assert not wrapper.exists()
+
+
+def test_healthsave_install_cli_upgrades_legacy_wrapper(tmp_path: Path) -> None:
+    wrapper = tmp_path / "healthsave"
+    wrapper.write_text(
+        f'#!/usr/bin/env bash\nexec "{ROOT}/healthsave" "$@"\n',
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o755)
+
+    proc = subprocess.run(
+        [str(CLI), "install-cli", "--bin-dir", str(tmp_path)],
+        cwd="/tmp",
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=True,
+    )
+
+    assert "Installed healthsave" in proc.stdout
+    text = wrapper.read_text(encoding="utf-8")
+    assert "# healthsave-wrapper:" in text
+
+
+def test_healthsave_uninstall_cli_accepts_legacy_wrapper(tmp_path: Path) -> None:
+    wrapper = tmp_path / "healthsave"
+    wrapper.write_text(
+        f'#!/usr/bin/env bash\nexec "{ROOT}/healthsave" "$@"\n',
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o755)
+
+    proc = subprocess.run(
+        [str(CLI), "uninstall-cli", "--bin-dir", str(tmp_path)],
+        cwd="/tmp",
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=True,
+    )
+
+    assert "Removed" in proc.stdout
+    assert not wrapper.exists()
+
+
+def test_healthsave_install_cli_shell_escapes_checkout_path(tmp_path: Path) -> None:
+    checkout = tmp_path / "checkout $(touch pwned)"
+    bin_dir = tmp_path / "bin"
+    checkout.mkdir()
+    bin_dir.mkdir()
+    shutil.copy(ROOT / "healthsave", checkout / "healthsave")
+    shutil.copy(ROOT / "setup.sh", checkout / "setup.sh")
+
+    subprocess.run(
+        [
+            str(checkout / "healthsave"),
+            "install-cli",
+            "--bin-dir",
+            str(bin_dir),
+            "--name",
+            "healthsave-escaped",
+        ],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=True,
+    )
+    subprocess.run(
+        [str(bin_dir / "healthsave-escaped"), "--help"],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=True,
+    )
+
+    assert not (tmp_path / "pwned").exists()
 
 
 def test_healthsave_uninstall_cli_refuses_unrelated_file(tmp_path: Path) -> None:

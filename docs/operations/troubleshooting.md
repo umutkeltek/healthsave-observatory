@@ -114,8 +114,8 @@ New installs usually get better results on day two.
 Edit `OLLAMA_MODEL=` in `.env`, then pull the model and restart the worker:
 
 ```bash
-docker compose exec ollama ollama pull qwen3:8b
-docker compose restart worker
+docker compose exec ollama ollama pull qwen3:8b &&
+  docker compose restart worker
 ```
 
 See [Local LLM](local-llm.md) for sizing.

@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-const VERSION = "0.1.2";
+const VERSION = "0.1.3";
 const PRIMARY_COMMAND = "healthsave";
 const ALIAS_COMMAND = "healthsave-observatory";
 const DEFAULT_REPO =
   process.env.HEALTHSAVE_OBSERVATORY_REPO ||
   "https://github.com/umutkeltek/healthsave-observatory.git";
-const DEFAULT_REF = process.env.HEALTHSAVE_OBSERVATORY_REF || "v0.1.2";
+const DEFAULT_REF = process.env.HEALTHSAVE_OBSERVATORY_REF || "v0.1.3";
 const DEFAULT_HOME = process.env.HOME || process.env.USERPROFILE || process.cwd();
 const DEFAULT_DIR =
   process.env.HEALTHSAVE_OBSERVATORY_HOME ||
@@ -292,6 +292,11 @@ function expandPath(value) {
   return path.resolve(value);
 }
 
+function shellQuote(value) {
+  if (/^[A-Za-z0-9_./:=@%+-]+$/.test(value)) return value;
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
 function defaultStackDir() {
   const discovered = findCheckout(process.cwd());
   return discovered || path.resolve(DEFAULT_DIR);
@@ -316,7 +321,7 @@ function splitDelegateArgs(command, commandArgs, options) {
   if (options.dir) return { dir: options.dir, args: [...commandArgs] };
 
   const first = commandArgs[0];
-  if (first && (looksLikePath(first) || isCheckout(expandPath(first)) || command !== "logs")) {
+  if (first && !first.startsWith("-") && (looksLikePath(first) || isCheckout(expandPath(first)))) {
     return { dir: expandPath(first), args: commandArgs.slice(1) };
   }
 
@@ -356,7 +361,10 @@ function ensureCheckout(dir, options) {
 
   info(`Checking out ${options.ref}`);
   result = run("git", ["-C", dir, "checkout", options.ref], { json: options.json });
-  if (result.status !== 0) process.exit(result.status || 1);
+  if (result.status !== 0) {
+    rmSync(dir, { recursive: true, force: true });
+    process.exit(result.status || 1);
+  }
 
   if (!isCheckout(dir)) {
     fail(`${dir} cloned, but does not contain HealthSave Observatory stack files.`, 1, options.json);
@@ -372,9 +380,7 @@ function installWrapper(dir, options) {
     stdio: "inherit",
   });
   if (result.status !== 0) {
-    process.stderr.write(
-      `[WARN] Could not install ${options.installName}; package-manager command can still control ${dir}.\n`,
-    );
+    process.exit(result.status || 1);
   }
 }
 
@@ -398,7 +404,7 @@ function commandInit(commandArgs, options) {
   installWrapper(dir, options);
   if (!options.dryRun) {
     ok(`HealthSave Observatory stack ready at ${dir}`);
-    process.stdout.write(`Next:\n  healthsave onboard --dir ${dir}\n`);
+    process.stdout.write(`Next:\n  cd ${shellQuote(dir)}\n  ./healthsave onboard\n`);
   }
 }
 

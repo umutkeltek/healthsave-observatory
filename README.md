@@ -95,6 +95,7 @@ HealthSave iOS also works without Observatory: on-device dashboard, trends, and 
 Human setup should start with `healthsave onboard` or `npx healthsave`. Agents and CI should use named commands:
 
 ```bash
+set -euo pipefail
 healthsave setup basic --no-input
 healthsave doctor --json
 ```
