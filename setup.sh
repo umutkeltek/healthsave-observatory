@@ -89,7 +89,7 @@ detect_lan_ip() {
                 if command -v powershell.exe >/dev/null 2>&1; then
                     ip="$(
                         powershell.exe -NoProfile -Command \
-                            "Get-NetIPAddress -AddressFamily IPv4 | Where-Object { \$_.IPAddress -notlike '127.*' -and \$_.IPAddress -notlike '169.254.*' -and \$_.PrefixOrigin -ne 'WellKnown' } | Sort-Object InterfaceMetric | Select-Object -First 1 -ExpandProperty IPAddress" \
+                            "\$interfaces = Get-NetIPInterface -AddressFamily IPv4 | Group-Object -AsHashTable -Property InterfaceIndex; \$cfg = Get-NetIPConfiguration | Where-Object { \$_.IPv4DefaultGateway -and \$_.IPv4Address } | Sort-Object { \$iface = \$interfaces[[uint32]\$_.InterfaceIndex]; if (\$iface) { \$iface.InterfaceMetric } else { [int]::MaxValue } } | Select-Object -First 1; if (\$cfg) { \$cfg.IPv4Address | Where-Object { \$_.IPAddress -notlike '127.*' -and \$_.IPAddress -notlike '169.254.*' } | Select-Object -First 1 -ExpandProperty IPAddress }" \
                             2>/dev/null | tr -d '\r' | awk 'NF {print; exit}'
                     )"
                 fi

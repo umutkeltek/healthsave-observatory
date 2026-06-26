@@ -59,6 +59,7 @@ healthsave layers
 Agents and CI should use named commands:
 
 ```bash
+set -euo pipefail
 healthsave setup basic --no-input
 healthsave doctor --json
 healthsave status --json
