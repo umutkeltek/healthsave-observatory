@@ -43,9 +43,38 @@ def test_readiness_marks_recent_materialized_daily_metric_ready() -> None:
     assert row["window_key"] == "today_local"
     assert row["ready"] is True
     assert row["status"] == "ready"
-    assert row["freshness_seconds"] == 13 * 60
-    assert row["observed_at"] == datetime(2026, 7, 1, 19, 17, tzinfo=UTC)
+    assert row["freshness_seconds"] == 12 * 60
+    assert row["observed_at"] == datetime(2026, 7, 1, 19, 18, tzinfo=UTC)
     assert row["materialized_at"] == datetime(2026, 7, 1, 19, 17, tzinfo=UTC)
+
+
+def test_readiness_uses_receipt_freshness_for_materialized_daily_rollups() -> None:
+    now = datetime(2026, 7, 1, 17, 55, tzinfo=UTC)
+    local_midnight_utc = datetime(2026, 6, 30, 21, tzinfo=UTC)
+
+    result = build_decision_readiness(
+        [
+            _coverage_row(
+                newest_receipt_at=now - timedelta(minutes=5),
+                receipt_sample_window={
+                    "min_sample_time": datetime(2017, 3, 4, 21, tzinfo=UTC),
+                    "max_sample_time": local_midnight_utc,
+                },
+                latest_destination_sample_time=local_midnight_utc,
+                freshness_state="fresh",
+            )
+        ],
+        now=now,
+        known_metrics=("step_count",),
+    )
+
+    row = result["per_metric"][0]
+
+    assert row["ready"] is True
+    assert row["status"] == "ready"
+    assert row["freshness_seconds"] == 5 * 60
+    assert row["observed_at"] == now - timedelta(minutes=5)
+    assert row["materialized_at"] == local_midnight_utc
 
 
 def test_readiness_does_not_treat_recent_receipt_as_materialized_steps() -> None:
@@ -70,13 +99,14 @@ def test_readiness_does_not_treat_recent_receipt_as_materialized_steps() -> None
     assert row["materialized_at"] is None
 
 
-def test_readiness_marks_old_destination_sample_stale_even_with_fresh_coverage_state() -> None:
+def test_readiness_marks_old_latest_sample_stale_even_with_fresh_coverage_state() -> None:
     now = datetime(2026, 7, 1, 19, 30, tzinfo=UTC)
-    old_sample = now - timedelta(hours=2)
+    old_sample = now - timedelta(hours=7)
 
     result = build_decision_readiness(
         [
             _coverage_row(
+                metric="heart_rate",
                 newest_receipt_at=now - timedelta(minutes=5),
                 receipt_sample_window={
                     "min_sample_time": old_sample,
@@ -87,13 +117,13 @@ def test_readiness_marks_old_destination_sample_stale_even_with_fresh_coverage_s
             )
         ],
         now=now,
-        known_metrics=("step_count",),
+        known_metrics=("heart_rate",),
     )
     row = result["per_metric"][0]
 
     assert row["ready"] is False
     assert row["status"] == "stale"
-    assert row["freshness_seconds"] == 2 * 60 * 60
+    assert row["freshness_seconds"] == 7 * 60 * 60
 
 
 def test_readiness_returns_missing_rows_for_known_unobserved_metrics() -> None:

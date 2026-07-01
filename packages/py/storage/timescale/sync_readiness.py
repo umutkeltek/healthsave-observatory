@@ -132,9 +132,15 @@ def _readiness_for_metric(
     source_window_start = _parse_time(sample_window.get("min_sample_time"))
     source_window_end = _parse_time(sample_window.get("max_sample_time"))
     materialized_at = _parse_time(row.get("latest_destination_sample_time"))
-    observed_at = source_window_end or materialized_at
-    freshness_seconds = _freshness_seconds(now, observed_at)
     coverage_state = row.get("freshness_state") or "unknown"
+    observed_at = _observed_at_for_policy(
+        policy=policy,
+        coverage_state=str(coverage_state),
+        receipt_at=receipt_at,
+        source_window_end=source_window_end,
+        materialized_at=materialized_at,
+    )
+    freshness_seconds = _freshness_seconds(now, observed_at)
 
     if coverage_state == "receipt_only":
         status = "receipt_only"
@@ -212,6 +218,23 @@ def _readiness_row(
             "freshness_sla_seconds": int(policy.freshness_sla.total_seconds()),
         },
     }
+
+
+def _observed_at_for_policy(
+    *,
+    policy: MetricReadinessPolicy,
+    coverage_state: str,
+    receipt_at: datetime | None,
+    source_window_end: datetime | None,
+    materialized_at: datetime | None,
+) -> datetime | None:
+    if (
+        policy.category == "daily_cumulative"
+        and coverage_state == "fresh"
+        and materialized_at is not None
+    ):
+        return receipt_at or materialized_at
+    return source_window_end or materialized_at
 
 
 def _freshness_seconds(now: datetime, observed_at: datetime | None) -> int | None:
