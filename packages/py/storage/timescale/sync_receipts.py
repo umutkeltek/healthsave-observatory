@@ -8,6 +8,7 @@ from typing import Any
 from normalization.mappers import DAILY_ACTIVITY_QUANTITY_FIELDS
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from storage.timescale.sync_readiness import build_decision_readiness
 
 # GH#14: the catch-all destination is ``quantity_samples`` keyed by the wire

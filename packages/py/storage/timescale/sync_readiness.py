@@ -8,12 +8,13 @@ machine-readable answer to "can this metric safely drive an automation now?"
 from __future__ import annotations
 
 import json
+import os
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from normalization.mappers import DAILY_ACTIVITY_QUANTITY_FIELDS
 
@@ -267,10 +268,7 @@ def _as_utc(value: datetime) -> datetime:
 @lru_cache(maxsize=1)
 def known_contract_metrics() -> tuple[str, ...]:
     override = os.getenv("HEALTHSAVE_PARITY_MANIFEST")
-    if override:
-        path = Path(override).expanduser()
-    else:
-        path = _default_parity_manifest_path()
+    path = Path(override).expanduser() if override else _default_parity_manifest_path()
     with path.open("r", encoding="utf-8") as handle:
         data = json.load(handle)
     metrics = data.get("metrics") or {}
