@@ -83,6 +83,9 @@ class _FakeResult:
     def all(self) -> list[tuple[Any, ...]]:
         return self._rows
 
+    def mappings(self):
+        return self
+
     def scalar_one_or_none(self) -> Any:
         if not self._rows:
             return None

@@ -21,9 +21,22 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
+
+
+@dataclass(frozen=True)
+class MetricReadinessSnapshot:
+    metric: str
+    window_key: str
+    ready: bool
+    status: str
+    freshness_seconds: int | None = None
+    observed_at: datetime | None = None
+    receipt_at: datetime | None = None
+    materialized_at: datetime | None = None
+    reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -46,6 +59,7 @@ class HealthSnapshot:
     resting_heart_rate: int | None = None
     strain: float | None = None
     latest_medication_status: str | None = None
+    metric_readiness: dict[str, MetricReadinessSnapshot] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

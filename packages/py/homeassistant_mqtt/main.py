@@ -16,6 +16,7 @@ from .bridge import (
     build_availability_message,
     build_discovery_messages,
     build_legacy_availability_messages,
+    build_readiness_discovery_messages,
     build_source_discovery_messages,
     build_source_state_message,
     build_state_messages,
@@ -51,6 +52,7 @@ async def publish_once(
         specs = sensor_specs_for_config(config)
 
         # Aggregate parent device — unchanged behaviour for backward-compat.
+        publisher.publish_many(build_readiness_discovery_messages(config, snapshot))
         publisher.publish_many(build_state_messages(config, specs, snapshot))
 
         # Per-source sub-devices.
