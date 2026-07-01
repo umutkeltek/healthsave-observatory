@@ -18,6 +18,7 @@ Covered behaviours:
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import sys
 from pathlib import Path
 from typing import Any
@@ -99,6 +100,7 @@ class _FakeSession:
         hrv_rows: list[tuple] | None = None,
         steps_rows: list[tuple] | None = None,
         sleep_rows: list[tuple] | None = None,
+        receipt_rows: list[tuple] | None = None,
         quantity_values: dict[str, Any] | None = None,
         medication_status: str | None = None,
         medication_table_exists: bool = True,
@@ -108,6 +110,7 @@ class _FakeSession:
         self._hrv = hrv_rows or []
         self._steps = steps_rows or []
         self._sleep = sleep_rows or []
+        self._receipts = receipt_rows or []
         self._quantity_values = quantity_values or {}
         self._medication_status = medication_status
         self._medication_table_exists = medication_table_exists
@@ -131,7 +134,12 @@ class _FakeSession:
         if "FROM hrv" in sql:
             return _FakeResult(self._hrv)
         if "FROM daily_activity" in sql:
+            if "max(steps)" in sql.lower():
+                values = [row[-1] for row in self._steps if row and row[-1] is not None]
+                return _FakeResult([(max(values),)] if values else [])
             return _FakeResult(self._steps)
+        if "healthsave_sync_receipts" in sql:
+            return _FakeResult(self._receipts)
         if "FROM sleep_sessions" in sql:
             return _FakeResult(self._sleep)
         if "FROM recovery" in sql:
@@ -247,6 +255,40 @@ async def test_fetch_snapshots_by_source_merges_steps_today_per_source() -> None
     # A source that only has steps still gets a snapshot.
     assert by_slug["iphone"].steps_today == 1200
     assert by_slug["iphone"].heart_rate is None
+
+
+@pytest.mark.asyncio
+async def test_fetch_snapshot_uses_highest_steps_today_across_sources() -> None:
+    """Aggregate HA steps should not pick an arbitrary lower device row."""
+    session = _FakeSession(
+        hr_rows=[],
+        hrv_rows=[],
+        steps_rows=[(1200,), (10_432,)],
+        sleep_rows=[],
+    )
+
+    repo = TimescaleHealthSnapshotRepository()
+    snapshot = await repo.fetch_snapshot(session)
+
+    assert snapshot.steps_today == 10_432
+
+
+@pytest.mark.asyncio
+async def test_fetch_snapshot_exposes_step_count_receipt_freshness() -> None:
+    synced_at = datetime(2026, 7, 1, 19, 18, tzinfo=UTC)
+    session = _FakeSession(
+        hr_rows=[],
+        hrv_rows=[],
+        steps_rows=[(10_432,)],
+        receipt_rows=[(synced_at,)],
+        sleep_rows=[],
+    )
+
+    repo = TimescaleHealthSnapshotRepository()
+    snapshot = await repo.fetch_snapshot(session)
+
+    assert snapshot.steps_today == 10_432
+    assert snapshot.steps_today_synced_at == synced_at
 
 
 @pytest.mark.asyncio

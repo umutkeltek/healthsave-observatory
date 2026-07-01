@@ -35,6 +35,7 @@ class HealthSnapshot:
     last_sleep_hours: float | None
     source_model: str
     room_health_state: str | None
+    steps_today_synced_at: datetime | None = None
     hrv: float | None = None
     steps: int | None = None
     active_calories: int | None = None
