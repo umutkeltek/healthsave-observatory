@@ -2,8 +2,18 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from homeassistant_mqtt.bridge import HomeAssistantMQTTConfig, build_state_messages, sensor_specs_for_config
-from homeassistant_mqtt.snapshot import HealthSnapshot, derive_room_health_state, latest_non_null
+from homeassistant_mqtt.bridge import (
+    HomeAssistantMQTTConfig,
+    build_readiness_discovery_messages,
+    build_state_messages,
+    sensor_specs_for_config,
+)
+from homeassistant_mqtt.snapshot import (
+    HealthSnapshot,
+    MetricReadinessSnapshot,
+    derive_room_health_state,
+    latest_non_null,
+)
 
 
 def test_latest_non_null_uses_first_non_null_row_value() -> None:
@@ -39,6 +49,74 @@ def test_bridge_state_payload_includes_steps_synced_at_iso_timestamp() -> None:
 
     assert payload["steps_today"] == 10_432
     assert payload["steps_today_synced_at"] == "2026-07-01T19:18:00+00:00"
+
+
+def test_bridge_state_payload_includes_generic_metric_readiness_fields() -> None:
+    observed_at = datetime(2026, 7, 1, 19, 17, tzinfo=UTC)
+    synced_at = datetime(2026, 7, 1, 19, 18, tzinfo=UTC)
+    snapshot = HealthSnapshot(
+        collected_at=datetime(2026, 7, 1, 19, 30, tzinfo=UTC),
+        heart_rate=None,
+        hrv_7d_avg=None,
+        steps_today=10_432,
+        steps_today_synced_at=synced_at,
+        last_sleep_hours=None,
+        source_model="HealthSave",
+        room_health_state=None,
+        metric_readiness={
+            "step_count": MetricReadinessSnapshot(
+                metric="step_count",
+                window_key="today_local",
+                ready=True,
+                status="ready",
+                freshness_seconds=13 * 60,
+                observed_at=observed_at,
+                receipt_at=synced_at,
+                materialized_at=observed_at,
+                reason=None,
+            )
+        },
+    )
+
+    messages = build_state_messages(
+        HomeAssistantMQTTConfig(), sensor_specs_for_config(HomeAssistantMQTTConfig()), snapshot
+    )
+    payload = messages[0][1]
+
+    assert payload["steps_today_ready"] is True
+    assert payload["steps_today_status"] == "ready"
+    assert payload["steps_today_staleness_minutes"] == 13
+    assert payload["steps_today_observed_at"] == "2026-07-01T19:17:00+00:00"
+    assert payload["steps_today_materialized_at"] == "2026-07-01T19:17:00+00:00"
+
+
+def test_bridge_discovers_readiness_entities_for_observed_metrics() -> None:
+    snapshot = HealthSnapshot(
+        collected_at=datetime(2026, 7, 1, 19, 30, tzinfo=UTC),
+        heart_rate=None,
+        hrv_7d_avg=None,
+        steps_today=10_432,
+        steps_today_synced_at=None,
+        last_sleep_hours=None,
+        source_model="HealthSave",
+        room_health_state=None,
+        metric_readiness={
+            "step_count": MetricReadinessSnapshot(
+                metric="step_count",
+                window_key="today_local",
+                ready=False,
+                status="stale",
+                freshness_seconds=91 * 60,
+            )
+        },
+    )
+
+    messages = build_readiness_discovery_messages(HomeAssistantMQTTConfig(), snapshot)
+    topics = {topic for topic, _payload, _retain in messages}
+
+    assert "homeassistant/binary_sensor/healthsave/steps_today_ready/config" in topics
+    assert "homeassistant/sensor/healthsave/steps_today_status/config" in topics
+    assert "homeassistant/sensor/healthsave/steps_today_staleness_minutes/config" in topics
 
 
 def test_derive_room_health_state_prefers_sleep_when_recent_sleep_low() -> None:

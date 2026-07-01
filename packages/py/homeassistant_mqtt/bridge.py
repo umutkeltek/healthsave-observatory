@@ -59,6 +59,8 @@ class SensorSpec:
     device_class: str | None = None
     state_class: str | None = None
     icon: str | None = None
+    component: str = "sensor"
+    value_template: str | None = None
 
     @property
     def object_id(self) -> str:
@@ -335,7 +337,8 @@ def build_discovery_messages(
 ) -> list[MQTTMessage]:
     """Build retained Home Assistant MQTT discovery config payloads."""
 
-    specs = specs or default_sensor_specs()
+    if specs is None:
+        specs = default_sensor_specs()
     messages: list[MQTTMessage] = []
     for spec in specs:
         payload: dict[str, Any] = {
@@ -350,7 +353,7 @@ def build_discovery_messages(
             "object_id": _topic_part(spec.key),
             "state_topic": state_topic(config, spec),
             "unique_id": f"{config.device_identifier}_{_topic_part(spec.key)}",
-            "value_template": f"{{{{ value_json.{spec.key} }}}}",
+            "value_template": spec.value_template or f"{{{{ value_json.{spec.key} }}}}",
         }
         if spec.unit:
             payload["unit_of_measurement"] = spec.unit
@@ -362,7 +365,7 @@ def build_discovery_messages(
             payload["icon"] = spec.icon
 
         topic = (
-            f"{config.discovery_prefix.rstrip('/')}/sensor/"
+            f"{config.discovery_prefix.rstrip('/')}/{spec.component}/"
             f"{_topic_part(config.state_topic_prefix)}/{_topic_part(spec.key)}/config"
         )
         messages.append((topic, payload, True))
@@ -382,7 +385,108 @@ def build_state_messages(
         if value is None:
             continue
         payload[spec.key] = value.isoformat() if hasattr(value, "isoformat") else value
+    for readiness in snapshot.metric_readiness.values():
+        key = _readiness_state_prefix(readiness.metric, readiness.window_key)
+        payload[f"{key}_ready"] = readiness.ready
+        payload[f"{key}_status"] = readiness.status
+        if readiness.freshness_seconds is not None:
+            payload[f"{key}_staleness_minutes"] = readiness.freshness_seconds // 60
+        if readiness.observed_at is not None:
+            payload[f"{key}_observed_at"] = readiness.observed_at.isoformat()
+        if readiness.receipt_at is not None:
+            payload[f"{key}_receipt_at"] = readiness.receipt_at.isoformat()
+        if readiness.materialized_at is not None:
+            payload[f"{key}_materialized_at"] = readiness.materialized_at.isoformat()
+        if readiness.reason:
+            payload[f"{key}_reason"] = readiness.reason
     return [(state_topic(config), payload, True)]
+
+
+def readiness_sensor_specs_for_snapshot(
+    config: HomeAssistantMQTTConfig,
+    snapshot: HealthSnapshot,
+) -> list[SensorSpec]:
+    """Discovery specs for observed metric-readiness fields."""
+
+    prefix = _topic_part(config.state_topic_prefix)
+    device_name = config.device_name.strip() or "HealthSave"
+    specs: list[SensorSpec] = []
+    seen: set[str] = set()
+    for readiness in sorted(
+        snapshot.metric_readiness.values(),
+        key=lambda item: _readiness_state_prefix(item.metric, item.window_key),
+    ):
+        key = _readiness_state_prefix(readiness.metric, readiness.window_key)
+        if key in seen:
+            continue
+        seen.add(key)
+        title = _readiness_title(key)
+        specs.extend(
+            [
+                SensorSpec(
+                    key=f"{key}_ready",
+                    entity_id=f"binary_sensor.{prefix}_{key}_ready",
+                    name=f"{device_name} {title} Ready",
+                    component="binary_sensor",
+                    icon="mdi:database-check",
+                    value_template=f"{{{{ 'ON' if value_json.{key}_ready else 'OFF' }}}}",
+                ),
+                SensorSpec(
+                    key=f"{key}_status",
+                    entity_id=f"sensor.{prefix}_{key}_status",
+                    name=f"{device_name} {title} Status",
+                    icon="mdi:database-clock",
+                ),
+                SensorSpec(
+                    key=f"{key}_staleness_minutes",
+                    entity_id=f"sensor.{prefix}_{key}_staleness_minutes",
+                    name=f"{device_name} {title} Staleness",
+                    unit="min",
+                    state_class="measurement",
+                    icon="mdi:timer-sand",
+                ),
+            ]
+        )
+        if readiness.observed_at is not None:
+            specs.append(
+                SensorSpec(
+                    key=f"{key}_observed_at",
+                    entity_id=f"sensor.{prefix}_{key}_observed_at",
+                    name=f"{device_name} {title} Observed At",
+                    device_class="timestamp",
+                    icon="mdi:clock-outline",
+                )
+            )
+        if readiness.materialized_at is not None:
+            specs.append(
+                SensorSpec(
+                    key=f"{key}_materialized_at",
+                    entity_id=f"sensor.{prefix}_{key}_materialized_at",
+                    name=f"{device_name} {title} Materialized At",
+                    device_class="timestamp",
+                    icon="mdi:database-clock-outline",
+                )
+            )
+    return specs
+
+
+def build_readiness_discovery_messages(
+    config: HomeAssistantMQTTConfig,
+    snapshot: HealthSnapshot,
+) -> list[MQTTMessage]:
+    return build_discovery_messages(config, readiness_sensor_specs_for_snapshot(config, snapshot))
+
+
+def _readiness_state_prefix(metric: str, window_key: str) -> str:
+    if metric == "step_count" and window_key == "today_local":
+        return "steps_today"
+    if window_key == "today_local":
+        return f"{_topic_part(metric)}_today"
+    return _topic_part(metric)
+
+
+def _readiness_title(key: str) -> str:
+    return key.replace("_", " ").title()
 
 
 def build_availability_message(config: HomeAssistantMQTTConfig) -> MQTTMessage:

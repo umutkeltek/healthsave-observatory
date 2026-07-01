@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 from homeassistant_mqtt.snapshot import (
     HealthSnapshot,
+    MetricReadinessSnapshot,
     SourceHealthSnapshot,
     derive_room_health_state,
     int_or_none,
@@ -14,6 +15,7 @@ from homeassistant_mqtt.snapshot import (
 )
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from storage.timescale.sync_receipts import sync_coverage
 
 
 def _fresh_hours(name: str, default: int) -> int:
@@ -36,6 +38,32 @@ def _fresh_hours(name: str, default: int) -> int:
 # Defaults preserve prior behavior (aggregate latest HR 6h, per-source HR 72h).
 _HR_FRESH_HOURS = _fresh_hours("HA_MQTT_HR_FRESH_HOURS", 6)
 _SOURCE_HR_FRESH_HOURS = _fresh_hours("HA_MQTT_SOURCE_HR_FRESH_HOURS", 72)
+
+
+def _int_or_none(value: object) -> int | None:
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _datetime_or_none(value: object) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return None
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        try:
+            parsed = datetime.fromisoformat(raw)
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    return None
 
 
 class TimescaleHealthSnapshotRepository:
@@ -129,7 +157,7 @@ class TimescaleHealthSnapshotRepository:
                         """
                         SELECT max(steps)
                         FROM daily_activity
-                        WHERE date = current_date
+                        WHERE date >= current_date - 1
                           AND steps IS NOT NULL
                         """
                     )
@@ -298,6 +326,9 @@ class TimescaleHealthSnapshotRepository:
                     )
                 )
             ).scalar_one_or_none()
+        metric_readiness = (
+            await self._metric_readiness(session) if medication_table_exists else {}
+        )
 
         snapshot = HealthSnapshot(
             collected_at=collected_at,
@@ -318,6 +349,7 @@ class TimescaleHealthSnapshotRepository:
             resting_heart_rate=resting_heart_rate,
             strain=strain,
             latest_medication_status=latest_medication_status,
+            metric_readiness=metric_readiness,
         )
         return HealthSnapshot(
             collected_at=snapshot.collected_at,
@@ -338,7 +370,31 @@ class TimescaleHealthSnapshotRepository:
             resting_heart_rate=snapshot.resting_heart_rate,
             strain=snapshot.strain,
             latest_medication_status=snapshot.latest_medication_status,
+            metric_readiness=snapshot.metric_readiness,
         )
+
+    async def _metric_readiness(
+        self, session: AsyncSession
+    ) -> dict[str, MetricReadinessSnapshot]:
+        coverage = await sync_coverage(session)
+        rows = coverage.get("decision_readiness", {}).get("per_metric", [])
+        readiness: dict[str, MetricReadinessSnapshot] = {}
+        for row in rows:
+            metric = str(row.get("metric") or "")
+            if not metric or row.get("status") == "missing":
+                continue
+            readiness[metric] = MetricReadinessSnapshot(
+                metric=metric,
+                window_key=str(row.get("window_key") or "latest"),
+                ready=bool(row.get("ready")),
+                status=str(row.get("status") or "unknown"),
+                freshness_seconds=_int_or_none(row.get("freshness_seconds")),
+                observed_at=_datetime_or_none(row.get("observed_at")),
+                receipt_at=_datetime_or_none(row.get("receipt_at")),
+                materialized_at=_datetime_or_none(row.get("materialized_at")),
+                reason=row.get("reason"),
+            )
+        return readiness
 
     async def fetch_snapshots_by_source(self, session: AsyncSession) -> list[SourceHealthSnapshot]:
         """Per-``source_id`` latest values across all primary metrics.
@@ -399,7 +455,7 @@ class TimescaleHealthSnapshotRepository:
                     """
                     SELECT source_id, steps
                     FROM daily_activity
-                    WHERE date = current_date AND steps IS NOT NULL
+                    WHERE date >= current_date - 1 AND steps IS NOT NULL
                     """
                 )
             )

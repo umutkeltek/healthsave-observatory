@@ -8,6 +8,7 @@ from typing import Any
 from normalization.mappers import DAILY_ACTIVITY_QUANTITY_FIELDS
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from storage.timescale.sync_readiness import build_decision_readiness
 
 # GH#14: the catch-all destination is ``quantity_samples`` keyed by the wire
 # metric name, but several metrics land elsewhere — dedicated tables, dedicated
@@ -532,6 +533,7 @@ async def sync_coverage(session: AsyncSession) -> dict[str, Any]:
 
     result = await session.execute(text(_sync_coverage_query()))
     rows = [_format_coverage_row(dict(row)) for row in result.mappings().all()]
+    decision_readiness = build_decision_readiness(rows)
     return {
         "status": "ok",
         "summary": {
@@ -546,6 +548,7 @@ async def sync_coverage(session: AsyncSession) -> dict[str, Any]:
             "records_skipped": sum(row["records_skipped"] for row in rows),
         },
         "metrics": rows,
+        "decision_readiness": decision_readiness,
     }
 
 
