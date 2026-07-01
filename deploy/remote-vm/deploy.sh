@@ -158,9 +158,18 @@ cp -a \"$REMOTE_TMP\"/. \"$REMOTE_DIR\"/
 rm -rf \"$REMOTE_TMP\"
 cd \"$REMOTE_DIR\"
 ln -sf \"$REMOTE_ENV_DIR/.env\" .env
+CONFIG_FILE=\"\$(grep -E '^ANALYSIS_CONFIG_FILE=' \"$REMOTE_ENV_DIR/.env\" | tail -n 1 | cut -d= -f2- || true)\"
+if [ \"\$CONFIG_FILE\" = \"./config.yaml\" ] || [ \"\$CONFIG_FILE\" = \"config.yaml\" ]; then
+  if [ -d config.yaml ]; then
+    rm -rf config.yaml
+  fi
+  if [ ! -f config.yaml ]; then
+    cp config.yaml.example config.yaml
+  fi
+fi
 if [ \"$DATABASE_MODE\" = \"external\" ]; then
   cp deploy/remote-vm/docker-compose.external-db.override.yml docker-compose.remote-vm.override.yml
-  COMPOSE_TARGETS=\"migrate api worker grafana web\"
+  COMPOSE_TARGETS=\"migrate api worker homeassistant-mqtt grafana web\"
 else
   cat > docker-compose.remote-vm.override.yml <<EOF
 services:
@@ -177,7 +186,7 @@ services:
     ports: !override
       - \"\${HEALTH_DATA_HUB_WEB_PORT:-$WEB_PORT}:4173\"
 EOF
-  COMPOSE_TARGETS=\"db migrate api worker grafana web\"
+COMPOSE_TARGETS=\"db migrate api worker homeassistant-mqtt grafana web\"
 fi
 docker compose --env-file \"$REMOTE_ENV_DIR/.env\" \
   -f docker-compose.yml \
