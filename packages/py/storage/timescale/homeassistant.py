@@ -15,6 +15,7 @@ from homeassistant_mqtt.snapshot import (
 )
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from storage.timescale.sync_receipts import sync_coverage
 
 
@@ -326,9 +327,7 @@ class TimescaleHealthSnapshotRepository:
                     )
                 )
             ).scalar_one_or_none()
-        metric_readiness = (
-            await self._metric_readiness(session) if medication_table_exists else {}
-        )
+        metric_readiness = await self._metric_readiness(session) if medication_table_exists else {}
 
         snapshot = HealthSnapshot(
             collected_at=collected_at,
@@ -373,9 +372,7 @@ class TimescaleHealthSnapshotRepository:
             metric_readiness=snapshot.metric_readiness,
         )
 
-    async def _metric_readiness(
-        self, session: AsyncSession
-    ) -> dict[str, MetricReadinessSnapshot]:
+    async def _metric_readiness(self, session: AsyncSession) -> dict[str, MetricReadinessSnapshot]:
         coverage = await sync_coverage(session)
         rows = coverage.get("decision_readiness", {}).get("per_metric", [])
         readiness: dict[str, MetricReadinessSnapshot] = {}
