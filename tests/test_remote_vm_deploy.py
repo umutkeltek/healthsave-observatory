@@ -110,8 +110,8 @@ def test_remote_vm_deploy_script_has_explicit_external_database_mode():
 
     assert "HEALTH_DATA_HUB_DATABASE_MODE" in script
     assert "docker-compose.external-db.override.yml" in script
-    assert "migrate api worker grafana" in script
-    assert "db migrate api worker grafana" in script
+    assert "migrate api worker homeassistant-mqtt grafana" in script
+    assert "db migrate api worker homeassistant-mqtt grafana" in script
     assert "HEALTH_DATA_HUB_DB_PUBLISH_PORT" in script
 
 
@@ -130,6 +130,15 @@ def test_remote_vm_deploy_script_self_heals_required_secrets():
 
     assert "backfilled a missing GRAFANA_PASSWORD" in script
     assert "DB_PASSWORD missing from remote .env" in script
+
+
+def test_remote_vm_deploy_script_self_heals_config_file_mount():
+    script = (ROOT / "deploy" / "remote-vm" / "deploy.sh").read_text()
+
+    assert "CONFIG_FILE=" in script
+    assert "\\$CONFIG_FILE" in script
+    assert "config.yaml.example config.yaml" in script
+    assert "rm -rf config.yaml" in script
 
 
 def test_remote_vm_readme_documents_external_database_mode():
