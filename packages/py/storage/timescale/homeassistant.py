@@ -127,16 +127,30 @@ class TimescaleHealthSnapshotRepository:
                 await session.execute(
                     text(
                         """
-                        SELECT steps
+                        SELECT max(steps)
                         FROM daily_activity
                         WHERE date = current_date
-                        ORDER BY date DESC
-                        LIMIT 1
+                          AND steps IS NOT NULL
                         """
                     )
                 )
             ).scalar_one_or_none()
         )
+        steps_today_synced_at = (
+            await session.execute(
+                text(
+                    """
+                    SELECT received_at
+                    FROM healthsave_sync_receipts
+                    WHERE metric = 'step_count'
+                      AND status = 'processed'
+                      AND records_received > 0
+                    ORDER BY received_at DESC
+                    LIMIT 1
+                    """
+                )
+            )
+        ).scalar_one_or_none()
         active_calories = int_or_none(
             (
                 await session.execute(
@@ -290,6 +304,7 @@ class TimescaleHealthSnapshotRepository:
             heart_rate=heart_rate,
             hrv_7d_avg=hrv_7d_avg,
             steps_today=steps_today,
+            steps_today_synced_at=steps_today_synced_at,
             last_sleep_hours=last_sleep_hours,
             source_model=str(source_model),
             room_health_state=None,
@@ -309,6 +324,7 @@ class TimescaleHealthSnapshotRepository:
             heart_rate=snapshot.heart_rate,
             hrv_7d_avg=snapshot.hrv_7d_avg,
             steps_today=snapshot.steps_today,
+            steps_today_synced_at=snapshot.steps_today_synced_at,
             last_sleep_hours=snapshot.last_sleep_hours,
             source_model=snapshot.source_model,
             room_health_state=derive_room_health_state(snapshot),

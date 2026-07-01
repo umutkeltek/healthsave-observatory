@@ -126,6 +126,13 @@ def _sensor_specs(entity_prefix: str, display_name: str) -> list[SensorSpec]:
             icon="mdi:walk",
         ),
         SensorSpec(
+            key="steps_today_synced_at",
+            entity_id=f"sensor.{prefix}_steps_today_synced_at",
+            name=f"{name} Steps Synced At",
+            device_class="timestamp",
+            icon="mdi:clock-check",
+        ),
+        SensorSpec(
             key="last_sleep_hours",
             entity_id=f"sensor.{prefix}_last_sleep_hours",
             name=f"{name} Last Sleep Hours",
@@ -374,7 +381,7 @@ def build_state_messages(
         value = getattr(snapshot, spec.key)
         if value is None:
             continue
-        payload[spec.key] = value
+        payload[spec.key] = value.isoformat() if hasattr(value, "isoformat") else value
     return [(state_topic(config), payload, True)]
 
 
