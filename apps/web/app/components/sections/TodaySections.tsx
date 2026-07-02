@@ -24,9 +24,11 @@ import {
   safeSeries,
   safeSeriesMany,
 } from "../../lib/load";
-import { getPinnedMetrics } from "../../lib/prefs";
+import { getFocusGoal, getPinnedMetrics } from "../../lib/prefs";
 import { EvidenceCard } from "../EvidenceCard";
 import { ExperimentsCard } from "../ExperimentsCard";
+import { FocusGoalPicker } from "../FocusGoalPicker";
+import { GoalRibbon } from "../GoalRibbon";
 import { LocalVaultReceipt, type VaultStep } from "../LocalVaultReceipt";
 import { MetricCard } from "../MetricCard";
 import { ReadinessCard } from "../ReadinessCard";
@@ -106,52 +108,92 @@ function vaultSteps(privacy: Privacy | null, readiness: Readiness | null): Vault
   ];
 }
 
-function EmptyToday({ state }: { state: "empty" | "unreachable" }) {
+async function EmptyToday({ state }: { state: "empty" | "unreachable" }) {
   // Rendered inside .today-grid (the hero slot) — span the full grid so the
   // empty state doesn't get squeezed into one column. The two states demand
-  // different actions: "empty" means keep syncing; "unreachable" means the
-  // backend is down or the key is wrong — telling that user to sync would be
-  // a lie they can't debug.
+  // different actions: "empty" means guide the first 60 seconds; "unreachable"
+  // means the backend is down or the key is wrong — telling that user to sync
+  // would be a lie they can't debug.
+  if (state === "unreachable") {
+    return (
+      <section className="lead" style={{ gridColumn: "1 / -1" }}>
+        <article className="hero">
+          <div className="hero-eyebrow">Today</div>
+          <p className="recovery-line" style={{ marginTop: 8 }}>
+            Can’t reach the backend. The dashboard is fine — the API didn’t answer (down,
+            wrong <code>API_BASE</code>, or rejected <code>API_KEY</code>).
+          </p>
+          <div className="exp-action">
+            <a className="btn" href="/demo">
+              Explore the demo
+            </a>
+            <span className="empty">
+              Check the web container’s <strong>API_BASE</strong> / <strong>API_KEY</strong> env
+              and the API logs — the server log lists the exact failing requests.
+            </span>
+          </div>
+        </article>
+      </section>
+    );
+  }
+  // The first 60 seconds: three concrete steps, each doable right now. The
+  // focus goal works before any data lands, so step 3 gives the empty state a
+  // real action with a durable payoff (it orients Today once data flows).
+  const goal = await getFocusGoal();
   return (
     <section className="lead" style={{ gridColumn: "1 / -1" }}>
-      <article className="hero">
-        <div className="hero-eyebrow">Today</div>
-        {state === "unreachable" ? (
-          <>
-            <p className="recovery-line" style={{ marginTop: 8 }}>
-              Can’t reach the backend. The dashboard is fine — the API didn’t answer (down,
-              wrong <code>API_BASE</code>, or rejected <code>API_KEY</code>).
-            </p>
-            <div className="exp-action">
-              <a className="btn" href="/demo">
-                Explore the demo
-              </a>
-              <span className="empty">
-                Check the web container’s <strong>API_BASE</strong> / <strong>API_KEY</strong> env
-                and the API logs — the server log lists the exact failing requests.
+      <article className="hero firstrun">
+        <div className="hero-eyebrow">Welcome to your Observatory</div>
+        <p className="recovery-line" style={{ marginTop: 8 }}>
+          Your server is running and private. Three steps and it becomes yours:
+        </p>
+        <ol className="firstrun-steps">
+          <li className="firstrun-step">
+            <span className="firstrun-n">1</span>
+            <div>
+              <strong>Pair the HealthSave app.</strong>
+              <span className="firstrun-hint">
+                Open <strong>HealthSave → Settings → Server Sync</strong> on your phone, point it at
+                this server’s address, and tap “Sync New Data.”
               </span>
             </div>
-          </>
-        ) : (
-          <>
-            <p className="recovery-line" style={{ marginTop: 8 }}>
-              No data yet. HealthSave Observatory turns your Apple Health + wearable data into a daily, private
-              briefing — but it needs a day or so of readings first.
-            </p>
-            <div className="exp-action">
-              <a className="btn" href="/demo">
-                Explore the demo
-              </a>
-              <span className="empty">
-                Or open <strong>HealthSave → Settings → Server Sync</strong>, point it at this server,
-                and tap “Sync New Data.”
+          </li>
+          <li className="firstrun-step">
+            <span className="firstrun-n">2</span>
+            <div>
+              <strong>See what it becomes.</strong>
+              <span className="firstrun-hint">
+                <a href="/demo">Explore the demo</a> — a 30-day story with a recovery dip, exactly
+                how your own Today will read.
               </span>
             </div>
-          </>
-        )}
+          </li>
+          <li className="firstrun-step">
+            <span className="firstrun-n">3</span>
+            <div>
+              <strong>Set your focus.</strong>
+              <span className="firstrun-hint">
+                {goal
+                  ? `Working toward: ${goal.title}. Tap again to change or clear it.`
+                  : "Pick what you’re working toward — Today will orient around it."}
+              </span>
+              <FocusGoalPicker active={goal} />
+            </div>
+          </li>
+        </ol>
       </article>
     </section>
   );
+}
+
+export async function GoalSection() {
+  // The focus ribbon appears only when there is data AND a stated goal —
+  // before data, the goal lives in the first-run panel instead.
+  if (!(await hasAnyData())) return null;
+  const goal = await getFocusGoal();
+  if (!goal) return null;
+  const seriesById = await safeSeriesMany(goal.metricIds, "7d");
+  return <GoalRibbon goal={goal} seriesById={seriesById} />;
 }
 
 export async function HeroSection() {
@@ -237,8 +279,10 @@ export async function ExperimentsSection() {
 
 export async function SignalsSection() {
   if (!(await hasAnyData())) return null;
-  // Pinned metrics (Library star) replace the curated default grid.
-  const pinned = await getPinnedMetrics();
+  // Pinned metrics (Library star) replace the curated default grid; a stated
+  // focus goal then pulls its target signals to the front (orientation, not
+  // replacement — pins and defaults stay, just reordered).
+  const [pinned, goal] = await Promise.all([getPinnedMetrics(), getFocusGoal()]);
   let defs: { id: string; title: string }[] = GRID_METRICS;
   if (pinned.length > 0) {
     const catalog = await safeMetrics();
@@ -246,6 +290,10 @@ export async function SignalsSection() {
       id,
       title: catalog?.find((m) => m.id === id)?.display_name ?? id,
     }));
+  }
+  if (goal) {
+    const goalSet = new Set(goal.metricIds);
+    defs = [...defs.filter((d) => goalSet.has(d.id)), ...defs.filter((d) => !goalSet.has(d.id))];
   }
   const [map, sleep] = await Promise.all([
     safeSeriesMany(defs.map((d) => d.id), "7d"),
