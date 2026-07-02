@@ -1,16 +1,18 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
-import { PrivacyCard } from "../components/PrivacyCard";
-import { safePrivacy } from "../lib/load";
+import { PrivacySection } from "../components/sections/PrivacySections";
+import { CardSkeleton } from "../components/Skeletons";
 
 export const metadata: Metadata = { title: "Privacy · HealthSave" };
 export const dynamic = "force-dynamic";
 
-export default async function PrivacyPage() {
-  const privacy = await safePrivacy();
+export default function PrivacyPage() {
   return (
     <section className="lead">
-      <PrivacyCard privacy={privacy} />
+      <Suspense fallback={<CardSkeleton />}>
+        <PrivacySection />
+      </Suspense>
     </section>
   );
 }

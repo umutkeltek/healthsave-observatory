@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
-import { ExperimentsCard } from "../components/ExperimentsCard";
-import { safeCandidates, safeExperiments } from "../lib/load";
+import { ExperimentsListSection } from "../components/sections/ExperimentsSections";
+import { LeadSkeleton } from "../components/Skeletons";
 
 export const metadata: Metadata = { title: "Experiments · HealthSave" };
 export const dynamic = "force-dynamic";
 
-export default async function ExperimentsPage() {
-  const [experiments, candidates] = await Promise.all([safeExperiments(), safeCandidates()]);
+export default function ExperimentsPage() {
   return (
-    <section className="lead">
-      <ExperimentsCard experiments={experiments} candidates={candidates} />
-    </section>
+    <Suspense fallback={<LeadSkeleton />}>
+      <ExperimentsListSection />
+    </Suspense>
   );
 }

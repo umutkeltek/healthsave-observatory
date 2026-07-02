@@ -1,22 +1,23 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
-import { EvidenceCard } from "../components/EvidenceCard";
-import { WeeklyBriefCard } from "../components/WeeklyBriefCard";
-import { safeFindings, safeLatest } from "../lib/load";
+import { BriefSection, FindingsEvidenceSection } from "../components/sections/FindingsSections";
+import { LeadSkeleton } from "../components/Skeletons";
 
 export const metadata: Metadata = { title: "Findings · HealthSave" };
 export const dynamic = "force-dynamic";
 
-export default async function FindingsPage() {
-  const [latest, findings] = await Promise.all([safeLatest(), safeFindings()]);
+// The page awaits nothing: each card streams in through its own Suspense
+// boundary (data fetching lives in components/sections/FindingsSections.tsx).
+export default function FindingsPage() {
   return (
     <>
-      <section className="lead">
-        <WeeklyBriefCard latest={latest} />
-      </section>
-      <section className="lead">
-        <EvidenceCard findings={findings} />
-      </section>
+      <Suspense fallback={<LeadSkeleton />}>
+        <BriefSection />
+      </Suspense>
+      <Suspense fallback={<LeadSkeleton />}>
+        <FindingsEvidenceSection />
+      </Suspense>
     </>
   );
 }
