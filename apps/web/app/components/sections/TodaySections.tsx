@@ -186,13 +186,46 @@ async function EmptyToday({ state }: { state: "empty" | "unreachable" }) {
   );
 }
 
+// Grid definitions: pins (Library star) replace the curated defaults, with
+// titles resolved from the catalog. Shared by SignalsSection and the union
+// series fetch below so both compute identical id sets.
+async function gridDefs(): Promise<{ defs: { id: string; title: string }[]; pinned: boolean }> {
+  const pinned = await getPinnedMetrics();
+  if (pinned.length === 0) return { defs: GRID_METRICS, pinned: false };
+  const catalog = await safeMetrics();
+  return {
+    defs: pinned.map((id) => ({
+      id,
+      title: catalog?.find((m) => m.id === id)?.display_name ?? id,
+    })),
+    pinned: true,
+  };
+}
+
+// The signals grid and the goal ribbon read overlapping 7d series sets, and
+// batchSeriesCached dedupes only IDENTICAL id sets — so both sections fetch
+// the same union (grid ids + any goal-only ids) and a stated goal costs zero
+// extra /api/v2/series round-trips.
+async function todaySeries7d() {
+  const [{ defs }, goal] = await Promise.all([gridDefs(), getFocusGoal()]);
+  const ids = defs.map((d) => d.id);
+  const seen = new Set(ids);
+  for (const id of goal?.metricIds ?? []) {
+    if (!seen.has(id)) {
+      seen.add(id);
+      ids.push(id);
+    }
+  }
+  return safeSeriesMany(ids, "7d");
+}
+
 export async function GoalSection() {
   // The focus ribbon appears only when there is data AND a stated goal —
   // before data, the goal lives in the first-run panel instead.
   if (!(await hasAnyData())) return null;
   const goal = await getFocusGoal();
   if (!goal) return null;
-  const seriesById = await safeSeriesMany(goal.metricIds, "7d");
+  const seriesById = await todaySeries7d();
   return <GoalRibbon goal={goal} seriesById={seriesById} />;
 }
 
@@ -282,26 +315,19 @@ export async function SignalsSection() {
   // Pinned metrics (Library star) replace the curated default grid; a stated
   // focus goal then pulls its target signals to the front (orientation, not
   // replacement — pins and defaults stay, just reordered).
-  const [pinned, goal] = await Promise.all([getPinnedMetrics(), getFocusGoal()]);
-  let defs: { id: string; title: string }[] = GRID_METRICS;
-  if (pinned.length > 0) {
-    const catalog = await safeMetrics();
-    defs = pinned.map((id) => ({
-      id,
-      title: catalog?.find((m) => m.id === id)?.display_name ?? id,
-    }));
-  }
+  const [{ defs: baseDefs, pinned }, goal] = await Promise.all([gridDefs(), getFocusGoal()]);
+  let defs = baseDefs;
   if (goal) {
     const goalSet = new Set(goal.metricIds);
     defs = [...defs.filter((d) => goalSet.has(d.id)), ...defs.filter((d) => !goalSet.has(d.id))];
   }
   const [map, sleep] = await Promise.all([
-    safeSeriesMany(defs.map((d) => d.id), "7d"),
+    todaySeries7d(),
     safeSeries("sleep.stage", "7d"),
   ]);
   return (
     <>
-      <div className="section-label">Signals{pinned.length > 0 ? " · pinned" : ""}</div>
+      <div className="section-label">Signals{pinned ? " · pinned" : ""}</div>
       <section className="grid">
         {defs.map((metric) => (
           <MetricCard key={metric.id} series={map.get(metric.id) ?? null} fallbackTitle={metric.title} />
