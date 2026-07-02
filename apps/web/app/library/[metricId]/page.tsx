@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { detectDivergence, groupBySource } from "../../lib/analytics";
+import { anomalyPinIndices } from "../../lib/annotations";
 import { quantile } from "../../components/chart/scale";
 import { comparability } from "../../lib/healthOpinion";
-import { agoLabel, safeMetrics, safeReadiness, safeSeries } from "../../lib/load";
+import { agoLabel, safeFindings, safeMetrics, safeReadiness, safeSeries } from "../../lib/load";
 import { METRIC_NOTES } from "../../lib/metricNotes";
 import { getPinnedMetrics } from "../../lib/prefs";
 import { friendlyName } from "../../lib/provenance";
@@ -34,11 +35,12 @@ export default async function MetricDetailPage({
   const sp = await searchParams;
   const range: Range = RANGES.includes(sp.range as Range) ? (sp.range as Range) : "30d";
 
-  const [series, metrics, readiness, pinned] = await Promise.all([
+  const [series, metrics, readiness, pinned, findings] = await Promise.all([
     metricId ? safeSeries(metricId, range) : Promise.resolve(null),
     safeMetrics(),
     safeReadiness(),
     getPinnedMetrics(),
+    safeFindings(),
   ]);
 
   const metric = metrics?.find((m) => m.id === metricId) ?? series?.metric ?? null;
@@ -118,6 +120,11 @@ export default async function MetricDetailPage({
           {values.length >= 2 && !multiSource && (
             <BaselineRibbon
               values={values}
+              anomalies={anomalyPinIndices(
+                points.filter((p) => p.value !== null).map((p) => p.t),
+                findings,
+                metricId,
+              )}
               height={120}
               axis={[`${range} ago`, "today"]}
               hoverLabels={points
