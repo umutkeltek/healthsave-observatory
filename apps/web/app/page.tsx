@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import {
   ExperimentsSection,
+  GoalSection,
   HeroSection,
   InsightsSection,
   ReadinessSection,
@@ -27,6 +28,10 @@ export default function Home() {
           <VaultSection />
         </Suspense>
       </div>
+
+      <Suspense fallback={null}>
+        <GoalSection />
+      </Suspense>
 
       <Suspense fallback={<RowSkeleton />}>
         <InsightsSection />

@@ -22,7 +22,16 @@ import {
   type TestConnectionPayload,
   type TestConnectionResult,
 } from "./api";
-import { type Density, DENSITY_COOKIE, MAX_PINS, parsePinned, PINNED_COOKIE } from "./prefs";
+import {
+  type Density,
+  DENSITY_COOKIE,
+  type FocusGoal,
+  FOCUS_GOAL_COOKIE,
+  MAX_PINS,
+  parseFocusGoal,
+  parsePinned,
+  PINNED_COOKIE,
+} from "./prefs";
 
 export type ActionResult = { ok: boolean; error?: string };
 
@@ -154,6 +163,36 @@ export async function setDensityAction(mode: Density): Promise<ActionResult> {
     return { ok: true };
   } catch (error) {
     return failure(error, "Could not switch the view mode.");
+  }
+}
+
+export async function setFocusGoalAction(goal: FocusGoal): Promise<ActionResult> {
+  try {
+    // Round-trip through the parser so only a well-formed goal is ever stored.
+    const clean = parseFocusGoal(JSON.stringify(goal));
+    if (!clean) return { ok: false, error: "That goal is missing a title or metrics." };
+    const jar = await cookies();
+    jar.set(FOCUS_GOAL_COOKIE, JSON.stringify(clean), {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax",
+      httpOnly: true,
+    });
+    revalidatePath("/");
+    return { ok: true };
+  } catch (error) {
+    return failure(error, "Could not set the focus goal.");
+  }
+}
+
+export async function clearFocusGoalAction(): Promise<ActionResult> {
+  try {
+    const jar = await cookies();
+    jar.delete(FOCUS_GOAL_COOKIE);
+    revalidatePath("/");
+    return { ok: true };
+  } catch (error) {
+    return failure(error, "Could not clear the focus goal.");
   }
 }
 

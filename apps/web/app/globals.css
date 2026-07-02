@@ -3468,3 +3468,170 @@ table.prov {
   font-size: var(--fs-sm);
   color: var(--faint);
 }
+
+/* ── Focus goal (v0) — the orientation ribbon + preset picker ───────────── */
+
+.goal-ribbon {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  flex-wrap: wrap;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--signal);
+  border-radius: var(--radius);
+  padding: 14px 20px;
+  margin-bottom: var(--s5);
+  animation: rise var(--dur-3) var(--ease-out) both;
+}
+.goal-ribbon-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  min-width: 0;
+}
+.goal-eyebrow {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--signal);
+}
+.goal-title {
+  font-size: var(--fs-md);
+  font-weight: 650;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.goal-dir {
+  font-size: var(--fs-xs);
+  color: var(--faint);
+}
+.goal-metrics {
+  display: flex;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+.goal-metric {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--raise);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  text-decoration: none;
+  transition: border-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.goal-metric:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.goal-metric-name {
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+.goal-spark {
+  width: 72px;
+  height: 20px;
+  color: var(--signal);
+  opacity: 0.85;
+}
+.goal-spark.empty-spark {
+  display: inline-block;
+  border-bottom: 1px dashed var(--line-strong);
+}
+
+.goal-picker {
+  display: flex;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  margin-top: var(--s3);
+}
+.goal-picker[data-pending] {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.goal-chip {
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--raise);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-family: var(--sans);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out),
+    background var(--dur-1) var(--ease-out);
+}
+.goal-chip:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.goal-chip.is-active {
+  border-color: var(--signal);
+  color: var(--signal);
+  background: color-mix(in srgb, var(--signal) 8%, transparent);
+}
+.goal-error {
+  font-size: var(--fs-sm);
+  color: var(--down);
+  align-self: center;
+}
+
+/* ── First run — the guided three steps on an empty Today ───────────────── */
+
+.firstrun-steps {
+  list-style: none;
+  margin: var(--s4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+.firstrun-step {
+  display: flex;
+  gap: var(--s4);
+  align-items: flex-start;
+  animation: rise var(--dur-3) var(--ease-out) both;
+}
+.firstrun-step:nth-child(2) {
+  animation-delay: 80ms;
+}
+.firstrun-step:nth-child(3) {
+  animation-delay: 160ms;
+}
+.firstrun-n {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  color: var(--signal);
+}
+.firstrun-step strong {
+  display: block;
+  color: var(--ink);
+  font-weight: 650;
+}
+.firstrun-hint {
+  display: block;
+  margin-top: 3px;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  max-width: 62ch;
+}
+.firstrun-hint a {
+  color: var(--accent);
+}
