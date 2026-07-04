@@ -5655,10 +5655,11 @@ padding: 0;
 }
 
 .brief-main-read {
-padding: 16px;
-border: 1px solid var(--line-soft);
-border-radius: 14px;
-background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 86%, var(--accent-weak)), var(--surface));
+padding: 16px 18px;
+border: 1px solid var(--line);
+border-left: 3px solid var(--accent);
+border-radius: 12px;
+background: var(--surface-2);
 }
 
 .brief-label {
