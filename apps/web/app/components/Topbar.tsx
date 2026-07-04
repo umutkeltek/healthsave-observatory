@@ -13,6 +13,7 @@ const TITLES: Record<string, { title: string; sub: string }> = {
   "/findings": { title: "Findings", sub: "Important changes first, calculations one layer deeper." },
   "/sources": { title: "Sources", sub: "Where each number came from and how fresh it is." },
   "/data": { title: "Data", sub: "Metrics, coverage, readiness, and export." },
+  "/explore": { title: "Explore", sub: "Build your own view — panels, buckets, and overlays over any signals." },
   "/compare": { title: "Compare", sub: "Compare periods, sources, and devices without losing provenance." },
   "/relationships": { title: "Relationships", sub: "Explore how signals move together." },
   "/privacy": { title: "Privacy", sub: "What stayed local, what left this host, and why." },

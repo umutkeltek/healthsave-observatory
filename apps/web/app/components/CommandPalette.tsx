@@ -15,6 +15,7 @@ const PAGES: { label: string; href: string }[] = [
   { label: "Findings", href: "/findings" },
   { label: "Sources", href: "/sources" },
   { label: "Data", href: "/data" },
+  { label: "Explore", href: "/explore" },
   { label: "Library", href: "/library" },
   { label: "Compare", href: "/compare" },
   { label: "Relationships", href: "/relationships" },
