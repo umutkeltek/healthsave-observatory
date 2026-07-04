@@ -1,7 +1,16 @@
 // N labelled line series on one shared scale - extends MetricCard's single
 // Sparkline to a multi-line overlay using the chart palette tokens. Pure
 // presentational; the page reduces points into {label, values}[] via analytics.
-const PALETTE = ["var(--accent)", "var(--signal)", "var(--experiment)", "var(--anomaly)"];
+// Categorical series palette — distinct hues so overlaid/compared lines stay
+// tellable apart (accent and signal are both system blue, so never pair them).
+const PALETTE = [
+  "var(--series-1)",
+  "var(--series-2)",
+  "var(--series-3)",
+  "var(--series-4)",
+  "var(--series-5)",
+  "var(--series-6)",
+];
 
 export type ChartSeries = { label: string; values: number[] };
 
