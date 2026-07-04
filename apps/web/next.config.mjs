@@ -1,7 +1,17 @@
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const appRoot = dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Self-contained server bundle for the Docker image (apps/web/Dockerfile).
   output: "standalone",
+  devIndicators: false,
+  allowedDevOrigins: ["127.0.0.1"],
+  turbopack: {
+    root: appRoot,
+  },
   // Dashboard reads the HealthSave Observatory v2 API. Server components fetch API_BASE
   // directly; this rewrite lets any client-side fetch hit same-origin /api/*.
   async rewrites() {
