@@ -6,7 +6,14 @@
 
 import { bucketBy, dayOfWeekPivot, hrZoneHistogram, weekHourPivot, type Stat } from "../../lib/analytics";
 import type { SeriesPoint } from "../../lib/api";
-import { normalize, type ExplorePanel, type ExploreState, type GrainOpt } from "../../lib/explore";
+import {
+  fetchRange,
+  filterWindow,
+  normalize,
+  type ExplorePanel,
+  type ExploreState,
+  type GrainOpt,
+} from "../../lib/explore";
 import { safeMetrics, safeSeries } from "../../lib/load";
 import { DayOfWeekChart } from "../DayOfWeekChart";
 import { ExploreControls, PanelToolbar, type MetricOpt } from "../ExploreControls";
@@ -70,9 +77,13 @@ export async function ExploreSections({ state }: { state: ExploreState }) {
   const nameById = new Map(metrics.map((m) => [m.id, m.display_name] as const));
   const unitById = new Map(metrics.map((m) => [m.id, m.canonical_unit ?? ""] as const));
 
+  const range = fetchRange(state);
   const neededIds = [...new Set(state.panels.flatMap((p) => p.metrics))];
   const seriesEntries = await Promise.all(
-    neededIds.map(async (id) => [id, (await safeSeries(id, state.range))?.points ?? []] as const),
+    neededIds.map(async (id) => {
+      const pts = (await safeSeries(id, range))?.points ?? [];
+      return [id, filterWindow(pts, state.from, state.to)] as const;
+    }),
   );
   const pointsById = new Map(seriesEntries);
 
