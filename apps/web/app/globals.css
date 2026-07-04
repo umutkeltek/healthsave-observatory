@@ -4778,22 +4778,33 @@ body {
 .topbar-health {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 0;
   min-height: 36px;
-  padding: 3px;
-  border: 0.5px solid var(--line);
+  padding: 2px 5px;
+  border: 1px solid var(--line);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset;
+  background: var(--surface-2);
+  box-shadow: none;
 }
 
 .topbar-health .pill,
 .topbar-health .live-pill {
-  min-height: 28px;
-  padding: 4px 9px;
+  min-height: 26px;
+  padding: 4px 10px;
   border: 0;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
+  font-family: var(--sans);
+  font-size: 11.5px;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+/* Hairline dividers turn the run of pills into one clean segmented capsule. */
+.topbar-health .pill + .pill,
+.topbar-health .live-pill + .pill {
+  border-left: 1px solid var(--line);
 }
 
 .theme-toggle {
@@ -5373,10 +5384,11 @@ body {
   padding: 30px 32px;
   display: grid;
   gap: 20px;
-  border-color: color-mix(in srgb, var(--accent) 20%, var(--line));
+  /* Solid neutral border (was a washy blue-tinted mix) + one whisper of a
+     top-left glow instead of the heavy double gradient DESIGN.md forbids. */
+  border-color: var(--line);
   background:
-    radial-gradient(620px 260px at 0% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 72%),
-    linear-gradient(135deg, color-mix(in srgb, var(--surface) 88%, var(--signal) 12%), var(--surface) 58%),
+    radial-gradient(680px 280px at 0% 0%, var(--accent-weak), transparent 66%),
     var(--surface);
 }
 
