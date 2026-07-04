@@ -5,61 +5,71 @@
    ───────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* ── Foundation - deeper, calmer near-black "observatory" canvas ── */
-  --bg: #07090d; /* canvas */
-  --bg-radial: #0b1220; /* faint glow toward the top of the canvas */
-  --surface: #0d1218; /* cards */
-  --surface-2: #090d12; /* sidebar */
-  --surface-3: #111923; /* raised panels / hover wells */
-  --raise: #0a0f15; /* inset wells (result blocks, progress track) */
+  /* ─────────────────────────────────────────────────────────────────
+     Design tokens — ONE language: macOS-light-first (Apple system).
+     Light is the default palette (here); dark overrides live in the
+     single [data-theme="dark"] block. No other palette layers exist.
+     Structural tokens (type/space/radius/motion) are theme-independent
+     and defined once, at the bottom of this block.
+     ───────────────────────────────────────────────────────────────── */
 
-  --line: rgba(184, 199, 218, 0.11); /* hairline border */
-  --line-soft: rgba(184, 199, 218, 0.07);
-  --line-strong: rgba(184, 199, 218, 0.18);
-  --line-glow: rgba(124, 140, 255, 0.32);
+  /* Surfaces */
+  --bg: #f2f2f7; /* grouped canvas */
+  --bg-radial: #ffffff;
+  --surface: #ffffff; /* elevated cards */
+  --surface-2: rgba(246, 246, 246, 0.72); /* sidebar material */
+  --surface-3: #e5e5ea; /* raised panels / hover wells */
+  --raise: #f2f2f7; /* inset wells */
 
-  --ink: #eef3f7;
-  --muted: #9aa8b7;
-  --faint: #657386;
-  --ghost: #465264;
+  /* Lines */
+  --line: rgba(60, 60, 67, 0.18); /* hairline divider */
+  --line-soft: rgba(60, 60, 67, 0.1);
+  --line-strong: rgba(60, 60, 67, 0.28);
+  --line-glow: rgba(0, 122, 255, 0.28);
 
-  /* Brand = intelligence (indigo). --accent kept as the name everything uses. */
-  --accent: #7c83ff;
-  --brand: #7c83ff;
-  --accent-weak: rgba(124, 131, 255, 0.12);
-  --accent-line: rgba(124, 131, 255, 0.28);
-  --brand-weak: rgba(124, 131, 255, 0.12);
+  /* Text */
+  --ink: #1d1d1f;
+  --muted: #6e6e73;
+  --faint: #98989d;
+  --ghost: #c7c7cc;
 
-  /* Signal = physiology / live / local-only proof (mint). The second voice. */
-  --signal: #5eead4;
-  --signal-weak: rgba(94, 234, 212, 0.12);
-  --signal-line: rgba(94, 234, 212, 0.3);
+  /* Accent — Apple system blue, the single accent voice. */
+  --accent: #007aff;
+  --brand: #007aff;
+  --accent-weak: rgba(0, 122, 255, 0.1);
+  --accent-line: rgba(0, 122, 255, 0.3);
+  --brand-weak: rgba(0, 122, 255, 0.1);
 
-  /* Health semantics */
-  --up: #38d996;
-  --warn: #e8b45f;
-  --down: #ff6b8a;
-  --neutral: #8ea2b8;
+  /* Signal = physiology / live / local proof — kept on-accent (one blue, no second language). */
+  --signal: #007aff;
+  --signal-weak: rgba(0, 122, 255, 0.1);
+  --signal-line: rgba(0, 122, 255, 0.22);
 
-  /* Chart system */
-  --baseline-fill: rgba(124, 131, 255, 0.11);
-  --baseline-line: rgba(124, 131, 255, 0.28);
-  --anomaly: #ff9f7a;
-  --experiment: #c084fc;
+  /* Health semantics — Apple system colors */
+  --up: #30d158;
+  --warn: #ff9f0a;
+  --down: #ff453a;
+  --neutral: #8e8e93;
 
-  /* Sleep stages */
-  --sleep-awake: #e8b45f;
-  --sleep-rem: #5eead4;
-  --sleep-core: #6f83ff;
-  --sleep-deep: #2d3f8f;
+  /* Chart system — baseline is accent-derived; anomaly/experiment are distinct system hues. */
+  --baseline-fill: rgba(0, 122, 255, 0.08);
+  --baseline-line: rgba(0, 122, 255, 0.28);
+  --anomaly: #ff453a;
+  --experiment: #af52de;
 
-  --hover: rgba(255, 255, 255, 0.03);
+  /* Sleep stages — Apple Health family, distinct + on-palette */
+  --sleep-awake: #ff9f0a;
+  --sleep-rem: #64d2ff;
+  --sleep-core: #007aff;
+  --sleep-deep: #5e5ce6;
 
+  --hover: rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.04), 0 12px 28px rgba(60, 60, 67, 0.08);
+
+  /* ── Structural (theme-independent) ── */
   --radius: 14px;
   --radius-lg: 20px;
   --radius-sm: 9px;
-
-  --shadow-card: 0 20px 70px rgba(0, 0, 0, 0.34);
 
   /* Type scale */
   --text-hero: clamp(44px, 6vw, 72px);
@@ -71,7 +81,7 @@
   --fs-xl: 18px; /* leads */
   --fs-2xl: 22px; /* section headings */
 
-  /* Spacing scale - new rules use these; legacy px values migrate as touched. */
+  /* Spacing scale (8pt) */
   --s1: 4px;
   --s2: 8px;
   --s3: 12px;
@@ -89,8 +99,8 @@
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-io: cubic-bezier(0.65, 0, 0.35, 1);
 
---mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
---sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", sans-serif;
 }
 
 * {
@@ -1027,51 +1037,9 @@ a {
    Polish layer - light theme, refinements, loading skeletons
    ───────────────────────────────────────────────────────────────────── */
 
-/* Light theme: the token-based components re-skin automatically. */
-[data-theme="light"] {
-  --bg: #f6f7f9;
-  --surface: #ffffff;
-  --surface-2: #f0f2f5;
-  --raise: #f3f5f8;
-  --line: #e4e8ef;
-  --line-soft: #eef1f5;
-
-  --ink: #161d29;
-  --muted: #586172;
-  --faint: #8a94a3;
-
-  --accent: #5b6cff;
-  --accent-weak: rgba(91, 108, 255, 0.1);
-  --accent-line: rgba(91, 108, 255, 0.28);
-
-  --up: #0f9d6b;
-  --warn: #b7791f;
-  --down: #e11d48;
-
-  --hover: rgba(16, 24, 40, 0.04);
-
-  /* Observatory tokens, light variant */
-  --bg-radial: #e9edf6;
-  --surface-3: #f7f9fc;
-  --line-strong: #d4dae4;
-  --line-glow: rgba(91, 108, 255, 0.3);
-  --ghost: #aab2c0;
-  --brand: #5b6cff;
-  --brand-weak: rgba(91, 108, 255, 0.1);
-  --signal: #0d9488;
-  --signal-weak: rgba(13, 148, 136, 0.1);
-  --signal-line: rgba(13, 148, 136, 0.28);
-  --neutral: #586172;
-  --baseline-fill: rgba(91, 108, 255, 0.09);
-  --baseline-line: rgba(91, 108, 255, 0.26);
-  --anomaly: #ea6a3a;
-  --experiment: #9333ea;
-  --sleep-awake: #b7791f;
-  --sleep-rem: #0d9488;
-  --sleep-core: #5b6cff;
-  --sleep-deep: #1e2a6b;
-  --shadow-card: 0 16px 50px rgba(20, 30, 55, 0.1);
-}
+/* Light is the default palette (:root). The dead periwinkle light-theme token
+   block was removed here during the design-system consolidation — light values
+   now live once, in :root; dark deltas live once, in [data-theme="dark"]. */
 
 [data-theme="light"] .status-dot {
   box-shadow: 0 0 0 3px rgba(15, 157, 107, 0.14);
@@ -1365,7 +1333,7 @@ html {
   stroke-width: 2;
   stroke-linejoin: round;
   stroke-linecap: round;
-  filter: drop-shadow(0 0 8px rgba(94, 234, 212, 0.28));
+  filter: drop-shadow(0 0 8px var(--signal-line));
 }
 .ribbon-pin {
   position: absolute;
@@ -2597,7 +2565,7 @@ table.prov {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(100deg, transparent 35%, rgba(94, 234, 212, 0.07) 50%, transparent 65%);
+  background: linear-gradient(100deg, transparent 35%, var(--signal-weak) 50%, transparent 65%);
   animation: shimmer-live 6s linear infinite;
   pointer-events: none;
 }
@@ -3282,7 +3250,7 @@ table.prov {
 }
 
 .hero-state-prime::before {
-  background: radial-gradient(640px 280px at 18% 0%, rgba(94, 234, 212, 0.13), transparent 70%);
+  background: radial-gradient(640px 280px at 18% 0%, var(--accent-weak), transparent 70%);
 }
 
 .hero-state-steady::before {
@@ -3694,38 +3662,6 @@ color: var(--accent);
    preserving the current component contracts and route structure.
 ───────────────────────────────────────────────────────────────────── */
 
-[data-theme="light"] {
-  --bg: #f2f2f7;
-  --bg-radial: #ffffff;
-  --surface: #ffffff;
-  --surface-2: rgba(246, 246, 246, 0.72);
-  --surface-3: #e5e5ea;
-  --raise: #f2f2f7;
-  --line: rgba(60, 60, 67, 0.18);
-  --line-soft: rgba(60, 60, 67, 0.1);
-  --line-strong: rgba(60, 60, 67, 0.28);
-  --line-glow: rgba(0, 122, 255, 0.28);
-  --ink: #1d1d1f;
-  --muted: #6e6e73;
-  --faint: #98989d;
-  --ghost: #c7c7cc;
-  --accent: #007aff;
-  --brand: #007aff;
-  --accent-weak: rgba(0, 122, 255, 0.1);
-  --accent-line: rgba(0, 122, 255, 0.3);
-  --brand-weak: rgba(0, 122, 255, 0.1);
-  --signal: #007aff;
-  --signal-weak: rgba(0, 122, 255, 0.1);
-  --signal-line: rgba(0, 122, 255, 0.22);
-  --experiment: #ff9f0a;
-  --anomaly: #ff453a;
-  --up: #30d158;
-  --down: #ff453a;
-  --warn: #ff9f0a;
-  --hover: rgba(0, 0, 0, 0.04);
-  --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.04), 0 12px 28px rgba(60, 60, 67, 0.08);
-}
-
 [data-theme="dark"] {
   --bg: #000000;
   --bg-radial: #1c1c1e;
@@ -3749,11 +3685,18 @@ color: var(--accent);
   --signal: #0a84ff;
   --signal-weak: rgba(10, 132, 255, 0.16);
   --signal-line: rgba(10, 132, 255, 0.3);
-  --experiment: #ff9f0a;
-  --anomaly: #ff453a;
+  --neutral: #98989d;
   --up: #30d158;
   --down: #ff453a;
   --warn: #ff9f0a;
+  --anomaly: #ff453a;
+  --experiment: #bf5af2;
+  --baseline-fill: rgba(10, 132, 255, 0.14);
+  --baseline-line: rgba(10, 132, 255, 0.32);
+  --sleep-awake: #ffb340;
+  --sleep-rem: #70d7ff;
+  --sleep-core: #0a84ff;
+  --sleep-deep: #7d7aff;
   --hover: rgba(255, 255, 255, 0.08);
   --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.32), 0 16px 36px rgba(0, 0, 0, 0.34);
 }
