@@ -91,22 +91,33 @@ const ICONS: Record<string, ReactNode> = {
   ),
 };
 
-// `essential: true` rows show in both modes; the rest are Observatory-mode
-// power surfaces (still URL-accessible in Essentials - only the nav slims).
-const NAV = [
-  { href: "/", label: "Today", icon: "overview", essential: true },
-{ href: "/findings", label: "Findings", icon: "findings", essential: true },
-{ href: "/data", label: "Data", icon: "data", essential: true },
-{ href: "/sources", label: "Sources", icon: "sources", essential: true },
-{ href: "/library", label: "Library", icon: "library", essential: true },
-{ href: "/experiments", label: "Experiments", icon: "experiments", essential: false },
-  { href: "/compare", label: "Compare", icon: "compare", essential: false },
-  { href: "/relationships", label: "Relationships", icon: "relationships", essential: false },
-  { href: "/integrations", label: "Integrations", icon: "integrations", essential: true },
-  { href: "/privacy", label: "Privacy", icon: "privacy", essential: true },
-  { href: "/intelligence", label: "Intelligence", icon: "intelligence", essential: false },
-  { href: "/settings", label: "Settings", icon: "settings", essential: true },
-] as const;
+// Nav is grouped into three tiers. Essentials is the calm daily set; Explore
+// holds the analytical / power surfaces; Manage holds config + routes. All three
+// show by default so no feature is hidden — the density toggle can slim the nav
+// to Essentials-only for a calmer view (Explore/Manage stay URL-reachable).
+type NavGroup = "essentials" | "explore" | "manage";
+type NavItem = { href: string; label: string; icon: string; group: NavGroup };
+
+const NAV: readonly NavItem[] = [
+  { href: "/", label: "Today", icon: "overview", group: "essentials" },
+  { href: "/findings", label: "Findings", icon: "findings", group: "essentials" },
+  { href: "/data", label: "Data", icon: "data", group: "essentials" },
+  { href: "/sources", label: "Sources", icon: "sources", group: "essentials" },
+  { href: "/privacy", label: "Privacy", icon: "privacy", group: "essentials" },
+  { href: "/library", label: "Library", icon: "library", group: "explore" },
+  { href: "/compare", label: "Compare", icon: "compare", group: "explore" },
+  { href: "/relationships", label: "Relationships", icon: "relationships", group: "explore" },
+  { href: "/experiments", label: "Experiments", icon: "experiments", group: "explore" },
+  { href: "/integrations", label: "Integrations", icon: "integrations", group: "manage" },
+  { href: "/intelligence", label: "Intelligence", icon: "intelligence", group: "manage" },
+  { href: "/settings", label: "Settings", icon: "settings", group: "manage" },
+];
+
+const GROUP_ORDER: readonly { id: NavGroup; label: string }[] = [
+  { id: "essentials", label: "Essentials" },
+  { id: "explore", label: "Explore" },
+  { id: "manage", label: "Manage" },
+];
 
 
 function NavIcon({ name }: { name: string }) {
@@ -140,7 +151,22 @@ export function Sidebar({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const items = density === "essentials" ? NAV.filter((item) => item.essential) : NAV;
+  const essentialsOnly = density === "essentials";
+  const groups = essentialsOnly ? GROUP_ORDER.filter((g) => g.id === "essentials") : GROUP_ORDER;
+  const renderItem = (item: NavItem) => {
+    const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        className={`nav-item ${active ? "active" : ""}`}
+        onClick={onNavigate}
+      >
+        <NavIcon name={item.icon} />
+        {item.label}
+      </Link>
+    );
+  };
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -152,20 +178,12 @@ export function Sidebar({
       </div>
 
       <nav className="nav">
-        {items.map((item) => {
-          const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`nav-item ${active ? "active" : ""}`}
-              onClick={onNavigate}
-            >
-              <NavIcon name={item.icon} />
-              {item.label}
-            </Link>
-          );
-        })}
+        {groups.map((g) => (
+          <div className="nav-group" key={g.id}>
+            {!essentialsOnly && <div className="nav-group-label">{g.label}</div>}
+            {NAV.filter((item) => item.group === g.id).map(renderItem)}
+          </div>
+        ))}
       </nav>
 
       <div className="sidebar-foot">

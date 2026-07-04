@@ -12,7 +12,9 @@ export const MAX_PINS = 16;
 
 export async function getDensity(): Promise<Density> {
   const jar = await cookies();
-  return jar.get(DENSITY_COOKIE)?.value === "observatory" ? "observatory" : "essentials";
+  // Default to Observatory so every surface is discoverable; Essentials is an
+  // explicit opt-in to a calmer, daily-only nav.
+  return jar.get(DENSITY_COOKIE)?.value === "essentials" ? "essentials" : "observatory";
 }
 
 export function parsePinned(raw: string | undefined): string[] {
