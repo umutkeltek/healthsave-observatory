@@ -1,79 +1,89 @@
 import { reliabilityFor } from "../lib/healthOpinion";
 import type { ProvenanceRow } from "../lib/provenance";
 
-// Active streams as a chain-of-origin table: Source → Hardware → Stream id →
-// Last sync → Freshness. The page owns the unreachable/demo decision and always
-// passes populated rows there; an empty array here is a reachable backend with
-// no source connected yet, which gets its own honest state.
+function freshnessLabel(row: ProvenanceRow): string {
+  if (row.stale) return "Needs attention";
+  if (row.freshness >= 0.9) return "Fresh";
+  if (row.freshness >= 0.65) return "Recent";
+  return "Aging";
+}
+
 export function ProvenanceTable({ rows, demo }: { rows: ProvenanceRow[]; demo?: boolean }) {
   if (rows.length === 0) {
     return (
-      <article className="card">
+      <article className="card prov-card-shell">
         <div className="prov-head">
           <h2>Active Streams</h2>
         </div>
-        <p className="empty">
-          No streams yet — connect a source and each device appears here with its origin and freshness.
-        </p>
+        <p className="empty">No streams yet. Connect a source to see devices, sync age, and origin.</p>
       </article>
     );
   }
 
   return (
-    <article className="card">
+    <article className="card prov-card-shell">
       <div className="prov-head">
-        <h2>Active Streams</h2>
+        <div>
+          <h2>Active Streams</h2>
+          <p className="card-subtitle">Human source names first. Raw stream tokens stay available in details.</p>
+        </div>
         <span className="chip mono">
           {rows.length} connection{rows.length === 1 ? "" : "s"}
         </span>
       </div>
-      <div className="prov-scroll">
-        <table className="prov">
-          <thead>
-            <tr>
-              <th scope="col">Source / Origin</th>
-              <th scope="col">Hardware</th>
-              <th scope="col">Stream ID</th>
-              <th scope="col">Last Sync</th>
-              <th scope="col">Freshness</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.streamId}>
-                <td className="prov-src">
-                  <span className="prov-name" title={reliabilityFor(row.sourceName).note}>
-                    {row.sourceName}
-                  </span>
-                  <span className="prov-origin">{row.origin}</span>
-                </td>
-                <td className="prov-hw">{row.hardware}</td>
-                <td>
-                  <code className="prov-id" title={row.streamId}>
-                    {row.shortId}
-                  </code>
-                </td>
-                <td className={`prov-sync ${row.stale ? "stale" : ""}`}>{row.lastSync}</td>
-                <td>
-                  <span
-                    className="prov-bar"
-                    role="img"
-                    aria-label={`freshness ${Math.round(row.freshness * 100)} percent`}
-                  >
-                    <span
-                      className={`prov-bar-fill ${row.stale ? "warn" : ""}`}
-                      style={{ width: `${Math.round(row.freshness * 100)}%` }}
-                    />
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+      <div className="prov-card-list">
+        {rows.map((row, index) => {
+          const pct = Math.round(row.freshness * 100);
+          const reliability = reliabilityFor(row.sourceName);
+
+          return (
+            <section key={row.streamId} className={`prov-source-card ${row.stale ? "is-stale" : ""}`}>
+              <div className="prov-source-main">
+                <span className="prov-source-index">Connection {index + 1}</span>
+                <h3 title={reliability.note}>{row.sourceName}</h3>
+                <p>
+                  {row.hardware} via {row.origin}
+                </p>
+              </div>
+
+              <div className="prov-source-sync">
+                <span>Last sync</span>
+                <strong className={row.stale ? "stale" : ""}>{row.lastSync}</strong>
+                <em>{freshnessLabel(row)}</em>
+              </div>
+
+              <div className="prov-source-meter" aria-label={`freshness ${pct} percent`}>
+                <span style={{ width: `${pct}%` }} />
+              </div>
+
+              <details className="prov-technical">
+                <summary>Stream details</summary>
+                <dl>
+                  <div>
+                    <dt>Stream token</dt>
+                    <dd>
+                      <code>{row.shortId}</code>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Full ID</dt>
+                    <dd>
+                      <code>{row.streamId}</code>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Reliability</dt>
+                    <dd>{reliability.note}</dd>
+                  </div>
+                </dl>
+              </details>
+            </section>
+          );
+        })}
       </div>
-      {demo && (
-        <p className="prov-demo-note">Showing demo provenance — connect a source to see your own streams.</p>
-      )}
+
+      {demo && <p className="prov-demo-note">Showing demo provenance. Connect a source to see your own streams.</p>}
     </article>
   );
 }

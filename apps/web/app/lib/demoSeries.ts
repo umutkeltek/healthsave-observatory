@@ -1,7 +1,7 @@
 import type { Correlation, MetricSeries, MetricSummary, SeriesPoint } from "./api";
 
 // A believable demo series for /compare so a fresh clone (no backend) renders
-// alive — parallel to DEMO_PROVENANCE. Two sources for the SAME metric (HRV),
+// alive - parallel to DEMO_PROVENANCE. Two sources for the SAME metric (HRV),
 // where Apple (SDNN) reads lower than Whoop (RMSSD): the cross-vendor
 // non-comparability story, and a later-week decline for the period story.
 // Clearly labelled as demo wherever it renders.
@@ -29,7 +29,7 @@ function points(source: string, vals: number[]): SeriesPoint[] {
 // A generic demo series for the Patterns panels (heatmap / weekday / zones /
 // table) so a fresh clone renders them alive for any selected metric. 14 days,
 // every 2h, with a daily rhythm (low overnight, midday peak) + a mild weekend
-// dip and two sources. Deterministic — no Date.now(). Clearly labelled as demo.
+// dip and two sources. Deterministic - no Date.now(). Clearly labelled as demo.
 export function demoPatternSeries(metric: MetricSummary): MetricSeries {
   const base = Date.parse("2026-05-27T00:00:00Z");
   const isHr = metric.id.includes("heart_rate") || metric.canonical_unit === "bpm";
@@ -82,7 +82,7 @@ export const DEMO_COMPARE_SERIES: MetricSeries = {
 //
 // A believable set of persisted correlations plus a deterministic related
 // pair for the explorer. Deliberately includes one weak, non-significant row
-// (p > 0.05) — the demo must model honesty, not just success.
+// (p > 0.05) - the demo must model honesty, not just success.
 
 export const DEMO_RELATE_METRICS: MetricSummary[] = [
   { id: "sleep.duration", display_name: "Sleep Duration", category: "sleep", value_type: "numeric", canonical_unit: "min" },

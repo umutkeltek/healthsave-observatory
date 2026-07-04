@@ -1,5 +1,5 @@
 // Chart annotations: join persisted findings onto series points so charts can
-// pin real, engine-detected events (not re-derived ones — the web never
+// pin real, engine-detected events (not re-derived ones - the web never
 // computes stats, it renders what the statistical engine persisted).
 // Pure functions, unit-tested in annotations.test.ts.
 
@@ -22,7 +22,7 @@ export function findingMetricToOntology(metric: string | null): string | null {
 }
 
 // Nearest-index join with a tolerance: an anomaly pins to the closest series
-// point in time, but only if that point is within `toleranceMs` (default 36h —
+// point in time, but only if that point is within `toleranceMs` (default 36h -
 // generous enough for daily buckets, tight enough that an anomaly from outside
 // the charted range never pins to its edge).
 const DEFAULT_TOLERANCE_MS = 36 * 3600_000;

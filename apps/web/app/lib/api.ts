@@ -47,7 +47,7 @@ export type SeriesBatch = {
 };
 
 const API_BASE = process.env.API_BASE ?? "http://localhost:8000";
-// Server-side only — the key stays in the Next server (these are server
+// Server-side only - the key stays in the Next server (these are server
 // components), never shipped to the browser.
 const API_KEY = process.env.API_KEY ?? "";
 
@@ -57,7 +57,7 @@ const DEFAULT_TIMEOUT_MS = Number(process.env.API_TIMEOUT_MS ?? 5000);
 
 // Typed failure: the safe* loaders flatten errors to null for rendering, but
 // the status survives here so logging (and any page that cares) can tell a
-// 401 key mismatch from a timeout from "backend down" — they need different
+// 401 key mismatch from a timeout from "backend down" - they need different
 // operator actions and must not all look like "no data".
 export class ApiError extends Error {
   constructor(
@@ -100,7 +100,7 @@ async function getJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise
   return res.json() as Promise<T>;
 }
 
-// Server-side POST — used by the experiment write actions. The key never
+// Server-side POST - used by the experiment write actions. The key never
 // reaches the browser (these run in server actions). On error we surface the
 // backend's `detail` (e.g. a 422 readiness rationale) so the UI can show it.
 async function postJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
@@ -121,14 +121,14 @@ async function postJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIME
         detail = typeof payload.detail === "string" ? payload.detail : JSON.stringify(payload.detail);
       }
     } catch {
-      // non-JSON error body — keep the status line
+      // non-JSON error body - keep the status line
     }
     throw new Error(detail);
   }
   return res.json() as Promise<T>;
 }
 
-// Server-side PUT — mirrors postJson. Used by the Intelligence settings apply.
+// Server-side PUT - mirrors postJson. Used by the Intelligence settings apply.
 async function putJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (API_KEY) headers["X-API-Key"] = API_KEY;
@@ -147,7 +147,7 @@ async function putJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEO
         detail = typeof payload.detail === "string" ? payload.detail : JSON.stringify(payload.detail);
       }
     } catch {
-      // non-JSON error body — keep the status line
+      // non-JSON error body - keep the status line
     }
     throw new Error(detail);
   }
@@ -169,7 +169,7 @@ export function fetchSeriesBatch(metricIds: string[], range = "7d"): Promise<Ser
   return getJson<SeriesBatch>(`/api/v2/series?ids=${ids}&range=${range}`);
 }
 
-// Receipts — the Local Vault's real chain-of-custody data. Mirrors
+// Receipts - the Local Vault's real chain-of-custody data. Mirrors
 // server/api/v2_receipts.py.
 
 export type ReceiptEvent = {
@@ -193,7 +193,7 @@ export type Receipts = {
 };
 
 export function fetchReceipts(limit = 20): Promise<Receipts> {
-  // Composes the canonical-coverage aggregates — the slowest reads in the
+  // Composes the canonical-coverage aggregates - the slowest reads in the
   // store. The backend now SWR-caches that aggregate (60s TTL), so steady
   // state is fast; 10s covers the once-per-TTL refresh + cold start.
   return getJson<Receipts>(`/api/v2/receipts?limit=${limit}`, 10_000);
@@ -234,7 +234,7 @@ export type TriggerType =
 
 export function postInsightsTrigger(type: TriggerType): Promise<TriggerResult> {
   // Analysis runs inline server-side (daily_briefing includes a real LLM
-  // narration round-trip) — give it well past the default timeout.
+  // narration round-trip) - give it well past the default timeout.
   return postJson<TriggerResult>("/api/v2/insights/trigger", { type }, 90_000);
 }
 
@@ -250,7 +250,7 @@ export function fetchMeta(): Promise<MetaView> {
   return getJson<MetaView>("/api/v2/meta");
 }
 
-// Data-readiness — Insight Action Loop card #1. Mirrors server/api/v2_readiness.py.
+// Data-readiness - Insight Action Loop card #1. Mirrors server/api/v2_readiness.py.
 
 export type GateVerdict = {
   is_sufficient: boolean;
@@ -286,13 +286,13 @@ export type Readiness = {
 };
 
 export function fetchReadiness(): Promise<Readiness> {
-  // Per-metric coverage over the whole canonical store — the heaviest read
+  // Per-metric coverage over the whole canonical store - the heaviest read
   // (it was the old first-byte bottleneck). The backend now SWR-caches both
   // aggregates (60s TTL); 10s covers the once-per-TTL refresh + cold start.
   return getJson<Readiness>("/api/v2/readiness", 10_000);
 }
 
-// Insights — Weekly Brief (narratives) + Evidence (findings).
+// Insights - Weekly Brief (narratives) + Evidence (findings).
 // Mirrors server/api/v2_insights.py /latest + /findings.
 
 export type Narrative = {
@@ -301,7 +301,7 @@ export type Narrative = {
   created_at: string | null;
 };
 
-// Last narrator attempt per job from analysis_runs — lets the brief card say
+// Last narrator attempt per job from analysis_runs - lets the brief card say
 // "last attempt failed" instead of an indistinguishable "no briefing yet".
 export type NarratorRun = {
   status: string; // "running" | "completed" | "skipped" | "failed"
@@ -343,7 +343,7 @@ export function fetchFindings(type?: string): Promise<FindingsList> {
   return getJson<FindingsList>(`/api/v2/insights/findings${query}`);
 }
 
-// Persisted cross-metric correlations — the statistical engine's output; the
+// Persisted cross-metric correlations - the statistical engine's output; the
 // web only renders them. Mirrors /api/v2/insights/correlations (fields come
 // from structured_data, so every one is nullable on the wire).
 
@@ -364,7 +364,7 @@ export function fetchCorrelations(period?: string): Promise<CorrelationsList> {
   return getJson<CorrelationsList>(`/api/v2/insights/correlations${query}`);
 }
 
-// Experiment candidates — "what to try next". Mirrors
+// Experiment candidates - "what to try next". Mirrors
 // server/api/v2_experiments.py /candidates.
 
 export type ExperimentReadiness = {
@@ -397,7 +397,7 @@ export function fetchCandidates(): Promise<Candidates> {
   return getJson<Candidates>("/api/v2/experiments/candidates");
 }
 
-// Egress posture — "what leaves this host". Mirrors server/api/v2_privacy.py.
+// Egress posture - "what leaves this host". Mirrors server/api/v2_privacy.py.
 
 export type EgressClass = {
   payload_class: string;
@@ -412,6 +412,7 @@ export type Privacy = {
   is_local: boolean;
   allow_cloud_egress: boolean;
   cloud_active: boolean;
+  cloud_prompt_redaction?: boolean;
   raw_observations_leave_host: boolean;
   egress: EgressClass[];
 };
@@ -421,7 +422,7 @@ export function fetchPrivacy(): Promise<Privacy> {
 }
 
 // A deployment with no LLM narrator (provider "disabled"/empty) performs zero
-// egress — it is the *most* private posture, not "cloud". The egress classifier
+// egress - it is the *most* private posture, not "cloud". The egress classifier
 // only knows ollama→local / everything-else→cloud, so a narrator-off host is
 // bucketed as cloud; callers special-case it here so the UI never mislabels a
 // no-egress host as a cloud one.
@@ -430,7 +431,7 @@ export function isNarratorOff(provider: string | null | undefined): boolean {
   return p === "" || p === "disabled" || p === "none";
 }
 
-// Experiments — committed n-of-1 ABAB runs. Mirrors the lifecycle routes in
+// Experiments - committed n-of-1 ABAB runs. Mirrors the lifecycle routes in
 // server/api/v2_experiments.py (ExperimentView et al.).
 
 export type Phase = {
@@ -498,7 +499,7 @@ export function fetchExperiment(id: string): Promise<Experiment> {
   return getJson<Experiment>(`/api/v2/experiments/${id}`);
 }
 
-// Write helpers — server-side only, called from server actions (lib/actions.ts).
+// Write helpers - server-side only, called from server actions (lib/actions.ts).
 
 export function createExperiment(body: {
   lever_metric_id: string;
@@ -519,7 +520,7 @@ export function abandonExperiment(id: string): Promise<Experiment> {
   return postJson<Experiment>(`/api/v2/experiments/${id}/abandon`, {});
 }
 
-// Identity — Source / Device / Stream provenance (R2). Mirrors
+// Identity - Source / Device / Stream provenance (R2). Mirrors
 // server/api/v2_identity.py. Streams join to sources on plugin_id; the
 // dashboard renders this as the provenance / chain-of-origin surface.
 
@@ -551,7 +552,7 @@ export type SourcesResponse = { count: number; sources: SourceView[] };
 export type StreamsResponse = { count: number; streams: StreamView[] };
 export type DevicesResponse = { count: number; devices: DeviceView[] };
 
-// Intelligence (LLM narrator) settings — the write surface. Mirrors
+// Intelligence (LLM narrator) settings - the write surface. Mirrors
 // server/api/v2_intelligence.py. Secrets are write-only: a key is sent in a
 // request body and NEVER returned (the view carries only key_last4).
 
@@ -657,9 +658,9 @@ export function postTestConnection(body: TestConnectionPayload): Promise<TestCon
   return postJson<TestConnectionResult>("/api/v2/intelligence/test-connection", body);
 }
 
-// Export — the per-metric CSV/JSON dump surface. Mirrors server/api/v2_export.py;
+// Export - the per-metric CSV/JSON dump surface. Mirrors server/api/v2_export.py;
 // metric names here are the legacy public export names (heart_rate, hrv, …),
-// NOT ontology ids — always drive the UI from this list.
+// NOT ontology ids - always drive the UI from this list.
 
 export type ExportMetricInfo = {
   metric: string;

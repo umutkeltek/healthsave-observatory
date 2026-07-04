@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 
 import type { InsightsLatest, Narrative, NarratorRun, NarrativeHistoryItem } from "../lib/api";
+import { briefParagraphs } from "../lib/textPresentation";
 import { RefreshInsightsButton } from "./RefreshInsightsButton";
 
 function formatDate(iso: string | null): string {
@@ -13,8 +14,6 @@ function hoursOld(iso: string | null): number | null {
   return (Date.now() - new Date(iso).getTime()) / 3_600_000;
 }
 
-// The most recent narrator attempt across both jobs. Optional-chained because
-// a cached response from a pre-runs API revision has no `runs` key.
 function lastNarratorRun(latest: InsightsLatest): NarratorRun | null {
   const candidates = [latest.runs?.weekly_summary, latest.runs?.daily_briefing].filter(
     (run): run is NarratorRun => Boolean(run),
@@ -24,33 +23,59 @@ function lastNarratorRun(latest: InsightsLatest): NarratorRun | null {
   return candidates[0];
 }
 
-// One honest line about a non-completed last attempt. Failed runs name the
-// error; skipped runs explain themselves; anything else stays quiet.
 function RunStatusLine({ run }: { run: NarratorRun | null }) {
   if (!run) return null;
+
   if (run.status === "failed") {
     return (
       <p className="brief-run-status brief-run-failed">
-        Last attempt failed{run.at ? ` · ${formatDate(run.at)}` : ""}
-        {run.error ? `: ${run.error}` : ""}{" "}
+        Refresh did not finish{run.at ? ` - ${formatDate(run.at)}` : ""}.{" "}
         <a href="/intelligence">Check Intelligence settings.</a>
       </p>
     );
   }
+
   if (run.status === "skipped") {
     return (
       <p className="brief-run-status">
-        Last run{run.at ? ` (${formatDate(run.at)})` : ""} was skipped — not enough data in the
-        window yet.
+        Brief paused{run.at ? ` - ${formatDate(run.at)}` : ""}. Add a little more history and try again.
       </p>
     );
   }
+
   return null;
 }
 
-// Four honest states: unreachable / narrator off / no brief yet / brief
-// (fresh or stale). Paragraphs stagger in via the rise keyframe — the honest
-// alternative to a fake typewriter on a non-streaming narrator.
+function stripBriefLabel(text: string): string {
+  return text.replace(/^(Recovery|Summary|Today|This week|Weekly brief):\s*/i, "").trim();
+}
+
+function splitBriefSentences(paragraphs: string[]): string[] {
+  return paragraphs
+    .flatMap((paragraph) => {
+      const cleaned = stripBriefLabel(paragraph);
+      return cleaned.split(/(?<=[.!?])\s+/);
+    })
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function briefParts(brief: Narrative) {
+  const paragraphs = briefParagraphs(brief.narrative);
+  const sentences = splitBriefSentences(paragraphs);
+  const lead = sentences[0] ?? paragraphs[0] ?? "Your recent data is ready to review.";
+  const takeaways = sentences
+    .slice(1)
+    .filter((sentence) => sentence !== lead)
+    .slice(0, 2);
+
+  return {
+    lead,
+    takeaways,
+    paragraphs,
+  };
+}
+
 export function WeeklyBriefCard({
   latest,
   narratorOff = false,
@@ -62,88 +87,112 @@ export function WeeklyBriefCard({
 }) {
   if (!latest) {
     return (
-      <article className="card brief">
+      <article className="card brief brief-clean">
         <h2>Weekly Brief</h2>
-        <p className="empty">Backend unreachable — start HealthSave Observatory and sync from the app.</p>
+        <p className="empty">Could not load your brief. Check the sync app and refresh.</p>
       </article>
     );
   }
 
-  // Prefer the weekly rollup; fall back to today's briefing until a week lands.
+  // Prefer the weekly rollup; fall back to today's briefing until the week lands.
   const brief: Narrative | null = latest.weekly_summary ?? latest.daily_briefing;
   const lastRun = lastNarratorRun(latest);
+
   if (!brief) {
     return (
-      <article className="card brief">
+      <article className="card brief brief-clean">
         <div className="brief-head">
-          <h2>Weekly Brief</h2>
+          <div>
+            <h2>Weekly Brief</h2>
+            <p className="brief-kicker">A short read appears here once enough data is synced.</p>
+          </div>
           <RefreshInsightsButton />
         </div>
+
         <p className="empty">
           {narratorOff ? (
             <>
-              Narration is off — your numbers still tell the story in the evidence feed.{" "}
-              <a href="/intelligence">Turn it on under Intelligence.</a>
+              Briefs are off. Your changes still appear in <strong>What changed</strong>.{" "}
+              <a href="/intelligence">Turn on briefs</a>.
             </>
           ) : lastRun?.status === "failed" ? (
-            "The narrator is on, but the last attempt didn't produce a brief:"
+            "The last refresh did not finish."
           ) : (
-            "No briefing yet — these are generated locally once you have a few days of data."
+            "No brief yet. Sync a few days of data, then refresh."
           )}
         </p>
+
         {!narratorOff && <RunStatusLine run={lastRun} />}
       </article>
     );
   }
 
   const scope = brief.insight_type === "weekly_summary" ? "This week" : "Today";
-  const when = brief.created_at ? ` · ${formatDate(brief.created_at)}` : "";
+  const when = brief.created_at ? ` - ${formatDate(brief.created_at)}` : "";
   const age = hoursOld(brief.created_at);
   const staleAfter = brief.insight_type === "weekly_summary" ? 24 * 8 : 36;
   const stale = age !== null && age > staleAfter;
-  const paragraphs = brief.narrative
-    .split(/\n{2,}|\n/)
-    .map((p) => p.trim())
-    .filter(Boolean);
+  const { lead, takeaways, paragraphs } = briefParts(brief);
   const previous = history.filter((item) => item.narrative !== brief.narrative).slice(0, 5);
 
   return (
-    <article className="card brief">
+    <article className="card brief brief-clean">
       <div className="brief-head">
-        <h2>Weekly Brief</h2>
+        <div>
+          <h2>Weekly Brief</h2>
+          <p className="brief-kicker">
+            {scope}
+            {when} - saved locally
+            {stale && <span className="brief-stale">Refresh suggested</span>}
+          </p>
+        </div>
         <RefreshInsightsButton />
       </div>
-      <div className="brief-meta">
-        {scope}
-        {when} · interpreted locally
-        {stale && <span className="brief-stale">stale</span>}
-      </div>
-      {/* A failed attempt newer than the shown brief explains WHY it is stale. */}
-      {lastRun?.status === "failed" &&
-        brief.created_at !== null &&
-        (lastRun.at ?? "") > brief.created_at && <RunStatusLine run={lastRun} />}
-      <div className="brief-body">
-        {paragraphs.map((paragraph, index) => (
-          // Index keys are correct here: the list is a stable split of one
-          // string per render and never reorders. Content-prefix keys would
-          // collide when the narrator repeats an opener.
-          // biome-ignore lint: see above
-          <p key={index} className="anim-rise" style={{ "--i": index } as CSSProperties}>
-            {paragraph}
-          </p>
-        ))}
-      </div>
+
+      {lastRun?.status === "failed" && brief.created_at !== null && (lastRun.at ?? "") > brief.created_at && (
+        <RunStatusLine run={lastRun} />
+      )}
+
+      <section className="brief-main-read" aria-label="Main read">
+        <span className="brief-label">Main read</span>
+        <p className="anim-rise" style={{ "--i": 0 } as CSSProperties}>
+          {lead}
+        </p>
+      </section>
+
+      {takeaways.length > 0 && (
+        <ul className="brief-takeaways" aria-label="Supporting points">
+          {takeaways.map((takeaway) => (
+            <li key={takeaway}>
+              <span className="brief-dot" aria-hidden />
+              <span>{takeaway}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {paragraphs.length > 0 && (
+        <details className="brief-history brief-more">
+          <summary>Read full brief</summary>
+          <div className="brief-body">
+            {paragraphs.map((paragraph, index) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: stable split of one narrative string.
+              <p key={index}>{paragraph}</p>
+            ))}
+          </div>
+        </details>
+      )}
+
       {previous.length > 0 && (
         <details className="brief-history">
-          <summary>Previous briefs</summary>
+          <summary>Earlier briefs</summary>
           <ul>
             {previous.map((item) => (
               <li key={`${item.insight_type}-${item.created_at}`}>
                 <span className="brief-history-meta mono">
-                  {item.insight_type === "weekly_summary" ? "weekly" : "daily"} ·{" "}
-                  {formatDate(item.created_at)}
+                  {item.insight_type === "weekly_summary" ? "weekly" : "daily"} - {formatDate(item.created_at)}
                 </span>
-                <p>{item.narrative}</p>
+                <p>{briefParagraphs(item.narrative).join("\n\n")}</p>
               </li>
             ))}
           </ul>

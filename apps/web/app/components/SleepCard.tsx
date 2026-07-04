@@ -19,7 +19,7 @@ export function SleepCard({ series }: { series: MetricSeries | null }) {
     return (
       <article className="card">
         <h2>Sleep</h2>
-        <p className="empty">Backend unreachable — start HealthSave Observatory and sync from the app.</p>
+        <p className="empty">Backend unreachable - start HealthSave Observatory and sync from the app.</p>
       </article>
     );
   }
@@ -29,7 +29,7 @@ export function SleepCard({ series }: { series: MetricSeries | null }) {
     return (
       <article className="card">
         <h2>Sleep Stages</h2>
-        <p className="empty">No sleep data yet — sync from HealthSave to see your night.</p>
+        <p className="empty">No sleep data yet - sync from HealthSave to see your night.</p>
       </article>
     );
   }

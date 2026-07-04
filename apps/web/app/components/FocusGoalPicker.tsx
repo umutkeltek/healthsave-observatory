@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { clearFocusGoalAction, setFocusGoalAction } from "../lib/actions";
 import type { FocusGoal } from "../lib/prefs";
 
-// Curated focus presets — every metric id is a real ontology id, so the
+// Curated focus presets - every metric id is a real ontology id, so the
 // ribbon's sparklines and the goal-first Today ordering always resolve.
 // Custom/free-text goals arrive with the DB-backed Goals API (migration 021).
 export const GOAL_PRESETS: FocusGoal[] = [

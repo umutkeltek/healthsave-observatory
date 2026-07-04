@@ -7,7 +7,7 @@ const GATE_LABELS: Record<string, string> = {
 };
 
 // Data older than this is likely behind because HealthKit can't sync while the
-// iPhone is locked — we say so rather than pretending freshness.
+// iPhone is locked - we say so rather than pretending freshness.
 const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
 function formatAgo(iso: string | null): string {
@@ -35,7 +35,7 @@ function GateBadge({ label, verdict }: { label: string; verdict: MetricReadiness
   return <span className="badge waiting">{`${label} · ${more}`}</span>;
 }
 
-// Compact trend line for a readiness row — drawn from the metric's recent
+// Compact trend line for a readiness row - drawn from the metric's recent
 // series when available, so the table shows shape, not just counts.
 function MiniSparkline({ values }: { values: number[] }) {
   if (values.length < 2) return null;
@@ -86,15 +86,17 @@ function MetricRow({ metric, values }: { metric: MetricReadiness; values?: numbe
 export function ReadinessCard({
   readiness,
   sparklines,
+  compact = false,
 }: {
   readiness: Readiness | null;
   sparklines?: Record<string, number[]>;
+  compact?: boolean;
 }) {
   if (!readiness) {
     return (
       <article className="card readiness">
         <h2>Data Readiness</h2>
-        <p className="empty">Backend unreachable — start HealthSave Observatory and sync from the app.</p>
+        <p className="empty">Backend unreachable. Start HealthSave Observatory and sync from the app.</p>
       </article>
     );
   }
@@ -103,16 +105,19 @@ export function ReadinessCard({
     return (
       <article className="card readiness">
         <h2>Data Readiness</h2>
-        <p className="empty">No data yet — sync from HealthSave to populate your hub.</p>
+        <p className="empty">No data yet. Sync from HealthSave to populate your hub.</p>
       </article>
     );
   }
 
   const stale = isStale(readiness.last_observation_at);
+  const visibleLimit = compact ? 5 : 14;
+  const visibleMetrics = readiness.metrics.slice(0, visibleLimit);
+  const hiddenCount = readiness.metrics.length - visibleMetrics.length;
 
   return (
-    <article className="card readiness">
-      <h2>Data Readiness</h2>
+    <article className={`card readiness ${compact ? "readiness-compact" : ""}`}>
+      <h2>{compact ? "Data Health" : "Data Readiness"}</h2>
 
       <div className="readiness-head">
         <div className="big">
@@ -126,7 +131,7 @@ export function ReadinessCard({
 
       {stale && (
         <p className="note">
-          Data may be behind — HealthKit only syncs while your iPhone is unlocked. Open HealthSave
+          Data may be behind. HealthKit only syncs while your iPhone is unlocked. Open HealthSave
           to catch up.
         </p>
       )}
@@ -142,7 +147,7 @@ export function ReadinessCard({
       )}
 
       <ul className="metric-rows">
-        {readiness.metrics.map((metric) => (
+{visibleMetrics.map((metric) => (
           <MetricRow
             key={metric.metric_id}
             metric={metric}
@@ -151,7 +156,18 @@ export function ReadinessCard({
         ))}
       </ul>
 
-      <div className="meta">{readiness.metrics.length} metrics · ✓ = ready to analyze now</div>
+      <div className="meta">
+        {compact
+          ? `${visibleMetrics.length} important metrics shown`
+          : `${readiness.metrics.length} metrics · ✓ = ready to analyze now`}
+        {hiddenCount > 0 && !compact ? ` · ${hiddenCount} more in Observatory mode` : ""}
+        {compact ? (
+          <>
+            {" · "}
+            <a href="/data">Review all metrics</a>
+          </>
+        ) : null}
+      </div>
     </article>
   );
 }

@@ -7,7 +7,7 @@ import { useCallback, useRef, useState } from "react";
 // components and pass pre-computed point positions (percentages of the plot
 // box); this never re-derives chart math.
 export type HoverPoint = {
-  xPct: number; // 0–100, position within the plot box
+  xPct: number; // 0-100, position within the plot box
   yPct: number;
   label: string; // e.g. the reading's date
   value: string; // pre-formatted value + unit

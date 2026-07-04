@@ -84,7 +84,7 @@ export async function safeSeries(id: string, range = "7d"): Promise<MetricSeries
 // One request for many metrics, keyed by metric id. Falls back to the
 // per-metric endpoint when /api/v2/series is unavailable (older backend), so
 // a newer web can deploy ahead of the API without blanking the grid. The
-// cache key is the joined id string — call through safeSeriesMany.
+// cache key is the joined id string - call through safeSeriesMany.
 const batchSeriesCached = cache(
   async (idsKey: string, range: string): Promise<Map<string, MetricSeries>> => {
     const ids = idsKey.split("\u0000");
@@ -108,7 +108,7 @@ const batchSeriesCached = cache(
       return map;
     } catch (error) {
       // Documented fallback for an older backend without /api/v2/series (404)
-      // — but a 500/timeout/auth failure lands here too, so log before
+      // - but a 500/timeout/auth failure lands here too, so log before
       // fanning out or a batch-endpoint regression stays invisible.
       swallow("series-batch", error);
       const series = await Promise.all(ids.map((id) => safeSeries(id, range)));
@@ -161,7 +161,7 @@ export const safeFindings = cache(async (): Promise<Finding[] | null> => {
 
 export const safeExportMetrics = cache(async (): Promise<ExportMetricInfo[] | null> => {
   try {
-    // Counts one full-table aggregate per exportable metric — ride the SWR
+    // Counts one full-table aggregate per exportable metric - ride the SWR
     // cache like the other heavy coverage reads.
     return await swrCache("export-metrics", 60_000, fetchExportMetrics);
   } catch (error) {
@@ -229,8 +229,8 @@ export async function safeIntelligence(): Promise<IntelligenceView | null> {
 // sections. Every input is cache()'d, so each section can ask independently
 // at the cost of one upstream read per surface per request.
 //
-// Three-way on purpose: "empty" (backend answered, no data yet — keep
-// syncing) and "unreachable" (every read failed — wrong API_BASE/API_KEY or
+// Three-way on purpose: "empty" (backend answered, no data yet - keep
+// syncing) and "unreachable" (every read failed - wrong API_BASE/API_KEY or
 // backend down) demand DIFFERENT user actions; collapsing them made the hero
 // tell a misconfigured user to sync forever. The loaders only return null on
 // a thrown fetch, so all-null ⇒ unreachable.
@@ -255,7 +255,7 @@ export async function hasAnyData(): Promise<boolean> {
   return (await dataState()) === "data";
 }
 
-// Identity / provenance loaders — the Sources view. Each returns the inner
+// Identity / provenance loaders - the Sources view. Each returns the inner
 // array (mirroring safeFindings) and degrades to null when the backend is
 // unreachable so the page can fall back to a clearly-labelled demo.
 
@@ -276,7 +276,7 @@ export async function safeStreams(): Promise<StreamView[] | null> {
 }
 
 // Recent values per readiness metric, for the inline row sparklines. Best-effort
-// — a metric with no series just renders without one.
+// - a metric with no series just renders without one.
 //
 // Only the most-populated metrics get a sparkline: fetching a 30d series for
 // EVERY metric is an N+1 storm that dominates home-page load at real scale
@@ -312,7 +312,7 @@ export async function loadReadinessSparklines(
 export type PostureChip = { text: string; ok: boolean };
 
 export function postureChip(privacy: Privacy | null): PostureChip {
-  // Backend unreachable: assert nothing we can't verify — just "on-host".
+  // Backend unreachable: assert nothing we can't verify - just "on-host".
   if (!privacy) return { text: "on-host", ok: true };
   if (isNarratorOff(privacy.provider)) return { text: "on-host · no egress", ok: true };
   if (privacy.is_local) return { text: `local · ${privacy.provider}`, ok: true };

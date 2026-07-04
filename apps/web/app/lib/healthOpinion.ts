@@ -1,10 +1,10 @@
-// The Observatory's point of view — opinionated, grounded, never diagnostic.
+// The Observatory's point of view - opinionated, grounded, never diagnostic.
 //
 // Grounded in docs/healthResearch/ (sensor epistemics + multi-source
 // reconciliation, fully cited there). Two hard lines carried verbatim from that
 // research into this surface:
 //   1. Never synthesize consensus. "When sources conflict materially, do not
-//      silently average them" — show the conflict, keep both, and narrate from
+//      silently average them" - show the conflict, keep both, and narrate from
 //      the highest-confidence source. The gap is the signal, not a blended number.
 //      Precedence is deterministic: prefer the more direct measurement modality,
 //      then the more validated device class, then the more internally consistent
@@ -34,42 +34,42 @@ const RULES: ReliabilityRule[] = [
     tag: "chest · ECG",
     best: "workout HR · rhythm",
     confidence: "high",
-    note: "Electrode-based — the gold standard for workout heart rate and rhythm. When it and a wrist source both report, the strap outranks wrist optics; we keep both and narrate from this one.",
+    note: "Electrode-based: the gold standard for workout heart rate and rhythm. When it and a wrist source both report, the strap outranks wrist optics; we keep both and narrate from this one.",
   },
   {
     match: /oura/i,
     tag: "ring · PPG",
     best: "overnight HRV · sleep · temperature",
     confidence: "high",
-    note: "Ring PPG is well validated for overnight HRV and sleep, with temperature as a disclosed trend signal. It reports RMSSD-style HRV — not directly comparable to Apple's SDNN, so we trend it on its own track rather than blending vendors.",
+    note: "Ring PPG is well validated for overnight HRV and sleep, with temperature as a disclosed trend signal. It reports RMSSD-style HRV, not directly comparable to Apple's SDNN, so we trend it on its own track rather than blending vendors.",
   },
   {
     match: /whoop/i,
     tag: "strap · PPG",
     best: "overnight HRV · strain",
     confidence: "high",
-    note: "Strap PPG is strong for overnight HRV. Its strain score ignores sleep, so we cross-check load against recovery. RMSSD-based HRV — not comparable to Apple SDNN; never averaged across vendors.",
+    note: "Strap PPG is strong for overnight HRV. Its strain score ignores sleep, so we cross-check load against recovery. RMSSD-based HRV is not comparable to Apple SDNN and is never averaged across vendors.",
   },
   {
     match: /apple|healthkit|health\s?save|watch/i,
     tag: "wrist · PPG",
     best: "resting trends · activity",
     confidence: "medium",
-    note: "Wrist PPG: solid at rest (CCC ~0.91 vs ECG), weaker in motion. HRV is SDNN — read it for your own trend, not cross-vendor comparison. Sleep staging is ~probabilistic vs lab PSG; SpO2 carries known pigmentation bias. Trust direction over absolutes.",
+    note: "Wrist PPG: solid at rest (CCC ~0.91 vs ECG), weaker in motion. HRV is SDNN, so read it for your own trend, not cross-vendor comparison. Sleep staging is ~probabilistic vs lab PSG; SpO2 carries known pigmentation bias. Trust direction over absolutes.",
   },
   {
     match: /garmin|body\s?battery/i,
     tag: "wrist · score",
     best: "steps · raw HR",
     confidence: "low",
-    note: "Body Battery is a proprietary composite with no published independent validation of the score — we keep its raw signals (HR, steps) and ignore the composite.",
+    note: "Body Battery is a proprietary composite with no published independent validation of the score. We keep its raw signals (HR, steps) and ignore the composite.",
   },
   {
     match: /manual|entry|self/i,
     tag: "manual",
     best: "context only",
     confidence: "low",
-    note: "Manually entered — lowest precedence in reconciliation. Kept as context; never used to overwrite a sensor reading without surfacing the disagreement.",
+    note: "Manually entered. Lowest precedence in reconciliation. Kept as context; never used to overwrite a sensor reading without surfacing the disagreement.",
   },
 ];
 
@@ -77,14 +77,14 @@ const UNKNOWN: SourceReliability = {
   tag: "unverified",
   best: "raw signals",
   confidence: "low",
-  note: "Reliability not yet characterised for this source — we keep its raw signals verbatim and don't infer beyond them.",
+  note: "Reliability not yet characterised for this source. We keep its raw signals verbatim and don't infer beyond them.",
 };
 
 export function reliabilityFor(source: string): SourceReliability {
   return RULES.find((r) => r.match.test(source)) ?? UNKNOWN;
 }
 
-// Vendor family of a source — the axis along which device measurements diverge.
+// Vendor family of a source - the axis along which device measurements diverge.
 function family(source: string): string {
   const s = source.toLowerCase();
   if (/oura/.test(s)) return "oura";
@@ -96,10 +96,10 @@ function family(source: string): string {
 
 export type Comparability = { comparable: boolean; warn: boolean; caveat: string | null };
 
-// Whether two (or more) sources can be compared for a metric — grounded in the
+// Whether two (or more) sources can be compared for a metric - grounded in the
 // research's reconciliation rule: keep both, never average, and surface what the
 // science says about each device. The canonical incomparable case is HRV across
-// vendors (Apple SDNN vs Whoop/Oura RMSSD). We never hard-block — we warn loudly
+// vendors (Apple SDNN vs Whoop/Oura RMSSD). We never hard-block - we warn loudly
 // and still render both readings verbatim.
 export function comparability(metricId: string, sources: string[]): Comparability {
   const families = [...new Set(sources.map(family))];
@@ -112,14 +112,14 @@ export function comparability(metricId: string, sources: string[]): Comparabilit
       comparable: false,
       warn: true,
       caveat:
-        "Apple reports HRV as SDNN; Whoop and Oura report RMSSD — different definitions that are not directly comparable. Shown side by side, never merged.",
+        "Apple reports HRV as SDNN; Whoop and Oura report RMSSD. Different definitions, not directly comparable. Shown side by side, never merged.",
     };
   }
   return {
     comparable: true,
     warn: false,
     caveat:
-      "Cross-source comparison — these devices measure differently (wrist PPG vs ring/strap/ECG). Read the gap as provenance, not a verdict: both kept, never averaged.",
+      "Cross-source comparison: these devices measure differently (wrist PPG vs ring/strap/ECG). Read the gap as provenance, not a verdict: both kept, never averaged.",
   };
 }
 
@@ -130,7 +130,7 @@ export type Verdict = {
 };
 
 // An opinion on your ingestion health, derived purely from freshness (a count
-// over your own streams — never a merged consensus value). It takes a stance and
+// over your own streams - never a merged consensus value). It takes a stance and
 // tells you what to do, grounded in the research's baseline rule: a usable
 // baseline needs ~5 of the last 7 valid nights, so a source going dark gaps your
 // overnight signals first.
@@ -147,7 +147,7 @@ export function coverageVerdict(domains: CoverageDomain[]): Verdict {
     return {
       state: "steady",
       label: "Solid",
-      line: "Every source is syncing — your 5-of-7-night baselines hold, so findings stay trustworthy.",
+      line: "Every source is syncing. Your 5-of-7-night baselines hold, so findings stay trustworthy.",
     };
   }
   const lead = stale[0];
@@ -157,6 +157,6 @@ export function coverageVerdict(domains: CoverageDomain[]): Verdict {
   return {
     state: degraded ? "suppressed" : "caution",
     label: degraded ? "Degraded" : "Watch",
-    line: `${lead.label}${more} has gone stale — ${gaps} gaps first. Reconnect before it slips below the 5-of-7 valid nights your baselines need.`,
+    line: `${lead.label}${more} has gone stale. ${gaps} gaps first. Reconnect before it slips below the 5-of-7 valid nights your baselines need.`,
   };
 }

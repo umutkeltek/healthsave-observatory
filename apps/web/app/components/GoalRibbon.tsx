@@ -1,6 +1,6 @@
-// The focus ribbon — the user's stated goal, framing Today. Presentation-only
+// The focus ribbon - the user's stated goal, framing Today. Presentation-only
 // (v0): it names the goal, shows its target signals as 7-day sparkline chips,
-// and links the picker. It never scores progress — that's a later, deterministic
+// and links the picker. It never scores progress - that's a later, deterministic
 // statistical module, not a UI feature.
 
 import type { MetricSeries } from "../lib/api";

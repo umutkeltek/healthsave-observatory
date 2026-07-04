@@ -9,7 +9,7 @@ import { ExperimentActions } from "./ExperimentActions";
 import { StartExperimentButton } from "./StartExperimentButton";
 
 function short(metricId: string | null): string {
-  if (!metricId) return "—";
+  if (!metricId) return "-";
   return (metricId.split(".").pop() ?? metricId).replace(/_/g, " ");
 }
 
@@ -18,26 +18,26 @@ function coeffLabel(candidate: Candidate): string | null {
 }
 
 function num(value: number | null, digits = 2): string {
-  return typeof value === "number" ? value.toFixed(digits) : "—";
+  return typeof value === "number" ? value.toFixed(digits) : "-";
 }
 
 function pairKey(lever: string | null, outcome: string | null): string {
   return [lever ?? "", outcome ?? ""].sort().join("~");
 }
 
-// How much weight the inference carries — kept honest (descriptive vs tested).
+// How much weight the inference carries - kept honest (descriptive vs tested).
 function inferenceLabel(inference: string | null): string {
   switch (inference) {
     case "randomization_test":
       return "randomization test";
     case "descriptive_only":
-      return "descriptive only — too few blocks to test";
+      return "descriptive only - too few blocks to test";
     case "observational":
-      return "observational — association, not cause";
+      return "observational - association, not cause";
     case "insufficient":
       return "not enough data yet";
     default:
-      return inference ?? "—";
+      return inference ?? "-";
   }
 }
 
@@ -136,7 +136,7 @@ function ExperimentRow({ experiment }: { experiment: Experiment }) {
           </div>
           <div className="meta">
             {prog.is_complete
-              ? "window complete — analyze now"
+              ? "window complete - analyze now"
               : `day ${prog.day_index}/${prog.total_days}${
                   prog.current_phase ? ` · phase ${prog.current_phase}` : ""
                 } · ${prog.days_remaining} days left`}
@@ -200,7 +200,7 @@ export function ExperimentsCard({
     return (
       <article className="card experiments">
         <h2>What to Try Next</h2>
-        <p className="empty">Backend unreachable — start HealthSave Observatory and sync from the app.</p>
+        <p className="empty">Backend unreachable - start HealthSave Observatory and sync from the app.</p>
       </article>
     );
   }
@@ -238,7 +238,7 @@ export function ExperimentsCard({
       <div className="brief-meta">
         {startable.length > 0
           ? `${startable.length} ${startable.length === 1 ? "idea" : "ideas"} to start`
-          : "Start something new"}
+          : "No easy test yet"}
       </div>
       {startable.length > 0 ? (
         <ul className="cand-list">
@@ -249,8 +249,8 @@ export function ExperimentsCard({
       ) : (
         <p className="empty">
           {exps.length > 0
-            ? "Nothing new to start right now — the strongest fresh correlations link metrics you can't set by choice."
-            : "No candidates yet — correlations become experiment ideas once the engine finds them."}
+            ? "No new idea to start right now. The strongest patterns are not actions you can choose."
+            : "No simple experiment is ready yet. When a pattern is strong enough, it will appear here as one action."}
         </p>
       )}
 

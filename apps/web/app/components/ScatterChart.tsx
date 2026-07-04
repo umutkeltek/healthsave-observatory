@@ -1,5 +1,5 @@
 // Day-aligned scatter for the Relationships explorer: one dot per shared UTC
-// day, x = metric A's day mean, y = metric B's. Pure presentational — the page
+// day, x = metric A's day mean, y = metric B's. Pure presentational - the page
 // computes the pairs (lib/analytics alignDaily); this only draws them. Axis
 // extents are printed verbatim so the dots are readable as data, not vibes.
 import type { AlignedPair } from "../lib/analytics";
@@ -51,10 +51,10 @@ export function ScatterChart({
       </svg>
       <figcaption className="scatter-cap mono">
         <span>
-          x · {xLabel} ({fmt(minX)}–{fmt(maxX)})
+          x · {xLabel} ({fmt(minX)}-{fmt(maxX)})
         </span>
         <span>
-          y · {yLabel} ({fmt(minY)}–{fmt(maxY)})
+          y · {yLabel} ({fmt(minY)}-{fmt(maxY)})
         </span>
       </figcaption>
     </figure>

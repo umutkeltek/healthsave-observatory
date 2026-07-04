@@ -1,13 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import { useMemo, useState } from "react";
 
 import { PinButton } from "./PinButton";
 
-// Stable colour identity per category — physiology mint, activity indigo,
-// sleep deep blue, body amber; the rest get a deterministic pick so a new
-// category never renders colourless.
 const CATEGORY_COLORS: Record<string, string> = {
   vital: "var(--signal)",
   cardio: "var(--down)",
@@ -18,13 +16,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   mind: "var(--experiment)",
 };
 
-const FALLBACK_COLORS = [
-  "var(--signal)",
-  "var(--accent)",
-  "var(--warn)",
-  "var(--experiment)",
-  "var(--up)",
-];
+const FALLBACK_COLORS = ["var(--signal)", "var(--accent)", "var(--warn)", "var(--experiment)", "var(--up)"];
 
 function categoryColor(category: string): string {
   if (CATEGORY_COLORS[category]) return CATEGORY_COLORS[category];
@@ -33,9 +25,17 @@ function categoryColor(category: string): string {
   return FALLBACK_COLORS[hash % FALLBACK_COLORS.length];
 }
 
-// One row per canonical metric: registry metadata joined (server-side) with
-// readiness stats. ~190 rows of metadata — trivially serializable, filtered
-// entirely client-side.
+function coverageStyle(row: LibraryRow): CSSProperties {
+  const pct = row.count === 0 ? 0 : Math.min(100, Math.max(8, Math.round((row.days / 90) * 100)));
+  return { "--lib-fill": `${pct}%` } as CSSProperties;
+}
+
+function statusLabel(row: LibraryRow): string {
+  if (row.analyzable) return "Ready";
+  if (row.count > 0) return "Collecting";
+  return "No data";
+}
+
 export type LibraryRow = {
   id: string;
   name: string;
@@ -68,8 +68,12 @@ export function LibraryBrowser({
     return rows.filter((row) => {
       if (withDataOnly && row.count === 0) return false;
       if (category !== "all" && row.category !== category) return false;
-      if (q && !row.name.toLowerCase().includes(q) && !row.id.includes(q)) return false;
-      return true;
+      if (!q) return true;
+      return (
+        row.name.toLowerCase().includes(q) ||
+        row.id.toLowerCase().includes(q) ||
+        row.category.toLowerCase().includes(q)
+      );
     });
   }, [rows, query, category, withDataOnly]);
 
@@ -80,7 +84,6 @@ export function LibraryBrowser({
       list.push(row);
       byCat.set(row.category, list);
     }
-    // Categories with data first, then alphabetical.
     return [...byCat.entries()].sort((a, b) => {
       const dataA = a[1].some((r) => r.count > 0) ? 0 : 1;
       const dataB = b[1].some((r) => r.count > 0) ? 0 : 1;
@@ -88,13 +91,43 @@ export function LibraryBrowser({
     });
   }, [filtered]);
 
+  const withData = rows.filter((row) => row.count > 0);
+  const analyzable = rows.filter((row) => row.analyzable);
+  const pinned = rows.filter((row) => row.pinned);
+  const freshest = withData
+    .filter((row) => row.lastAt)
+    .sort((a, b) => new Date(b.lastAt ?? 0).getTime() - new Date(a.lastAt ?? 0).getTime())[0];
+
   return (
     <>
-      <div className="lib-controls">
+      <div className="lib-overview-grid">
+        <article className="card lib-overview-card">
+          <span>With data</span>
+          <strong>{withData.length}</strong>
+          <em>of {rows.length} canonical signals</em>
+        </article>
+        <article className="card lib-overview-card">
+          <span>Analysis ready</span>
+          <strong>{analyzable.length}</strong>
+          <em>enough history for trends</em>
+        </article>
+        <article className="card lib-overview-card">
+          <span>Pinned today</span>
+          <strong>{pinned.length}</strong>
+          <em>{pinned.length ? "driving Today grid" : "use stars to focus"}</em>
+        </article>
+        <article className="card lib-overview-card">
+          <span>Freshest signal</span>
+          <strong>{freshest ? freshest.lastLabel : "none"}</strong>
+          <em>{freshest?.name ?? "waiting for first sync"}</em>
+        </article>
+      </div>
+
+      <div className="card lib-toolbar">
         <input
           type="search"
           className="lib-search"
-          placeholder="Search signals…"
+          placeholder="Search signals..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           aria-label="Search metrics"
@@ -113,11 +146,7 @@ export function LibraryBrowser({
           ))}
         </select>
         <label className="lib-toggle">
-          <input
-            type="checkbox"
-            checked={withDataOnly}
-            onChange={(e) => setWithDataOnly(e.target.checked)}
-          />
+          <input type="checkbox" checked={withDataOnly} onChange={(e) => setWithDataOnly(e.target.checked)} />
           With data only
         </label>
         <span className="lib-count mono">
@@ -127,34 +156,45 @@ export function LibraryBrowser({
 
       {grouped.length === 0 && (
         <p className="empty" style={{ marginTop: 16 }}>
-          Nothing matches — clear the search or include signals without data yet.
+          Nothing matches. Clear search or include signals without data yet.
         </p>
       )}
 
       {grouped.map(([cat, list]) => (
         <section key={cat} className="lib-group">
-          <div className="section-label">
+          <div className="section-label lib-group-label">
             <span className="cat-dot" style={{ background: categoryColor(cat) }} aria-hidden />
-            {cat}
+            <span>{cat}</span>
+            <span className="lib-group-count">{list.length}</span>
           </div>
           <div className="card lib-card">
             {list.map((row) => (
               <div key={row.id} className={`lib-row ${row.count === 0 ? "lib-row-empty" : ""}`}>
                 <PinButton metricId={row.id} pinned={row.pinned} />
-                <Link href={`/library/${encodeURIComponent(row.id)}`} className="lib-name">
-                  {row.name}
-                  {row.unit && <span className="lib-unit mono">{row.unit}</span>}
+                <div className="lib-row-body">
+                  <div className="lib-row-titleline">
+                    <Link href={`/library/${encodeURIComponent(row.id)}`} className="lib-name">
+                      {row.name}
+                      {row.unit && <span className="lib-unit mono">{row.unit}</span>}
+                    </Link>
+                    <span className={`lib-status ${row.analyzable ? "ready" : ""}`}>{statusLabel(row)}</span>
+                  </div>
+                  <div className="lib-row-meta">
+                    <span>{row.valueType}</span>
+                    <span>{row.count > 0 ? `last ${row.lastLabel}` : "not observed yet"}</span>
+                    <span>{row.days} days covered</span>
+                  </div>
+                  <div className="lib-row-track" style={coverageStyle(row)} aria-hidden>
+                    <span />
+                  </div>
+                </div>
+                <div className="lib-row-stats">
+                  <strong>{row.count.toLocaleString()}</strong>
+                  <span>observations</span>
+                </div>
+                <Link href={`/library/${encodeURIComponent(row.id)}`} className="lib-open">
+                  Open
                 </Link>
-                <span className="lib-stats mono">
-                  {row.count > 0 ? (
-                    <>
-                      {row.count.toLocaleString()} obs · {row.days}d · last {row.lastLabel}
-                    </>
-                  ) : (
-                    "no data yet"
-                  )}
-                </span>
-                {row.analyzable && <span className="lib-badge">analyzable</span>}
               </div>
             ))}
           </div>

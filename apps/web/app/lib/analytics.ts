@@ -1,13 +1,13 @@
-// Pure analytics over the v2 /series point array — the Grafana-parity math,
+// Pure analytics over the v2 /series point array - the Grafana-parity math,
 // computed client-side on data the existing API already returns (api.ts
 // SeriesPoint). No I/O, no fetch, no Date.now(): every function is a
 // deterministic reduction of its inputs, mirroring lib/provenance.ts. The
-// honesty rule holds here too — a comparison returns A and B and a delta, never
+// honesty rule holds here too - a comparison returns A and B and a delta, never
 // a single merged value.
 //
 // This module is the load-bearing core for the filtering / sorting / device /
 // comparison work (see docs_private/plans/2026-06-09-grafana-parity-frontend-plan.md).
-// It is intentionally standalone — nothing imports it yet.
+// It is intentionally standalone - nothing imports it yet.
 
 import type { SeriesPoint } from "./api";
 
@@ -35,7 +35,7 @@ export function groupBySource(points: SeriesPoint[]): Map<string, SeriesPoint[]>
 }
 
 // Group points by device stream (stream_id). Points without a stream_id are
-// dropped — they cannot be attributed to a physical emitter. This is the
+// dropped - they cannot be attributed to a physical emitter. This is the
 // per-device axis the v2 series endpoint unlocked.
 export function groupByStream(points: SeriesPoint[]): Map<string, SeriesPoint[]> {
   const out = new Map<string, SeriesPoint[]>();
@@ -50,7 +50,7 @@ export function groupByStream(points: SeriesPoint[]): Map<string, SeriesPoint[]>
 
 export type SourceCount = { source_id: string; count: number };
 
-// Count per source, sorted desc — the "data sources" distribution panels.
+// Count per source, sorted desc - the "data sources" distribution panels.
 export function distribution(points: SeriesPoint[]): SourceCount[] {
   const counts = new Map<string, number>();
   for (const p of points) counts.set(p.source_id, (counts.get(p.source_id) ?? 0) + 1);
@@ -156,7 +156,7 @@ export function dayOfWeekPivot(points: SeriesPoint[], stat: Stat = "mean"): DowC
 
 export type HeatCell = { dow: number; hour: number; value: number | null; n: number };
 
-// A 7×24 grid (Mon..Sun × 0..23, UTC) of the stat over points — the "when in
+// A 7×24 grid (Mon..Sun × 0..23, UTC) of the stat over points - the "when in
 // the week" heatmap. Empty cells carry value null (rendered blank).
 export function weekHourPivot(points: SeriesPoint[], stat: Stat = "mean"): HeatCell[] {
   const buckets = new Map<string, number[]>();
@@ -185,7 +185,7 @@ export type Delta = { abs: number; pct: number | null; direction: "up" | "down" 
 export type PeriodSplit = { a: Period; b: Period; delta: Delta };
 
 // Split the (time-sorted) points into an earlier half A and a later half B; the
-// delta is B vs A. A and B are kept separate — NEVER merged into one number.
+// delta is B vs A. A and B are kept separate - NEVER merged into one number.
 export function periodSplit(points: SeriesPoint[]): PeriodSplit {
   const v = valued(points).slice().sort(byTime);
   const mid = Math.floor(v.length / 2);
@@ -206,7 +206,7 @@ export function periodSplit(points: SeriesPoint[]): PeriodSplit {
 // ── Threshold bands (Grafana panel thresholds, ported as data) ───────────────
 //
 // Coarse adult reference ranges for context only. The product reads against the
-// USER's own baseline (per docs/healthResearch) — these never stand in for a
+// USER's own baseline (per docs/healthResearch) - these never stand in for a
 // personal baseline or a diagnosis; the opinion layer consumes them.
 
 export type ThresholdBand = { label: string; min: number; max: number; tone: "ok" | "warn" | "down" };
@@ -242,7 +242,7 @@ export function classify(metricId: string, value: number): ThresholdBand | null 
 // ── Divergence (the never-average rule, quantified) ────────────────────
 //
 // When two sources stream the same metric we never merge them; this measures
-// HOW MUCH they currently disagree so the UI can say "kept separate — and
+// HOW MUCH they currently disagree so the UI can say "kept separate - and
 // right now they differ by ~12%" instead of a vague caveat.
 
 export type SourceDivergence = {
@@ -280,7 +280,7 @@ export function detectDivergence(points: SeriesPoint[]): SourceDivergence {
 // ── Cross-metric relationship (the Relationships surface) ────────────────────
 //
 // Align two series on shared UTC days (mean per day) and measure how they move
-// together. Both sides stay verbatim — the output is a coefficient over shared
+// together. Both sides stay verbatim - the output is a coefficient over shared
 // days, never a merged number, and the UI must always frame it as correlation,
 // not causation.
 
@@ -296,7 +296,7 @@ export function alignDaily(a: SeriesPoint[], b: SeriesPoint[]): AlignedPair[] {
   return out;
 }
 
-// Below this many shared days a coefficient is noise, not signal — return null
+// Below this many shared days a coefficient is noise, not signal - return null
 // and let the UI say "not enough overlapping days" instead of a fake r.
 export const CORRELATION_MIN_DAYS = 7;
 
@@ -317,7 +317,7 @@ export function pearson(pairs: AlignedPair[]): PearsonResult | null {
     varA += da * da;
     varB += db * db;
   }
-  // A flat series correlates with nothing — r would be 0/0.
+  // A flat series correlates with nothing - r would be 0/0.
   if (varA === 0 || varB === 0) return null;
   return { r: Number((cov / Math.sqrt(varA * varB)).toFixed(3)), n };
 }

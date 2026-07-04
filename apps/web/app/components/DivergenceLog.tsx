@@ -1,7 +1,7 @@
 import type { Divergence } from "../lib/provenance";
 
 // The signature honesty primitive: when sources disagree, every reading is kept
-// verbatim — never merged into a synthetic consensus.
+// verbatim - never merged into a synthetic consensus.
 //
 // `live` (a reachable backend with real streams) renders the principle rather
 // than fixture disagreements, because divergence detection is not wired to an
@@ -12,10 +12,10 @@ export function DivergenceLog({ divergences, live }: { divergences: Divergence[]
     return (
       <article className="card div-empty">
         <p className="empty">
-          When two sources disagree, both readings are kept — never averaged into a synthetic consensus.
-          We narrate from the higher-confidence source (more direct modality → more validated device →
-          more consistent stream), because the gap is the signal, not a blended number. Flagged
-          divergences surface here in a later release.
+          No source conflict is flagged in the current stream set. When two sources disagree,
+          both readings stay in the Local Vault. The Observatory can prefer a higher-confidence
+          stream for narration, but it keeps the gap inspectable instead of blending it into a
+          synthetic number.
         </p>
       </article>
     );

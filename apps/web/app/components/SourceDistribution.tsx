@@ -1,6 +1,6 @@
 import type { SourceCount } from "../lib/analytics";
 
-// Where the visible readings came from — count per source over the current
+// Where the visible readings came from - count per source over the current
 // filter/range, computed by analytics.distribution(). A provenance-at-a-glance
 // strip; the /sources page carries the full chain of custody.
 export function SourceDistribution({ dist }: { dist: SourceCount[] }) {

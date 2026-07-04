@@ -1,24 +1,28 @@
-// Privacy made tangible: the egress posture rendered as a chain of custody —
-// source → store → engine → local model → (blocked) cloud — instead of a prose
+// Privacy made tangible: the egress posture rendered as a chain of custody -
+// source → store → engine → local model → (blocked) cloud - instead of a prose
 // "we respect your privacy" card. Each step is a link in a visible chain.
 
 export type VaultStep = { label: string; meta: string; blocked?: boolean };
 
 export function LocalVaultReceipt({
   steps,
+  title = "Local Vault",
   seal = "No cloud egress",
+  variant = "local",
   auditNote,
 }: {
   steps: VaultStep[];
+  title?: string;
   seal?: string;
+  variant?: "local" | "egress";
   // Real chain-of-custody proof from /api/v2/receipts (e.g. the last
-  // egress-relevant config event) — renders under the chain when available.
+  // egress-relevant config event) - renders under the chain when available.
   auditNote?: string | null;
 }) {
   return (
-    <article className="card vault">
+    <article className={`card vault ${variant === "egress" ? "vault-egress" : ""}`}>
       <div className="vault-head">
-        <div className="card-title">Local Vault</div>
+        <div className="card-title">{title}</div>
         <span className="vault-seal">{seal}</span>
       </div>
       <ul className="chain">

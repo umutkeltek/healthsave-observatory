@@ -5,9 +5,9 @@ import { useState } from "react";
 import type { SeriesPoint } from "../lib/api";
 
 // A sortable recent-readings table (the Grafana log-table capability). Local
-// client sort by column — holds no data beyond the props. Capped to keep the
+// client sort by column - holds no data beyond the props. Capped to keep the
 // DOM light. (A workout-specific log needs a v2 workouts endpoint that does not
-// exist yet — this is the generic per-metric reading log.)
+// exist yet - this is the generic per-metric reading log.)
 type Col = "t" | "value" | "source_id";
 const CAP = 60;
 
@@ -62,7 +62,7 @@ export function DataTable({ points, unit }: { points: SeriesPoint[]; unit?: stri
             <tr key={`${p.t}-${i}`}>
               <td className="prov-sync">{p.t.slice(0, 16).replace("T", " ")}</td>
               <td className="dt-val">
-                {p.value ?? "—"}
+                {p.value ?? "-"}
                 {p.value !== null && unit ? ` ${unit}` : ""}
               </td>
               <td className="prov-hw">{p.source_id}</td>

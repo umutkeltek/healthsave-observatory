@@ -2,7 +2,7 @@ import type { Delta } from "../lib/analytics";
 
 export type Side = { label: string; value: number; meta?: string };
 
-// A vs B with a delta between them — NEVER a single merged number. The delta is
+// A vs B with a delta between them - NEVER a single merged number. The delta is
 // B relative to A; A and B are always shown verbatim. An optional caveat carries
 // the comparability stance (e.g. SDNN vs RMSSD) from healthOpinion.
 export function ComparisonCard({
