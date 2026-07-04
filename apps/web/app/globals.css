@@ -1990,6 +1990,96 @@ table.prov {
   padding: 7px 13px;
   font-size: 13px;
 }
+
+/* ── Explore — the composable dashboard (controls + panel grid) ── */
+.explore-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.explore-control {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 120px;
+}
+.explore-control-grow {
+  flex: 1;
+  min-width: 200px;
+}
+.explore-control label {
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.explore-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+}
+.explore-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.panel-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.panel-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.panel-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+.panel-chip-x {
+  display: inline-flex;
+  border: 0;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.panel-chip-x:hover {
+  color: var(--down);
+}
+.panel-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.panel-remove-btn {
+  font-size: var(--fs-sm);
+  padding: 5px 10px;
+}
+.panel-note {
+  font-size: var(--fs-xs);
+  color: var(--faint);
+  margin: 0;
+}
+
 .source-dist {
   display: flex;
   flex-wrap: wrap;

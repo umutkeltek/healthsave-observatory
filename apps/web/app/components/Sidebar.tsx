@@ -8,6 +8,14 @@ import type { Density } from "../lib/prefs";
 import { DensityToggle } from "./DensityToggle";
 
 const ICONS: Record<string, ReactNode> = {
+  explore: (
+    <>
+      <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1.2" />
+      <rect x="9" y="2.5" width="4.5" height="4.5" rx="1.2" />
+      <rect x="2.5" y="9" width="4.5" height="4.5" rx="1.2" />
+      <rect x="9" y="9" width="4.5" height="4.5" rx="1.2" />
+    </>
+  ),
   overview: (
     <>
       <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" />
@@ -104,6 +112,7 @@ const NAV: readonly NavItem[] = [
   { href: "/data", label: "Data", icon: "data", group: "essentials" },
   { href: "/sources", label: "Sources", icon: "sources", group: "essentials" },
   { href: "/privacy", label: "Privacy", icon: "privacy", group: "essentials" },
+  { href: "/explore", label: "Explore", icon: "explore", group: "explore" },
   { href: "/library", label: "Library", icon: "library", group: "explore" },
   { href: "/compare", label: "Compare", icon: "compare", group: "explore" },
   { href: "/relationships", label: "Relationships", icon: "relationships", group: "explore" },
@@ -115,7 +124,7 @@ const NAV: readonly NavItem[] = [
 
 const GROUP_ORDER: readonly { id: NavGroup; label: string }[] = [
   { id: "essentials", label: "Essentials" },
-  { id: "explore", label: "Explore" },
+  { id: "explore", label: "Analyze" },
   { id: "manage", label: "Manage" },
 ];
 
