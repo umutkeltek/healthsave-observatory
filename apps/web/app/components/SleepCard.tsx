@@ -1,10 +1,12 @@
 import type { MetricSeries } from "../lib/api";
 
+// Sleep-stage colours come from the design tokens (theme-aware) rather than
+// hardcoded hex, so they stay coherent with the palette in light and dark.
 const STAGE_COLOR: Record<string, string> = {
-  awake: "#f59e0b",
-  rem: "#8b5cf6",
-  core: "#3b82f6",
-  deep: "#1e3a8a",
+  awake: "var(--sleep-awake)",
+  rem: "var(--sleep-rem)",
+  core: "var(--sleep-core)",
+  deep: "var(--sleep-deep)",
 };
 
 const STAGE_LABEL: Record<string, string> = {
@@ -46,7 +48,7 @@ export function SleepCard({ series }: { series: MetricSeries | null }) {
           <span
             key={i}
             className="seg"
-            style={{ background: STAGE_COLOR[s.code ?? ""] ?? "#475569" }}
+            style={{ background: STAGE_COLOR[s.code ?? ""] ?? "var(--neutral)" }}
             title={`${STAGE_LABEL[s.code ?? ""] ?? s.code} · ${new Date(s.t).toLocaleString()}`}
           />
         ))}
@@ -54,7 +56,7 @@ export function SleepCard({ series }: { series: MetricSeries | null }) {
       <div className="legend">
         {present.map((code) => (
           <span key={code} className="legend-item">
-            <span className="dot" style={{ background: STAGE_COLOR[code] ?? "#475569" }} />
+            <span className="dot" style={{ background: STAGE_COLOR[code] ?? "var(--neutral)" }} />
             {STAGE_LABEL[code] ?? code}
           </span>
         ))}
