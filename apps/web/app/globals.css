@@ -63,6 +63,16 @@
   --sleep-core: #007aff;
   --sleep-deep: #5e5ce6;
 
+  /* Categorical chart series — distinct qualitative hues for multi-series /
+     overlay / comparison charts. NOT semantic; use when N arbitrary series
+     need to be told apart (accent alone can't). */
+  --series-1: #007aff;
+  --series-2: #ff9500;
+  --series-3: #af52de;
+  --series-4: #34c759;
+  --series-5: #ff2d55;
+  --series-6: #5ac8fa;
+
   --hover: rgba(0, 0, 0, 0.04);
   --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.04), 0 12px 28px rgba(60, 60, 67, 0.08);
 
@@ -3697,6 +3707,12 @@ color: var(--accent);
   --sleep-rem: #70d7ff;
   --sleep-core: #0a84ff;
   --sleep-deep: #7d7aff;
+  --series-1: #0a84ff;
+  --series-2: #ff9f0a;
+  --series-3: #bf5af2;
+  --series-4: #30d158;
+  --series-5: #ff375f;
+  --series-6: #64d2ff;
   --hover: rgba(255, 255, 255, 0.08);
   --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.32), 0 16px 36px rgba(0, 0, 0, 0.34);
 }

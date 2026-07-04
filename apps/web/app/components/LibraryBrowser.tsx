@@ -6,17 +6,27 @@ import { useMemo, useState } from "react";
 
 import { PinButton } from "./PinButton";
 
+// Distinct per-category dot colours. --signal collapsed onto --accent, so
+// vital/activity/sleep previously rendered the same blue; use the categorical
+// series palette (plus semantic red/orange where it reads naturally).
 const CATEGORY_COLORS: Record<string, string> = {
-  vital: "var(--signal)",
+  vital: "var(--series-1)",
   cardio: "var(--down)",
-  activity: "var(--accent)",
-  sleep: "var(--sleep-core)",
+  activity: "var(--series-4)",
+  sleep: "var(--series-3)",
   body: "var(--warn)",
-  nutrition: "var(--up)",
-  mind: "var(--experiment)",
+  nutrition: "var(--series-6)",
+  mind: "var(--series-5)",
 };
 
-const FALLBACK_COLORS = ["var(--signal)", "var(--accent)", "var(--warn)", "var(--experiment)", "var(--up)"];
+const FALLBACK_COLORS = [
+  "var(--series-1)",
+  "var(--series-2)",
+  "var(--series-3)",
+  "var(--series-4)",
+  "var(--series-5)",
+  "var(--series-6)",
+];
 
 function categoryColor(category: string): string {
   if (CATEGORY_COLORS[category]) return CATEGORY_COLORS[category];

@@ -2,7 +2,9 @@ import type { ZoneCount } from "../lib/analytics";
 
 // HR-zone distribution (Grafana zones pie) as a stacked bar + legend. Pure
 // presentational; the page reduces points via analytics.hrZoneHistogram.
-const ZONE_COLORS = ["var(--up)", "var(--signal)", "var(--accent)", "var(--warn)", "var(--down)"];
+// HR zones low→high: distinct cool→warm ramp (--signal == --accent, so the old
+// blue,blue pair rendered two zones identically).
+const ZONE_COLORS = ["var(--up)", "var(--series-6)", "var(--accent)", "var(--warn)", "var(--down)"];
 
 export function ZoneBar({ zones }: { zones: ZoneCount[] }) {
   const total = zones.reduce((sum, z) => sum + z.count, 0);
