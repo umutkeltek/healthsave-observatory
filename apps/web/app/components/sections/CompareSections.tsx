@@ -1,4 +1,4 @@
-// Compare page section — controls, chart, and comparison card are one coupled
+// Compare page section - controls, chart, and comparison card are one coupled
 // unit (they all derive from the same catalog + series reads), so they stream
 // behind a single boundary while the intro paints immediately.
 
@@ -26,7 +26,7 @@ function mean(values: number[]): number {
 
 type CardModel = { a: Side; b: Side; delta: Delta; caveat: string | null; warn: boolean };
 
-// A device stream's human label — the registry's device_label, or a tidied
+// A device stream's human label - the registry's device_label, or a tidied
 // fallback from the stream id so demo/unknown streams still read sensibly.
 function streamLabel(id: string, labels: Map<string, string>): string {
   const known = labels.get(id);
@@ -66,7 +66,7 @@ export async function CompareSection({
       .sort((a, b) => b.pts.length - a.pts.length);
     chart = groups.slice(0, 4).map((g) => ({ label: g.label, values: vals(g.pts) }));
     if (groups.length < 2) {
-      note = "Only one device stream for this metric — connect another device to compare.";
+      note = "Only one device stream for this metric. Connect another device to compare.";
     } else {
       const [A, B] = groups;
       const ma = mean(vals(A.pts));
@@ -88,7 +88,7 @@ export async function CompareSection({
       .sort((a, b) => b.pts.length - a.pts.length);
     chart = groups.slice(0, 4).map((g) => ({ label: g.source, values: vals(g.pts) }));
     if (groups.length < 2) {
-      note = "Only one source for this metric — connect another source to compare.";
+      note = "Only one source for this metric. Connect another source to compare.";
     } else {
       const [A, B] = groups;
       const ma = mean(vals(A.pts));

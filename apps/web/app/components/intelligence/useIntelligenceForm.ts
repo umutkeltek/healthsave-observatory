@@ -122,7 +122,7 @@ export function useIntelligenceForm(view: IntelligenceView) {
       setDetectMsg({
         ok: true,
         text: `Found Ollama at ${found.url}${
-          found.models.length ? ` · ${found.models.length} model(s)` : " (no models yet — pull one)"
+          found.models.length ? ` · ${found.models.length} model(s)` : " (no models yet - pull one)"
         }.`,
       });
     });

@@ -8,11 +8,16 @@ export const metadata: Metadata = { title: "Compare · HealthSave" };
 export const dynamic = "force-dynamic";
 
 type SearchParams = { [key: string]: string | string[] | undefined };
-const one = (v: string | string[] | undefined): string => (Array.isArray(v) ? (v[0] ?? "") : (v ?? ""));
 
-// The intro paints immediately; the comparison streams in behind it (data
-// fetching lives in components/sections/CompareSections.tsx).
-export default async function ComparePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+const one = (value: string | string[] | undefined): string =>
+  Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
+
+// Intro paints immediately; comparison streams in behind it.
+export default async function ComparePage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
   const sp = await searchParams;
   const metricSel = one(sp.metric);
   const modeSel = one(sp.mode);
@@ -21,15 +26,13 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
 
   return (
     <>
-      <div className="prov-intro">
-        <h2>Compare</h2>
+      <div className="prov-intro route-note">
         <p>
-          Period vs previous, or source vs source — both readings are kept, never merged into one number.
-          The gap is the signal, not a blended figure.
+          Choose a metric and comparison mode. Both sides stay visible so differences remain
+          inspectable instead of being blended into one number.
         </p>
       </div>
 
-      {/* Re-mount on selection change so a stale comparison never lingers behind a slow re-fetch. */}
       <Suspense
         key={`${metricSel}|${mode}|${range}`}
         fallback={

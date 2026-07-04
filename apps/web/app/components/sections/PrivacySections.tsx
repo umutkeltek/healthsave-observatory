@@ -1,4 +1,4 @@
-// Privacy page section — one card, one boundary.
+// Privacy page section - one card, one boundary.
 
 import { PrivacyCard } from "../PrivacyCard";
 import { safePrivacy } from "../../lib/load";

@@ -93,7 +93,7 @@ export function ProviderConfig({
             onChange={(e) => form.setApiKey(e.target.value)}
             placeholder={
               view.primary?.key_last4
-                ? `saved ${view.primary.key_last4} — leave blank to keep`
+                ? `saved ${view.primary.key_last4} - leave blank to keep`
                 : "sk-…"
             }
             autoComplete="off"

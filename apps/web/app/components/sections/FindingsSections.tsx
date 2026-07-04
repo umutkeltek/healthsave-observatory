@@ -1,4 +1,4 @@
-// Findings page sections — the weekly brief and the evidence list stream
+// Findings page sections - the weekly brief and the evidence list stream
 // independently (both reads are cache()-deduped with the layout chrome).
 
 import { EvidenceCard } from "../EvidenceCard";

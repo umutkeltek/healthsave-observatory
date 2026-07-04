@@ -1,4 +1,4 @@
-// Library page section — the registry join (catalog × readiness × pins) is one
+// Library page section - the registry join (catalog × readiness × pins) is one
 // coupled unit, so it streams behind a single boundary while the shell paints.
 
 import { LibraryBrowser, type LibraryRow } from "../LibraryBrowser";
@@ -6,7 +6,7 @@ import { agoLabel, safeMetrics, safeReadiness } from "../../lib/load";
 import { getPinnedMetrics } from "../../lib/prefs";
 
 // The whole registry (~190 canonical metrics) joined with per-metric readiness
-// stats — every signal the system can hold, browsable and pinnable. No series
+// stats - every signal the system can hold, browsable and pinnable. No series
 // fan-out here (that would recreate the old N+1 page load); sparklines live on
 // the detail page.
 export async function LibrarySection() {
@@ -21,7 +21,7 @@ export async function LibrarySection() {
       <section className="lead">
         <div className="card">
           <h2>Library</h2>
-          <p className="empty">Backend unreachable — start HealthSave Observatory to browse your signals.</p>
+          <p className="empty">Backend unreachable - start HealthSave Observatory to browse your signals.</p>
         </div>
       </section>
     );
@@ -62,7 +62,7 @@ export async function LibrarySection() {
             </>
           ) : (
             <>
-              <strong>{rows.length}</strong> canonical signals in the registry — per-signal stats are
+              <strong>{rows.length}</strong> canonical signals in the registry - per-signal stats are
               unavailable right now (readiness endpoint unreachable).
             </>
           )}{" "}

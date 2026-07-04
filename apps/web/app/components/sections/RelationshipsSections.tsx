@@ -1,4 +1,4 @@
-// Relationships page sections — the computed-correlations table and the
+// Relationships page sections - the computed-correlations table and the
 // pair explorer stream independently. Shared reads (metrics catalog,
 // correlations) are cache()-deduped in lib/load.ts, so both sections asking
 // costs one upstream fetch per surface per request.
@@ -22,7 +22,7 @@ import { agoLabel, safeCorrelations, safeMetrics, safeSeries } from "../../lib/l
 export const REL_RANGES = ["30d", "90d", "1y"];
 
 // Display name from the catalog, else a prettified metric-id tail (the
-// /compare fallback idiom) — never a raw dotted id in running copy.
+// /compare fallback idiom) - never a raw dotted id in running copy.
 function prettyName(catalog: MetricSummary[], id: string): string {
   const hit = catalog.find((m) => m.id === id);
   if (hit) return hit.display_name;
@@ -35,7 +35,7 @@ function unitOf(catalog: MetricSummary[], id: string, series: MetricSeries | nul
   return unit ? ` (${unit})` : "";
 }
 
-// Normalize one side of the pair to its own 0–1 range for the overlay chart.
+// Normalize one side of the pair to its own 0-1 range for the overlay chart.
 // Shapes stay comparable; magnitudes are deliberately NOT comparable and the
 // caption says so.
 function ownScale(values: number[]): number[] {
@@ -72,14 +72,14 @@ function CorrelationRow({
         <span className={`rel-bar ${r !== null && r < 0 ? "neg" : ""}`} aria-hidden>
           <span style={{ width: `${width}%` }} />
         </span>
-        {r === null ? "—" : r.toFixed(2)}
+        {r === null ? "-" : r.toFixed(2)}
       </td>
-      <td className="mono">{row.method ?? "—"}</td>
+      <td className="mono">{row.method ?? "-"}</td>
       <td className="mono">
-        {row.p_value === null ? "—" : `p=${row.p_value.toFixed(3)}`}
+        {row.p_value === null ? "-" : `p=${row.p_value.toFixed(3)}`}
         {row.p_value !== null && !significant && <span className="rel-weak"> · weak</span>}
       </td>
-      <td className="mono">{row.period_days ? `${row.period_days}d` : "—"}</td>
+      <td className="mono">{row.period_days ? `${row.period_days}d` : "-"}</td>
       <td className="mono">{agoLabel(row.created_at)}</td>
     </tr>
   );
@@ -108,12 +108,12 @@ export async function ComputedRelationshipsSection({ range }: { range: string })
           <RunCorrelationButton />
         </div>
         <p className="rel-sub">
-          Cross-metric correlations the statistical engine computed and persisted — with method,
+          Cross-metric correlations the statistical engine computed and persisted - with method,
           p-value, and window. Click a pair to explore it below.
         </p>
         {rows.length === 0 ? (
           <p className="empty">
-            No correlations computed yet — they appear once the engine runs over enough paired
+            No correlations computed yet - they appear once the engine runs over enough paired
             days. Use “Compute now”, or pick a pair below to explore directly.
           </p>
         ) : (
@@ -202,7 +202,7 @@ export async function ExplorePairSection({
         <article className="card">
           <h2>Explore a pair</h2>
           <p className="rel-sub">
-            Day means over shared days — both signals kept verbatim, each on its own scale.
+            Day means over shared days - both signals kept verbatim, each on its own scale.
           </p>
           <RelateControls metrics={options} ranges={REL_RANGES} />
 
@@ -210,26 +210,26 @@ export async function ExplorePairSection({
             <p className="empty">Pick two different signals.</p>
           )}
           {!pairChosen && !(aId && aId === bId) && (
-            <p className="empty">Pick two signals — or click a computed pair above.</p>
+            <p className="empty">Pick two signals - or click a computed pair above.</p>
           )}
           {pairChosen && (!seriesA || !seriesB) && (
-            <p className="empty">Couldn’t load one of the series — try another pair or range.</p>
+            <p className="empty">Couldn’t load one of the series - try another pair or range.</p>
           )}
           {pairChosen && seriesA && seriesB && pairs.length < CORRELATION_MIN_DAYS && (
             <p className="empty">
-              Only {pairs.length} shared day{pairs.length === 1 ? "" : "s"} in this range — at
+              Only {pairs.length} shared day{pairs.length === 1 ? "" : "s"} in this range - at
               least {CORRELATION_MIN_DAYS} are needed before a coefficient means anything.
             </p>
           )}
           {pairChosen && seriesA && seriesB && pairs.length >= CORRELATION_MIN_DAYS && (
             <>
               <div className="rel-stat mono">
-                r = {stat ? stat.r.toFixed(2) : "—"} · n = {pairs.length} shared days · exploratory
+                r = {stat ? stat.r.toFixed(2) : "-"} · n = {pairs.length} shared days · exploratory
                 (no p-value)
               </div>
               <MultiSeriesChart series={overlay} />
               <p className="rel-note">
-                Each curve is scaled to its own range — compare shape and timing, not magnitude.
+                Each curve is scaled to its own range - compare shape and timing, not magnitude.
               </p>
               <ScatterChart
                 pairs={pairs}

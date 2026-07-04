@@ -1,4 +1,4 @@
-// Experiments page section — candidates + lifecycle stream behind one boundary
+// Experiments page section - candidates + lifecycle stream behind one boundary
 // (they render as a single card and share no reads with the shell).
 
 import { ExperimentsCard } from "../ExperimentsCard";
