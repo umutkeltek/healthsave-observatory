@@ -13,6 +13,11 @@ export type ExploreState = {
   range: string;
   grain: GrainOpt;
   stat: Stat;
+  // Optional custom window (YYYY-MM-DD). When set, it overrides `range`: the page
+  // fetches the widest preset and slices points to [from, to] client-side, so no
+  // backend change is needed.
+  from?: string;
+  to?: string;
   panels: ExplorePanel[];
 };
 
@@ -64,18 +69,25 @@ export function parsePanels(raw: string | undefined): ExplorePanel[] {
   return panels.length ? panels : DEFAULT_PANELS;
 }
 
+const isDate = (v: string | undefined): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+
 export function parseExploreState(sp: {
   range?: string;
   grain?: string;
   stat?: string;
+  from?: string;
+  to?: string;
   panels?: string;
 }): ExploreState {
-  return {
+  const state: ExploreState = {
     range: (EXPLORE_RANGES as readonly string[]).includes(sp.range ?? "") ? sp.range! : "30d",
     grain: sp.grain && isGrain(sp.grain) ? sp.grain : "day",
     stat: sp.stat && isStat(sp.stat) ? sp.stat : "mean",
     panels: parsePanels(sp.panels),
   };
+  if (isDate(sp.from)) state.from = sp.from;
+  if (isDate(sp.to)) state.to = sp.to;
+  return state;
 }
 
 // Serialize a full state back to a query string (used by the client controls to
@@ -85,8 +97,25 @@ export function encodeExploreState(state: ExploreState): string {
   qs.set("range", state.range);
   qs.set("grain", state.grain);
   qs.set("stat", state.stat);
+  if (state.from) qs.set("from", state.from);
+  if (state.to) qs.set("to", state.to);
   qs.set("panels", encodePanels(state.panels));
   return qs.toString();
+}
+
+// The preset to actually fetch: a custom window pulls the widest preset (the page
+// then slices it), otherwise the chosen preset.
+export function fetchRange(state: ExploreState): string {
+  return state.from || state.to ? "1y" : state.range;
+}
+
+// Slice points to a custom [from, to] window (inclusive). ISO timestamps compare
+// lexicographically, so string bounds are correct.
+export function filterWindow<T extends { t: string }>(points: T[], from?: string, to?: string): T[] {
+  if (!from && !to) return points;
+  const lo = from ?? "";
+  const hi = to ? `${to}T23:59:59.999Z` : "￿";
+  return points.filter((p) => p.t >= lo && p.t <= hi);
 }
 
 // Min-max normalize a series to 0..1 so metrics with different units can share

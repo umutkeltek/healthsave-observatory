@@ -3,6 +3,8 @@ import { describe, expect, it } from "bun:test";
 import {
   encodeExploreState,
   encodePanels,
+  fetchRange,
+  filterWindow,
   normalize,
   parseExploreState,
   parsePanels,
@@ -58,6 +60,36 @@ describe("explore state parsing", () => {
     // encode → parse is stable
     const qs = new URLSearchParams(encodeExploreState(s));
     expect(parseExploreState(Object.fromEntries(qs))).toEqual(s);
+  });
+});
+
+describe("custom date window", () => {
+  it("parses valid YYYY-MM-DD from/to and rejects junk", () => {
+    const ok = parseExploreState({ from: "2026-06-01", to: "2026-06-20" });
+    expect(ok.from).toBe("2026-06-01");
+    expect(ok.to).toBe("2026-06-20");
+    const junk = parseExploreState({ from: "june", to: "2026/06/20" });
+    expect(junk.from).toBeUndefined();
+    expect(junk.to).toBeUndefined();
+  });
+
+  it("round-trips from/to through encode", () => {
+    const s = parseExploreState({ from: "2026-06-01", to: "2026-06-20", panels: "line:m" });
+    const qs = new URLSearchParams(encodeExploreState(s));
+    expect(parseExploreState(Object.fromEntries(qs))).toEqual(s);
+  });
+
+  it("fetchRange pulls the widest preset when a window is set, else the preset", () => {
+    expect(fetchRange(parseExploreState({ range: "7d" }))).toBe("7d");
+    expect(fetchRange(parseExploreState({ range: "7d", from: "2026-06-01" }))).toBe("1y");
+  });
+
+  it("filterWindow slices inclusively and passes through with no bounds", () => {
+    const pts = [{ t: "2026-05-31T12:00:00Z" }, { t: "2026-06-10T12:00:00Z" }, { t: "2026-06-21T12:00:00Z" }];
+    expect(filterWindow(pts, "2026-06-01", "2026-06-20")).toEqual([{ t: "2026-06-10T12:00:00Z" }]);
+    expect(filterWindow(pts, undefined, undefined)).toEqual(pts);
+    // an open upper bound keeps everything from `from` onward
+    expect(filterWindow(pts, "2026-06-01", undefined).length).toBe(2);
   });
 });
 

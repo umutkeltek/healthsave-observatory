@@ -26,6 +26,8 @@ export default async function ExplorePage({
     range: one(sp.range),
     grain: one(sp.grain),
     stat: one(sp.stat),
+    from: one(sp.from),
+    to: one(sp.to),
     panels: one(sp.panels),
   });
 

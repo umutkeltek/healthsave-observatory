@@ -71,6 +71,8 @@ export function ExploreControls({ state, metrics }: { state: ExploreState; metri
         <select
           className="filter-select"
           value={state.range}
+          disabled={Boolean(state.from || state.to)}
+          title={state.from || state.to ? "Clear the custom dates to use a preset" : undefined}
           onChange={(e) => set({ range: e.target.value })}
         >
           {EXPLORE_RANGES.map((r) => (
@@ -79,6 +81,26 @@ export function ExploreControls({ state, metrics }: { state: ExploreState; metri
             </option>
           ))}
         </select>
+      </div>
+      <div className="explore-control">
+        <label>From</label>
+        <input
+          type="date"
+          className="filter-select"
+          value={state.from ?? ""}
+          max={state.to || undefined}
+          onChange={(e) => set({ from: e.target.value || undefined })}
+        />
+      </div>
+      <div className="explore-control">
+        <label>To</label>
+        <input
+          type="date"
+          className="filter-select"
+          value={state.to ?? ""}
+          min={state.from || undefined}
+          onChange={(e) => set({ to: e.target.value || undefined })}
+        />
       </div>
       <div className="explore-control">
         <label>Bucket</label>
