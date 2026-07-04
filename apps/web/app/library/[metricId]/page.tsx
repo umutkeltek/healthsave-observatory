@@ -5,10 +5,10 @@ import { detectDivergence, groupBySource } from "../../lib/analytics";
 import { anomalyPinIndices } from "../../lib/annotations";
 import { quantile } from "../../components/chart/scale";
 import { comparability } from "../../lib/healthOpinion";
-import { agoLabel, safeFindings, safeMetrics, safeReadiness, safeSeries } from "../../lib/load";
+import { agoLabel, safeFindings, safeMetrics, safeReadiness, safeSeries, safeStreams } from "../../lib/load";
 import { METRIC_NOTES } from "../../lib/metricNotes";
 import { getPinnedMetrics } from "../../lib/prefs";
-import { friendlyName } from "../../lib/provenance";
+import { friendlyName, shortId } from "../../lib/provenance";
 import { BaselineRibbon } from "../../components/BaselineRibbon";
 import { MultiSeriesChart } from "../../components/MultiSeriesChart";
 import { PinButton } from "../../components/PinButton";
@@ -44,12 +44,13 @@ export default async function MetricDetailPage({
   const sp = await searchParams;
   const range: Range = RANGES.includes(sp.range as Range) ? (sp.range as Range) : "30d";
 
-  const [series, metrics, readiness, pinned, findings] = await Promise.all([
+  const [series, metrics, readiness, pinned, findings, streams] = await Promise.all([
     metricId ? safeSeries(metricId, range) : Promise.resolve(null),
     safeMetrics(),
     safeReadiness(),
     getPinnedMetrics(),
     safeFindings(),
+    safeStreams(),
   ]);
 
   const metric = metrics?.find((m) => m.id === metricId) ?? series?.metric;
@@ -75,6 +76,20 @@ export default async function MetricDetailPage({
   const sorted = [...values].sort((a, b) => a - b);
   const bySource = groupBySource(points);
   const sourceIds = [...bySource.keys()];
+
+  // Resolve a point's source_id to a human label: prefer the device from the
+  // stream registry, then a known integration name, then a shortened id — never
+  // surface a raw 36-char UUID as the source name.
+  const streamLabel = new Map(
+    (streams ?? []).map((s) => [s.id, s.device_label ?? friendlyName(s.source_plugin_id)] as const),
+  );
+  const sourceLabel = (id: string): string => {
+    const mapped = streamLabel.get(id);
+    if (mapped) return mapped;
+    const friendly = friendlyName(id);
+    if (friendly !== id) return friendly;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id) ? `Stream ${shortId(id)}` : id;
+  };
   const comp = comparability(metricId, sourceIds);
   const divergence = detectDivergence(points);
   const notes = METRIC_NOTES[metricId] ?? [];
@@ -96,7 +111,7 @@ export default async function MetricDetailPage({
   const perSourceSeries = multiSource
     ? [...bySource.entries()]
         .map(([sourceId, pts]) => ({
-          label: friendlyName(sourceId),
+          label: sourceLabel(sourceId),
           values: pts.map((p) => p.value).filter((v): v is number => v !== null),
         }))
         .filter((s) => s.values.length >= 2)
@@ -105,7 +120,7 @@ export default async function MetricDetailPage({
   const sourceSummaries = [...bySource.entries()]
     .map(([sourceId, pts]) => ({
       id: sourceId,
-      label: friendlyName(sourceId),
+      label: sourceLabel(sourceId),
       count: pts.length,
       numericCount: pts.filter((p) => p.value !== null).length,
       last: latestLabel(pts),
