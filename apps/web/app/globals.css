@@ -2079,6 +2079,56 @@ table.prov {
   color: var(--faint);
   margin: 0;
 }
+.panel-move {
+  min-width: 30px;
+  padding: 5px 8px;
+  font-size: 13px;
+  line-height: 1;
+}
+.panel-move:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.saved-views {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+}
+.saved-views-label {
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.saved-view-chip {
+  padding-left: 10px;
+}
+.saved-view-open {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.saved-view-open:hover {
+  color: var(--accent);
+}
+.saved-view-input {
+  width: 190px;
+  margin-left: auto;
+}
+/* Inputs borrow .filter-select's chrome but must not show its dropdown caret. */
+input.filter-select {
+  background-image: none;
+  padding-right: 12px;
+}
 
 .source-dist {
   display: flex;

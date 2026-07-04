@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   CHART_KINDS,
   EXPLORE_GRAINS,
@@ -54,6 +55,80 @@ function MetricSelect({
         </option>
       ))}
     </select>
+  );
+}
+
+type SavedView = { name: string; qs: string };
+const VIEWS_KEY = "explore_views";
+
+// Saved views persist in localStorage (per-browser; fine for a single-user
+// self-hosted product). Each stores the current URL query, so opening one just
+// navigates there — the whole dashboard is already URL-encoded.
+function SavedViews({ current }: { current: string }) {
+  const router = useRouter();
+  const [views, setViews] = useState<SavedView[]>([]);
+  const [name, setName] = useState("");
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(VIEWS_KEY);
+      if (raw) setViews(JSON.parse(raw));
+    } catch {
+      // ignore malformed storage
+    }
+  }, []);
+
+  const persist = (next: SavedView[]) => {
+    setViews(next);
+    try {
+      localStorage.setItem(VIEWS_KEY, JSON.stringify(next));
+    } catch {
+      // storage may be unavailable (private mode) — the in-memory list still works
+    }
+  };
+  const save = () => {
+    const n = name.trim();
+    if (!n) return;
+    persist([...views.filter((v) => v.name !== n), { name: n, qs: current }]);
+    setName("");
+  };
+  const remove = (n: string) => persist(views.filter((v) => v.name !== n));
+
+  return (
+    <div className="saved-views">
+      <span className="saved-views-label">Views</span>
+      {views.map((v) => (
+        <span key={v.name} className="panel-chip saved-view-chip">
+          <button
+            type="button"
+            className="saved-view-open"
+            onClick={() => router.push(`/explore?${v.qs}`)}
+          >
+            {v.name}
+          </button>
+          <button
+            type="button"
+            className="panel-chip-x"
+            aria-label={`Delete view ${v.name}`}
+            onClick={() => remove(v.name)}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <input
+        className="filter-select saved-view-input"
+        placeholder="Save this view as…"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") save();
+        }}
+      />
+      <button type="button" className="btn-ghost panel-remove-btn" onClick={save} disabled={!name.trim()}>
+        Save
+      </button>
+    </div>
   );
 }
 
@@ -135,6 +210,7 @@ export function ExploreControls({ state, metrics }: { state: ExploreState; metri
         <label>Add panel</label>
         <MetricSelect metrics={metrics} placeholder="Pick a signal…" onPick={addPanel} />
       </div>
+      <SavedViews current={encodeExploreState(state)} />
     </div>
   );
 }
@@ -159,6 +235,13 @@ export function PanelToolbar({
     nav({ ...state, panels });
   };
   const removePanel = () => nav({ ...state, panels: state.panels.filter((_, i) => i !== index) });
+  const move = (dir: -1 | 1) => {
+    const j = index + dir;
+    if (j < 0 || j >= state.panels.length) return;
+    const panels = [...state.panels];
+    [panels[index], panels[j]] = [panels[j], panels[index]];
+    nav({ ...state, panels });
+  };
   const setChart = (chart: ChartKind) => update({ ...panel, chart });
   const addMetric = (id: string) =>
     !panel.metrics.includes(id) && update({ ...panel, metrics: [...panel.metrics, id] });
@@ -196,6 +279,24 @@ export function PanelToolbar({
         )}
       </div>
       <div className="panel-tools">
+        <button
+          type="button"
+          className="btn-ghost panel-move"
+          onClick={() => move(-1)}
+          disabled={index === 0}
+          aria-label="Move panel earlier"
+        >
+          ←
+        </button>
+        <button
+          type="button"
+          className="btn-ghost panel-move"
+          onClick={() => move(1)}
+          disabled={index === state.panels.length - 1}
+          aria-label="Move panel later"
+        >
+          →
+        </button>
         <select
           className="filter-select"
           value={panel.chart}
