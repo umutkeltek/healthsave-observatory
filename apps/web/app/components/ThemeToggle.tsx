@@ -7,7 +7,7 @@ type Theme = "dark" | "light";
 // Toggles the data-theme on <html> and persists it. The no-flash inline script
 // in layout.tsx applies the saved theme before paint; this just flips it.
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>("dark");
+ const [theme, setTheme] = useState<Theme>("light");
 
   useEffect(() => {
     const current = document.documentElement.dataset.theme;
@@ -20,7 +20,7 @@ export function ThemeToggle() {
     try {
       localStorage.setItem("theme", next);
     } catch {
-      // private mode / storage disabled — the toggle still works for the session
+      // private mode / storage disabled - the toggle still works for the session
     }
     setTheme(next);
   }

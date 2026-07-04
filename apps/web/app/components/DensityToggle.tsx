@@ -6,7 +6,7 @@ import { setDensityAction } from "../lib/actions";
 import type { Density } from "../lib/prefs";
 
 // Optimistic: the UI flips the instant you click; the cookie write settles in
-// the background. Never disabled — switching modes must feel like a light
+// the background. Never disabled - switching modes must feel like a light
 // switch, not a form submit. Used by the sidebar (which also reshapes its nav
 // from the same optimistic value) and the Settings page.
 export function useOptimisticDensity(server: Density): [Density, (mode: Density) => void] {
