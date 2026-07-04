@@ -92,6 +92,9 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
     visible = (defaults.length ? defaults : all).slice(0, DEFAULT_CAP);
   }
   const isDefault = !metricSel && !categorySel;
+  // A metric id in the URL that resolves to nothing (backend reachable) is an
+  // invalid selection — show an honest empty state, not "0 metrics" + demo.
+  const unknownMetric = Boolean(metricSel) && all.length > 0 && visible.length === 0;
 
   const [seriesList, sleep] = await Promise.all([
     Promise.all(visible.map((m) => safeSeries(m.id, range))),
@@ -167,11 +170,15 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
 
       <SourceDistribution dist={dist} />
 
-      <div className="section-label">
-        {metrics === null
-          ? "Metrics"
-          : `${visible.length} metric${visible.length === 1 ? "" : "s"} · ${range}${sourceSel ? ` · ${sourceSel}` : ""}${deviceSel ? ` · ${streamLabels.get(deviceSel) ?? deviceSel}` : ""}`}
-      </div>
+      {unknownMetric ? (
+        <p className="empty">No signal called “{metricSel}”. Pick one from the filter above.</p>
+      ) : (
+        <div className="section-label">
+          {metrics === null
+            ? "Metrics"
+            : `${visible.length} metric${visible.length === 1 ? "" : "s"} · ${range}${sourceSel ? ` · ${sourceSel}` : ""}${deviceSel ? ` · ${streamLabels.get(deviceSel) ?? deviceSel}` : ""}`}
+        </div>
+      )}
       <section className="grid">
         {cards.map(({ metric, series }) => (
           <MetricCard key={metric.id} series={series} fallbackTitle={metric.display_name} />
@@ -179,7 +186,7 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
         {isDefault && <SleepCard series={sleep} />}
       </section>
 
-      {patterns && (
+      {patterns && !unknownMetric && (
         <>
           <div className="section-label">
             Patterns · {patterns.metric.display_name}

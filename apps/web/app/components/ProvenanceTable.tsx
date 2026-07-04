@@ -33,14 +33,13 @@ export function ProvenanceTable({ rows, demo }: { rows: ProvenanceRow[]; demo?: 
       </div>
 
       <div className="prov-card-list">
-        {rows.map((row, index) => {
+        {rows.map((row) => {
           const pct = Math.round(row.freshness * 100);
           const reliability = reliabilityFor(row.sourceName);
 
           return (
             <section key={row.streamId} className={`prov-source-card ${row.stale ? "is-stale" : ""}`}>
               <div className="prov-source-main">
-                <span className="prov-source-index">Connection {index + 1}</span>
                 <h3 title={reliability.note}>{row.sourceName}</h3>
                 <p>
                   {row.hardware} via {row.origin}
