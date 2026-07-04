@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 // ⌘K palette: jump to any page or any of the ~190 catalog signals without
-// hunting the nav or the Library grid. Pure client island — the metric list
+// hunting the nav or the Library grid. Pure client island - the metric list
 // arrives server-rendered via PaletteHost, queries never leave the page.
 
 export type PaletteMetric = { id: string; name: string; category: string };

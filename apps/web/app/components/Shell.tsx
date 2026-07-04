@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 
 import type { Density } from "../lib/prefs";
+import { useOptimisticDensity } from "./DensityToggle";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
@@ -23,14 +24,21 @@ export function Shell({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [shownDensity, pickDensity] = useOptimisticDensity(density);
 
   return (
-    <div className={`app ${open ? "nav-open" : ""}`}>
-      <Sidebar status={sidebarStatus} density={density} onNavigate={() => setOpen(false)} />
+    <div className={`app density-${shownDensity} ${open ? "nav-open" : ""}`}>
+      <Sidebar
+        status={sidebarStatus}
+        density={shownDensity}
+        onDensityChange={pickDensity}
+        onNavigate={() => setOpen(false)}
+      />
       <button
         type="button"
         className="nav-scrim"
         aria-label="Close navigation"
+        hidden={!open}
         tabIndex={open ? 0 : -1}
         onClick={() => setOpen(false)}
       />

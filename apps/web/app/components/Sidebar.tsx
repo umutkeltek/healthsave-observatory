@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import type { Density } from "../lib/prefs";
-import { DensityToggle, useOptimisticDensity } from "./DensityToggle";
+import { DensityToggle } from "./DensityToggle";
 
 const ICONS: Record<string, ReactNode> = {
   overview: (
@@ -92,14 +92,14 @@ const ICONS: Record<string, ReactNode> = {
 };
 
 // `essential: true` rows show in both modes; the rest are Observatory-mode
-// power surfaces (still URL-accessible in Essentials — only the nav slims).
+// power surfaces (still URL-accessible in Essentials - only the nav slims).
 const NAV = [
   { href: "/", label: "Today", icon: "overview", essential: true },
-  { href: "/experiments", label: "Experiments", icon: "experiments", essential: false },
-  { href: "/findings", label: "Findings", icon: "findings", essential: true },
-  { href: "/sources", label: "Sources", icon: "sources", essential: false },
-  { href: "/data", label: "Data", icon: "data", essential: false },
-  { href: "/library", label: "Library", icon: "library", essential: true },
+{ href: "/findings", label: "Findings", icon: "findings", essential: true },
+{ href: "/data", label: "Data", icon: "data", essential: true },
+{ href: "/sources", label: "Sources", icon: "sources", essential: true },
+{ href: "/library", label: "Library", icon: "library", essential: true },
+{ href: "/experiments", label: "Experiments", icon: "experiments", essential: false },
   { href: "/compare", label: "Compare", icon: "compare", essential: false },
   { href: "/relationships", label: "Relationships", icon: "relationships", essential: false },
   { href: "/integrations", label: "Integrations", icon: "integrations", essential: true },
@@ -131,15 +131,16 @@ function NavIcon({ name }: { name: string }) {
 export function Sidebar({
   status,
   density,
+  onDensityChange,
   onNavigate,
 }: {
   status: ReactNode;
   density: Density;
+  onDensityChange: (mode: Density) => void;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const [shownDensity, pickDensity] = useOptimisticDensity(density);
-  const items = shownDensity === "essentials" ? NAV.filter((item) => item.essential) : NAV;
+  const items = density === "essentials" ? NAV.filter((item) => item.essential) : NAV;
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -168,7 +169,7 @@ export function Sidebar({
       </nav>
 
       <div className="sidebar-foot">
-        <DensityToggle density={shownDensity} onPick={pickDensity} />
+        <DensityToggle density={density} onPick={onDensityChange} />
         {status}
       </div>
     </aside>
