@@ -8,6 +8,20 @@ Design posture: **macOS-inspired Private Health Observatory**.
 
 Use Apple-like grouped surfaces, subtle materials, system typography, compact spacing, and clear hierarchy. This is not literal macOS cosplay: do not add fake traffic lights, desktop wallpaper, or theatrical chrome unless the product is actually showing a window metaphor. Linear is a useful reference for density and token discipline, not for the dark neon visual identity.
 
+## One language (non-negotiable)
+
+There is exactly ONE design language: macOS-light-first (Apple system). Dark is a
+single supported override, not a second identity. Enforcement:
+
+- All colour comes from CSS custom properties (tokens). Light values live once in
+  `:root`; dark deltas live once in `[data-theme="dark"]`. No third palette layer,
+  no periwinkle / indigo / mint remnants.
+- No hardcoded hex/rgba in component CSS or JSX when a token exists. Sleep, baseline,
+  chart, and semantic colours all have tokens — use them.
+- Do not add "polish / alignment / reset" override passes that re-skin
+  `.hero` / `.card` / `.topbar` / `.sidebar`. Fix the single definition instead.
+  A duplicate top-level selector is a bug, not a layer.
+
 ## Color
 
 Light mode is the primary experience.
