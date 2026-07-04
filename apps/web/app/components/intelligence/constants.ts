@@ -1,7 +1,7 @@
 import type { IntelMode } from "../../lib/api";
 
-// Known cloud providers + a sensible default model. The user can still type any
-// litellm route; these just make the common path one click.
+// Known cloud providers plus sensible default models. Users can still type a
+// provider/model route manually; these just make common paths fast.
 export const CLOUD_PROVIDERS = [
   { id: "deepseek", label: "DeepSeek", model: "deepseek/deepseek-chat" },
   { id: "openai", label: "OpenAI", model: "openai/gpt-4o-mini" },
@@ -18,26 +18,30 @@ export const MODE_CARDS: { id: IntelMode; title: string; blurb: string }[] = [
   {
     id: "off",
     title: "Off",
-    blurb: "No narrator. Findings are computed on-device by the statistical engine. Nothing leaves.",
+    blurb: "No narrator. Findings are computed on this host. Nothing leaves.",
   },
   {
     id: "local",
     title: "Local",
-    blurb: "A model on your own machine (Ollama) writes the briefs. Still nothing leaves the host.",
+    blurb: "A model on your machine writes briefs. Nothing leaves the host.",
   },
   {
     id: "cloud",
     title: "Cloud",
-    blurb: "Your own provider key. Only redacted, derived findings leave — never raw health data.",
+    blurb: "Your provider key. Only redacted derived findings leave. Raw health data never does.",
   },
 ];
 
 export function leavesCopy(mode: IntelMode, redact: boolean): string {
-  if (mode === "off")
-    return "Nothing. With the narrator off, findings are computed on-device and no prompt is ever assembled.";
-  if (mode === "local")
-    return "Nothing. A local model runs on your own host, so prompts and findings stay inside the trust boundary.";
+  if (mode === "off") {
+    return "Nothing. With the narrator off, findings are computed locally and no prompt is assembled.";
+  }
+
+  if (mode === "local") {
+    return "Nothing. A local model runs on your host, so prompts and findings stay inside the trust boundary.";
+  }
+
   return redact
-    ? "Only an assembled prompt of derived findings — with identifiers (emails, names, IDs) scrubbed first — is sent to your provider once you consent."
-    : "An assembled prompt of derived findings is sent to your provider once you consent. Redaction is OFF, so identifiers are not scrubbed.";
+    ? "Only a redacted prompt built from derived findings is sent to your provider after consent."
+    : "A prompt built from derived findings is sent to your provider after consent. Redaction is off, so identifiers are not scrubbed.";
 }

@@ -1,4 +1,4 @@
-// Settings page sections — preferences (cookie reads), the service cards
+// Settings page sections - preferences (cookie reads), the service cards
 // (network reads), and the system versions each stream behind their own
 // boundary so a slow backend never delays the inline-manageable prefs.
 
@@ -49,7 +49,7 @@ export async function PreferencesSection() {
           <h2>Pinned signals</h2>
           {pinnedRows.length === 0 ? (
             <p className="empty">
-              Nothing pinned — the Today grid shows the curated defaults. Star any signal in the{" "}
+              Nothing pinned - the Today grid shows the curated defaults. Star any signal in the{" "}
               <Link href="/library">Library</Link> to build your own grid.
             </p>
           ) : (
@@ -88,7 +88,7 @@ export async function ServicesSection() {
                 narratorOff
                   ? "off"
                   : `${privacy.is_local ? "local" : "cloud"} · ${privacy.provider}`
-              }${intelligence?.managed_by_env ? " (set by deploy env)" : ""} — provider, fallback chain, redaction and consent are managed end-to-end on the Intelligence page.`
+              }${intelligence?.managed_by_env ? " (set by deploy env)" : ""} - provider, fallback chain, redaction and consent are managed end-to-end on the Intelligence page.`
             : "Narrator settings unavailable (backend unreachable)."}
         </p>
         <div className="exp-action">

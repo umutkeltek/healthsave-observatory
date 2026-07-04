@@ -31,7 +31,7 @@ export default async function DataPage({ searchParams }: { searchParams: Promise
     range: RANGES.includes(one(sp.range)) ? one(sp.range) : "7d",
   };
   // Re-mount the explorer when filters change so stale cards never linger
-  // behind a slow re-fetch — the skeleton is the honest in-between state.
+  // behind a slow re-fetch - the skeleton is the honest in-between state.
   const explorerKey = JSON.stringify(filters);
 
   return (

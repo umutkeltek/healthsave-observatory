@@ -1,4 +1,4 @@
-// Sources page section — provenance table, divergence log, and coverage share
+// Sources page section - provenance table, divergence log, and coverage share
 // the same identity reads, so they stream behind one boundary. Only an
 // UNREACHABLE backend falls back to the clearly-labelled demo (see page).
 

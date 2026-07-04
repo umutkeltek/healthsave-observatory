@@ -3,7 +3,7 @@
 import type { IntelligenceView } from "../../lib/api";
 import type { IntelligenceForm } from "./useIntelligenceForm";
 
-// Cloud egress consent — deliberately separate from saving a provider:
+// Cloud egress consent - deliberately separate from saving a provider:
 // entering a key is configuration, this card is the explicit opt-in.
 export function ConsentPanel({ form, view }: { form: IntelligenceForm; view: IntelligenceView }) {
   const granted = view.consent.granted;

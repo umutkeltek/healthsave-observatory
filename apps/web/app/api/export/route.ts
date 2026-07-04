@@ -1,4 +1,4 @@
-// Browser-facing proxy for /api/v2/export — the X-API-Key never reaches the
+// Browser-facing proxy for /api/v2/export - the X-API-Key never reaches the
 // browser (the /api/changes idiom, applied to file downloads). Params are
 // whitelisted and re-validated here so the route can't be steered anywhere
 // but the one upstream endpoint; the backend enforces its own row cap.
@@ -51,7 +51,7 @@ export async function GET(request: Request): Promise<Response> {
     }
     const out = new Headers();
     out.set("Content-Type", res.headers.get("content-type") ?? "application/json");
-    // The backend only sets a filename for CSV — name JSON downloads here.
+    // The backend only sets a filename for CSV - name JSON downloads here.
     out.set(
       "Content-Disposition",
       res.headers.get("content-disposition") ?? `attachment; filename=healthsave_${metric}.json`,

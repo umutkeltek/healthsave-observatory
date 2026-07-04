@@ -1,5 +1,5 @@
 // Browser-facing proxy for the backend's change fingerprint. The X-API-Key
-// never reaches the browser — the LiveStatus poller hits this route and the
+// never reaches the browser - the LiveStatus poller hits this route and the
 // key is injected server-side. ETag/304 semantics pass straight through, so
 // an unchanged state costs a header exchange and nothing more.
 

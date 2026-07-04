@@ -15,7 +15,7 @@ export default function ErrorBoundary({
       <div className="card">
         <div className="hero-eyebrow">Something broke</div>
         <p className="empty" style={{ marginTop: 8 }}>
-          This view hit a rendering error. Your data is untouched — this is a UI bug, not a data
+          This view hit a rendering error. Your data is untouched. This is a UI bug, not a data
           problem.{error.digest ? ` (ref ${error.digest})` : ""}
         </p>
         <div className="exp-action">

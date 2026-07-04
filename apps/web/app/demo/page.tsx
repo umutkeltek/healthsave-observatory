@@ -3,13 +3,13 @@ import type { Metadata } from "next";
 import { BaselineRibbon } from "../components/BaselineRibbon";
 import { LocalVaultReceipt, type VaultStep } from "../components/LocalVaultReceipt";
 
-// A seeded "first 60 seconds" Today — a believable 30-day story with one
+// A seeded "first 60 seconds" Today - a believable 30-day story with one
 // recovery dip, so a fresh clone (or the README screenshot) shows the product
 // alive before any real data is synced. Pure fixtures; no API required.
 
 export const metadata: Metadata = { title: "Today · demo · HealthSave Observatory" };
 
-// HRV (ms) over 30 days — steady, then a clear multi-day decline at the end.
+// HRV (ms) over 30 days - steady, then a clear multi-day decline at the end.
 const HRV_30D = [
   64, 61, 66, 63, 68, 62, 65, 67, 60, 63, 66, 64, 69, 62, 65, 63, 67, 61, 64, 66, 62, 60, 58, 55,
   52, 49, 47, 45, 44, 46,
@@ -35,7 +35,7 @@ const VAULT: VaultStep[] = [
 const EVIDENCE = [
   {
     title: "HRV anomaly",
-    calc: "42 ms vs expected 55–71 ms · z = −2.1",
+    calc: "42 ms vs expected 55-71 ms · z = −2.1",
     conf: "confidence high · source: Apple Watch",
   },
   {
@@ -61,7 +61,7 @@ export default function DemoToday() {
             <div className="recovery-state state-caution">Caution</div>
           </div>
           <p className="recovery-line">
-            Below your baseline. <strong>Three independent signals agree</strong> — HRV is down,
+            Below your baseline. <strong>Three independent signals agree</strong> - HRV is down,
             resting heart rate is up, and deep sleep fell.
           </p>
           <BaselineRibbon
@@ -91,7 +91,7 @@ export default function DemoToday() {
         <section className="card col-12">
           <div className="card-title">Evidence</div>
           <p className="empty" style={{ margin: "0 0 6px" }}>
-            Every finding traces to a calculation — computed, not guessed.
+            Every finding traces to a calculation - computed, not guessed.
           </p>
           <div>
             {EVIDENCE.map((e) => (
