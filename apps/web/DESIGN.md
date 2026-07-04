@@ -98,16 +98,19 @@ Radius scale:
 
 ## Navigation
 
-Essentials mode is normal use:
+The nav is grouped into three always-visible tiers (this is the default — no
+feature is hidden behind a mode):
 
-- Today: how am I doing?
-- Findings: what changed?
-- Data: what do I have?
-- Sources: is sync healthy?
-- Privacy: where did my data go?
-- Settings: what can I configure?
+- **Essentials** — the daily surfaces: Today, Findings, Data, Sources, Privacy.
+- **Explore** — the analytical / power surfaces: Library, Compare, Relationships, Experiments.
+- **Manage** — config + routes: Integrations, Intelligence, Settings.
 
-Observatory mode can expose deeper surfaces: compare, relationships, experiments, intelligence, raw readiness, and calculation detail.
+The density toggle can slim the nav to **Essentials-only** for a calmer view;
+Explore/Manage stay reachable by URL. Essentials is an opt-in, not the default —
+discovering the power surfaces must not require flipping a switch.
+
+Within pages, raw evidence, p-values, readiness gates, and calculation detail
+still default collapsed behind drilldowns.
 
 Sidebar rules:
 
