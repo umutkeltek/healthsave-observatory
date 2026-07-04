@@ -13,7 +13,7 @@ export function DayOfWeekChart({ cells, unit }: { cells: DowCell[]; unit?: strin
             <span className="dow-fill" style={{ width: `${c.n ? Math.round((c.value / max) * 100) : 0}%` }} />
           </span>
           <span className="dow-val">
-            {c.n ? c.value : "—"}
+            {c.n ? c.value : "-"}
             {c.n && unit ? ` ${unit}` : ""}
           </span>
         </li>

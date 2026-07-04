@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { MetricOption } from "./FilterBar";
 
 // URL-state controls for /relationships: signal A, signal B, range. Holds no
-// data — writes the query string and lets the server component re-fetch
+// data - writes the query string and lets the server component re-fetch
 // (the CompareControls idiom).
 export function RelateControls({ metrics, ranges }: { metrics: MetricOption[]; ranges: string[] }) {
   const router = useRouter();

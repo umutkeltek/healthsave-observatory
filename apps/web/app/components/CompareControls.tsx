@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { MetricOption } from "./FilterBar";
 
 // URL-state controls for /compare: metric, comparison mode, range. Holds no
-// data — writes the query string and lets the server component re-fetch.
+// data - writes the query string and lets the server component re-fetch.
 export function CompareControls({ metrics, ranges }: { metrics: MetricOption[]; ranges: string[] }) {
   const router = useRouter();
   const pathname = usePathname();

@@ -1,30 +1,30 @@
-// Provenance view-model — the join + derivations behind the Sources page.
+// Provenance view-model - the join + derivations behind the Sources page.
 //
 // Pure (no I/O): the page fetches sources + streams from the v2 identity API
 // (server/api/v2_identity.py) and hands them here to build display rows. The
 // honesty rule the whole page is built on: we surface where each reading came
-// from and how fresh it is — we never merge disagreeing sources into a single
+// from and how fresh it is - we never merge disagreeing sources into a single
 // synthetic "truth".
 
 import type { SourceView, StreamView } from "./api";
 import { agoLabel } from "./load";
 
 export type ProvenanceRow = {
-  streamId: string; // full id (UUID for real rows) — shown on hover
+  streamId: string; // full id (UUID for real rows) - shown on hover
   shortId: string; // compact monospace token for the table cell
   sourceName: string; // joined source.display_name (falls back to plugin id)
   origin: string; // the integration/plugin the stream arrived through
-  hardware: string; // device_label — the physical emitter
+  hardware: string; // device_label - the physical emitter
   lastSync: string; // "12m ago" relative label
-  freshness: number; // 0..1 — a view of recency, NOT a fabricated integrity score
+  freshness: number; // 0..1 - a view of recency, NOT a fabricated integrity score
   stale: boolean; // synced longer ago than the stale threshold
 };
 
 export type Divergence = {
   metric: string;
-  context: string; // e.g. "Last Night" — rendered parenthetically
+  context: string; // e.g. "Last Night" - rendered parenthetically
   readings: { source: string; value: string }[]; // every source kept verbatim
-  resolution: string; // e.g. "Both Kept" — never a merged value
+  resolution: string; // e.g. "Both Kept" - never a merged value
   stance?: string; // the Observatory's grounded opinion on the disagreement
   note?: string; // optional alignment caveat
   warn?: boolean; // amber treatment for a flagged divergence
@@ -39,7 +39,7 @@ export type Coverage = {
 };
 
 // A stream is "stale" once it hasn't synced for a day. Tuned for human scanning,
-// not a contract — it only drives colour, never a stored judgement.
+// not a contract - it only drives colour, never a stored judgement.
 const STALE_AFTER_MIN = 24 * 60;
 
 function minutesAgo(iso: string | null | undefined): number {
@@ -49,7 +49,7 @@ function minutesAgo(iso: string | null | undefined): number {
 }
 
 // Freshness as a 0..1 bar: full at sync, decaying to a floor by the stale
-// threshold. It is a visualisation of last_seen_at — not a data-integrity claim.
+// threshold. It is a visualisation of last_seen_at - not a data-integrity claim.
 export function freshness(iso: string | null | undefined): { value: number; stale: boolean } {
   const mins = minutesAgo(iso);
   if (!Number.isFinite(mins)) return { value: 0, stale: true };
@@ -91,7 +91,7 @@ export function buildProvenanceRows(streams: StreamView[], sources: SourceView[]
         shortId: shortId(s.id),
         sourceName: friendlyName(nameByPlugin.get(s.source_plugin_id) ?? s.source_plugin_id),
         origin: s.source_plugin_id,
-        hardware: s.device_label ?? "—",
+        hardware: s.device_label ?? "-",
         lastSync: agoLabel(s.last_seen_at),
         freshness: f.value,
         stale: f.stale,
@@ -100,7 +100,7 @@ export function buildProvenanceRows(streams: StreamView[], sources: SourceView[]
 }
 
 // Honest coverage: one bar per DEVICE (the physical emitter), each bar the mean
-// freshness of that device's streams, and the headline the mean of those bars —
+// freshness of that device's streams, and the headline the mean of those bars -
 // a descriptive statistic over your own data, verifiable by eye. We key on the
 // device because real-world capture is one source (e.g. all via Apple Health)
 // with many devices behind it, so the device is where the variety lives. It is
@@ -109,7 +109,7 @@ export function buildProvenanceRows(streams: StreamView[], sources: SourceView[]
 export function buildCoverage(rows: ProvenanceRow[]): Coverage {
   const byDevice = new Map<string, { label: string; values: number[]; anyFresh: boolean }>();
   for (const row of rows) {
-    const key = row.hardware && row.hardware !== "—" ? row.hardware : row.sourceName;
+    const key = row.hardware && row.hardware !== "-" ? row.hardware : row.sourceName;
     const group = byDevice.get(key) ?? { label: key, values: [], anyFresh: false };
     group.values.push(row.freshness);
     if (!row.stale) group.anyFresh = true;
@@ -152,7 +152,7 @@ export const DEMO_DIVERGENCES: Divergence[] = [
     ],
     resolution: "Both Kept",
     stance:
-      "Wrist staging is probabilistic vs lab PSG, so a 36-min gap is expected. We keep both and never average them — narration leans on the more consistent nightly source, not a blended figure.",
+      "Wrist staging is probabilistic vs lab PSG, so a 36-min gap is expected. We keep both and never average them. Narration leans on the more consistent nightly source, not a blended figure.",
   },
   {
     metric: "Recovery Trend Alignment",
@@ -161,13 +161,13 @@ export const DEMO_DIVERGENCES: Divergence[] = [
     resolution: "",
     warn: true,
     stance:
-      "Whoop and Oura report RMSSD; Apple reports SDNN — different HRV definitions that are not comparable, so we never blend vendors. The 15%+ cross-source gap is the signal worth surfacing, not a number to resolve.",
+      "Whoop and Oura report RMSSD; Apple reports SDNN. Different HRV definitions are not comparable, so we never blend vendors. The 15%+ cross-source gap is the signal worth surfacing, not a number to resolve.",
     note: "Sources disagree on current trajectory. HRV delta between Whoop and Oura exceeds the 15% variance threshold over a 3-day rolling window.",
   },
 ];
 
 // Derived from the demo rows by the SAME function the live path uses, so the
 // headline is genuinely the mean of the per-source bars shown and the card
-// summarizes the exact streams in the table beside it — demo and live tell one
+// summarizes the exact streams in the table beside it - demo and live tell one
 // honest story (here Oura is stale, which is why coverage is not 100%).
 export const DEMO_COVERAGE: Coverage = buildCoverage(DEMO_PROVENANCE);

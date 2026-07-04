@@ -1,5 +1,5 @@
 // Process-level stale-while-revalidate cache for the few backend reads that
-// are genuinely expensive (canonical-coverage aggregates run 5–20s on a
+// are genuinely expensive (canonical-coverage aggregates run 5-20s on a
 // 2M-row store). Semantics:
 //   - fresh hit  → cached value, no fetch
 //   - stale hit  → cached value IMMEDIATELY + one background refresh
@@ -27,7 +27,7 @@ export async function swrCache<T>(key: string, ttlMs: number, fetcher: () => Pro
       void fetcher()
         .then((value) => store.set(key, { value, storedAt: Date.now(), refreshing: false }))
         .catch(() => {
-          // Keep serving stale on refresh failure — the loaders' logging
+          // Keep serving stale on refresh failure - the loaders' logging
           // choke point reports it on the path that awaited.
           entry.refreshing = false;
         });

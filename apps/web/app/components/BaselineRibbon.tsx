@@ -9,12 +9,12 @@ import { quantile } from "./chart/scale";
 
 type Props = {
   values: number[];
-  band?: [number, number]; // expected range (value units); defaults to P25–P75
+  band?: [number, number]; // expected range (value units); defaults to P25-P75
   anomalies?: number[]; // indices into `values` to pin
   height?: number; // plot height in px
   axis?: [string, string]; // left / right captions
-  live?: boolean; // last reading <24h — adds the slow mint freshness shimmer
-  hoverLabels?: string[]; // per-value captions (dates) — enables the tooltip overlay
+  live?: boolean; // last reading <24h - adds the slow mint freshness shimmer
+  hoverLabels?: string[]; // per-value captions (dates) - enables the tooltip overlay
   unit?: string | null; // printed after the value in the tooltip
 };
 

@@ -127,7 +127,7 @@ describe("weekHourPivot", () => {
 });
 
 describe("periodSplit", () => {
-  it("returns A, B and a delta — never a merged value", () => {
+  it("returns A, B and a delta - never a merged value", () => {
     const pts = [
       pt("2026-06-01T00:00:00Z", 10),
       pt("2026-06-02T00:00:00Z", 10),
@@ -140,7 +140,7 @@ describe("periodSplit", () => {
     expect(s.delta.abs).toBe(10);
     expect(s.delta.pct).toBe(100);
     expect(s.delta.direction).toBe("up");
-    // no top-level "value"/"merged" field exists — comparison stays A/B
+    // no top-level "value"/"merged" field exists - comparison stays A/B
     expect(Object.keys(s).sort()).toEqual(["a", "b", "delta"]);
   });
   it("guards divide-by-zero when A mean is 0", () => {

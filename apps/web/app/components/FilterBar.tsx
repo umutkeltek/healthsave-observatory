@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 // A thin client island: it holds NO data. It reads the current selection from
 // the URL and writes the next selection back to the URL via router.replace
-// (scroll-preserving) — the server component re-fetches and re-renders. This is
+// (scroll-preserving) - the server component re-fetches and re-renders. This is
 // the URL-as-state pattern (mirrors ExperimentActions); every view stays
 // deep-linkable and the X-API-Key never leaves the server.
 
@@ -12,7 +12,7 @@ export type MetricOption = { id: string; display_name: string; category: string 
 
 const SORTS = [
   { value: "", label: "Default order" },
-  { value: "name", label: "Name (A–Z)" },
+  { value: "name", label: "Name (A-Z)" },
   { value: "recent", label: "Latest value" },
   { value: "coverage", label: "Most readings" },
 ];

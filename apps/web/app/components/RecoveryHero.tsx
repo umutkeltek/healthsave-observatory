@@ -2,14 +2,11 @@ import { BaselineRibbon } from "./BaselineRibbon";
 import { type Contributor, ContributorStack } from "./ContributorStack";
 import { CountUp } from "./CountUp";
 
-// Score → state label, using the same bands the product narrates by. The score
-// itself is the backend's open formula (analysis/statistical/scoring.py); we
-// only translate it to a word + colour.
 const STATES = [
-  { min: 75, label: "Prime", cls: "state-prime" },
-  { min: 60, label: "Steady", cls: "state-steady" },
-  { min: 45, label: "Caution", cls: "state-caution" },
-  { min: 0, label: "Suppressed", cls: "state-suppressed" },
+  { min: 75, label: "Prime", cls: "state-prime", title: "Prime today" },
+  { min: 60, label: "Steady", cls: "state-steady", title: "Steady today" },
+  { min: 45, label: "Caution", cls: "state-caution", title: "Worth watching" },
+  { min: 0, label: "Suppressed", cls: "state-suppressed", title: "Go easier today" },
 ] as const;
 
 function stateFor(score: number) {
@@ -22,48 +19,85 @@ export type HeroRibbon = {
   axis?: [string, string];
 };
 
-// The Today centrepiece. Degrades honestly: the recovery number shows only when
-// the engine has computed one; otherwise the briefing headline leads and the
-// ribbon still anchors the card with a real signal.
+export type TodayHighlight = {
+  label: string;
+  value: string;
+  hint: string;
+  tone?: "good" | "watch";
+};
+
 export function RecoveryHero({
   freshness,
   score,
-  headline,
+  summary,
   ribbon,
   live,
   contributors = [],
+  highlights = [],
 }: {
   freshness: string;
   score: number | null;
-  headline: string;
+  summary: string;
   ribbon: HeroRibbon | null;
   live?: boolean;
   contributors?: Contributor[];
+  highlights?: TodayHighlight[];
 }) {
   const state = score !== null ? stateFor(score) : null;
 
   return (
-    <section className={`hero col-8 ${state ? `hero-${state.cls}` : ""}`}>
-      <div className="hero-eyebrow">Today · last reading {freshness}</div>
-
-      {score !== null && state && (
-        <div className="recovery">
-          <div className="recovery-score">
-            <CountUp value={score} />
+    <section className={`hero today-hero ${state ? `hero-${state.cls}` : ""}`}>
+      <div className="today-hero-main">
+        <div className="today-status">
+          <div className="hero-eyebrow">Today</div>
+          <div className="today-scoreline">
+            {score !== null && state ? (
+              <>
+                <span className="recovery-score">
+                  <CountUp value={score} />
+                </span>
+                <span className={`recovery-state ${state.cls}`}>{state.label}</span>
+              </>
+            ) : (
+              <span className="recovery-state state-caution">Building</span>
+            )}
           </div>
-          <div className={`recovery-state ${state.cls}`}>{state.label}</div>
+          <h2>{state?.title ?? "Building your baseline"}</h2>
+          <p>{summary}</p>
+        </div>
+
+        <div className="today-glance" aria-label="Today at a glance">
+          <div className="today-glance-head">
+            <span>At a glance</span>
+            <strong>{live ? "Fresh" : "Check sync"}</strong>
+          </div>
+          <div className="today-glance-grid">
+            {highlights.map((item) => (
+              <div key={item.label} className={`today-glance-item ${item.tone === "watch" ? "watch" : ""}`}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+                <em>{item.hint}</em>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {ribbon && ribbon.values.length >= 2 && (
+        <div className="today-ribbon">
+          <div className="today-ribbon-head">
+            <span>HRV baseline</span>
+            <em>last reading {freshness}</em>
+          </div>
+          <BaselineRibbon values={ribbon.values} band={ribbon.band} axis={ribbon.axis} live={live} />
         </div>
       )}
 
-      <p className="recovery-line" style={score === null ? { marginTop: 6, fontSize: 17 } : undefined}>
-        {headline}
-      </p>
-
-      {ribbon && ribbon.values.length >= 2 && (
-        <BaselineRibbon values={ribbon.values} band={ribbon.band} axis={ribbon.axis} live={live} />
+      {contributors.length > 0 && (
+        <div className="today-contributors">
+          <ContributorStack contributors={contributors} />
+        </div>
       )}
-
-      {contributors.length > 0 && <ContributorStack contributors={contributors} />}
     </section>
   );
 }

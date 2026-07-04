@@ -1,4 +1,4 @@
-// Shared chart math — the single home for the scale/quantile helpers that
+// Shared chart math - the single home for the scale/quantile helpers that
 // were previously duplicated in BaselineRibbon and the Library detail page.
 // Pure functions, unit-tested in scale.test.ts.
 
@@ -21,7 +21,7 @@ export function extent(values: number[]): [number, number] {
   return [min, max];
 }
 
-// Map a domain value onto an output range (no clamping — callers pad domains).
+// Map a domain value onto an output range (no clamping - callers pad domains).
 export function linearScale(
   domain: [number, number],
   range: [number, number],

@@ -1,10 +1,11 @@
 import { coverageVerdict, reliabilityFor } from "../lib/healthOpinion";
 import type { Coverage } from "../lib/provenance";
 
-// Coverage — NOT "confidence". One bar per source; the headline is the mean of
-// those bars (an average over your own data), never a synthesized judgement of
-// which disagreeing source is correct. The card also takes a STANCE: a verdict
-// on ingestion health and a grounded reliability tag per source.
+function sourceHint(best: string): string {
+  if (best === "raw signals") return "kept as source evidence";
+  return `best for ${best}`;
+}
+
 export function CoverageCard({ headline, domains }: Coverage) {
   const verdict = coverageVerdict(domains);
 
@@ -41,18 +42,15 @@ export function CoverageCard({ headline, domains }: Coverage) {
             <li className="cov-row" key={d.id}>
               <span className="cov-label" title={rel.note}>
                 <span className="cov-name">
-                  <span
-                    className={`cov-conf ${rel.confidence}`}
-                    aria-label={`${rel.confidence} confidence`}
-                  />
+                  <span className={`cov-conf ${rel.confidence}`} aria-label={`${rel.confidence} confidence`} />
                   {d.label}
                 </span>
                 <span className="cov-rel">
-                  {rel.tag} · {rel.best} · <span className="cov-conf-label">{rel.confidence}</span>
+                  {rel.confidence} confidence - {sourceHint(rel.best)}
                 </span>
               </span>
-              <span className="cov-track">
-                <span className={`cov-fill ${d.tone}`} style={{ width: `${d.pct}%` }} />
+              <span className="cov-track" aria-label={`${d.pct} percent fresh`}>
+                <span className={`cov-fill ${d.tone === "warn" ? "warn" : "ok"}`} style={{ width: `${d.pct}%` }} />
               </span>
               <span className="cov-val">{d.pct}%</span>
             </li>

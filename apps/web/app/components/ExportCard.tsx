@@ -6,7 +6,7 @@ import type { ExportMetricInfo } from "../lib/api";
 
 // Take-your-data-out card for /data: pick a metric, format, and window, then
 // download through the server-side /api/export proxy (the key never reaches
-// the browser). Driven by the backend's own exportable-metric list — names
+// the browser). Driven by the backend's own exportable-metric list - names
 // here are the legacy export names, not ontology ids.
 
 const WINDOWS = [
@@ -18,10 +18,10 @@ const WINDOWS = [
 ];
 
 function dayLabel(iso: string | null): string {
-  return iso ? iso.slice(0, 10) : "—";
+  return iso ? iso.slice(0, 10) : "-";
 }
 
-// Server-enforced per-request ceiling (SECURITY-004, ORDER BY time DESC) —
+// Server-enforced per-request ceiling (SECURITY-004, ORDER BY time DESC) -
 // disclose it whenever a metric holds more, or "rows on host" overpromises
 // what one download actually contains.
 const ROW_CAP = 100_000;
@@ -36,7 +36,7 @@ export function ExportCard({ metrics }: { metrics: ExportMetricInfo[] | null }) 
     return (
       <article className="card">
         <h2>Export</h2>
-        <p className="empty">Backend unreachable — exports read straight from the canonical store.</p>
+        <p className="empty">Backend unreachable. Exports read straight from the canonical store.</p>
       </article>
     );
   }
@@ -52,7 +52,7 @@ export function ExportCard({ metrics }: { metrics: ExportMetricInfo[] | null }) 
     <article className="card">
       <h2>Export</h2>
       <p className="rel-sub">
-        Your data, out — CSV or JSON, straight from the canonical store on this host.
+        Your data, out: CSV or JSON, straight from the canonical store on this host.
       </p>
       <div className="filter-bar" role="group" aria-label="Export controls">
         <label className="filter-field">
@@ -94,7 +94,7 @@ export function ExportCard({ metrics }: { metrics: ExportMetricInfo[] | null }) 
       </div>
       <div className="export-meta mono">
         {available.length === 0
-          ? "nothing exportable yet — sync some data first"
+          ? "nothing exportable yet. Sync some data first"
           : selected
             ? `${selected.count.toLocaleString()} rows on host · ${dayLabel(selected.oldest)} → ${dayLabel(selected.newest)}${
                 selected.count > ROW_CAP ? " · each download keeps the newest 100,000 rows" : ""

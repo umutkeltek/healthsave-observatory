@@ -157,7 +157,7 @@ export async function setDensityAction(mode: Density): Promise<ActionResult> {
       httpOnly: true,
     });
     // No explicit revalidate: cookie writes in a server action already
-    // invalidate the router cache, and every page is dynamic — the old
+    // invalidate the router cache, and every page is dynamic - the old
     // revalidatePath("/", "layout") forced a full re-render storm that made
     // the toggle feel sluggish. The nav itself is optimistic client state.
     return { ok: true };
@@ -199,7 +199,7 @@ export async function clearFocusGoalAction(): Promise<ActionResult> {
 export type TriggerAnalysisResult = ActionResult & { status?: string };
 
 // On-demand narration/analysis refresh (the Weekly Brief card's button). A
-// 409 means the analysis block is disabled — the card surfaces that calmly
+// 409 means the analysis block is disabled - the card surfaces that calmly
 // with a link to /intelligence instead of an error tone.
 export async function triggerAnalysisAction(
   type: "correlation_analysis" | "recovery_check" | "daily_briefing" | "weekly_summary",

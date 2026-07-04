@@ -9,7 +9,7 @@ export type Contributor = {
   value: number;
   unit: string;
   // Whether a positive value is good for this signal (HRV up = good,
-  // resting HR up = bad) — drives the bar colour honestly.
+  // resting HR up = bad) - drives the bar colour honestly.
   positiveIsGood: boolean;
 };
 

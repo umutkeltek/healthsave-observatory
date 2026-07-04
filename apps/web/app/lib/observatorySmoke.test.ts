@@ -4,7 +4,7 @@ import { describe, expect, it } from "bun:test";
 // series -> analytics pivots (Patterns), per-stream split + opinion layer
 // (Compare), provenance -> coverage -> verdict (Sources), and the privacy
 // posture chip (Shell). Pure logic over the deterministic demo fixtures the
-// pages themselves fall back to — if any link in these flows reshapes, the
+// pages themselves fall back to - if any link in these flows reshapes, the
 // page renders empty or wrong and these go red before a deploy does.
 
 import {
@@ -74,7 +74,7 @@ describe("Patterns flow: demo series through every pivot", () => {
 
     const band = classify("vital.resting_heart_rate", 60);
     expect(band?.label).toBe("typical");
-    // Unknown metrics get no band — the opinion layer must never invent one.
+    // Unknown metrics get no band - the opinion layer must never invent one.
     expect(classify("heart_rate", 60)).toBeNull();
   });
 });
@@ -144,7 +144,7 @@ describe("Relationships flow: demo fixtures through align + pearson", () => {
     const stat = pearson(pairs);
     expect(stat).not.toBeNull();
     // Coupled at ~0.6 with deterministic noise: clearly positive, never a
-    // fake-perfect 1.0 — the demo must look like data, not like a formula.
+    // fake-perfect 1.0 - the demo must look like data, not like a formula.
     expect(stat!.r).toBeGreaterThan(0.35);
     expect(stat!.r).toBeLessThan(0.95);
   });

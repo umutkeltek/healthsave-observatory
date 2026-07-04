@@ -19,7 +19,7 @@ export function RunCorrelationButton() {
         const detail = result.error ?? "";
         setNote(
           detail.includes("disabled")
-            ? "Analysis is off — enable it under Intelligence."
+            ? "Analysis is off - enable it under Intelligence."
             : detail || "Could not run the analysis.",
         );
       }
@@ -37,7 +37,7 @@ export function RunCorrelationButton() {
         <span className="brief-note mono">
           {note.includes("Intelligence") ? (
             <>
-              Analysis is off — <a href="/intelligence">enable it</a>.
+              Analysis is off - <a href="/intelligence">enable it</a>.
             </>
           ) : (
             note

@@ -2,7 +2,7 @@ import type { HeatCell } from "../lib/analytics";
 
 const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-// "When in the week" heatmap — a 7×24 grid coloured by value intensity. Empty
+// "When in the week" heatmap - a 7×24 grid coloured by value intensity. Empty
 // cells render blank. Pure presentational; the page reduces points via
 // analytics.weekHourPivot.
 export function HeatmapChart({ cells, unit }: { cells: HeatCell[]; unit?: string }) {
@@ -30,8 +30,8 @@ export function HeatmapChart({ cells, unit }: { cells: HeatCell[]; unit?: string
                 className="heat-cell"
                 title={
                   v === null
-                    ? `${DOW[dow]} ${hour}:00 — no data`
-                    : `${DOW[dow]} ${hour}:00 — ${v}${unit ? ` ${unit}` : ""} (n=${cell?.n})`
+                    ? `${DOW[dow]} ${hour}:00 - no data`
+                    : `${DOW[dow]} ${hour}:00 - ${v}${unit ? ` ${unit}` : ""} (n=${cell?.n})`
                 }
                 style={{
                   background: v === null ? "var(--raise)" : `color-mix(in srgb, var(--accent) ${intensity}%, transparent)`,

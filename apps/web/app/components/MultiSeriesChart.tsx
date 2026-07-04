@@ -1,4 +1,4 @@
-// N labelled line series on one shared scale — extends MetricCard's single
+// N labelled line series on one shared scale - extends MetricCard's single
 // Sparkline to a multi-line overlay using the chart palette tokens. Pure
 // presentational; the page reduces points into {label, values}[] via analytics.
 const PALETTE = ["var(--accent)", "var(--signal)", "var(--experiment)", "var(--anomaly)"];

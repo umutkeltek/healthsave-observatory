@@ -34,7 +34,7 @@ export async function getPinnedMetrics(): Promise<string[]> {
 
 // ── Focus goal (v0) ────────────────────────────────────────────────────
 // A cookie-backed orientation: what the user is currently working toward.
-// v0 is presentation-only — it orders and frames existing surfaces, it never
+// v0 is presentation-only - it orders and frames existing surfaces, it never
 // computes anything. Graduates to the DB-backed Goals API (migration 021)
 // without changing this shape; the server action then migrates the cookie.
 
