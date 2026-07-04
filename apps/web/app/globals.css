@@ -4612,7 +4612,10 @@ padding: 16px;
   margin-top: 16px;
 }
 
-.evidence-cluster {
+/* Compound selector (0,2,0) so the full border beats `.evidence-item:first-child
+   { border-top: none }` — otherwise a first-child cluster loses its top border and
+   the rounded box renders with an open/"weird" top edge. */
+.evidence-item.evidence-cluster {
   margin: 4px 0;
   padding: 14px;
   border: 1px solid var(--accent-line);
