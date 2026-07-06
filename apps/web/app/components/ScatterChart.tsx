@@ -104,8 +104,12 @@ export function ScatterChart({
         ))}
       </svg>
       <figcaption className="scatter-cap mono">
-        <span>x · {xLabel}</span>
-        <span>y · {yLabel}</span>
+        <span>
+          x · {xLabel} ({fmt(minX)}-{fmt(maxX)})
+        </span>
+        <span>
+          y · {yLabel} ({fmt(minY)}-{fmt(maxY)})
+        </span>
       </figcaption>
     </figure>
   );
