@@ -126,13 +126,13 @@ function todayHighlights(readiness: Readiness | null, findings: Finding[] | null
   ];
 }
 
-// Byline for the hero lede — every atom is a number the hero already holds
-// (baseline window from the HRV trace, ready-signal count, sync freshness).
-function heroByline(readiness: Readiness | null, baselineNights: number, freshness: string): BylineItem[] {
-  const items: BylineItem[] = [];
-  if (baselineNights >= 2) {
-    items.push({ lead: "from ", strong: "your baseline", trail: ` · n=${baselineNights} nights` });
-  }
+// Byline for the hero lede — every atom is a fact the hero already holds
+// (that the score is measured against the personal baseline, the ready-signal
+// count, sync freshness). We deliberately do NOT print a "nights" count: the
+// only window figure on hand is the raw HRV sample count (thousands of
+// readings, not nights), so quoting it would be a misleading number.
+function heroByline(readiness: Readiness | null, freshness: string): BylineItem[] {
+  const items: BylineItem[] = [{ lead: "from ", strong: "your baseline" }];
   const ready = readyMetricCount(readiness);
   if (ready > 0) items.push({ strong: ready.toLocaleString(), trail: " signals ready" });
   items.push({ lead: "synced ", strong: freshness });
@@ -282,7 +282,7 @@ export async function HeroSection() {
         score={score}
         contributors={recoveryContributors(findings)}
         summary={todaySummary(score, findings, readiness)}
-        byline={heroByline(readiness, ribbonValues.length, freshness)}
+        byline={heroByline(readiness, freshness)}
         deltaPct={recoveryDelta(findings)}
         ribbon={ribbonValues.length >= 2 ? { values: ribbonValues, axis: ["30 days ago", "today"] } : null}
       />

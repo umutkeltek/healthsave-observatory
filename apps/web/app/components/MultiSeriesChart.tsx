@@ -8,7 +8,7 @@
 // rendered inline SVG. The page reduces points into {label, values}[].
 // Categorical series palette — distinct hues so overlaid/compared lines stay
 // tellable apart (accent and signal are both system blue, so never pair them).
-import { dateDomainMs, dateTicks, valueTicks } from "./chart/axis";
+import { dateDomainMs, dateTicks, declutterLabels, valueTicks } from "./chart/axis";
 import { niceTicks } from "./chart/scale";
 
 const PALETTE = [
@@ -28,6 +28,9 @@ const RH = 240;
 const M = { l: 46, r: 58, t: 16, b: 26 };
 const PLOT_W = RW - M.l - M.r;
 const PLOT_H = RH - M.t - M.b;
+// Minimum vertical separation between end-labels, in viewBox user units. ~14px
+// once the 720x240 viewBox is scaled down to a typical Explore panel width.
+const END_LABEL_MIN_GAP = 22;
 
 function fmtTick(v: number): string {
   const a = Math.abs(v);
@@ -72,6 +75,23 @@ export function MultiSeriesChart({
 
   const direct = series.length <= 3;
   const yUser = (v: number) => M.t + (1 - (v - lo) / span) * PLOT_H;
+
+  // Direct end-labels only make sense for 2-3 overlaid series: a single series'
+  // label would just duplicate the panel title, and >3 gets a legend instead.
+  const showEndLabels = series.length >= 2 && series.length <= 3;
+  const endLabels = showEndLabels
+    ? series.flatMap((s, i) =>
+        s.values.length >= 1 ? [{ label: s.label, color: PALETTE[i % PALETTE.length], y: yUser(s.values[s.values.length - 1]) }] : [],
+      )
+    : [];
+  // Push apart any labels that would otherwise stack on top of each other.
+  const endLabelY = declutterLabels(
+    endLabels.map((e) => e.y),
+    END_LABEL_MIN_GAP,
+    M.t,
+    M.t + PLOT_H,
+  );
+  const plotRightPct = ((M.l + PLOT_W) / RW) * 100;
 
   return (
     <div className="multi-chart">
@@ -149,21 +169,19 @@ export function MultiSeriesChart({
               {t.label}
             </span>
           ))}
-          {direct &&
-            series.map((s, i) =>
-              s.values.length >= 1 ? (
-                <span
-                  key={`el${s.label}`}
-                  className="chart-end-label"
-                  style={{
-                    top: `${(yUser(s.values[s.values.length - 1]) / RH) * 100}%`,
-                    color: PALETTE[i % PALETTE.length],
-                  }}
-                >
-                  {s.label}
-                </span>
-              ) : null,
-            )}
+          {endLabels.map((e, k) => (
+            <span
+              key={`el${e.label}`}
+              className="chart-end-label"
+              style={{
+                top: `${(endLabelY[k] / RH) * 100}%`,
+                left: `${plotRightPct}%`,
+                color: e.color,
+              }}
+            >
+              {e.label}
+            </span>
+          ))}
         </div>
       </div>
       {!direct && (

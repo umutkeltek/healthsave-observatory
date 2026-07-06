@@ -6,7 +6,7 @@
 
 import { valueTicks } from "./chart/axis";
 import { HoverOverlay } from "./chart/HoverOverlay";
-import { quantile } from "./chart/scale";
+import { quantile, robustDomain } from "./chart/scale";
 
 function fmtTick(v: number): string {
   const a = Math.abs(v);
@@ -41,15 +41,18 @@ export function BaselineRibbon({
   const sorted = [...values].sort((a, b) => a - b);
   const lo = band ? band[0] : quantile(sorted, 0.25);
   const hi = band ? band[1] : quantile(sorted, 0.75);
-  const min = Math.min(...values, lo);
-  const max = Math.max(...values, hi);
+  // Robust p2-p98 domain widened to hold the baseline band — so a few HRV
+  // spikes can't flatten the trace into a hairline or push the band off-scale.
+  const [min, max] = robustDomain(values, lo, hi);
   const span = max - min || 1;
 
   const W = 1000;
   const H = 100;
   const padY = 12;
   const x = (i: number) => (i / (values.length - 1)) * W;
-  const y = (v: number) => padY + (H - 2 * padY) * (1 - (v - min) / span);
+  // Clamp into the domain so outliers pin at the top/bottom edge of the plot.
+  const clampV = (v: number) => (v < min ? min : v > max ? max : v);
+  const y = (v: number) => padY + (H - 2 * padY) * (1 - (clampV(v) - min) / span);
 
   const trace = values
     .map((v, i) => `${i === 0 ? "M" : "L"} ${x(i).toFixed(1)} ${y(v).toFixed(1)}`)

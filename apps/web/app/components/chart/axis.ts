@@ -17,6 +17,31 @@ export function valueTicks(lo: number, hi: number, count = 4): ValueTick[] {
     .map((value) => ({ value, frac: (value - lo) / span }));
 }
 
+// Nudge a set of label positions (same coordinate space as `lo`/`hi`) so no two
+// sit closer than `minGap`, preserving input order and clamping into [lo, hi].
+// Deterministic: colliding labels are pushed downward, then the whole block is
+// shifted back up if it overran `hi`. Used for MultiSeriesChart end-labels so
+// two series ending at nearly the same value don't stack on top of each other.
+export function declutterLabels(positions: number[], minGap: number, lo: number, hi: number): number[] {
+  const clamp = (v: number) => Math.min(hi, Math.max(lo, v));
+  if (positions.length <= 1) return positions.map(clamp);
+
+  const order = positions.map((p, i) => ({ p, i })).sort((a, b) => a.p - b.p);
+  const placed = order.map((o) => o.p);
+
+  for (let k = 1; k < placed.length; k++) {
+    if (placed[k] < placed[k - 1] + minGap) placed[k] = placed[k - 1] + minGap;
+  }
+  const overflow = placed[placed.length - 1] - hi;
+  if (overflow > 0) for (let k = 0; k < placed.length; k++) placed[k] -= overflow;
+
+  const out = new Array<number>(positions.length);
+  order.forEach((o, k) => {
+    out[o.i] = clamp(placed[k]);
+  });
+  return out;
+}
+
 export type DateTick = { frac: number; label: string };
 
 const MS_DAY = 86_400_000;
