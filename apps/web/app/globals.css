@@ -3845,6 +3845,178 @@ input.filter-select {
     grid-template-columns: 1fr;
   }
 }
+
+/* --- FindingCard (P-03): the ONE card grammar --- */
+/* Claim as headline, proof figure in place, computed chips, drilldown, and the
+   propose-experiment CTA. Tokens only; both themes ride the token layer. */
+.finding-cards {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.fc {
+  display: grid;
+  gap: 12px;
+}
+.fc-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.fc-metric {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.fc-when {
+  color: var(--faint);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.fc-claim {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(19px, 2.4vw, 22px);
+  font-weight: 600;
+  line-height: 1.28;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.fc-fig {
+  margin: 2px 0;
+}
+.fc-nofig {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.fc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fc-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 0.5px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--raise) 80%, transparent);
+}
+.fc-chip-k {
+  color: var(--faint);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+.fc-chip-v {
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.fc-chip-good {
+  border-color: color-mix(in srgb, var(--up) 34%, var(--line));
+}
+.fc-chip-good .fc-chip-v {
+  color: color-mix(in srgb, var(--up) 62%, var(--ink));
+}
+.fc-chip-warn {
+  border-color: color-mix(in srgb, var(--warn) 40%, var(--line));
+}
+.fc-chip-warn .fc-chip-v {
+  color: color-mix(in srgb, var(--warn) 64%, var(--ink));
+}
+.fc-chip-muted .fc-chip-v {
+  color: var(--muted);
+}
+.fc-drill {
+  border-top: 0.5px solid var(--line-soft);
+  padding-top: 10px;
+}
+.fc-drill > summary {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.fc-confounders,
+.fc-limitations {
+  margin: 10px 0 0;
+  padding-left: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.fc-confounders li {
+  display: grid;
+  gap: 2px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+.fc-confounder-kind {
+  color: var(--ink);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.fc-limitations li {
+  color: var(--faint);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+.fc-next {
+  border-top: 0.5px solid var(--line-soft);
+  padding-top: 12px;
+  display: grid;
+  gap: 6px;
+}
+.fc-next-label {
+  color: var(--accent);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.fc-next-prose {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--fs-lg, 15px);
+  line-height: 1.5;
+}
+.fc-next-cta {
+  justify-self: start;
+  margin-top: 4px;
+}
+
+/* Weekly Brief -> evidence jump (findings page only). */
+.brief-evidence-link {
+  justify-self: start;
+  margin-top: 4px;
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+.brief-evidence-link:hover {
+  text-decoration: underline;
+}
+
+/* Experiment proposed from a finding (read-only URL prefill). */
+.exp-prefill {
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border: 0.5px solid color-mix(in srgb, var(--accent) 32%, var(--line));
+  border-radius: 14px;
+  background: var(--accent-weak);
+  display: grid;
+  gap: 8px;
+}
 /* === end instrument grammar === */
 
 /* ── Export card (/data) ── */

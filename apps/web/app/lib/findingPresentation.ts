@@ -1,4 +1,4 @@
-import type { Finding } from "./api";
+import type { CardEffectSize, Finding, FindingCard } from "./api";
 
 export type FindingGroupId = "needs-attention" | "improving" | "watching" | "background";
 
@@ -236,4 +236,125 @@ export function groupFindingsForDisplay(findings: Finding[]): FindingDisplayGrou
   for (const group of GROUPS) map.set(group.id, []);
   for (const finding of findings) map.get(findingGroupId(finding))?.push(finding);
   return GROUPS.map((group) => ({ ...group, findings: map.get(group.id) ?? [] }));
+}
+
+// ── FindingCard presentation (the ONE card grammar) ───────────────────
+// Pure mapping from a computed FindingCard to its rendered chips + labels. The
+// component is a thin shell over these; tests pin the honest formatting here.
+
+// Tone maps onto the semantic token classes (fc-chip-*). Direction is NOT toned
+// good/bad - up HRV is good, up resting-HR is not; the card never colors a
+// change as a verdict. Only confidence + coverage carry a quality tone.
+export type CardChipTone = "good" | "warn" | "neutral" | "muted";
+
+export type CardChip = {
+  key: string;
+  label: string;
+  value: string;
+  tone: CardChipTone;
+};
+
+const DIRECTION_ARROW: Record<string, string> = { up: "↑", down: "↓", flat: "→" };
+
+const EFFECT_SYMBOL: Record<string, string> = {
+  z_score: "z",
+  spearman_rho: "ρ",
+  pearson_r: "r",
+  slope_per_day: "slope",
+  cohens_d: "d",
+};
+
+function fmtNum(value: number, digits = 1): string {
+  return Number(value.toFixed(digits)).toString();
+}
+
+// "z = 2.1", "ρ = 0.62", "slope 0.34/day" - method-tagged so a coefficient is
+// never mistaken for a standardized difference.
+export function effectSizeText(effect: CardEffectSize): string | null {
+  if (effect.value == null) return null;
+  const kind = effect.kind ?? "";
+  const symbol = EFFECT_SYMBOL[kind];
+  if (kind === "slope_per_day") return `slope ${fmtNum(effect.value, 2)}/day`;
+  if (symbol) return `${symbol} = ${fmtNum(effect.value, 2)}`;
+  return fmtNum(effect.value, 2);
+}
+
+export function confidenceTone(confidence: FindingCard["confidence"]): CardChipTone {
+  if (confidence === "high") return "good";
+  if (confidence === "medium") return "neutral";
+  return "muted";
+}
+
+// The chip row: delta, effect size, coverage, confidence, window-n - each only
+// when the computed card carries it (a thin card renders fewer chips honestly).
+export function findingCardChips(card: FindingCard): CardChip[] {
+  const chips: CardChip[] = [];
+
+  const delta = card.delta;
+  if (delta && (delta.pct != null || delta.absolute != null)) {
+    const arrow = delta.direction ? `${DIRECTION_ARROW[delta.direction] ?? ""} ` : "";
+    const value =
+      delta.pct != null
+        ? `${arrow}${delta.pct >= 0 ? "+" : ""}${fmtNum(delta.pct)}%`
+        : `${arrow}${delta.absolute! >= 0 ? "+" : ""}${fmtNum(delta.absolute!, 2)}${delta.unit ? ` ${delta.unit}` : ""}`;
+    chips.push({ key: "delta", label: "vs baseline", value, tone: "neutral" });
+  }
+
+  if (card.effect_size) {
+    const text = effectSizeText(card.effect_size);
+    if (text) {
+      const label = card.effect_size.label ? `${card.effect_size.label} effect` : "effect size";
+      chips.push({ key: "effect", label, value: text, tone: "neutral" });
+    }
+    if (card.effect_size.p_value != null) {
+      chips.push({
+        key: "p",
+        label: "significance",
+        value: `p = ${fmtNum(card.effect_size.p_value, 3)}`,
+        tone: "neutral",
+      });
+    }
+  }
+
+  if (card.current_window?.n != null) {
+    chips.push({
+      key: "n",
+      label: "window",
+      value: `n = ${card.current_window.n}`,
+      tone: "neutral",
+    });
+  }
+
+  const coverage = card.coverage;
+  if (coverage && (coverage.is_sufficient != null || coverage.observation_count != null)) {
+    const value =
+      coverage.observation_count != null
+        ? `${coverage.observation_count} obs`
+        : coverage.is_sufficient
+          ? "sufficient"
+          : "thin";
+    chips.push({
+      key: "coverage",
+      label: "coverage",
+      value,
+      tone: coverage.is_sufficient === false ? "warn" : "good",
+    });
+  }
+
+  if (card.confidence) {
+    chips.push({
+      key: "confidence",
+      label: "confidence",
+      value: card.confidence,
+      tone: confidenceTone(card.confidence),
+    });
+  }
+
+  return chips;
+}
+
+// A card whose metric is a correlation pair ("a~b") has no single series to
+// plot; the component skips the proof figure instead of drawing a wrong one.
+export function cardMetricIsPlottable(metric: string): boolean {
+  return Boolean(metric) && !metric.includes("~");
 }

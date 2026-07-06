@@ -5,6 +5,7 @@ import type {
   ExperimentList,
   ExperimentResult,
 } from "../lib/api";
+import type { ExperimentPrefill } from "../lib/experimentPrefill";
 import { ExperimentActions } from "./ExperimentActions";
 import { StartExperimentButton } from "./StartExperimentButton";
 
@@ -189,12 +190,45 @@ function NotTestableRow({ candidate }: { candidate: Candidate }) {
   );
 }
 
+// A finding card proposed this exact lever->outcome. Show it pre-aimed at the
+// top, unless it's already running. Reuses StartExperimentButton (no new write
+// path); the prefill is purely read from the URL.
+function ProposedExperiment({
+  prefill,
+  running,
+}: {
+  prefill: ExperimentPrefill;
+  running: boolean;
+}) {
+  return (
+    <div className="exp-prefill">
+      <div className="cand-head">
+        <span className="cand-hyp">
+          {short(prefill.lever)} → {short(prefill.outcome)}
+        </span>
+        <span className="badge ready">proposed from a finding</span>
+      </div>
+      {prefill.protocol && <p className="cand-protocol">{prefill.protocol}</p>}
+      {prefill.requiredDays != null && (
+        <p className="cand-rationale">Needs about {prefill.requiredDays} days of data to read.</p>
+      )}
+      {running ? (
+        <p className="cand-rationale">You're already running this pair — see it below.</p>
+      ) : (
+        <StartExperimentButton lever={prefill.lever} outcome={prefill.outcome} />
+      )}
+    </div>
+  );
+}
+
 export function ExperimentsCard({
   experiments,
   candidates,
+  prefill = null,
 }: {
   experiments: ExperimentList | null;
   candidates: Candidates | null;
+  prefill?: ExperimentPrefill | null;
 }) {
   if (experiments === null && candidates === null) {
     return (
@@ -220,9 +254,15 @@ export function ExperimentsCard({
     (c) => !runningPairs.has(pairKey(c.readiness.lever, c.readiness.outcome)),
   );
 
+  const prefillRunning = prefill
+    ? runningPairs.has(pairKey(prefill.lever, prefill.outcome))
+    : false;
+
   return (
     <article className="card experiments">
       <h2>What to Try Next</h2>
+
+      {prefill && <ProposedExperiment prefill={prefill} running={prefillRunning} />}
 
       {exps.length > 0 && (
         <>

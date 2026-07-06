@@ -80,10 +80,14 @@ export function WeeklyBriefCard({
   latest,
   narratorOff = false,
   history = [],
+  evidenceHref,
 }: {
   latest: InsightsLatest | null;
   narratorOff?: boolean;
   history?: NarrativeHistoryItem[];
+  // When set (the findings page), the brief links its claim to the evidence
+  // cards rendered below it on the same page.
+  evidenceHref?: string;
 }) {
   if (!latest) {
     return (
@@ -169,6 +173,12 @@ export function WeeklyBriefCard({
             </li>
           ))}
         </ul>
+      )}
+
+      {evidenceHref && (
+        <a className="brief-evidence-link" href={evidenceHref}>
+          See the evidence ↓
+        </a>
       )}
 
       {paragraphs.length > 0 && (

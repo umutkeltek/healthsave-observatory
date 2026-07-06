@@ -3,14 +3,22 @@ import { Suspense } from "react";
 
 import { ExperimentsListSection } from "../components/sections/ExperimentsSections";
 import { LeadSkeleton } from "../components/Skeletons";
+import { parseExperimentPrefill } from "../lib/experimentPrefill";
 
 export const metadata: Metadata = { title: "Experiments · HealthSave" };
 export const dynamic = "force-dynamic";
 
-export default function ExperimentsPage() {
+export default async function ExperimentsPage({
+  searchParams,
+}: {
+  // Read-only prefill from a finding card's "propose experiment" CTA
+  // (/experiments?lever=..&outcome=..). No new write path.
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const prefill = parseExperimentPrefill(await searchParams);
   return (
     <Suspense fallback={<LeadSkeleton />}>
-      <ExperimentsListSection />
+      <ExperimentsListSection prefill={prefill} />
     </Suspense>
   );
 }

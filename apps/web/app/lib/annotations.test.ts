@@ -10,6 +10,8 @@ const anomaly = (metric: string, detectedAt: string, type = "anomaly"): Finding 
   severity: "warning",
   structured_data: { detected_at: detectedAt, magnitude: -2.3 },
   created_at: detectedAt,
+  card: null,
+  schema_version: 0,
 });
 
 const DAYS = ["2026-06-01T00:00:00Z", "2026-06-02T00:00:00Z", "2026-06-03T00:00:00Z"];
