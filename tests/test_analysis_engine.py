@@ -20,7 +20,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from analysis.config import AnalysisConfig  # noqa: E402
 from analysis.engine import AnalysisEngine  # noqa: E402
 from analysis.llm.client import InsightResult, LLMUnavailableError  # noqa: E402
-from analysis.types import Anomaly, Correlation, PeriodSummary, Trend  # noqa: E402
+from analysis.statistical.aggregator import DataAggregator  # noqa: E402
+from analysis.statistical.finding_cards import build_card  # noqa: E402
+from analysis.types import Anomaly, Correlation, Finding, PeriodSummary, Trend  # noqa: E402
+from contracts.findings import FINDING_CARD_SCHEMA_VERSION, FindingCard  # noqa: E402
 
 
 class _Row:
@@ -883,3 +886,117 @@ async def test_run_daily_briefing_marks_failed_when_llm_raises():
     assert failed_update, "expected an UPDATE ... status = 'failed' statement"
     assert "ollama unreachable" in failed_update[0][1]["error"]
     assert session.committed is True
+
+
+# ──────────────────────────────────────────────────────────────────
+#  Finding-card engine seam (P-03): the integration point where a built
+#  card is persisted, and where the aggregator's keys feed the builder.
+#  These guard the seam that the pure builder unit tests can't see.
+# ──────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_insert_finding_card_round_trips_through_storage_serialization():
+    """A card built at the engine seam survives the storage write/read cycle.
+
+    ``_insert_finding`` → ``build_card`` → ``model_dump`` → ``json.dumps`` (what
+    storage persists) → ``json.loads`` → ``model_validate`` must reconstruct an
+    equal :class:`FindingCard`. A card field that can't serialize, or one a reader
+    can't rebuild, goes red here — the pure builder tests never exercise this.
+    """
+    session = _FakeSession(run_queue=[42])
+    engine = _make_plain_engine(session)
+    finding = Finding(
+        finding_type="summary",
+        metric="vital.resting_heart_rate",
+        severity="info",
+        structured_data={"avg": 58.0, "delta_pct_vs_baseline": -6.4, "sample_count": 42},
+    )
+
+    finding_id = await engine._insert_finding(session, run_id=1, finding=finding)
+    assert finding_id == 42
+
+    finding_inserts = session.all_insert_params_for("analysis_findings")
+    assert len(finding_inserts) == 1
+    stored_card_json = finding_inserts[0]["card"]
+    assert stored_card_json is not None, "a describable finding must persist a card"
+
+    # Read-back: reconstruct the card from the exact JSON storage would write.
+    reread = FindingCard.model_validate(json.loads(stored_card_json))
+    original = build_card("summary", finding.metric, finding.structured_data, finding.severity)
+    assert reread == original
+    assert reread.metric == "vital.resting_heart_rate"
+    assert reread.finding_type == "summary"
+    assert reread.schema_version == FINDING_CARD_SCHEMA_VERSION
+
+
+@pytest.mark.asyncio
+async def test_build_summary_card_reads_real_aggregator_output_keys():
+    """The summary builder reads the SAME keys ``DataAggregator.summarize_period``
+    emits — ``avg`` / ``delta_pct_vs_baseline`` / ``sample_count``.
+
+    Driven through the REAL aggregator (with a fake per-window fetcher), so
+    renaming an aggregator output key silently breaks the card here rather than in
+    production. A rename would strip the delta and this assertion goes red.
+    """
+
+    async def fake_window(metric_id, start, end):
+        # The baseline window is the wider (earlier) span; give it a different
+        # average so a non-zero delta is produced. The narrow window carries
+        # enough samples to clear the delta sufficiency floor.
+        if (end - start).days > 7:  # the ~30-day baseline window
+            return {"avg": 60.0, "min": 50.0, "max": 70.0, "count": 120}
+        return {"avg": 54.0, "min": 48.0, "max": 66.0, "count": 20}
+
+    aggregator = DataAggregator(fake_window)
+    summary = await aggregator.summarize_period(
+        "daily", days=1, metrics=["vital.resting_heart_rate"]
+    )
+    metric = "vital.resting_heart_rate"
+    assert metric in summary.metrics
+
+    card = build_card("summary", metric, summary.metrics[metric])
+    assert card is not None
+    # avg + delta both surface because the aggregator keys line up with the builder.
+    assert card.delta is not None
+    assert card.delta.pct == pytest.approx(-10.0)  # (54 − 60) / 60 × 100
+    assert card.coverage.observation_count == 20  # sample_count key honored
+    assert "ran" in card.claim
+
+
+@pytest.mark.asyncio
+async def test_weekly_summary_injects_finding_cards_into_narrator_prompt():
+    """``_finding_cards_for_brief`` feeds computed cards into the weekly prompt.
+
+    The narrator receives Brain-1's finished claim (built from the summary
+    metrics), not just raw numbers — proving the card seam reaches the prompt.
+    """
+    session = _FakeSession(run_queue=[770, 771])  # run_id=770, finding_id=771
+    summary = PeriodSummary(
+        period="weekly",
+        metrics={
+            "vital.resting_heart_rate": {
+                "avg": 58.0,
+                "sample_count": 140,
+                "baseline_avg": 62.0,
+                "delta_pct_vs_baseline": -6.4,
+            }
+        },
+    )
+    llm_mock = AsyncMock()
+    llm_mock.generate_insight.return_value = InsightResult(
+        narrative="Resting HR eased this week. Not medical advice.",
+        tokens_in=30,
+        tokens_out=60,
+        model="ollama/llama3.1:8b",
+        insight_type="weekly_summary",
+    )
+    config = AnalysisConfig.model_validate({"analysis": {"weekly_summary": {"enabled": True}}})
+    engine = AnalysisEngine(lambda: session, llm_mock, config)
+    engine.aggregator.summarize_period = AsyncMock(return_value=summary)
+
+    await engine.run_weekly_summary()
+
+    prompt = llm_mock.generate_insight.await_args.args[0]
+    # The computed summary card's claim (via _finding_cards_for_brief) is present.
+    assert "ran -6.4% vs your recent baseline" in prompt

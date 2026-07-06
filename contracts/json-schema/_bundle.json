@@ -912,7 +912,7 @@
     },
     "ExperimentCandidateRef": {
       "additionalProperties": false,
-      "description": "Machine hook linking ``next_question`` to the experiments surface.\n\nDeliberately speaks the ``/api/v2/experiments/candidates`` vocabulary\n(metric pair + lever/outcome/verdict/protocol from the readiness classifier)\nso the client can hand this straight to ``POST /api/v2/experiments`` with no\nparallel schema. Invented nothing new \u2014 this is the candidate shape the\nexperiment engine already ranks.",
+      "description": "Machine hook linking ``next_question`` to the experiments surface.\n\nDeliberately speaks the ``/api/v2/experiments/candidates`` vocabulary\n(metric pair + lever/outcome/verdict/protocol from the readiness classifier)\n\u2014 the candidate shape the experiment engine already ranks, so nothing new is\ninvented here. The ``POST /api/v2/experiments`` create body renames the pair\nto ``lever_metric_id`` / ``outcome_metric_id``: the values are identical, only\nthe field names differ, so the client maps ``lever`` \u2192 ``lever_metric_id`` and\n``outcome`` \u2192 ``outcome_metric_id`` when promoting a candidate.",
       "properties": {
         "lever": {
           "anyOf": [
