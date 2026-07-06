@@ -174,6 +174,10 @@ async def list_findings(
             "severity": row.severity,
             "structured_data": row.structured_data,
             "created_at": row.created_at.isoformat() if row.created_at else None,
+            # The FindingCard content model (additive). Legacy findings persisted
+            # before the card schema carry card=null and schema_version 0.
+            "card": row.card,
+            "schema_version": (row.card or {}).get("schema_version", 0),
         }
         for row in rows
     ]

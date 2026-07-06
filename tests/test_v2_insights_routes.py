@@ -264,6 +264,55 @@ async def test_list_findings_rejects_unknown_type():
     assert session.calls == []
 
 
+@pytest.mark.asyncio
+async def test_list_findings_serves_card_and_schema_version():
+    """A finding with a persisted card exposes it + its schema_version (additive)."""
+    card = {
+        "schema_version": 1,
+        "claim": "resting heart rate ran -6.4% vs your 30-day baseline",
+        "metric": "vital.resting_heart_rate",
+        "finding_type": "summary",
+    }
+    rows = [
+        _Row(
+            id=9,
+            finding_type="summary",
+            metric="vital.resting_heart_rate",
+            severity="info",
+            structured_data={"avg": 58.0, "delta_pct_vs_baseline": -6.4},
+            created_at=datetime(2026, 5, 2, 6, 0, tzinfo=UTC),
+            card=card,
+        ),
+    ]
+    session = _Session(rows)
+    result = await list_findings(finding_type=None, session=session)
+    finding = result["findings"][0]
+    assert finding["card"] == card
+    assert finding["schema_version"] == 1
+    # The SELECT must pull the card column so the API can surface it.
+    assert "card" in session.calls[0][0]
+
+
+@pytest.mark.asyncio
+async def test_list_findings_legacy_row_without_card_is_schema_version_zero():
+    """A legacy finding (no card column) serves card:null / schema_version 0."""
+    rows = [
+        _Row(
+            id=3,
+            finding_type="anomaly",
+            metric="vital.hrv_sdnn",
+            severity="watch",
+            structured_data={"magnitude": 2.1, "direction": "down"},
+            created_at=datetime(2026, 5, 1, 6, 0, tzinfo=UTC),
+            # no `card` attribute → NULL column → legacy
+        ),
+    ]
+    result = await list_findings(finding_type=None, session=_Session(rows))
+    finding = result["findings"][0]
+    assert finding["card"] is None
+    assert finding["schema_version"] == 0
+
+
 # ──────────────────────────────────────────────────────────────
 #  POST /api/v2/insights/trigger
 # ──────────────────────────────────────────────────────────────
