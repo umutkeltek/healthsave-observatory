@@ -2,43 +2,17 @@
 // gauge with engraved threshold ticks (every 5, majors every 25, labels at
 // 0/50/100), a tertiary track, an optional grey "your recent normal" band
 // segment, and a semantic fill whose share of the sweep is the score. Geometry
-// is ported from the reference mock (docs_private/plans/2026-07-06-meridian-mock.html).
-// Server-rendered SVG; only the fill sweep is a client island (DialFill). When
-// there is no score the dial shows a bare track and a "—" readout — never a fake
-// value. Colour comes from `--dial-color`, set by the `dial-tone-*` class.
+// is ported from the reference mock (docs_private/plans/2026-07-06-meridian-mock.html)
+// and lives in chart/dialGeometry.ts (unit-tested there). Server-rendered SVG;
+// only the fill sweep is a client island (DialFill). When there is no score
+// the dial shows a bare track and a "—" readout — never a fake value. Colour
+// comes from `--dial-color`, set by the `dial-tone-*` class.
 
 import { CountUp } from "./CountUp";
+import { arcPath, bandArc, R_ARC, TICKS } from "./chart/dialGeometry";
 import { DialFill } from "./chart/DialFill";
 
 export type DialTone = "good" | "warn" | "muted";
-
-const C = { x: 130, y: 128, r: 100 };
-const R_ARC = C.r - 5;
-const A0 = 210; // sweep start angle (deg)
-const A1 = -30; // sweep end angle (deg)
-
-function ang(t: number): number {
-  return ((A0 + (A1 - A0) * t) * Math.PI) / 180;
-}
-function pt(t: number, r: number): [number, number] {
-  return [C.x + Math.cos(ang(t)) * r, C.y - Math.sin(ang(t)) * r];
-}
-function arcPath(t0: number, t1: number, r: number): string {
-  const [x0, y0] = pt(t0, r);
-  const [x1, y1] = pt(t1, r);
-  const large = Math.abs(t1 - t0) * 240 > 180 ? 1 : 0;
-  return `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
-}
-
-// Engraved tick marks every 5 units; majors (every 25) longer + heavier.
-const TICKS = Array.from({ length: 21 }, (_, k) => k * 5).map((i) => {
-  const t = i / 100;
-  const major = i % 25 === 0;
-  const [x1, y1] = pt(t, C.r + 2);
-  const [x2, y2] = pt(t, C.r + (major ? 11 : 6));
-  const label = i % 50 === 0 ? pt(t, C.r + 22) : null;
-  return { i, major, x1, y1, x2, y2, label };
-});
 
 const FILL_D = arcPath(0, 1, R_ARC);
 
@@ -55,17 +29,7 @@ export function BodyDial({
   // when the hero has no baseline range for the score itself.
   baselineBand?: [number, number];
 }) {
-  const bandArc =
-    baselineBand &&
-    Number.isFinite(baselineBand[0]) &&
-    Number.isFinite(baselineBand[1]) &&
-    baselineBand[1] > baselineBand[0]
-      ? arcPath(
-          Math.max(0, Math.min(1, baselineBand[0] / 100)),
-          Math.max(0, Math.min(1, baselineBand[1] / 100)),
-          R_ARC,
-        )
-      : null;
+  const band = bandArc(baselineBand, R_ARC);
 
   return (
     <div className={`body-dial dial-tone-${tone}`}>
@@ -97,8 +61,8 @@ export function BodyDial({
               {tk.i}
             </text>
           ))}
-          <path className="body-dial-track" d={arcPath(0, 1, R_ARC)} vectorEffect="non-scaling-stroke" />
-          {bandArc && <path className="body-dial-band" d={bandArc} vectorEffect="non-scaling-stroke" />}
+          <path className="body-dial-track" d={FILL_D} vectorEffect="non-scaling-stroke" />
+          {band && <path className="body-dial-band" d={band} vectorEffect="non-scaling-stroke" />}
           {score !== null && <DialFill d={FILL_D} score={score} />}
         </svg>
         <div className="body-dial-readout">

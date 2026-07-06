@@ -64,7 +64,7 @@ export function RecoveryHero({
   const state = score !== null ? stateFor(score) : null;
   const tone: DialTone = state ? state.tone : "muted";
   const [headline, dek] = splitSummary(summary);
-  const hasDelta = typeof deltaPct === "number" && Number.isFinite(deltaPct);
+  const finiteDeltaPct = typeof deltaPct === "number" && Number.isFinite(deltaPct) ? deltaPct : null;
 
   return (
     <section className={`hero today-hero ${state ? `hero-${state.cls}` : ""}`}>
@@ -94,10 +94,10 @@ export function RecoveryHero({
             ) : (
               <span className="hero-chip">Building</span>
             )}
-            {hasDelta && (
+            {finiteDeltaPct !== null && (
               <span className="hero-delta mono">
-                {deltaPct! >= 0 ? "+" : "−"}
-                {Math.abs(deltaPct!).toFixed(0)}% vs baseline
+                {finiteDeltaPct >= 0 ? "+" : "−"}
+                {Math.abs(finiteDeltaPct).toFixed(0)}% vs baseline
               </span>
             )}
           </div>
