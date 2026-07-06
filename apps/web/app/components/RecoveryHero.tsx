@@ -1,16 +1,23 @@
 import { BaselineRibbon } from "./BaselineRibbon";
+import { BodyDial, type DialTone } from "./BodyDial";
 import { type Contributor, ContributorStack } from "./ContributorStack";
-import { CountUp } from "./CountUp";
 
 const STATES = [
-  { min: 75, label: "Prime", cls: "state-prime", title: "Prime today" },
-  { min: 60, label: "Steady", cls: "state-steady", title: "Steady today" },
-  { min: 45, label: "Caution", cls: "state-caution", title: "Worth watching" },
-  { min: 0, label: "Suppressed", cls: "state-suppressed", title: "Go easier today" },
+  { min: 75, label: "Prime", cls: "state-prime", tone: "good" },
+  { min: 60, label: "Steady", cls: "state-steady", tone: "good" },
+  { min: 45, label: "Caution", cls: "state-caution", tone: "warn" },
+  { min: 0, label: "Suppressed", cls: "state-suppressed", tone: "muted" },
 ] as const;
 
 function stateFor(score: number) {
   return STATES.find((s) => score >= s.min) ?? STATES[STATES.length - 1];
+}
+
+// The lede leads with ONE finding sentence (h1), the rest of the deterministic
+// summary follows as a muted dek. Pure string reshaping — invents nothing.
+function splitSummary(summary: string): [string, string] {
+  const match = summary.match(/^(.*?[.!?])\s+(.+)$/s);
+  return match ? [match[1], match[2]] : [summary, ""];
 }
 
 export type HeroRibbon = {
@@ -26,6 +33,15 @@ export type TodayHighlight = {
   tone?: "good" | "watch";
 };
 
+// A byline atom: `{lead}<b>{strong}</b>{trail}`. Built only from data the hero
+// already receives (baseline window, ready-signal count, sync freshness) —
+// never an invented number.
+export type BylineItem = {
+  lead?: string;
+  strong: string;
+  trail?: string;
+};
+
 export function RecoveryHero({
   freshness,
   score,
@@ -33,7 +49,8 @@ export function RecoveryHero({
   ribbon,
   live,
   contributors = [],
-  highlights = [],
+  byline = [],
+  deltaPct = null,
 }: {
   freshness: string;
   score: number | null;
@@ -41,44 +58,48 @@ export function RecoveryHero({
   ribbon: HeroRibbon | null;
   live?: boolean;
   contributors?: Contributor[];
-  highlights?: TodayHighlight[];
+  byline?: BylineItem[];
+  deltaPct?: number | null;
 }) {
   const state = score !== null ? stateFor(score) : null;
+  const tone: DialTone = state ? state.tone : "muted";
+  const [headline, dek] = splitSummary(summary);
+  const hasDelta = typeof deltaPct === "number" && Number.isFinite(deltaPct);
 
   return (
     <section className={`hero today-hero ${state ? `hero-${state.cls}` : ""}`}>
       <div className="today-hero-main">
-        <div className="today-status">
-          <div className="hero-eyebrow">Today</div>
-          <div className="today-scoreline">
-            {score !== null && state ? (
-              <>
-                <span className="recovery-score">
-                  <CountUp value={score} />
+        <div className="hero-lede">
+          <div className="hero-eyebrow">Today&rsquo;s lead finding</div>
+          <h1 className="hero-lede-head">{headline}</h1>
+          {dek && <p className="hero-lede-dek">{dek}</p>}
+          {byline.length > 0 && (
+            <div className="hero-byline mono">
+              {byline.map((item, i) => (
+                <span key={i}>
+                  {item.lead}
+                  <b>{item.strong}</b>
+                  {item.trail}
                 </span>
-                <span className={`recovery-state ${state.cls}`}>{state.label}</span>
-              </>
-            ) : (
-              <span className="recovery-state state-caution">Building</span>
-            )}
-          </div>
-          <h2>{state?.title ?? "Building your baseline"}</h2>
-          <p>{summary}</p>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="today-glance" aria-label="Today at a glance">
-          <div className="today-glance-head">
-            <span>At a glance</span>
-            <strong>{live ? "Fresh" : "Check sync"}</strong>
-          </div>
-          <div className="today-glance-grid">
-            {highlights.map((item) => (
-              <div key={item.label} className={`today-glance-item ${item.tone === "watch" ? "watch" : ""}`}>
-                <span>{item.label}</span>
-                <strong>{item.value}</strong>
-                <em>{item.hint}</em>
-              </div>
-            ))}
+        <div className={`hero-instrument dial-tone-${tone}`}>
+          <BodyDial score={score} tone={tone} caption="Recovery" />
+          <div className="hero-instrument-meta">
+            {state ? (
+              <span className="hero-chip">{state.label}</span>
+            ) : (
+              <span className="hero-chip">Building</span>
+            )}
+            {hasDelta && (
+              <span className="hero-delta mono">
+                {deltaPct! >= 0 ? "+" : "−"}
+                {Math.abs(deltaPct!).toFixed(0)}% vs baseline
+              </span>
+            )}
           </div>
         </div>
       </div>

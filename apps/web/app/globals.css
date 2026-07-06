@@ -3622,6 +3622,223 @@ input.filter-select {
   right: 0;
   top: 0;
 }
+
+/* --- Today hero (E-2): lede finding + calibrated Body Dial --- */
+/* The lede leads; the dial instruments; sync plumbing lives in its own strip
+   below (.today-plumbing). Semantic tone drives the dial fill + chip via
+   --dial-color; never blue. Tokens only. */
+.hero-lede {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 10px;
+}
+.hero-lede-head {
+  margin: 6px 0 0;
+  color: var(--ink);
+  font-size: clamp(28px, 3.4vw, 32px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.14;
+  text-wrap: balance;
+}
+.hero-lede-dek {
+  max-width: 54ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 15.5px;
+  line-height: 1.55;
+}
+.hero-byline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.hero-byline b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.hero-instrument {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.hero-instrument-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.hero-chip {
+  padding: 3px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--dial-color, var(--neutral)) 60%, var(--ink));
+  background: color-mix(in srgb, var(--dial-color, var(--neutral)) 14%, transparent);
+}
+.hero-delta {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Semantic tone → dial colour (prime/steady = health, caution = attention,
+   suppressed = muted). Set on both .hero-instrument and .body-dial so the fill
+   and the chip agree. */
+.dial-tone-good {
+  --dial-color: var(--up);
+}
+.dial-tone-warn {
+  --dial-color: var(--warn);
+}
+.dial-tone-muted {
+  --dial-color: var(--neutral);
+}
+
+.body-dial {
+  width: 100%;
+  max-width: 250px;
+}
+.body-dial-wrap {
+  position: relative;
+}
+.body-dial svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.body-dial-tick {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.body-dial-tick.major {
+  stroke: var(--muted);
+  stroke-width: 1.4;
+}
+.body-dial-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  fill: var(--faint);
+}
+.body-dial-track {
+  fill: none;
+  stroke: var(--surface-3);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+.body-dial-band {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 6;
+  stroke-linecap: round;
+  opacity: 0.6;
+}
+.body-dial-fill {
+  fill: none;
+  stroke: var(--dial-color, var(--neutral));
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+.body-dial-readout {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: 10px;
+  pointer-events: none;
+}
+.body-dial-num {
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 56px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+.body-dial-cap {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Sync-plumbing strip: the four sync facts, out of the emotional hero. Reuses
+   .today-glance-item for each fact. */
+.today-plumbing {
+  margin-top: 12px;
+  padding: 16px 18px;
+  display: grid;
+  gap: 12px;
+  border: 0.5px solid var(--line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--raise) 86%, transparent);
+}
+.today-plumbing-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.today-plumbing-head span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+.today-plumbing-head strong {
+  color: var(--accent);
+  font-size: 12px;
+}
+.today-plumbing-head strong.watch {
+  color: var(--warn);
+}
+.today-plumbing-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 980px) {
+  .today-plumbing-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 620px) {
+  .hero-lede,
+  .hero-instrument,
+  .today-plumbing,
+  .today-plumbing-grid {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .hero-lede-head {
+    font-size: 26px;
+  }
+  .hero-lede-head,
+  .hero-lede-dek {
+    overflow-wrap: anywhere;
+  }
+}
+@media (max-width: 560px) {
+  .today-plumbing-grid {
+    grid-template-columns: 1fr;
+  }
+}
 /* === end instrument grammar === */
 
 /* ── Export card (/data) ── */
@@ -5531,9 +5748,10 @@ body {
 
 .today-hero-main {
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(300px, 0.92fr);
+  /* E-2: lede (flexible) | Body Dial (~300px, stacks under at 980px). */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 300px);
   gap: 28px;
-  align-items: stretch;
+  align-items: center;
 }
 
 .today-status {
