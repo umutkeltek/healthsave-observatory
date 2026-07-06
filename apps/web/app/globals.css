@@ -3583,15 +3583,18 @@ input.filter-select {
 .chart-x-label {
   transform: translate(-50%, -50%);
 }
+/* End-labels live fully in the right margin gutter: `left` (set inline to the
+   plot's right edge) plus `right` fixes their box to the gutter, so a long name
+   ellipsizes instead of ever overlapping the plot on a narrow panel. */
 .chart-end-label {
   position: absolute;
-  right: 2px;
+  right: 3px;
   transform: translateY(-50%);
-  max-width: 42%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: right;
+  text-align: left;
+  padding-left: 4px;
   font-family: var(--mono);
   font-size: 9.5px;
   line-height: 1;
@@ -3669,14 +3672,17 @@ input.filter-select {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 6px;
 }
+/* One centered meta row (chip + optional delta) that hugs the dial. The dial
+   SVG reserves ~15% dead space below its arc for the gauge sweep, so the meta
+   is pulled up over it — otherwise a lone chip floats, orphaned, far below. */
 .hero-instrument-meta {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-wrap: wrap;
   gap: 10px;
+  margin-top: -28px;
 }
 .hero-chip {
   padding: 3px 11px;

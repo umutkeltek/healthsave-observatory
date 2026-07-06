@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { dateDomainMs, dateTicks, valueTicks } from "./axis";
+import { dateDomainMs, dateTicks, declutterLabels, valueTicks } from "./axis";
 
 describe("valueTicks", () => {
   it("places round ticks with fractional positions inside the domain", () => {
@@ -67,6 +67,37 @@ describe("dateTicks", () => {
     for (let i = 1; i < ticks.length; i++) {
       expect(ticks[i].frac).toBeGreaterThan(ticks[i - 1].frac);
     }
+  });
+});
+
+describe("declutterLabels", () => {
+  it("leaves already-separated labels untouched", () => {
+    expect(declutterLabels([10, 40, 80], 14, 0, 100)).toEqual([10, 40, 80]);
+  });
+  it("pushes colliding labels apart to at least minGap, preserving order", () => {
+    const out = declutterLabels([50, 52], 14, 0, 100);
+    expect(out[1] - out[0]).toBeGreaterThanOrEqual(14 - 1e-9);
+    // input order is preserved (first stays the lower position)
+    expect(out[0]).toBeLessThan(out[1]);
+  });
+  it("shifts the block up when spreading would overflow the bottom bound", () => {
+    const out = declutterLabels([95, 96, 97], 14, 0, 100);
+    for (const v of out) {
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(100);
+    }
+    for (let i = 1; i < out.length; i++) {
+      expect(out[i] - out[i - 1]).toBeGreaterThanOrEqual(14 - 1e-9);
+    }
+  });
+  it("keeps results mapped to their original indices regardless of input order", () => {
+    // higher desired position first — output must still line up index-for-index
+    const out = declutterLabels([80, 10], 14, 0, 100);
+    expect(out[0]).toBeGreaterThan(out[1]);
+  });
+  it("clamps a single label and handles the empty case", () => {
+    expect(declutterLabels([120], 14, 0, 100)).toEqual([100]);
+    expect(declutterLabels([], 14, 0, 100)).toEqual([]);
   });
 });
 
