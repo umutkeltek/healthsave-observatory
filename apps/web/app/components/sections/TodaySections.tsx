@@ -25,8 +25,9 @@ import { GoalRibbon } from "../GoalRibbon";
 import { LocalVaultReceipt, type VaultStep } from "../LocalVaultReceipt";
 import { MetricCard } from "../MetricCard";
 import { ReadinessCard } from "../ReadinessCard";
-import { RecoveryHero, type TodayHighlight } from "../RecoveryHero";
+import { type BylineItem, RecoveryHero, type TodayHighlight } from "../RecoveryHero";
 import { SleepCard } from "../SleepCard";
+import { TodayPlumbing } from "../TodayPlumbing";
 import { WeeklyBriefCard } from "../WeeklyBriefCard";
 
 function recoveryScore(findings: Finding[] | null): number | null {
@@ -52,6 +53,12 @@ function recoveryContributors(findings: Finding[] | null) {
       ? [{ label: def.label, value, unit: def.unit, positiveIsGood: def.positiveIsGood }]
       : [];
   });
+}
+
+function recoveryDelta(findings: Finding[] | null): number | null {
+  const found = findings?.find((f) => f.finding_type === "recovery_score");
+  const delta = found?.structured_data?.delta_pct_vs_baseline;
+  return typeof delta === "number" && Number.isFinite(delta) ? delta : null;
 }
 
 function readyMetricCount(readiness: Readiness | null): number {
@@ -117,6 +124,19 @@ function todayHighlights(readiness: Readiness | null, findings: Finding[] | null
       hint: changeCount(findings) > 0 ? "review below" : "none flagged",
     },
   ];
+}
+
+// Byline for the hero lede — every atom is a number the hero already holds
+// (baseline window from the HRV trace, ready-signal count, sync freshness).
+function heroByline(readiness: Readiness | null, baselineNights: number, freshness: string): BylineItem[] {
+  const items: BylineItem[] = [];
+  if (baselineNights >= 2) {
+    items.push({ lead: "from ", strong: "your baseline", trail: ` · n=${baselineNights} nights` });
+  }
+  const ready = readyMetricCount(readiness);
+  if (ready > 0) items.push({ strong: ready.toLocaleString(), trail: " signals ready" });
+  items.push({ lead: "synced ", strong: freshness });
+  return items;
 }
 
 function vaultSteps(privacy: Privacy | null, readiness: Readiness | null): VaultStep[] {
@@ -252,17 +272,22 @@ export async function HeroSection() {
   const lastObs = readiness?.last_observation_at;
   const live = Boolean(lastObs && Date.now() - new Date(lastObs).getTime() < 24 * 3600_000);
   const score = recoveryScore(findings);
+  const freshness = agoLabel(readiness?.last_observation_at);
 
   return (
-    <RecoveryHero
-      freshness={agoLabel(readiness?.last_observation_at)}
-      live={live}
-      score={score}
-      contributors={recoveryContributors(findings)}
-      summary={todaySummary(score, findings, readiness)}
-      highlights={todayHighlights(readiness, findings, live)}
-      ribbon={ribbonValues.length >= 2 ? { values: ribbonValues, axis: ["30 days ago", "today"] } : null}
-    />
+    <>
+      <RecoveryHero
+        freshness={freshness}
+        live={live}
+        score={score}
+        contributors={recoveryContributors(findings)}
+        summary={todaySummary(score, findings, readiness)}
+        byline={heroByline(readiness, ribbonValues.length, freshness)}
+        deltaPct={recoveryDelta(findings)}
+        ribbon={ribbonValues.length >= 2 ? { values: ribbonValues, axis: ["30 days ago", "today"] } : null}
+      />
+      <TodayPlumbing highlights={todayHighlights(readiness, findings, live)} live={live} />
+    </>
   );
 }
 
