@@ -51,6 +51,10 @@ class FindingRow:
     # their type is implied by the method. The generic :meth:`fetch_findings`
     # populates it so a mixed evidence feed can tell rows apart.
     finding_type: str | None = None
+    # The FindingCard content model (migration 021). ``None`` on legacy rows
+    # persisted before the card schema existed — the read API serves those as
+    # schema_version 0. Only :meth:`fetch_findings` populates it.
+    card: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +86,26 @@ def _parse_structured_data(value: Any) -> dict[str, Any]:
             return {}
         return decoded if isinstance(decoded, dict) else {}
     return {}
+
+
+def _parse_card(value: Any) -> dict[str, Any] | None:
+    """Parse the ``card`` JSONB column, preserving ``None`` for legacy rows.
+
+    Unlike :func:`_parse_structured_data`, a missing/NULL card stays ``None``
+    (not ``{}``) so the read API can distinguish a legacy finding (schema_version
+    0, no card) from one that genuinely has a card.
+    """
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            decoded = json.loads(value)
+        except ValueError:
+            return None
+        return decoded if isinstance(decoded, dict) else None
+    return None
 
 
 class TimescaleBriefingRepository:
@@ -368,7 +392,7 @@ class TimescaleBriefingRepository:
         where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
         sql = text(
             f"""
-            SELECT id, finding_type, metric, severity, structured_data, created_at
+            SELECT id, finding_type, metric, severity, structured_data, created_at, card
               FROM analysis_findings{where_sql}
              ORDER BY created_at DESC
              LIMIT :limit
@@ -383,6 +407,7 @@ class TimescaleBriefingRepository:
                 structured_data=_parse_structured_data(row.structured_data),
                 created_at=row.created_at,
                 finding_type=getattr(row, "finding_type", None),
+                card=_parse_card(getattr(row, "card", None)),
             )
             for row in rows
         ]

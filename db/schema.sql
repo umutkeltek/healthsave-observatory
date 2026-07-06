@@ -334,7 +334,10 @@ CREATE TABLE analysis_findings (
     structured_data JSONB NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     owner_id        UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
-    workspace_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001'
+    workspace_id    UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    -- FindingCard content model (migration 021); NULL on legacy rows → served
+    -- as schema_version 0. See packages/py/contracts/findings.py.
+    card            JSONB
 );
 
 CREATE TABLE analysis_insights (

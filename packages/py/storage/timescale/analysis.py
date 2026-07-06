@@ -154,14 +154,21 @@ async def insert_finding(
     metric: str | None,
     severity: str,
     structured_data: dict[str, Any],
+    card: dict[str, Any] | None = None,
 ) -> int | None:
-    """Persist one finding row and return its id."""
+    """Persist one finding row and return its id.
+
+    ``card`` is the finding's :class:`~contracts.findings.FindingCard` payload
+    (already ``model_dump``-ed to JSON-safe primitives), or ``None`` for a
+    finding the pure builder couldn't describe — a NULL card is served as
+    ``schema_version 0`` by the read API.
+    """
     result = await session.execute(
         text(
             """
             INSERT INTO analysis_findings
-                (run_id, finding_type, metric, severity, structured_data)
-            VALUES (:run_id, :finding_type, :metric, :severity, :structured_data)
+                (run_id, finding_type, metric, severity, structured_data, card)
+            VALUES (:run_id, :finding_type, :metric, :severity, :structured_data, :card)
             RETURNING id
             """
         ),
@@ -171,6 +178,7 @@ async def insert_finding(
             "metric": metric,
             "severity": severity,
             "structured_data": json.dumps(structured_data, default=str),
+            "card": json.dumps(card, default=str) if card is not None else None,
         },
     )
     row = result.fetchone()
