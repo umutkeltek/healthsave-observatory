@@ -32,6 +32,7 @@ from .llm.prompts.weekly_summary import WEEKLY_SUMMARY_PROMPT_TEMPLATE
 from .statistical.aggregator import DataAggregator
 from .statistical.anomaly import AnomalyDetector
 from .statistical.correlations import CorrelationAnalyzer
+from .statistical.finding_cards import build_card
 from .statistical.recovery import RECOVERY_INPUT_METRICS, recovery_finding_data
 from .statistical.trends import TrendAnalyzer
 from .types import Anomaly, Finding, Insight
@@ -341,11 +342,14 @@ class AnalysisEngine:
             recent_trends = await self._fetch_recent_findings(session, "trend")
             recent_correlations = await self._fetch_recent_findings(session, "correlation")
 
+            cards = _finding_cards_for_brief(summary.metrics, recent_trends, recent_correlations)
+
             prompt = WEEKLY_SUMMARY_PROMPT_TEMPLATE.format(
                 period_summary=json.dumps(summary.metrics, indent=2, default=str),
                 week_comparison=_format_week_comparison(summary.metrics),
                 trends=_format_trends_for_prompt(recent_trends),
                 correlations=_format_correlations_for_prompt(recent_correlations),
+                findings=_format_finding_cards_for_prompt(cards),
                 # The aggregator does not expose distinct-day counts; like the
                 # daily briefing this reports "data present for the period".
                 days_of_data=_daily_data_days(summary.metrics),
@@ -574,7 +578,20 @@ class AnalysisEngine:
             log.exception("failed to mark analysis_runs.id=%s as failed", run_id)
 
     async def _insert_finding(self, session, *, run_id: int | None, finding: Finding) -> int | None:
-        """Persist one finding via the storage helper and return its id."""
+        """Persist one finding via the storage helper and return its id.
+
+        Also builds the finding's :class:`~contracts.findings.FindingCard`
+        deterministically (Brain-1, pure) and persists it alongside the raw
+        ``structured_data``. A finding the builder can't describe honestly
+        (unknown type / too thin) persists with a ``NULL`` card and is served as
+        ``schema_version 0`` — never a fabricated card.
+        """
+        card = build_card(
+            finding.finding_type,
+            finding.metric,
+            finding.structured_data,
+            finding.severity,
+        )
         return await _sql().insert_finding(
             session,
             run_id=run_id,
@@ -582,6 +599,7 @@ class AnalysisEngine:
             metric=finding.metric,
             severity=finding.severity,
             structured_data=finding.structured_data,
+            card=card.model_dump(mode="json") if card is not None else None,
         )
 
     async def _insert_insight(self, session, *, insight: Insight, run_id: int | None) -> None:
@@ -679,6 +697,49 @@ def _format_correlations_for_prompt(correlations: list[Any]) -> str:
             f"- {data.get('metric_a')} ~ {data.get('metric_b')}: "
             f"r={data.get('coefficient')} ({data.get('method')})"
         )
+    return "\n".join(lines)
+
+
+def _finding_cards_for_brief(
+    summary_metrics: dict[str, dict],
+    recent_trends: list[Any],
+    recent_correlations: list[Any],
+) -> list[Any]:
+    """Build FindingCards for the weekly Body Brief's narrative input.
+
+    Brain-1 stays the author: the narrator receives finished, computed cards and
+    only narrates them. Summary metrics come from this run; trends/correlations
+    are the most recent persisted findings (already carrying their own cards on
+    disk, rebuilt here from ``structured_data`` for a uniform prompt block).
+    """
+    cards: list[Any] = []
+    for metric, metric_summary in summary_metrics.items():
+        card = build_card("summary", metric, metric_summary, "info")
+        if card is not None:
+            cards.append(card)
+    for row in recent_trends:
+        card = build_card("trend", row.metric, row.structured_data, getattr(row, "severity", None))
+        if card is not None:
+            cards.append(card)
+    for row in recent_correlations:
+        card = build_card(
+            "correlation", row.metric, row.structured_data, getattr(row, "severity", None)
+        )
+        if card is not None:
+            cards.append(card)
+    return cards
+
+
+def _format_finding_cards_for_prompt(cards: list[Any]) -> str:
+    """Render finding cards as a compact claim block for the narrator prompt."""
+    if not cards:
+        return "no structured findings this week"
+    lines = []
+    for card in cards:
+        confidence = f" [{card.confidence} confidence]" if card.confidence else ""
+        lines.append(f"- {card.claim}{confidence}")
+        if card.next_question is not None:
+            lines.append(f"    next question: {card.next_question.prose}")
     return "\n".join(lines)
 
 
