@@ -51,9 +51,16 @@ function PanelChart({
       // honestly (each on its own scale); a single metric keeps real values.
       return { label: nameById.get(id) ?? id, values: overlay ? normalize(values) : values };
     });
+    // Real values carry a unit + a dated x-axis; normalized overlays are
+    // unitless (0-1, each on its own scale) so neither is shown.
+    const primaryPts = pointsById.get(panel.metrics[0]) ?? [];
+    const times = primaryPts.map((p) => p.t).filter(Boolean).sort();
+    const dateDomain: [string, string] | undefined =
+      times.length >= 2 ? [times[0], times[times.length - 1]] : undefined;
+    const unit = overlay ? null : unitById.get(panel.metrics[0]) || null;
     return (
       <>
-        <MultiSeriesChart series={series} />
+        <MultiSeriesChart series={series} unit={unit} dateDomain={dateDomain} />
         {overlay && <p className="panel-note">Overlaid signals are normalized to their own 0–1 range.</p>}
       </>
     );

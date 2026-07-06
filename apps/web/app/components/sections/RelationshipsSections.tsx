@@ -191,6 +191,9 @@ export async function ExplorePairSection({
           { label: nameB, values: ownScale(pairs.map((p) => p.b)) },
         ]
       : [];
+  const days = pairs.map((p) => p.day).sort();
+  const overlayDomain: [string, string] | undefined =
+    days.length >= 2 ? [days[0], days[days.length - 1]] : undefined;
 
   const options = catalog
     .map((m) => ({ id: m.id, display_name: m.display_name, category: m.category }))
@@ -227,7 +230,7 @@ export async function ExplorePairSection({
                 r = {stat ? stat.r.toFixed(2) : "-"} · n = {pairs.length} shared days · exploratory
                 (no p-value)
               </div>
-              <MultiSeriesChart series={overlay} />
+              <MultiSeriesChart series={overlay} dateDomain={overlayDomain} />
               <p className="rel-note">
                 Each curve is scaled to its own range - compare shape and timing, not magnitude.
               </p>

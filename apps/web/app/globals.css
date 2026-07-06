@@ -2176,7 +2176,7 @@ input.filter-select {
 }
 .multi-svg {
   width: 100%;
-  height: 130px;
+  height: auto;
   display: block;
 }
 .multi-legend {
@@ -3539,6 +3539,90 @@ input.filter-select {
   font-size: var(--fs-2xs);
   color: var(--faint);
 }
+
+/* === instrument grammar (2026-07-06) === */
+/* Calibrated chart axes: value/date ticks, hairline gridlines, direct end
+   labels. Axis TEXT for the responsive line chart is an HTML overlay (crisp at
+   any width); scatter uses SVG <text> (its box scales uniformly). Tokens only. */
+
+/* Hairline gridlines shared by MultiSeriesChart + ScatterChart (SVG). The stroke
+   width is pinned via vector-effect="non-scaling-stroke" on each element. */
+.chart-grid {
+  stroke: var(--line);
+  opacity: 0.7;
+}
+
+/* Scatter axis tick labels live inside the SVG (fill, not color). */
+.scatter-tick {
+  font-family: var(--mono);
+  font-size: 11px;
+  fill: var(--faint);
+}
+
+/* MultiSeriesChart HTML axis overlay. */
+.multi-plot {
+  position: relative;
+}
+.multi-axis {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.chart-tick-label {
+  position: absolute;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  line-height: 1;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.chart-y-label,
+.chart-axis-unit {
+  transform: translate(-100%, -50%);
+}
+.chart-x-label {
+  transform: translate(-50%, -50%);
+}
+.chart-end-label {
+  position: absolute;
+  right: 2px;
+  transform: translateY(-50%);
+  max-width: 42%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  line-height: 1;
+  font-weight: 500;
+}
+
+/* BaselineRibbon left calibration gutter (value ticks + unit). */
+.ribbon-frame {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.ribbon-frame .ribbon-plot {
+  flex: 1;
+  min-width: 0;
+}
+.ribbon-yaxis {
+  position: relative;
+  flex: 0 0 30px;
+  width: 30px;
+}
+.ribbon-y-label {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+}
+.ribbon-unit {
+  right: 0;
+  top: 0;
+}
+/* === end instrument grammar === */
 
 /* ── Export card (/data) ── */
 .export-btn {

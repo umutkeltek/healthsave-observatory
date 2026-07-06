@@ -4,8 +4,16 @@
 // stretched edge-to-edge; anomaly pins are HTML overlays so they stay perfectly
 // round regardless of width.
 
+import { valueTicks } from "./chart/axis";
 import { HoverOverlay } from "./chart/HoverOverlay";
 import { quantile } from "./chart/scale";
+
+function fmtTick(v: number): string {
+  const a = Math.abs(v);
+  if (a >= 1000) return Math.round(v).toLocaleString();
+  if (Number.isInteger(v)) return String(v);
+  return v.toFixed(a < 1 ? 2 : 1);
+}
 
 type Props = {
   values: number[];
@@ -49,10 +57,26 @@ export function BaselineRibbon({
   const bandTop = y(hi);
   const bandBot = y(lo);
   const mid = y((lo + hi) / 2);
+  const yTicks = valueTicks(min, max, 3);
 
   return (
     <div className="ribbon-wrap">
-      <div className={`ribbon-plot ${live ? "is-live" : ""}`} style={{ height }}>
+      <div className="ribbon-frame">
+        <div className="ribbon-yaxis" style={{ height }} aria-hidden>
+          {unit ? (
+            <span className="chart-tick-label ribbon-unit">{unit}</span>
+          ) : null}
+          {yTicks.map((t) => (
+            <span
+              key={t.value}
+              className="chart-tick-label ribbon-y-label"
+              style={{ top: `${(y(t.value) / H) * 100}%` }}
+            >
+              {fmtTick(t.value)}
+            </span>
+          ))}
+        </div>
+        <div className={`ribbon-plot ${live ? "is-live" : ""}`} style={{ height }}>
         <svg
           className="ribbon"
           viewBox={`0 0 ${W} ${H}`}
@@ -90,6 +114,7 @@ export function BaselineRibbon({
             }))}
           />
         )}
+        </div>
       </div>
       {axis && (
         <div className="ribbon-axis">

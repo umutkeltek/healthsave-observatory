@@ -34,7 +34,7 @@ function Sparkline({ values }: { values: number[] }) {
   return (
     <svg className="spark signal-spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden>
       <rect className="spark-band" x="0" y={bandTop} width={w} height={bandHeight} />
-      <path d={d} pathLength={1} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" />
+      <path d={d} pathLength={1} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
       <circle
         className={`spark-dot ${outOfBand ? "out" : ""}`}
         cx={w}

@@ -58,7 +58,7 @@ function MiniSparkline({ values }: { values: number[] }) {
       preserveAspectRatio="none"
       aria-hidden
     >
-      <path d={d} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d={d} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
