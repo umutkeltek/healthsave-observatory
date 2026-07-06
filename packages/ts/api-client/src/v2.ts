@@ -472,9 +472,11 @@ export interface EffectSize {
  *
  * Deliberately speaks the ``/api/v2/experiments/candidates`` vocabulary
  * (metric pair + lever/outcome/verdict/protocol from the readiness classifier)
- * so the client can hand this straight to ``POST /api/v2/experiments`` with no
- * parallel schema. Invented nothing new — this is the candidate shape the
- * experiment engine already ranks.
+ * — the candidate shape the experiment engine already ranks, so nothing new is
+ * invented here. The ``POST /api/v2/experiments`` create body renames the pair
+ * to ``lever_metric_id`` / ``outcome_metric_id``: the values are identical, only
+ * the field names differ, so the client maps ``lever`` → ``lever_metric_id`` and
+ * ``outcome`` → ``outcome_metric_id`` when promoting a candidate.
  */
 export interface ExperimentCandidateRef {
   lever?: Lever;
