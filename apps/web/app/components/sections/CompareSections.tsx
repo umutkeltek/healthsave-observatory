@@ -122,6 +122,10 @@ export async function CompareSection({
     };
   }
 
+  const times = series.points.map((p) => p.t).filter(Boolean).sort();
+  const dateDomain: [string, string] | undefined =
+    times.length >= 2 ? [times[0], times[times.length - 1]] : undefined;
+
   const controlMetrics = all.length
     ? all.map((m) => ({ id: m.id, display_name: m.display_name, category: m.category }))
     : [{ id: series.metric.id, display_name: series.metric.display_name, category: series.metric.category }];
@@ -136,7 +140,7 @@ export async function CompareSection({
             {series.metric.display_name}
             {isDemo ? " · demo" : ` · ${range}`}
           </div>
-          <MultiSeriesChart series={chart} />
+          <MultiSeriesChart series={chart} unit={unit || null} dateDomain={dateDomain} />
         </article>
       </section>
 

@@ -204,7 +204,17 @@ export default async function MetricDetailPage({
                 unit={metric.canonical_unit}
               />
             )}
-            {multiSource && perSourceSeries.length >= 1 && <MultiSeriesChart series={perSourceSeries} />}
+            {multiSource && perSourceSeries.length >= 1 && (
+              <MultiSeriesChart
+                series={perSourceSeries}
+                unit={metric.canonical_unit}
+                dateDomain={
+                  numericPoints.length >= 2
+                    ? [numericPoints[0].t, numericPoints[numericPoints.length - 1].t]
+                    : undefined
+                }
+              />
+            )}
             {values.length < 2 && (
               <p className="empty">
                 {stat?.observation_count

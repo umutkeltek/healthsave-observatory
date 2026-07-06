@@ -25,7 +25,7 @@ function Spark({ series }: { series: MetricSeries | null }) {
     .join(" ");
   return (
     <svg className="goal-spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden>
-      <path d={d} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d={d} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
