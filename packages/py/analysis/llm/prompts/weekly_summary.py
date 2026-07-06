@@ -17,6 +17,9 @@ Trends this week:
 Correlations observed:
 {correlations}
 
+Findings (computed — narrate these claims, do NOT recompute or invent numbers):
+{findings}
+
 Data sufficiency: {days_of_data}/{minimum_required} days of history.
 
 Produce a 200-350 word narrative. Organize by pillar (Recovery, Sleep,
