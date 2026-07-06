@@ -1,0 +1,556 @@
+{
+  "$defs": {
+    "Confounder": {
+      "additionalProperties": false,
+      "description": "A competing explanation the engine already accounts for or flags.\n\nMirrors the context-suppression rules in the detectors (workout-window HR\nspikes, post-workout HRV drops, the sleep window) so a card can say *why* a\nreading might not mean what it looks like.",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "metric": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Metric"
+        }
+      },
+      "required": [
+        "kind",
+        "description"
+      ],
+      "title": "Confounder",
+      "type": "object"
+    },
+    "Coverage": {
+      "additionalProperties": false,
+      "description": "Data sufficiency behind the finding \u2014 the ``gates.py`` verdict, surfaced.\n\nA finding is only emitted once its producer's sufficiency gate passed, so\n``is_sufficient`` is typically ``True``; ``note`` records the threshold that\nwas cleared (e.g. \"\u226514 observations over \u22657 days\"). ``days_until_sufficient``\nis only meaningful on the not-yet-analyzable path a future producer might\nsurface.",
+      "properties": {
+        "days_until_sufficient": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Days Until Sufficient"
+        },
+        "days_with_data": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Days With Data"
+        },
+        "is_sufficient": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is Sufficient"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "observation_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation Count"
+        }
+      },
+      "title": "Coverage",
+      "type": "object"
+    },
+    "Delta": {
+      "additionalProperties": false,
+      "description": "The change: current vs baseline.",
+      "properties": {
+        "absolute": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Absolute"
+        },
+        "direction": {
+          "anyOf": [
+            {
+              "enum": [
+                "up",
+                "down",
+                "flat"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Direction"
+        },
+        "pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pct"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        }
+      },
+      "title": "Delta",
+      "type": "object"
+    },
+    "EffectSize": {
+      "additionalProperties": false,
+      "description": "How big the effect is, method-tagged so the UI can label it honestly.\n\n``kind`` names the statistic (``z_score`` / ``spearman_rho`` /\n``slope_per_day`` / ``cohens_d`` \u2026) so a reader never confuses a correlation\ncoefficient with a standardized mean difference. ``p_value`` rides alongside\nthe magnitude (significance \u2260 size) rather than being a separate top-level\ncard field.",
+      "properties": {
+        "kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kind"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "p_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "P Value"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "title": "EffectSize",
+      "type": "object"
+    },
+    "ExperimentCandidateRef": {
+      "additionalProperties": false,
+      "description": "Machine hook linking ``next_question`` to the experiments surface.\n\nDeliberately speaks the ``/api/v2/experiments/candidates`` vocabulary\n(metric pair + lever/outcome/verdict/protocol from the readiness classifier)\nso the client can hand this straight to ``POST /api/v2/experiments`` with no\nparallel schema. Invented nothing new \u2014 this is the candidate shape the\nexperiment engine already ranks.",
+      "properties": {
+        "lever": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lever"
+        },
+        "metric_a": {
+          "title": "Metric A",
+          "type": "string"
+        },
+        "metric_b": {
+          "title": "Metric B",
+          "type": "string"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outcome"
+        },
+        "required_days": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required Days"
+        },
+        "suggested_protocol": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suggested Protocol"
+        },
+        "verdict": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Verdict"
+        }
+      },
+      "required": [
+        "metric_a",
+        "metric_b"
+      ],
+      "title": "ExperimentCandidateRef",
+      "type": "object"
+    },
+    "NextQuestion": {
+      "additionalProperties": false,
+      "description": "The flywheel field: prose + an optional promotable experiment candidate.",
+      "properties": {
+        "experiment_candidate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExperimentCandidateRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "prose": {
+          "title": "Prose",
+          "type": "string"
+        }
+      },
+      "required": [
+        "prose"
+      ],
+      "title": "NextQuestion",
+      "type": "object"
+    },
+    "SourceRef": {
+      "additionalProperties": false,
+      "description": "Where the underlying data came from (provenance, at card granularity).",
+      "properties": {
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "source_plugin_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Plugin Id"
+        }
+      },
+      "title": "SourceRef",
+      "type": "object"
+    },
+    "WindowRef": {
+      "additionalProperties": false,
+      "description": "A time window a finding is measured over (current or baseline).",
+      "properties": {
+        "end": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start"
+        }
+      },
+      "title": "WindowRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The versioned content model for one evidence-linked finding.\n\n``claim`` / ``metric`` / ``schema_version`` are required; everything else is\noptional so legacy or thin findings are represented without fabrication.",
+  "properties": {
+    "baseline_window": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WindowRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "claim": {
+      "title": "Claim",
+      "type": "string"
+    },
+    "confidence": {
+      "anyOf": [
+        {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Confidence"
+    },
+    "confounders": {
+      "items": {
+        "$ref": "#/$defs/Confounder"
+      },
+      "title": "Confounders",
+      "type": "array"
+    },
+    "coverage": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Coverage"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "current_window": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WindowRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "delta": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Delta"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "effect_size": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EffectSize"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "finding_type": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Finding Type"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "metric": {
+      "title": "Metric",
+      "type": "string"
+    },
+    "next_question": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NextQuestion"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/SourceRef"
+      },
+      "title": "Sources",
+      "type": "array"
+    }
+  },
+  "required": [
+    "claim",
+    "metric"
+  ],
+  "title": "FindingCard",
+  "type": "object"
+}

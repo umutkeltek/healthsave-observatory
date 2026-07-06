@@ -55,6 +55,7 @@ NON_OWNERSHIP_TYPES: frozenset[type[V2Model]] = frozenset(
         contracts.Uncertainty,
         contracts.Claim,
         contracts.Insight,
+        contracts.FindingCard,
         contracts.SuggestedAction,
         contracts.PluginCapability,
         contracts.PluginPermissions,
@@ -204,6 +205,7 @@ def test_all_models_in_init_match_directory() -> None:
         "contracts.data",
         "contracts.agents",
         "contracts.narrative",
+        "contracts.findings",
         "contracts.ui",
         "contracts.plugins",
     }

@@ -83,6 +83,18 @@ export type Evidence = EvidenceRef[];
 export type Text1 = string;
 export type Confidence = number;
 export type Reason = string | null;
+export type Description1 = string;
+export type Kind4 = string;
+export type Metric1 = string | null;
+export type DaysUntilSufficient = number | null;
+export type DaysWithData = number | null;
+export type IsSufficient = boolean | null;
+export type Note = string | null;
+export type ObservationCount = number | null;
+export type Absolute = number | null;
+export type Direction = ("up" | "down" | "flat") | null;
+export type Pct = number | null;
+export type Unit = string | null;
 export type HardwareId = string | null;
 export type Id6 = string;
 export type Model = string | null;
@@ -90,6 +102,32 @@ export type Name1 = string;
 export type OwnerId6 = string;
 export type SourceId = string;
 export type WorkspaceId6 = string;
+export type Kind5 = string | null;
+export type Label = string | null;
+export type PValue = number | null;
+export type Value = number | null;
+export type Lever = string | null;
+export type MetricA = string;
+export type MetricB = string;
+export type Outcome = string | null;
+export type RequiredDays = number | null;
+export type SuggestedProtocol = string | null;
+export type Verdict = string | null;
+export type End1 = string | null;
+export type Label1 = string | null;
+export type N = number | null;
+export type Start = string | null;
+export type Claim1 = string;
+export type Confidence1 = ("low" | "medium" | "high") | null;
+export type Confounders = Confounder[];
+export type FindingType = string | null;
+export type Limitations = string[];
+export type Metric2 = string;
+export type Prose = string;
+export type SchemaVersion = number;
+export type Label2 = string | null;
+export type SourcePluginId = string | null;
+export type Sources = SourceRef[];
 export type ErrorKind = string;
 export type Id7 = string;
 export type Message = string;
@@ -108,28 +146,28 @@ export type StartedAt1 = string;
 export type Status2 = "running" | "succeeded" | "failed" | "partial" | "cancelled";
 export type WorkspaceId8 = string;
 export type Claims = Claim[];
-export type Metric1 = string | null;
+export type Metric3 = string | null;
 export type Severity = "info" | "watch" | "alert";
 export type Summary = string;
-export type Confidence1 = number | null;
+export type Confidence2 = number | null;
 export type DeviceId = string | null;
 export type Id9 = string;
 export type IntervalEnd = string;
 export type IntervalStart = string;
-export type Metric2 = string;
+export type Metric4 = string;
 export type NormalizationVersion = string;
 export type OwnerId9 = string;
 export type CapturedAt = string;
 export type RawPayloadRef = string | null;
 export type SdkVersion = string;
-export type SourcePluginId = string;
+export type SourcePluginId1 = string;
 export type SourceId2 = string;
-export type Unit = string;
-export type Value = number;
+export type Unit1 = string;
+export type Value1 = number;
 export type WorkspaceId9 = string;
 export type Id10 = string;
 export type Insights = Insight[];
-export type Kind4 = "daily_briefing" | "weekly_summary" | "anomaly_explanation" | "intervention_proposal";
+export type Kind6 = "daily_briefing" | "weekly_summary" | "anomaly_explanation" | "intervention_proposal";
 export type NarratorPluginId = string;
 export type NarratorVersion = string;
 export type OwnerId10 = string;
@@ -141,28 +179,28 @@ export type SuggestedActions = SuggestedAction[];
 export type Text3 = string;
 export type WorkspaceId10 = string;
 export type Annotations = Annotation[];
-export type Metric3 = string;
+export type Metric5 = string;
 export type OwnerId11 = string;
 export type Points = [unknown, unknown][];
-export type Unit1 = string;
+export type Unit2 = string;
 export type WorkspaceId11 = string;
 export type OwnerId12 = string;
 export type RawPayloadId = string;
 export type WorkspaceId12 = string;
 export type CapturedAt1 = string;
 export type Id11 = string;
-export type Metric4 = string | null;
+export type Metric6 = string | null;
 export type OwnerId13 = string;
 export type RunId4 = string;
 export type WorkspaceId13 = string;
-export type Description1 = string | null;
+export type Description2 = string | null;
 export type Name2 = string;
 export type ConfigSchema = string | null;
 export type Consumes = string[];
 export type Emits = string[];
 export type Entrypoint = string;
 export type Id12 = string;
-export type Kind5 = "source" | "narrator" | "agent";
+export type Kind7 = "source" | "narrator" | "agent";
 export type Language = "python" | "typescript";
 export type Name3 = string;
 export type Capabilities1 = PluginCapability[];
@@ -207,7 +245,7 @@ export type SourceId3 = string;
 export type WorkspaceId14 = string;
 export type DisplayName = string;
 export type Id14 = string;
-export type Kind6 = "sensor" | "manual" | "computed" | "external_api";
+export type Kind8 = "sensor" | "manual" | "computed" | "external_api";
 export type OwnerId15 = string;
 export type PluginId3 = string;
 export type WorkspaceId15 = string;
@@ -366,6 +404,43 @@ export interface Uncertainty {
   reason?: Reason;
 }
 /**
+ * A competing explanation the engine already accounts for or flags.
+ *
+ * Mirrors the context-suppression rules in the detectors (workout-window HR
+ * spikes, post-workout HRV drops, the sleep window) so a card can say *why* a
+ * reading might not mean what it looks like.
+ */
+export interface Confounder {
+  description: Description1;
+  kind: Kind4;
+  metric?: Metric1;
+}
+/**
+ * Data sufficiency behind the finding — the ``gates.py`` verdict, surfaced.
+ *
+ * A finding is only emitted once its producer's sufficiency gate passed, so
+ * ``is_sufficient`` is typically ``True``; ``note`` records the threshold that
+ * was cleared (e.g. "≥14 observations over ≥7 days"). ``days_until_sufficient``
+ * is only meaningful on the not-yet-analyzable path a future producer might
+ * surface.
+ */
+export interface Coverage {
+  days_until_sufficient?: DaysUntilSufficient;
+  days_with_data?: DaysWithData;
+  is_sufficient?: IsSufficient;
+  note?: Note;
+  observation_count?: ObservationCount;
+}
+/**
+ * The change: current vs baseline.
+ */
+export interface Delta {
+  absolute?: Absolute;
+  direction?: Direction;
+  pct?: Pct;
+  unit?: Unit;
+}
+/**
  * A physical or logical device emitting samples for a Source.
  */
 export interface Device {
@@ -376,6 +451,84 @@ export interface Device {
   owner_id?: OwnerId6;
   source_id: SourceId;
   workspace_id?: WorkspaceId6;
+}
+/**
+ * How big the effect is, method-tagged so the UI can label it honestly.
+ *
+ * ``kind`` names the statistic (``z_score`` / ``spearman_rho`` /
+ * ``slope_per_day`` / ``cohens_d`` …) so a reader never confuses a correlation
+ * coefficient with a standardized mean difference. ``p_value`` rides alongside
+ * the magnitude (significance ≠ size) rather than being a separate top-level
+ * card field.
+ */
+export interface EffectSize {
+  kind?: Kind5;
+  label?: Label;
+  p_value?: PValue;
+  value?: Value;
+}
+/**
+ * Machine hook linking ``next_question`` to the experiments surface.
+ *
+ * Deliberately speaks the ``/api/v2/experiments/candidates`` vocabulary
+ * (metric pair + lever/outcome/verdict/protocol from the readiness classifier)
+ * so the client can hand this straight to ``POST /api/v2/experiments`` with no
+ * parallel schema. Invented nothing new — this is the candidate shape the
+ * experiment engine already ranks.
+ */
+export interface ExperimentCandidateRef {
+  lever?: Lever;
+  metric_a: MetricA;
+  metric_b: MetricB;
+  outcome?: Outcome;
+  required_days?: RequiredDays;
+  suggested_protocol?: SuggestedProtocol;
+  verdict?: Verdict;
+}
+/**
+ * The versioned content model for one evidence-linked finding.
+ *
+ * ``claim`` / ``metric`` / ``schema_version`` are required; everything else is
+ * optional so legacy or thin findings are represented without fabrication.
+ */
+export interface FindingCard {
+  baseline_window?: WindowRef | null;
+  claim: Claim1;
+  confidence?: Confidence1;
+  confounders?: Confounders;
+  coverage?: Coverage | null;
+  current_window?: WindowRef | null;
+  delta?: Delta | null;
+  effect_size?: EffectSize | null;
+  finding_type?: FindingType;
+  limitations?: Limitations;
+  metric: Metric2;
+  next_question?: NextQuestion | null;
+  schema_version?: SchemaVersion;
+  sources?: Sources;
+}
+/**
+ * A time window a finding is measured over (current or baseline).
+ */
+export interface WindowRef {
+  end?: End1;
+  label?: Label1;
+  n?: N;
+  start?: Start;
+}
+/**
+ * The flywheel field: prose + an optional promotable experiment candidate.
+ */
+export interface NextQuestion {
+  experiment_candidate?: ExperimentCandidateRef | null;
+  prose: Prose;
+}
+/**
+ * Where the underlying data came from (provenance, at card granularity).
+ */
+export interface SourceRef {
+  label?: Label2;
+  source_plugin_id?: SourcePluginId;
 }
 /**
  * One error captured during an IngestionRun. Append-only.
@@ -412,7 +565,7 @@ export interface IngestionRun {
  */
 export interface Insight {
   claims?: Claims;
-  metric?: Metric1;
+  metric?: Metric3;
   severity?: Severity;
   summary: Summary;
 }
@@ -423,18 +576,18 @@ export interface Insight {
  * Time-interval samples (sleep stages, workouts, ECG) set both.
  */
 export interface Measurement {
-  confidence?: Confidence1;
+  confidence?: Confidence2;
   device_id?: DeviceId;
   id?: Id9;
   interval_end: IntervalEnd;
   interval_start: IntervalStart;
-  metric: Metric2;
+  metric: Metric4;
   normalization_version?: NormalizationVersion;
   owner_id?: OwnerId9;
   provenance: Provenance;
   source_id: SourceId2;
-  unit: Unit;
-  value: Value;
+  unit: Unit1;
+  value: Value1;
   workspace_id?: WorkspaceId9;
 }
 /**
@@ -449,7 +602,7 @@ export interface Provenance {
   captured_at: CapturedAt;
   raw_payload_ref?: RawPayloadRef;
   sdk_version: SdkVersion;
-  source_plugin_id: SourcePluginId;
+  source_plugin_id: SourcePluginId1;
 }
 /**
  * A streamable narrative — daily briefing, weekly summary, etc.
@@ -461,7 +614,7 @@ export interface Provenance {
 export interface NarrativeArtifact {
   id: Id10;
   insights?: Insights;
-  kind: Kind4;
+  kind: Kind6;
   narrator_plugin_id: NarratorPluginId;
   narrator_version: NarratorVersion;
   owner_id?: OwnerId10;
@@ -499,10 +652,10 @@ export interface NarrativeCard {
  */
 export interface SeriesResponse {
   annotations?: Annotations;
-  metric: Metric3;
+  metric: Metric5;
   owner_id?: OwnerId11;
   points: Points;
-  unit: Unit1;
+  unit: Unit2;
   workspace_id?: WorkspaceId11;
 }
 /**
@@ -529,7 +682,7 @@ export interface Observation {
   captured_at: CapturedAt1;
   findings: Findings;
   id: Id11;
-  metric?: Metric4;
+  metric?: Metric6;
   owner_id?: OwnerId13;
   run_id: RunId4;
   workspace_id?: WorkspaceId13;
@@ -543,7 +696,7 @@ export interface Findings {}
  * can match on prefix.
  */
 export interface PluginCapability {
-  description?: Description1;
+  description?: Description2;
   name: Name2;
 }
 /**
@@ -561,7 +714,7 @@ export interface PluginManifest {
   emits?: Emits;
   entrypoint: Entrypoint;
   id: Id12;
-  kind: Kind5;
+  kind: Kind7;
   language?: Language;
   name: Name3;
   permissions?: PluginPermissions;
@@ -627,7 +780,7 @@ export interface Payload3 {}
 export interface Source {
   display_name: DisplayName;
   id: Id14;
-  kind: Kind6;
+  kind: Kind8;
   owner_id?: OwnerId15;
   plugin_id: PluginId3;
   workspace_id?: WorkspaceId15;

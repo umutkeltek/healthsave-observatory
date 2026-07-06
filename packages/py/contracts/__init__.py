@@ -53,6 +53,7 @@ from .data import (
     Source,
     SourceCapability,
 )
+from .findings import FindingCard
 from .narrative import (
     Claim,
     EvidenceRef,
@@ -95,6 +96,8 @@ ALL_MODELS: tuple[type[V2Model], ...] = (
     Insight,
     SuggestedAction,
     NarrativeArtifact,
+    # findings
+    FindingCard,
     # ui
     Annotation,
     SeriesResponse,
@@ -150,6 +153,8 @@ __all__ = [
     "Insight",
     "SuggestedAction",
     "NarrativeArtifact",
+    # findings
+    "FindingCard",
     # ui
     "Annotation",
     "SeriesResponse",
