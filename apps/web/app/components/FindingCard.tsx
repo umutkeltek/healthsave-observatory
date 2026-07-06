@@ -10,21 +10,30 @@
 // pure `FindingCardView` renders from props so it unit-tests and renders
 // standalone.
 
-import type { Finding, FindingCard as FindingCardModel } from "../lib/api";
+import type { Finding, FindingCard as FindingCardModel, MetricSeries } from "../lib/api";
 import {
   cardMetricIsPlottable,
   findingCardChips,
   userFindingTitle,
 } from "../lib/findingPresentation";
 import { experimentHref } from "../lib/experimentPrefill";
-import { safeSeries } from "../lib/load";
 import { BaselineRibbon } from "./BaselineRibbon";
 
-const PROOF_RANGE = "30d";
+// The proof-figure window. Exported so FindingsSections can resolve the series
+// for EVERY card in one batched /api/v2/series call (see the pure FindingCard
+// below) instead of one uncached fetch per card.
+export const PROOF_RANGE = "30d";
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "";
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+// A per-card label so N proof ribbons are distinguishable to assistive tech
+// (the ribbon's default label is identical for every figure on the page).
+function proofAriaLabel(card: FindingCardModel): string {
+  const claim = card.claim.length > 90 ? `${card.claim.slice(0, 89).trimEnd()}…` : card.claim;
+  return `${card.metric} — proof for: ${claim}`;
 }
 
 type ViewProps = {
@@ -69,6 +78,7 @@ export function FindingCardView({
             hoverLabels={hoverLabels}
             unit={unit}
             live={live}
+            ariaLabel={proofAriaLabel(card)}
           />
         </div>
       ) : (
@@ -141,29 +151,31 @@ const FALLBACK_FINDING = {
   schema_version: 0,
 } satisfies Finding;
 
-// Async wrapper: resolves the proof series for the card's metric, then renders
-// the pure view. A correlation-pair metric (no single series) or an unreachable
-// backend simply renders the claim + chips without a figure.
-export async function FindingCard({ finding }: { finding: Finding }) {
+// Derive the proof-figure props from an ALREADY-resolved series (or null). The
+// series is fetched once, in a batch, by the caller (FindingsSections) — this
+// component no longer does its own fetch, so a page of cards costs one series
+// request, not N. A missing series (unreachable backend, correlation-pair
+// metric, or thin window) drops the figure only; the card still renders.
+function proofFigureProps(card: FindingCardModel, series: MetricSeries | null) {
+  if (!series || !cardMetricIsPlottable(card.metric)) {
+    return { values: null as number[] | null, hoverLabels: undefined as string[] | undefined, unit: null as string | null, live: false };
+  }
+  const points = series.points.filter((p) => p.value !== null);
+  const last = points.at(-1);
+  return {
+    values: points.map((p) => p.value as number),
+    hoverLabels: points.map((p) => new Date(p.t).toLocaleDateString()),
+    unit: series.metric.canonical_unit ?? points.find((p) => p.unit)?.unit ?? null,
+    live: last ? Date.now() - new Date(last.t).getTime() < 24 * 3_600_000 : false,
+  };
+}
+
+// Pure card: the caller resolves the proof series (batched) and passes it in.
+export function FindingCard({ finding, series }: { finding: Finding; series: MetricSeries | null }) {
   const card = finding.card;
   if (!card) return null; // legacy findings render via EvidenceCard
 
-  let values: number[] | null = null;
-  let hoverLabels: string[] | undefined;
-  let unit: string | null = null;
-  let live = false;
-
-  if (cardMetricIsPlottable(card.metric)) {
-    const series = await safeSeries(card.metric, PROOF_RANGE);
-    if (series) {
-      const points = series.points.filter((p) => p.value !== null);
-      values = points.map((p) => p.value as number);
-      hoverLabels = points.map((p) => new Date(p.t).toLocaleDateString());
-      unit = series.metric.canonical_unit ?? points.find((p) => p.unit)?.unit ?? null;
-      const last = points.at(-1);
-      live = last ? Date.now() - new Date(last.t).getTime() < 24 * 3_600_000 : false;
-    }
-  }
+  const { values, hoverLabels, unit, live } = proofFigureProps(card, series);
 
   return (
     <FindingCardView

@@ -291,13 +291,17 @@ export function findingCardChips(card: FindingCard): CardChip[] {
   const chips: CardChip[] = [];
 
   const delta = card.delta;
-  if (delta && (delta.pct != null || delta.absolute != null)) {
+  if (delta) {
     const arrow = delta.direction ? `${DIRECTION_ARROW[delta.direction] ?? ""} ` : "";
-    const value =
-      delta.pct != null
-        ? `${arrow}${delta.pct >= 0 ? "+" : ""}${fmtNum(delta.pct)}%`
-        : `${arrow}${delta.absolute! >= 0 ? "+" : ""}${fmtNum(delta.absolute!, 2)}${delta.unit ? ` ${delta.unit}` : ""}`;
-    chips.push({ key: "delta", label: "vs baseline", value, tone: "neutral" });
+    // Explicit narrowing (not `delta.absolute!`): a percentage delta wins, an
+    // absolute-only delta carries its unit, and a delta with neither adds no chip.
+    let value: string | null = null;
+    if (delta.pct != null) {
+      value = `${arrow}${delta.pct >= 0 ? "+" : ""}${fmtNum(delta.pct)}%`;
+    } else if (delta.absolute != null) {
+      value = `${arrow}${delta.absolute >= 0 ? "+" : ""}${fmtNum(delta.absolute, 2)}${delta.unit ? ` ${delta.unit}` : ""}`;
+    }
+    if (value != null) chips.push({ key: "delta", label: "vs baseline", value, tone: "neutral" });
   }
 
   if (card.effect_size) {

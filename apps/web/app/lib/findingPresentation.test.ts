@@ -137,6 +137,22 @@ describe("finding card presentation", () => {
     expect(findingCardChips(card())).toEqual([]);
   });
 
+  test("renders an absolute-only delta (no pct) with its unit and sign", () => {
+    const down = Object.fromEntries(
+      findingCardChips(
+        card({ delta: { absolute: -0.42, pct: null, unit: "kg", direction: "down" } }),
+      ).map((c) => [c.key, c]),
+    );
+    expect(down.delta.value).toBe("↓ -0.42 kg");
+
+    const up = Object.fromEntries(
+      findingCardChips(
+        card({ delta: { absolute: 1.5, pct: null, unit: null, direction: null } }),
+      ).map((c) => [c.key, c]),
+    );
+    expect(up.delta.value).toBe("+1.5");
+  });
+
   test("flags an insufficient-coverage card with a caution tone", () => {
     const chips = findingCardChips(
       card({

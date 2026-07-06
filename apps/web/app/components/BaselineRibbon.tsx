@@ -24,6 +24,7 @@ type Props = {
   live?: boolean; // last reading <24h - adds the slow mint freshness shimmer
   hoverLabels?: string[]; // per-value captions (dates) - enables the tooltip overlay
   unit?: string | null; // printed after the value in the tooltip
+  ariaLabel?: string; // SVG accessible name; override so repeated figures aren't identical to AT
 };
 
 export function BaselineRibbon({
@@ -35,6 +36,7 @@ export function BaselineRibbon({
   live,
   hoverLabels,
   unit,
+  ariaLabel = "Recent trace against your personal baseline range",
 }: Props) {
   if (values.length < 2) return null;
 
@@ -85,7 +87,7 @@ export function BaselineRibbon({
           viewBox={`0 0 ${W} ${H}`}
           preserveAspectRatio="none"
           role="img"
-          aria-label="Recent trace against your personal baseline range"
+          aria-label={ariaLabel}
         >
           <rect
             className="ribbon-band"

@@ -3849,6 +3849,22 @@ input.filter-select {
 /* --- FindingCard (P-03): the ONE card grammar --- */
 /* Claim as headline, proof figure in place, computed chips, drilldown, and the
    propose-experiment CTA. Tokens only; both themes ride the token layer. */
+.findings-head {
+  margin-bottom: 16px;
+}
+.findings-head h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--fs-xl);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.findings-sub {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
 .finding-cards {
   display: grid;
   gap: 16px;
@@ -3856,6 +3872,10 @@ input.filter-select {
 }
 .fc {
   display: grid;
+  /* minmax(0,1fr): grid items default to min-content = min-width auto, so an
+     un-wrapped chip row would size the whole card to its max-content and blow
+     past the viewport. Pin the track to the container width. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 .fc-head {
@@ -5172,7 +5192,10 @@ body {
 .row-2,
 .grid,
 .mode-card,
-.intg-card {
+.intg-card,
+.fc,
+.fc-chips,
+.fc-next-prose {
   min-width: 0;
   max-width: 100%;
 }
