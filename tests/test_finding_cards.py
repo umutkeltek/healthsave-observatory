@@ -57,7 +57,10 @@ def test_trend_card_uses_slope_effect_and_confidence_passthrough():
     assert card.effect_size.kind == "slope_per_day"
     assert card.effect_size.value == -0.8
     assert card.effect_size.p_value == 0.004
-    assert card.current_window.n == 30
+    # The span lives in the label; n stays null (the model carries no point
+    # count, and the span would overstate coverage — a 30-day fit ≈ 21 points).
+    assert card.current_window.label == "last 30 days"
+    assert card.current_window.n is None
     assert card.confidence == "high"
     assert card.limitations  # linear-fit caveat present
 
@@ -114,13 +117,29 @@ def test_recovery_card_lists_missing_inputs_as_limitations():
     assert "sleep_efficiency unavailable" in card.limitations
 
 
-def test_summary_card_uses_delta_when_present():
+def test_summary_card_uses_delta_when_sufficient_samples():
     sd = {"avg": 58.0, "delta_pct_vs_baseline": -6.4, "count": 42}
     card = build_card("summary", "vital.resting_heart_rate", sd, "info")
     assert card.delta.pct == -6.4
     assert card.delta.direction == "down"
-    assert card.baseline_window.label == "30-day baseline"
+    # Truthful baseline prose — the aggregator baseline is 30 − window days long,
+    # not a flat 30 days, and the length isn't derivable from builder inputs.
+    assert "recent baseline" in card.claim
+    assert "30-day" not in card.claim
+    assert card.baseline_window.label == "recent baseline"
     assert card.coverage.observation_count == 42
+
+
+def test_summary_card_below_sample_floor_suppresses_delta_and_flags_coverage():
+    # Only 2 samples in the window — a "%-vs-baseline" claim off that is noise.
+    sd = {"avg": 58.0, "delta_pct_vs_baseline": -6.4, "count": 2}
+    card = build_card("summary", "vital.resting_heart_rate", sd, "info")
+    assert card.delta is None  # delta claim dropped
+    assert "averaged" in card.claim  # falls back to the defensible avg-only claim
+    assert "%" not in card.claim
+    assert card.coverage.is_sufficient is False
+    assert card.coverage.observation_count == 2
+    assert "not analyzable" in card.coverage.note
 
 
 def test_summary_card_falls_back_to_average_without_baseline():

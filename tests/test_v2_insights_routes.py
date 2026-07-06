@@ -269,7 +269,7 @@ async def test_list_findings_serves_card_and_schema_version():
     """A finding with a persisted card exposes it + its schema_version (additive)."""
     card = {
         "schema_version": 1,
-        "claim": "resting heart rate ran -6.4% vs your 30-day baseline",
+        "claim": "resting heart rate ran -6.4% vs your recent baseline",
         "metric": "vital.resting_heart_rate",
         "finding_type": "summary",
     }

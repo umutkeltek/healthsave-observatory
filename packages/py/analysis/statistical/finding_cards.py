@@ -40,6 +40,14 @@ from contracts.findings import (
 from . import experiment_readiness as readiness
 from .gates import MINIMUM_DATA_REQUIREMENTS
 
+# A "ran X% vs baseline" delta claim needs enough samples in the window to be
+# meaningful — a single reading's %-vs-baseline is noise, not a signal. No entry
+# in MINIMUM_DATA_REQUIREMENTS fits (``weekly_summary`` is day-based, not
+# observation-based, so reusing it would conflate days with samples), so we name
+# a conservative sample floor here. Below it, a summary card drops the delta
+# claim and says why, rather than asserting a percentage it can't stand behind.
+_SUMMARY_DELTA_MIN_SAMPLES = 5
+
 
 def _short(metric_id: str | None) -> str:
     """Human tail of a metric id (``vital.resting_heart_rate`` → ``resting heart rate``)."""
@@ -166,10 +174,11 @@ def _trend_card(metric: str | None, sd: dict[str, Any]) -> FindingCard | None:
         claim=claim,
         metric=metric,
         finding_type="trend",
-        current_window=WindowRef(
-            label=f"last {period_days} days",
-            n=int(period_days) if isinstance(period_days, int) else None,
-        ),
+        # The Trend model carries only the regression *span* (period_days), not
+        # the count of observations the fit ran on — a 30-day span may hold ~21
+        # points. Reporting the span as ``n`` would overstate coverage, so ``n``
+        # is left null and the span lives in the label only.
+        current_window=WindowRef(label=f"last {period_days} days"),
         effect_size=EffectSize(value=slope, kind="slope_per_day", p_value=p_value),
         coverage=Coverage(
             is_sufficient=True,
@@ -275,16 +284,43 @@ def _summary_card(metric: str | None, sd: dict[str, Any]) -> FindingCard | None:
     avg = _num(sd.get("avg"))
     delta_pct = _num(sd.get("delta_pct_vs_baseline"))
     count = sd.get("count") or sd.get("sample_count")
+    n = int(count) if isinstance(count, int) else None
 
-    if delta_pct is not None:
+    # A delta claim is only honest with enough samples behind it (see
+    # _SUMMARY_DELTA_MIN_SAMPLES). Below the floor — or when the sample count is
+    # unknown — we drop the delta and say so, instead of asserting a percentage
+    # off one or two readings.
+    delta_is_analyzable = (
+        delta_pct is not None and n is not None and n >= _SUMMARY_DELTA_MIN_SAMPLES
+    )
+
+    if delta_is_analyzable:
         direction = "up" if delta_pct > 0 else "down" if delta_pct < 0 else "flat"
-        claim = f"{_short(metric)} ran {delta_pct:+.1f}% vs your 30-day baseline"
+        # The aggregator baseline is (end − 30d → window_start), i.e. 30 − window
+        # days long — the exact length isn't derivable from the builder's inputs,
+        # so we say "recent baseline" rather than overstate it as "30-day".
+        claim = f"{_short(metric)} ran {delta_pct:+.1f}% vs your recent baseline"
         delta = Delta(pct=delta_pct, direction=direction)
-        baseline_window = WindowRef(label="30-day baseline")
+        baseline_window = WindowRef(label="recent baseline")
+        coverage = Coverage(observation_count=n)
     elif avg is not None:
         claim = f"{_short(metric)} averaged {avg:.1f} over the period"
         delta = None
         baseline_window = None
+        if delta_pct is not None:
+            # A delta existed but too few samples to stand behind it — flag the
+            # insufficiency explicitly rather than silently dropping it.
+            samples = f"only {n} sample(s)" if n is not None else "an unknown sample count"
+            coverage = Coverage(
+                is_sufficient=False,
+                observation_count=n,
+                note=(
+                    f"{samples} in window — delta vs your baseline not analyzable "
+                    f"(needs ≥{_SUMMARY_DELTA_MIN_SAMPLES})"
+                ),
+            )
+        else:
+            coverage = Coverage(observation_count=n)
     else:
         return None
 
@@ -292,10 +328,10 @@ def _summary_card(metric: str | None, sd: dict[str, Any]) -> FindingCard | None:
         claim=claim,
         metric=metric,
         finding_type="summary",
-        current_window=WindowRef(label="reporting period"),
+        current_window=WindowRef(label="reporting period", n=n),
         baseline_window=baseline_window,
         delta=delta,
-        coverage=Coverage(observation_count=int(count) if isinstance(count, int) else None),
+        coverage=coverage,
     )
 
 
