@@ -45,7 +45,10 @@ TYPE_TO_MODULES: dict[str, list[str]] = {
     "MetaView": ["server.api.v2_meta"],
     "Readiness": ["server.api.v2_readiness"],
     "InsightsLatest": ["server.api.v2_insights"],
-    "FindingsList": ["server.api.v2_insights"],
+    # The findings dict's top-level keys (id/finding_type/.../card/schema_version)
+    # are emitted by the route module; the nested FindingCard field names live in
+    # the contract models the producers serialize into the JSONB card column.
+    "FindingsList": ["server.api.v2_insights", "contracts.findings"],
     "CorrelationsList": ["server.api.v2_insights"],
     # The export list's keys are emitted by the storage adapter's dict
     # literal, not the thin route module — gate against where they live.

@@ -80,9 +80,15 @@ function EvidenceItem({ item }: { item: FindingDisplayItem }) {
 export function EvidenceCard({
   findings,
   compact = false,
+  title = "What changed",
+  subtitle = "Important signals first. Calculations stay available when you need proof.",
 }: {
   findings: Finding[] | null;
   compact?: boolean;
+  // Overridable so the findings page can frame legacy (schema-v0, pre-card)
+  // findings honestly as "Earlier findings" beneath the evidence cards.
+  title?: string;
+  subtitle?: string;
 }) {
   if (findings === null) {
     return (
@@ -110,8 +116,8 @@ export function EvidenceCard({
     <article className="card evidence">
       <div className="card-head split">
         <div>
-          <h2>What changed</h2>
-          <p className="card-subtitle">Important signals first. Calculations stay available when you need proof.</p>
+          <h2>{title}</h2>
+          <p className="card-subtitle">{subtitle}</p>
         </div>
         <span className="meta">
           {findings.length} finding{findings.length === 1 ? "" : "s"}

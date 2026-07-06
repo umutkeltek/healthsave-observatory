@@ -320,6 +320,89 @@ export type InsightsLatest = {
   };
 };
 
+// The FindingCard content model (additive) - the ONE card grammar the whole
+// product speaks (web, Body Brief, agent surface). Mirrors
+// packages/py/contracts/findings.py; V2Model has no alias generator, so wire
+// keys are the snake_case field names. Every field is computed by the Brain-1
+// statistical producers - the LLM never fills a card field.
+
+export type CardDirection = "up" | "down" | "flat";
+export type CardConfidence = "low" | "medium" | "high";
+
+export type CardWindow = {
+  label: string | null;
+  start: string | null;
+  end: string | null;
+  n: number | null;
+};
+
+export type CardDelta = {
+  absolute: number | null;
+  pct: number | null;
+  unit: string | null;
+  direction: CardDirection | null;
+};
+
+export type CardEffectSize = {
+  value: number | null;
+  kind: string | null; // z_score | spearman_rho | slope_per_day | cohens_d ...
+  label: string | null; // small | moderate | large | weak | strong
+  p_value: number | null;
+};
+
+export type CardCoverage = {
+  is_sufficient: boolean | null;
+  observation_count: number | null;
+  days_with_data: number | null;
+  days_until_sufficient: number | null;
+  note: string | null;
+};
+
+export type CardSource = {
+  source_plugin_id: string | null;
+  label: string | null;
+};
+
+export type CardConfounder = {
+  kind: string;
+  description: string;
+  metric: string | null;
+};
+
+// Speaks the /api/v2/experiments/candidates vocabulary so next_question can be
+// promoted straight into POST /api/v2/experiments with no parallel schema.
+export type CardExperimentCandidate = {
+  metric_a: string;
+  metric_b: string;
+  verdict: string | null;
+  lever: string | null;
+  outcome: string | null;
+  suggested_protocol: string | null;
+  required_days: number | null;
+};
+
+export type CardNextQuestion = {
+  prose: string;
+  experiment_candidate: CardExperimentCandidate | null;
+};
+
+export type FindingCard = {
+  schema_version: number;
+  claim: string;
+  metric: string;
+  finding_type: string | null;
+  current_window: CardWindow | null;
+  baseline_window: CardWindow | null;
+  delta: CardDelta | null;
+  effect_size: CardEffectSize | null;
+  coverage: CardCoverage | null;
+  sources: CardSource[];
+  confidence: CardConfidence | null;
+  limitations: string[];
+  confounders: CardConfounder[];
+  next_question: CardNextQuestion | null;
+};
+
 export type Finding = {
   id: number;
   finding_type: string | null;
@@ -327,6 +410,11 @@ export type Finding = {
   severity: string | null;
   structured_data: Record<string, unknown>;
   created_at: string | null;
+  // Additive FindingCard content model. A legacy finding persisted before the
+  // card schema carries card=null + schema_version 0 - represented honestly,
+  // never fabricated.
+  card: FindingCard | null;
+  schema_version: number;
 };
 
 export type FindingsList = {
