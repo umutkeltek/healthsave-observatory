@@ -75,7 +75,9 @@ def test_golden_batches_flow_v1_to_v2() -> None:
         # 4) the metric series the dashboard charts actually returns points
         series = client.get(
             "/api/v2/metrics/vital.heart_rate/series",
-            params={"range": "90d"},
+            # Golden fixtures are intentionally fixed historical samples. Keep
+            # this e2e about ingest -> v2 visibility, not today's rolling cutoff.
+            params={"range": "1y"},
             headers=_headers(),
         ).json()
         assert series["points"], "v2 heart_rate series came back empty after ingest"
