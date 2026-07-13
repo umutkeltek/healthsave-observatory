@@ -107,10 +107,25 @@ async def run() -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop_event.set)
 
+    # Bound each publish cycle so a stalled DB await (or any hang inside
+    # publish_once) cannot freeze the loop forever — the failure that left the
+    # bridge silently dark for ~8 days while the container stayed "Up" and paho's
+    # socket thread eventually dropped. A timed-out cycle is logged and the next
+    # cycle retries; paho keeps the MQTT socket alive on its own thread throughout.
+    publish_cycle_timeout_s = max(5, min(bridge_config.mqtt.publish_interval_seconds, 30))
+
     try:
         while not stop_event.is_set():
             try:
-                await publish_once(repository, publisher, publish_configs=publish_configs)
+                await asyncio.wait_for(
+                    publish_once(repository, publisher, publish_configs=publish_configs),
+                    timeout=publish_cycle_timeout_s,
+                )
+            except TimeoutError:
+                log.warning(
+                    "Home Assistant MQTT bridge publish cycle timed out after %ss; retrying next cycle",
+                    publish_cycle_timeout_s,
+                )
             except Exception:
                 log.exception("Home Assistant MQTT bridge publish failed")
             with suppress(TimeoutError):
