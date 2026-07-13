@@ -34,6 +34,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from .api import (
+    coverage,
     health_routes,
     ingest,
     insights,
@@ -165,6 +166,7 @@ app.include_router(health_routes.router)
 app.include_router(ingest.router)
 app.include_router(metrics.router)
 app.include_router(status.router)
+app.include_router(coverage.router)
 app.include_router(sync.router)
 app.include_router(insights.router)
 app.include_router(v2_agents.router)

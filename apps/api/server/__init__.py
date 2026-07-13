@@ -17,6 +17,7 @@ from the top-level namespace. Internal ingestion state is not re-exported
 here - call it through ``server.ingestion.*`` in new code.
 """
 
+from .api.coverage import apple_coverage
 from .api.deps import API_KEY, verify_api_key
 from .api.ingest import apple_batch
 from .api.status import apple_status
