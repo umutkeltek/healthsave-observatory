@@ -13,6 +13,12 @@ class HomeAssistantMQTTBridgeConfig:
     enabled: bool
     mqtt: HomeAssistantMQTTConfig
     legacy_mqtt: tuple[HomeAssistantMQTTConfig, ...] = ()
+    # Liveness watchdog: if no publish has actually gone out within this many
+    # seconds, the bridge exits non-zero so Docker restarts a clean process.
+    liveness_deadline_seconds: int = 300
+    # Heartbeat file updated on every successful publish; a Docker HEALTHCHECK
+    # reads its freshness so a stalled worker shows "unhealthy" instead of "Up".
+    heartbeat_path: str = "/tmp/ha_mqtt_heartbeat"
 
     @property
     def publish_configs(self) -> tuple[HomeAssistantMQTTConfig, ...]:
@@ -58,10 +64,17 @@ def load_config_from_env() -> HomeAssistantMQTTBridgeConfig:
         publish_interval_seconds=_env_int("HA_MQTT_PUBLISH_INTERVAL_SECONDS", 60),
     )
     legacy_mqtt = _legacy_mqtt_configs(mqtt)
+    # A non-positive deadline would disable the watchdog by misconfig — clamp it
+    # to the default so "Up but dark" can never silently return.
+    liveness_deadline_seconds = _env_int("HA_MQTT_LIVENESS_DEADLINE_SECONDS", 300)
+    if liveness_deadline_seconds <= 0:
+        liveness_deadline_seconds = 300
     return HomeAssistantMQTTBridgeConfig(
         enabled=_env_bool("HA_MQTT_ENABLED", False),
         mqtt=mqtt,
         legacy_mqtt=legacy_mqtt,
+        liveness_deadline_seconds=liveness_deadline_seconds,
+        heartbeat_path=_env_text("HA_MQTT_HEARTBEAT_PATH", "/tmp/ha_mqtt_heartbeat"),
     )
 
 
