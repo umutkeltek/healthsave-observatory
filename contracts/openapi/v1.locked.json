@@ -1889,6 +1889,45 @@
         "summary": "Apple Batch"
       }
     },
+    "/api/apple/coverage": {
+      "get": {
+        "description": "Per-metric latest sample timestamp, for iOS backfill-recovery reconciliation.",
+        "operationId": "apple_coverage_api_apple_coverage_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apple Coverage"
+      }
+    },
     "/api/apple/status": {
       "get": {
         "description": "Return record counts so the iOS app knows what's synced.",
