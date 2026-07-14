@@ -13,6 +13,7 @@ that matters for shape.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -20,7 +21,8 @@ from unittest.mock import patch
 
 import pytest
 from homeassistant_mqtt.bridge import HomeAssistantMQTTConfig
-from homeassistant_mqtt.main import publish_once
+from homeassistant_mqtt.liveness import BridgeStalled, LivenessWatchdog
+from homeassistant_mqtt.main import _run_loop, publish_once
 from homeassistant_mqtt.snapshot import HealthSnapshot, SourceHealthSnapshot
 
 
@@ -29,8 +31,9 @@ class _RecordingPublisher:
     config: HomeAssistantMQTTConfig = field(default_factory=HomeAssistantMQTTConfig)
     published: list[tuple[str, Any, bool]] = field(default_factory=list)
 
-    def publish_many(self, messages):
+    def publish_many(self, messages) -> bool:
         self.published.extend(messages)
+        return True
 
 
 class _StubRepository:
@@ -204,3 +207,123 @@ async def test_publish_once_emits_primary_and_legacy_alias_shapes():
     assert legacy_state["hrv"] == 58.0
     assert legacy_state["steps"] == 4200
     assert legacy_state["sleep_duration"] == 7.25
+
+
+# --- Liveness watchdog + run-loop self-heal ----------------------------------
+#
+# The bridge once went silently dark for ~8 days: the loop kept spinning but
+# every publish was skipped, so nothing raised and the container never
+# restarted. These tests pin the fix — a sustained no-publish MUST escalate
+# (raise BridgeStalled), and a healthy loop MUST update the heartbeat and stop
+# cleanly. Without the watchdog the dark-loop test loops forever; the
+# asyncio.wait_for guard turns that hang into a clear failure.
+
+
+def test_liveness_watchdog_flags_stall_after_deadline():
+    wd = LivenessWatchdog(deadline_seconds=10)
+    # Not armed yet -> never stalled (no false positive before mark_start).
+    assert wd.is_stalled(now=1000.0) is False
+    wd.mark_start(now=100.0)
+    assert wd.is_stalled(now=109.9) is False  # within deadline
+    assert wd.is_stalled(now=110.1) is True  # just past deadline
+    # A successful publish resets the clock.
+    wd.record_publish(now=200.0)
+    assert wd.is_stalled(now=209.0) is False
+    assert wd.is_stalled(now=211.0) is True
+    assert wd.seconds_since_publish(now=205.0) == pytest.approx(5.0)
+
+
+@dataclass
+class _LoopPublisher:
+    """Publisher double for the run loop. ``connected=False`` simulates a broker
+    outage / dead paho thread: every publish_many is skipped (returns False)."""
+
+    connected: bool = True
+    config: HomeAssistantMQTTConfig = field(default_factory=HomeAssistantMQTTConfig)
+    calls: int = 0
+    stop_event: asyncio.Event | None = None
+    stop_after_calls: int = 0
+
+    def publish_many(self, messages) -> bool:
+        self.calls += 1
+        if (
+            self.stop_event is not None
+            and self.stop_after_calls
+            and self.calls >= self.stop_after_calls
+        ):
+            self.stop_event.set()
+        return self.connected
+
+
+def _live_snapshot_repository() -> _StubRepository:
+    aggregate = HealthSnapshot(
+        collected_at=datetime(2026, 5, 22, 9, 0, tzinfo=UTC),
+        heart_rate=72,
+        hrv_7d_avg=58.0,
+        steps_today=4200,
+        last_sleep_hours=7.25,
+        source_model="HealthSave",
+        room_health_state="normal",
+    )
+    return _StubRepository(aggregate=aggregate, per_source=[])
+
+
+@pytest.mark.asyncio
+async def test_run_loop_exits_when_publishing_stays_dark(tmp_path):
+    """A sustained silent outage must raise BridgeStalled (self-heal), not hang."""
+
+    stop_event = asyncio.Event()
+    publisher = _LoopPublisher(connected=False)  # every publish is skipped
+    repository = _live_snapshot_repository()
+    watchdog = LivenessWatchdog(deadline_seconds=0.05)
+    loop = asyncio.get_running_loop()
+
+    async def drive():
+        with patch("homeassistant_mqtt.main.async_session", _FakeAsyncSessionFactory()):
+            await _run_loop(
+                repository=repository,
+                publisher=publisher,
+                publish_configs=(publisher.config,),
+                stop_event=stop_event,
+                watchdog=watchdog,
+                heartbeat_path=str(tmp_path / "heartbeat"),
+                publish_interval_seconds=0,  # spin fast so the deadline is reached
+                now=loop.time,
+            )
+
+    # The guard turns a regression (no escalation -> infinite loop) into a clear
+    # timeout failure instead of a hung test run.
+    with pytest.raises(BridgeStalled):
+        await asyncio.wait_for(drive(), timeout=5.0)
+
+
+@pytest.mark.asyncio
+async def test_run_loop_healthy_updates_heartbeat_and_stops_cleanly(tmp_path):
+    """A connected loop updates the heartbeat and exits cleanly on stop (no stall)."""
+
+    stop_event = asyncio.Event()
+    heartbeat = tmp_path / "heartbeat"
+    # Stop as soon as the first publish goes out so the loop ends deterministically.
+    publisher = _LoopPublisher(connected=True, stop_event=stop_event, stop_after_calls=1)
+    repository = _live_snapshot_repository()
+    watchdog = LivenessWatchdog(deadline_seconds=100)
+    loop = asyncio.get_running_loop()
+
+    with patch("homeassistant_mqtt.main.async_session", _FakeAsyncSessionFactory()):
+        await asyncio.wait_for(
+            _run_loop(
+                repository=repository,
+                publisher=publisher,
+                publish_configs=(publisher.config,),
+                stop_event=stop_event,
+                watchdog=watchdog,
+                heartbeat_path=str(heartbeat),
+                publish_interval_seconds=0,
+                now=loop.time,
+            ),
+            timeout=5.0,
+        )
+
+    # Heartbeat written with a real float timestamp; loop exited without stalling.
+    assert heartbeat.exists()
+    float(heartbeat.read_text())

@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
+import time
+from collections.abc import Callable
 from contextlib import suppress
 
 from server.db.session import async_session, engine
@@ -24,16 +26,37 @@ from .bridge import (
 )
 from .client import PahoMQTTPublisher
 from .config import load_config_from_env
+from .liveness import BridgeStalled, LivenessWatchdog
 
 log = logging.getLogger("healthsave.homeassistant_mqtt")
+
+
+def _write_heartbeat(path: str) -> None:
+    """Touch the heartbeat file so a Docker HEALTHCHECK can read its freshness.
+
+    Best-effort: a filesystem hiccup must not take the bridge down (the liveness
+    watchdog is the authoritative self-heal; the heartbeat is the observability
+    signal).
+    """
+
+    try:
+        with open(path, "w") as fh:
+            fh.write(str(time.time()))
+    except OSError:
+        log.warning("could not write MQTT heartbeat file %s", path, exc_info=True)
 
 
 async def publish_once(
     repository: TimescaleHealthSnapshotRepository,
     publisher: PahoMQTTPublisher,
     publish_configs: tuple[HomeAssistantMQTTConfig, ...] | None = None,
-) -> None:
+) -> bool:
     """Fetch one aggregate + per-source snapshot pass and publish them.
+
+    Returns ``True`` if at least one publish actually went out this cycle (i.e.
+    the client was connected), ``False`` if every publish was skipped because the
+    broker was unreachable. The caller's liveness watchdog uses this to tell a
+    healthy cycle from a silent outage.
 
     P5-d: in addition to the aggregate-device state on
     ``<prefix>/sensor/state``, we now also publish one retained-state
@@ -48,17 +71,87 @@ async def publish_once(
         snapshot = await repository.fetch_snapshot(session)
         source_snapshots = await repository.fetch_snapshots_by_source(session)
 
+    published = False
     for config in configs:
         specs = sensor_specs_for_config(config)
 
         # Aggregate parent device — unchanged behaviour for backward-compat.
-        publisher.publish_many(build_readiness_discovery_messages(config, snapshot))
-        publisher.publish_many(build_state_messages(config, specs, snapshot))
+        published |= publisher.publish_many(build_readiness_discovery_messages(config, snapshot))
+        published |= publisher.publish_many(build_state_messages(config, specs, snapshot))
 
         # Per-source sub-devices.
         for source in source_snapshots:
-            publisher.publish_many(build_source_discovery_messages(config, source))
-            publisher.publish_many([build_source_state_message(config, source)])
+            published |= publisher.publish_many(build_source_discovery_messages(config, source))
+            published |= publisher.publish_many([build_source_state_message(config, source)])
+
+    return published
+
+
+async def _run_loop(
+    *,
+    repository: TimescaleHealthSnapshotRepository,
+    publisher: PahoMQTTPublisher,
+    publish_configs: tuple[HomeAssistantMQTTConfig, ...],
+    stop_event: asyncio.Event,
+    watchdog: LivenessWatchdog,
+    heartbeat_path: str,
+    publish_interval_seconds: int,
+    now: Callable[[], float],
+) -> None:
+    """Drive the periodic publish cycle with liveness + heartbeat.
+
+    Extracted from ``run`` so the escalation path is unit-testable without real
+    signals, sockets, or a DB engine. Raises :class:`BridgeStalled` when no
+    publish has actually gone out within the watchdog deadline, so the process
+    exits non-zero and Docker restarts a clean one.
+    """
+
+    # Bound each publish cycle so a stalled DB await (or any hang inside
+    # publish_once) cannot freeze the loop — a timed-out cycle is logged and the
+    # next retries; paho keeps the MQTT socket alive on its own thread throughout.
+    publish_cycle_timeout_s = max(5, min(publish_interval_seconds, 30))
+
+    watchdog.mark_start(now())
+    _write_heartbeat(heartbeat_path)
+
+    while not stop_event.is_set():
+        published = False
+        try:
+            published = await asyncio.wait_for(
+                publish_once(repository, publisher, publish_configs=publish_configs),
+                timeout=publish_cycle_timeout_s,
+            )
+        except TimeoutError:
+            log.warning(
+                "Home Assistant MQTT bridge publish cycle timed out after %ss; retrying next cycle",
+                publish_cycle_timeout_s,
+            )
+        except Exception:
+            log.exception("Home Assistant MQTT bridge publish failed")
+
+        if published:
+            watchdog.record_publish(now())
+            _write_heartbeat(heartbeat_path)
+        elif watchdog.is_stalled(now()):
+            # Sustained silent-dark: the loop is alive but nothing is reaching the
+            # broker (paho thread dead / permanent disconnect / DB always stalling).
+            # Exit loudly so Docker (restart: unless-stopped) revives a clean
+            # process with a fresh paho thread + DB engine.
+            log.error(
+                "Home Assistant MQTT bridge has not published for %.0fs "
+                "(deadline %ss); exiting for a clean restart",
+                watchdog.seconds_since_publish(now()),
+                watchdog.deadline_seconds,
+            )
+            raise BridgeStalled(
+                "HA MQTT bridge stalled: no successful publish within the liveness deadline"
+            )
+
+        with suppress(TimeoutError):
+            await asyncio.wait_for(
+                stop_event.wait(),
+                timeout=publish_interval_seconds,
+            )
 
 
 async def run() -> None:
@@ -107,32 +200,18 @@ async def run() -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop_event.set)
 
-    # Bound each publish cycle so a stalled DB await (or any hang inside
-    # publish_once) cannot freeze the loop forever — the failure that left the
-    # bridge silently dark for ~8 days while the container stayed "Up" and paho's
-    # socket thread eventually dropped. A timed-out cycle is logged and the next
-    # cycle retries; paho keeps the MQTT socket alive on its own thread throughout.
-    publish_cycle_timeout_s = max(5, min(bridge_config.mqtt.publish_interval_seconds, 30))
-
+    watchdog = LivenessWatchdog(bridge_config.liveness_deadline_seconds)
     try:
-        while not stop_event.is_set():
-            try:
-                await asyncio.wait_for(
-                    publish_once(repository, publisher, publish_configs=publish_configs),
-                    timeout=publish_cycle_timeout_s,
-                )
-            except TimeoutError:
-                log.warning(
-                    "Home Assistant MQTT bridge publish cycle timed out after %ss; retrying next cycle",
-                    publish_cycle_timeout_s,
-                )
-            except Exception:
-                log.exception("Home Assistant MQTT bridge publish failed")
-            with suppress(TimeoutError):
-                await asyncio.wait_for(
-                    stop_event.wait(),
-                    timeout=bridge_config.mqtt.publish_interval_seconds,
-                )
+        await _run_loop(
+            repository=repository,
+            publisher=publisher,
+            publish_configs=publish_configs,
+            stop_event=stop_event,
+            watchdog=watchdog,
+            heartbeat_path=bridge_config.heartbeat_path,
+            publish_interval_seconds=bridge_config.mqtt.publish_interval_seconds,
+            now=loop.time,
+        )
     finally:
         publisher.close()
         await engine.dispose()
@@ -140,7 +219,13 @@ async def run() -> None:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
-    asyncio.run(run())
+    try:
+        asyncio.run(run())
+    except BridgeStalled:
+        # Non-zero exit so the container restart policy (unless-stopped) revives
+        # the bridge with a clean process instead of leaving it silently dark.
+        log.error("Home Assistant MQTT bridge exiting (code 1) after a liveness stall")
+        raise SystemExit(1) from None
 
 
 if __name__ == "__main__":

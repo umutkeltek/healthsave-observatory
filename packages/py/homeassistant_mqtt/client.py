@@ -83,6 +83,11 @@ class PahoMQTTPublisher:
 
         return self._connected.wait(timeout=timeout)
 
+    def is_connected(self) -> bool:
+        """Whether the MQTT socket is currently up (publishes will go out)."""
+
+        return self._connected.is_set()
+
     def _on_connect(
         self, client: Any, _userdata: Any, _flags: Any, reason_code: Any, *_: Any
     ) -> None:
@@ -120,7 +125,15 @@ class PahoMQTTPublisher:
             )
             client.publish(topic, body, qos=_QOS, retain=retain)
 
-    def publish_many(self, messages: Iterable[MQTTMessage]) -> None:
+    def publish_many(self, messages: Iterable[MQTTMessage]) -> bool:
+        """Publish a batch. Returns ``True`` if it actually went out, ``False`` if
+        it was skipped because the client is disconnected.
+
+        The bool lets the caller's liveness watchdog distinguish a healthy cycle
+        from a silently-skipped one during an outage — a sustained run of
+        ``False`` is the "Up but dark" failure that must self-heal.
+        """
+
         if self._client is None:
             raise RuntimeError("MQTT publisher is not connected")
         if not self._connected.is_set():
@@ -128,8 +141,9 @@ class PahoMQTTPublisher:
             # reconnect, on_connect re-asserts and the next cycle resends — every
             # message is retained, so nothing is permanently lost.
             log.debug("MQTT not connected; skipping publish of this cycle")
-            return
+            return False
         self._publish_each(self._client, messages)
+        return True
 
     def close(self) -> None:
         if self._client is not None:
