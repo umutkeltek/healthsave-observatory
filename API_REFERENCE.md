@@ -82,6 +82,20 @@ Per-table record counts + date ranges. The app + operators use it to confirm syn
 }
 ```
 
+### `GET /api/apple/coverage` — keyed
+Lean companion to `/api/apple/status`: the newest sample timestamp per metric, `{metric: iso_ts_or_null}`. The iOS app uses it for backfill-recovery reconciliation — it clears a sticky `deliveryIncomplete` flag only when this proves the server holds data at/after the flagged gap window. Metric keys mirror `status`; a failing metric degrades to `null` (the flag stays set, so a genuine gap still surfaces). Owner-scoped like `status`.
+```json
+{
+  "heart_rate":       "2026-06-08T20:17:39Z",
+  "hrv":              "2026-06-08T19:55:00Z",
+  "blood_oxygen":     "2026-06-08T18:03:00Z",
+  "daily_activity":   "2026-06-07",
+  "sleep_sessions":   "2026-06-08T06:41:00Z",
+  "workouts":         "2026-06-07T17:22:00Z",
+  "quantity_samples": "2026-06-08T20:10:00Z"
+}
+```
+
 ---
 
 ## 3. Read — v2 (evolvable) · callers: dashboard (apps/web), Home Assistant bridge, integrators, operator

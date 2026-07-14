@@ -77,6 +77,7 @@ __all__ = [
     "_upsert_sleep_session",
     "_upsert_sleep_stages",
     "apple_batch",
+    "apple_coverage",
     "apple_status",
     "app",
     "async_session",

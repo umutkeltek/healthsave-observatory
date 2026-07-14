@@ -58,6 +58,7 @@ V1_ROUTES_FROZEN: frozenset[str] = frozenset(
         "GET /ready",
         "POST /api/apple/batch",
         "GET /api/apple/status",
+        "GET /api/apple/coverage",
         "GET /metrics",
         "GET /api/insights/latest",
         "GET /api/insights/daily",

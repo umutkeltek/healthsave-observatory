@@ -62,8 +62,13 @@ async def test_coverage_returns_per_metric_latest():
     # flat {metric: iso_or_none} -- no wrapper, mirroring /api/apple/status
     assert "status" not in result and "counts" not in result
     assert set(result) == {
-        "heart_rate", "hrv", "blood_oxygen", "daily_activity",
-        "sleep_sessions", "workouts", "quantity_samples",
+        "heart_rate",
+        "hrv",
+        "blood_oxygen",
+        "daily_activity",
+        "sleep_sessions",
+        "workouts",
+        "quantity_samples",
     }
     assert result["heart_rate"] == "2026-07-14T08:03:00Z"
     assert result["hrv"] == "2026-07-14T07:55:00Z"

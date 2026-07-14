@@ -133,6 +133,14 @@ ALLOWLIST: dict[str, str] = {
         "STATUS_QUERY_FAILURES{metric, exception} counter (added 5G-3) is the "
         "operator-side surface."
     ),
+    "apps/api/server/api/coverage.py": (
+        "stays — lean companion to /api/apple/status: reads max(<time>) per metric "
+        "table for iOS backfill-recovery reconciliation. Same rationale as status.py: "
+        "the silent-fallback-to-None semantics are part of the iOS reconciliation "
+        "contract (a failing metric degrades to None so the deliveryIncomplete flag "
+        "stays set), so wrapping behind a repository would change the contract or "
+        "duplicate the try/except shape. Reuses the STATUS_QUERY_FAILURES counter."
+    ),
     # Phase 5F retired the four `packages/py/analysis/*` entries here:
     #   engine.py, statistical/aggregator.py, statistical/anomaly.py,
     #   statistical/trends.py — their SQL now lives in
