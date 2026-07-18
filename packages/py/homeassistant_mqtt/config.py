@@ -13,6 +13,8 @@ class HomeAssistantMQTTBridgeConfig:
     enabled: bool
     mqtt: HomeAssistantMQTTConfig
     legacy_mqtt: tuple[HomeAssistantMQTTConfig, ...] = ()
+    readiness_entities: bool = False
+    source_slugs: frozenset[str] | None = None
     # Liveness watchdog: if no publish has actually gone out within this many
     # seconds, the bridge exits non-zero so Docker restarts a clean process.
     liveness_deadline_seconds: int = 300
@@ -58,9 +60,9 @@ def load_config_from_env() -> HomeAssistantMQTTBridgeConfig:
         username=os.getenv("HA_MQTT_USERNAME", ""),
         password=os.getenv("HA_MQTT_PASSWORD", ""),
         discovery_prefix=os.getenv("HA_MQTT_DISCOVERY_PREFIX", "homeassistant"),
-        state_topic_prefix=os.getenv("HA_MQTT_STATE_TOPIC_PREFIX", "healthsave"),
-        device_identifier=os.getenv("HA_MQTT_DEVICE_IDENTIFIER", "healthsave"),
-        device_name=os.getenv("HA_MQTT_DEVICE_NAME", "HealthSave"),
+        state_topic_prefix=os.getenv("HA_MQTT_STATE_TOPIC_PREFIX", "observatory"),
+        device_identifier=os.getenv("HA_MQTT_DEVICE_IDENTIFIER", "observatory"),
+        device_name=os.getenv("HA_MQTT_DEVICE_NAME", "HealthSave Observatory"),
         publish_interval_seconds=_env_int("HA_MQTT_PUBLISH_INTERVAL_SECONDS", 60),
     )
     legacy_mqtt = _legacy_mqtt_configs(mqtt)
@@ -73,9 +75,17 @@ def load_config_from_env() -> HomeAssistantMQTTBridgeConfig:
         enabled=_env_bool("HA_MQTT_ENABLED", False),
         mqtt=mqtt,
         legacy_mqtt=legacy_mqtt,
+        readiness_entities=_env_bool("HA_MQTT_READINESS_ENTITIES", False),
+        source_slugs=_env_source_slugs(),
         liveness_deadline_seconds=liveness_deadline_seconds,
         heartbeat_path=_env_text("HA_MQTT_HEARTBEAT_PATH", "/tmp/ha_mqtt_heartbeat"),
     )
+
+
+def _env_source_slugs() -> frozenset[str] | None:
+    raw = os.getenv("HA_MQTT_SOURCE_SLUGS", "")
+    slugs = frozenset(part.strip() for part in raw.split(",") if part.strip())
+    return slugs or None
 
 
 def _legacy_mqtt_configs(

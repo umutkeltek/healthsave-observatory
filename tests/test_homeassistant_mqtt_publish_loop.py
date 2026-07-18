@@ -14,6 +14,7 @@ that matters for shape.
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -22,8 +23,12 @@ from unittest.mock import patch
 import pytest
 from homeassistant_mqtt.bridge import HomeAssistantMQTTConfig
 from homeassistant_mqtt.liveness import BridgeStalled, LivenessWatchdog
-from homeassistant_mqtt.main import _run_loop, publish_once
-from homeassistant_mqtt.snapshot import HealthSnapshot, SourceHealthSnapshot
+from homeassistant_mqtt.main import _run_loop, _warn_for_reserved_prefixes, publish_once
+from homeassistant_mqtt.snapshot import (
+    HealthSnapshot,
+    MetricReadinessSnapshot,
+    SourceHealthSnapshot,
+)
 
 
 @dataclass
@@ -114,15 +119,15 @@ async def test_publish_once_emits_aggregate_plus_per_source_layers():
 
     topics = [m[0] for m in publisher.published]
 
-    # Aggregate-device state goes out on the legacy topic.
-    assert "healthsave/sensor/state" in topics
+    # Aggregate-device state goes out on the Observatory topic.
+    assert "observatory/sensor/state" in topics
 
     # One per-source state topic per source snapshot.
-    assert "healthsave/source/apple_watch/state" in topics
-    assert "healthsave/source/whoop/state" in topics
+    assert "observatory/source/apple_watch/state" in topics
+    assert "observatory/source/whoop/state" in topics
 
     # Per-source discovery topics — at least one per populated metric.
-    discovery_topics = [t for t in topics if t.startswith("homeassistant/sensor/healthsave_")]
+    discovery_topics = [t for t in topics if t.startswith("homeassistant/sensor/observatory_")]
     # Apple Watch has all four metrics; Whoop has three (no steps).
     assert len(discovery_topics) == 4 + 3
 
@@ -148,11 +153,13 @@ async def test_publish_once_is_a_noop_for_per_source_when_no_sources_active():
         await publish_once(repository, publisher)
 
     # One aggregate state message; no per-source messages at all.
-    assert publisher.published[0][0] == "healthsave/sensor/state"
+    assert publisher.published[0][0] == "observatory/sensor/state"
     per_source_topics = [m[0] for m in publisher.published if "/source/" in m[0]]
     assert per_source_topics == []
     discovery_topics = [
-        m[0] for m in publisher.published if m[0].startswith("homeassistant/sensor/healthsave_")
+        m[0]
+        for m in publisher.published
+        if m[0].startswith("homeassistant/sensor/observatory_")
     ]
     assert discovery_topics == []
 
@@ -193,9 +200,9 @@ async def test_publish_once_emits_primary_and_legacy_alias_shapes():
         await publish_once(repository, publisher, publish_configs=(publisher.config, legacy))
 
     topics = [m[0] for m in publisher.published]
-    assert "healthsave/sensor/state" in topics
-    assert "healthsave/source/apple_watch/state" in topics
-    assert "homeassistant/sensor/healthsave_apple_watch/heart_rate/config" in topics
+    assert "observatory/sensor/state" in topics
+    assert "observatory/source/apple_watch/state" in topics
+    assert "homeassistant/sensor/observatory_apple_watch/heart_rate/config" in topics
 
     assert "healthtrack/sensor/state" in topics
     assert "healthtrack/source/apple_watch/state" in topics
@@ -205,8 +212,130 @@ async def test_publish_once_emits_primary_and_legacy_alias_shapes():
         payload for topic, payload, _ in publisher.published if topic == "healthtrack/sensor/state"
     )
     assert legacy_state["hrv"] == 58.0
-    assert legacy_state["steps"] == 4200
+    assert legacy_state["steps_today"] == 4200
+    assert "steps" not in legacy_state
     assert legacy_state["sleep_duration"] == 7.25
+
+
+@pytest.mark.asyncio
+async def test_publish_once_readiness_entities_are_off_by_default_and_keep_state_fields():
+    aggregate = HealthSnapshot(
+        collected_at=datetime(2026, 7, 18, 9, 0, tzinfo=UTC),
+        heart_rate=None,
+        hrv_7d_avg=None,
+        steps_today=4200,
+        last_sleep_hours=None,
+        source_model="HealthSave",
+        room_health_state=None,
+        metric_readiness={
+            "step_count": MetricReadinessSnapshot(
+                metric="step_count",
+                window_key="today_local",
+                ready=True,
+                status="ready",
+            )
+        },
+    )
+    repository = _StubRepository(aggregate=aggregate, per_source=[])
+    publisher = _RecordingPublisher()
+
+    with patch("homeassistant_mqtt.main.async_session", _FakeAsyncSessionFactory()):
+        await publish_once(repository, publisher)
+
+    topics = [topic for topic, _payload, _retain in publisher.published]
+    assert not any("steps_today_ready/config" in topic for topic in topics)
+    aggregate_state = next(
+        payload
+        for topic, payload, _retain in publisher.published
+        if topic == "observatory/sensor/state"
+    )
+    assert aggregate_state["steps_today_ready"] is True
+    assert aggregate_state["steps_today_status"] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_publish_once_readiness_entities_can_be_enabled():
+    aggregate = HealthSnapshot(
+        collected_at=datetime(2026, 7, 18, 9, 0, tzinfo=UTC),
+        heart_rate=None,
+        hrv_7d_avg=None,
+        steps_today=4200,
+        last_sleep_hours=None,
+        source_model="HealthSave",
+        room_health_state=None,
+        metric_readiness={
+            "step_count": MetricReadinessSnapshot(
+                metric="step_count",
+                window_key="today_local",
+                ready=True,
+                status="ready",
+            )
+        },
+    )
+    repository = _StubRepository(aggregate=aggregate, per_source=[])
+    publisher = _RecordingPublisher()
+
+    with patch("homeassistant_mqtt.main.async_session", _FakeAsyncSessionFactory()):
+        await publish_once(repository, publisher, readiness_entities=True)
+
+    topics = {topic for topic, _payload, _retain in publisher.published}
+    assert "homeassistant/binary_sensor/observatory/steps_today_ready/config" in topics
+
+
+@pytest.mark.asyncio
+async def test_publish_once_filters_source_layer_with_slug_allowlist():
+    aggregate = HealthSnapshot(
+        collected_at=datetime(2026, 7, 18, 9, 0, tzinfo=UTC),
+        heart_rate=72,
+        hrv_7d_avg=None,
+        steps_today=None,
+        last_sleep_hours=None,
+        source_model="HealthSave",
+        room_health_state=None,
+    )
+    per_source = [
+        SourceHealthSnapshot(
+            collected_at=aggregate.collected_at,
+            source_id="Apple Watch",
+            heart_rate=72,
+            hrv_latest_ms=None,
+        ),
+        SourceHealthSnapshot(
+            collected_at=aggregate.collected_at,
+            source_id="Bug C Probe",
+            heart_rate=99,
+            hrv_latest_ms=None,
+        ),
+    ]
+    repository = _StubRepository(aggregate=aggregate, per_source=per_source)
+    publisher = _RecordingPublisher()
+
+    with patch("homeassistant_mqtt.main.async_session", _FakeAsyncSessionFactory()):
+        await publish_once(repository, publisher, source_slugs=frozenset({"apple_watch"}))
+
+    topics = {topic for topic, _payload, _retain in publisher.published}
+    assert "observatory/source/apple_watch/state" in topics
+    assert "homeassistant/sensor/observatory_apple_watch/heart_rate/config" in topics
+    assert "observatory/source/bug_c_probe/state" not in topics
+    assert "homeassistant/sensor/observatory_bug_c_probe/heart_rate/config" not in topics
+
+
+def test_reserved_healthsave_prefix_logs_ios_app_collision_warning(caplog):
+    configs = (
+        HomeAssistantMQTTConfig(),
+        HomeAssistantMQTTConfig(
+            state_topic_prefix="/HealthSave/",
+            device_identifier="legacy-healthsave",
+            device_name="Legacy HealthSave",
+        ),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="healthsave.homeassistant_mqtt"):
+        _warn_for_reserved_prefixes(configs)
+
+    assert "sensor.healthsave_*" in caplog.text
+    assert "iOS app" in caplog.text
+    assert "reserved" in caplog.text
 
 
 # --- Liveness watchdog + run-loop self-heal ----------------------------------

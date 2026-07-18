@@ -26,7 +26,7 @@ def test_bridge_exposes_steps_synced_at_timestamp_sensor() -> None:
 
     spec = by_key["steps_today_synced_at"]
 
-    assert spec.entity_id == "sensor.healthsave_steps_today_synced_at"
+    assert spec.entity_id == "sensor.observatory_steps_today_synced_at"
     assert spec.device_class == "timestamp"
 
 
@@ -114,9 +114,9 @@ def test_bridge_discovers_readiness_entities_for_observed_metrics() -> None:
     messages = build_readiness_discovery_messages(HomeAssistantMQTTConfig(), snapshot)
     topics = {topic for topic, _payload, _retain in messages}
 
-    assert "homeassistant/binary_sensor/healthsave/steps_today_ready/config" in topics
-    assert "homeassistant/sensor/healthsave/steps_today_status/config" in topics
-    assert "homeassistant/sensor/healthsave/steps_today_staleness_minutes/config" in topics
+    assert "homeassistant/binary_sensor/observatory/steps_today_ready/config" in topics
+    assert "homeassistant/sensor/observatory/steps_today_status/config" in topics
+    assert "homeassistant/sensor/observatory/steps_today_staleness_minutes/config" in topics
 
 
 def test_derive_room_health_state_prefers_sleep_when_recent_sleep_low() -> None:

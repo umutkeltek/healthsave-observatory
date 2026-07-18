@@ -1,20 +1,19 @@
 from __future__ import annotations
 
+import pytest
 from homeassistant_mqtt.config import load_config_from_env
 
 
 def test_load_config_from_env_keeps_bridge_disabled_by_default(monkeypatch) -> None:
-    """Defaults rebranded in P5-b: prefix/identifier/name all start
-    with ``healthsave`` so a fresh datahub deploy ships a coherent
-    HA-side brand. Legacy ``healthtrack`` shape stays available via
-    explicit env overrides (tested in
-    ``test_load_config_from_env_reads_broker_and_discovery_values``).
-    """
+    """A fresh bridge uses the Observatory namespace and a lean entity set."""
     for var in (
         "HA_MQTT_ENABLED",
         "HA_MQTT_STATE_TOPIC_PREFIX",
         "HA_MQTT_DEVICE_IDENTIFIER",
         "HA_MQTT_DEVICE_NAME",
+        "HA_MQTT_READINESS_ENTITIES",
+        "HA_MQTT_SOURCE_SLUGS",
+        "HA_MQTT_LEGACY_STATE_TOPIC_PREFIX",
     ):
         monkeypatch.delenv(var, raising=False)
 
@@ -22,9 +21,11 @@ def test_load_config_from_env_keeps_bridge_disabled_by_default(monkeypatch) -> N
 
     assert loaded.enabled is False
     assert loaded.mqtt.broker == "localhost"
-    assert loaded.mqtt.state_topic_prefix == "healthsave"
-    assert loaded.mqtt.device_identifier == "healthsave"
-    assert loaded.mqtt.device_name == "HealthSave"
+    assert loaded.mqtt.state_topic_prefix == "observatory"
+    assert loaded.mqtt.device_identifier == "observatory"
+    assert loaded.mqtt.device_name == "HealthSave Observatory"
+    assert loaded.readiness_entities is False
+    assert loaded.source_slugs is None
 
 
 def test_load_config_from_env_reads_broker_and_discovery_values(monkeypatch) -> None:
@@ -38,6 +39,8 @@ def test_load_config_from_env_reads_broker_and_discovery_values(monkeypatch) -> 
     monkeypatch.setenv("HA_MQTT_DEVICE_IDENTIFIER", "health_data_hub_demo")
     monkeypatch.setenv("HA_MQTT_DEVICE_NAME", "Health Demo")
     monkeypatch.setenv("HA_MQTT_PUBLISH_INTERVAL_SECONDS", "30")
+    monkeypatch.setenv("HA_MQTT_READINESS_ENTITIES", "true")
+    monkeypatch.setenv("HA_MQTT_SOURCE_SLUGS", "apple_watch, whoop,apple_watch")
 
     loaded = load_config_from_env()
 
@@ -51,6 +54,17 @@ def test_load_config_from_env_reads_broker_and_discovery_values(monkeypatch) -> 
     assert loaded.mqtt.device_identifier == "health_data_hub_demo"
     assert loaded.mqtt.device_name == "Health Demo"
     assert loaded.mqtt.publish_interval_seconds == 30
+    assert loaded.readiness_entities is True
+    assert loaded.source_slugs == frozenset({"apple_watch", "whoop"})
+
+
+@pytest.mark.parametrize("raw", ["", " , "])
+def test_empty_source_slug_allowlist_publishes_all_sources(monkeypatch, raw: str) -> None:
+    monkeypatch.setenv("HA_MQTT_SOURCE_SLUGS", raw)
+
+    loaded = load_config_from_env()
+
+    assert loaded.source_slugs is None
 
 
 def test_load_config_from_env_reads_legacy_alias_values(monkeypatch) -> None:
@@ -60,16 +74,16 @@ def test_load_config_from_env_reads_legacy_alias_values(monkeypatch) -> None:
     monkeypatch.setenv("HA_MQTT_USERNAME", "health")
     monkeypatch.setenv("HA_MQTT_PASSWORD", "secret")
     monkeypatch.setenv("HA_MQTT_DISCOVERY_PREFIX", "ha")
-    monkeypatch.setenv("HA_MQTT_STATE_TOPIC_PREFIX", "healthsave")
-    monkeypatch.setenv("HA_MQTT_DEVICE_IDENTIFIER", "healthsave")
-    monkeypatch.setenv("HA_MQTT_DEVICE_NAME", "HealthSave")
+    monkeypatch.setenv("HA_MQTT_STATE_TOPIC_PREFIX", "observatory")
+    monkeypatch.setenv("HA_MQTT_DEVICE_IDENTIFIER", "observatory")
+    monkeypatch.setenv("HA_MQTT_DEVICE_NAME", "HealthSave Observatory")
     monkeypatch.setenv("HA_MQTT_LEGACY_STATE_TOPIC_PREFIX", "healthtrack")
     monkeypatch.setenv("HA_MQTT_LEGACY_DEVICE_IDENTIFIER", "healthtrack")
     monkeypatch.setenv("HA_MQTT_LEGACY_DEVICE_NAME", "HealthTrack")
 
     loaded = load_config_from_env()
 
-    assert loaded.publish_configs[0].state_topic_prefix == "healthsave"
+    assert loaded.publish_configs[0].state_topic_prefix == "observatory"
     assert len(loaded.legacy_mqtt) == 1
 
     legacy = loaded.legacy_mqtt[0]
