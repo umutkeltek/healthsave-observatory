@@ -3,8 +3,8 @@
 Two device layers ship side-by-side:
 
   * **Aggregate parent device** (``device_identifier`` from config, default
-    ``"healthsave"``). Emits the legacy 6-sensor enum so existing HA
-    dashboards keep working. Topics: ``<prefix>/sensor/state`` for
+    ``"observatory"``). Emits the aggregate sensor set on the Observatory
+    parent device. Topics: ``<prefix>/sensor/state`` for
     state, ``<prefix>/status`` for availability, discovery under
     ``homeassistant/sensor/<prefix>/<metric>/config``.
 
@@ -40,13 +40,12 @@ class HomeAssistantMQTTConfig:
     username: str = ""
     password: str = ""
     discovery_prefix: str = "homeassistant"
-    # Rebranded from the legacy 'healthtrack' prefix to 'healthsave' on
-    # the datahub side. Env vars HA_MQTT_STATE_TOPIC_PREFIX
-    # / HA_MQTT_DEVICE_IDENTIFIER / HA_MQTT_DEVICE_NAME still override
-    # so users on the legacy HA setup can pin the old shape.
-    state_topic_prefix: str = "healthsave"
-    device_identifier: str = "healthsave"
-    device_name: str = "HealthSave"
+    # The Observatory namespace stays separate from the iOS app's reserved
+    # healthsave_* direct-push entities. Env vars still allow explicit migration
+    # aliases through HomeAssistantMQTTBridgeConfig.legacy_mqtt.
+    state_topic_prefix: str = "observatory"
+    device_identifier: str = "observatory"
+    device_name: str = "HealthSave Observatory"
     publish_interval_seconds: int = 60
 
 
@@ -75,34 +74,31 @@ def default_sensor_specs() -> list[SensorSpec]:
 
     Source-aware sub-devices (per-source HR/HRV/steps/sleep) land in
     the P5-d bridge rewrite. P5-b keeps the wire shape the same and
-    only rebrands the entity_id + display-name strings from legacy
-    ``healthtrack_*`` to the datahub-canonical ``healthsave_*``.
+    only controls the default entity id + display-name strings.
     """
 
-    return _sensor_specs(entity_prefix="healthsave", display_name="HealthSave")
+    return _sensor_specs(
+        entity_prefix="observatory",
+        display_name="HealthSave Observatory",
+    )
 
 
 def sensor_specs_for_config(config: HomeAssistantMQTTConfig) -> list[SensorSpec]:
     """Aggregate-device sensors for the configured Home Assistant shape.
 
     The MQTT topic prefix, Home Assistant object ids, and display names
-    should move together. That keeps the default HealthSave device clean
-    while still letting legacy deployments publish ``healthtrack_*``
-    entities until their dashboards are migrated.
+    move together. Legacy aliases use this same generic shape.
     """
 
-    specs = _sensor_specs(
+    return _sensor_specs(
         entity_prefix=_topic_part(config.state_topic_prefix),
         display_name=config.device_name,
     )
-    if _topic_part(config.state_topic_prefix) == "healthtrack":
-        specs.extend(_legacy_healthtrack_specs(config.device_name))
-    return specs
 
 
 def _sensor_specs(entity_prefix: str, display_name: str) -> list[SensorSpec]:
     prefix = _topic_part(entity_prefix)
-    name = display_name.strip() or "HealthSave"
+    name = display_name.strip() or "HealthSave Observatory"
     return [
         SensorSpec(
             key="heart_rate",
@@ -144,7 +140,7 @@ def _sensor_specs(entity_prefix: str, display_name: str) -> list[SensorSpec]:
         ),
         # Rich metrics — already populated in HealthSnapshot, now advertised on the
         # primary device so the Home Assistant adaptive-automation "brain" can read
-        # fresh healthsave_* entities instead of the orphaned legacy healthtrack_*.
+        # fresh Observatory entities instead of orphaned migration aliases.
         SensorSpec(
             key="hrv",
             entity_id=f"sensor.{prefix}_hrv",
@@ -227,83 +223,6 @@ def _sensor_specs(entity_prefix: str, display_name: str) -> list[SensorSpec]:
             entity_id=f"sensor.{prefix}_room_health_state",
             name=f"{name} Room State",
             icon="mdi:home-heart",
-        ),
-    ]
-
-
-def _legacy_healthtrack_specs(display_name: str) -> list[SensorSpec]:
-    name = display_name.strip() or "HealthTrack"
-    return [
-        SensorSpec(
-            key="hrv",
-            entity_id="sensor.healthtrack_hrv",
-            name=f"{name} HRV",
-            unit="ms",
-            state_class="measurement",
-            icon="mdi:heart-flash",
-        ),
-        SensorSpec(
-            key="steps",
-            entity_id="sensor.healthtrack_steps",
-            name=f"{name} Steps",
-            unit="steps",
-            state_class="total",
-            icon="mdi:shoe-print",
-        ),
-        SensorSpec(
-            key="active_calories",
-            entity_id="sensor.healthtrack_active_calories",
-            name=f"{name} Active Calories",
-            unit="kcal",
-            state_class="total",
-            icon="mdi:fire",
-        ),
-        SensorSpec(
-            key="blood_oxygen",
-            entity_id="sensor.healthtrack_blood_oxygen",
-            name=f"{name} Blood Oxygen",
-            unit="%",
-            state_class="measurement",
-            icon="mdi:water-percent",
-        ),
-        SensorSpec(
-            key="recovery_score",
-            entity_id="sensor.healthtrack_recovery_score",
-            name=f"{name} Recovery Score",
-            unit="%",
-            state_class="measurement",
-            icon="mdi:medal",
-        ),
-        SensorSpec(
-            key="sleep_duration",
-            entity_id="sensor.healthtrack_sleep_duration",
-            name=f"{name} Sleep Duration",
-            unit="h",
-            state_class="measurement",
-            icon="mdi:sleep",
-        ),
-        SensorSpec(
-            key="sleep_efficiency",
-            entity_id="sensor.healthtrack_sleep_efficiency",
-            name=f"{name} Sleep Efficiency",
-            unit="%",
-            state_class="measurement",
-            icon="mdi:sleep",
-        ),
-        SensorSpec(
-            key="resting_heart_rate",
-            entity_id="sensor.healthtrack_resting_heart_rate",
-            name=f"{name} Resting Heart Rate",
-            unit="bpm",
-            state_class="measurement",
-            icon="mdi:heart-pulse",
-        ),
-        SensorSpec(
-            key="strain",
-            entity_id="sensor.healthtrack_strain",
-            name=f"{name} Strain",
-            state_class="measurement",
-            icon="mdi:arm-flex",
         ),
     ]
 
@@ -409,7 +328,7 @@ def readiness_sensor_specs_for_snapshot(
     """Discovery specs for observed metric-readiness fields."""
 
     prefix = _topic_part(config.state_topic_prefix)
-    device_name = config.device_name.strip() or "HealthSave"
+    device_name = config.device_name.strip() or "HealthSave Observatory"
     specs: list[SensorSpec] = []
     seen: set[str] = set()
     for readiness in sorted(
@@ -521,7 +440,7 @@ SOURCE_METRIC_SPECS: tuple[tuple[str, str, str | None, str | None, str], ...] = 
 def _source_device_identifier(config: HomeAssistantMQTTConfig, slug: str) -> str:
     """The HA device identifier for a per-source sub-device.
 
-    ``<parent_identifier>_<slug>`` — e.g. ``healthsave_apple_watch``.
+    ``<parent_identifier>_<slug>`` — e.g. ``observatory_apple_watch``.
     """
     return f"{config.device_identifier}_{slug}"
 

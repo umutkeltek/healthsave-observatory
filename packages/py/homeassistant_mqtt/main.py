@@ -50,6 +50,9 @@ async def publish_once(
     repository: TimescaleHealthSnapshotRepository,
     publisher: PahoMQTTPublisher,
     publish_configs: tuple[HomeAssistantMQTTConfig, ...] | None = None,
+    *,
+    readiness_entities: bool = False,
+    source_slugs: frozenset[str] | None = None,
 ) -> bool:
     """Fetch one aggregate + per-source snapshot pass and publish them.
 
@@ -76,11 +79,16 @@ async def publish_once(
         specs = sensor_specs_for_config(config)
 
         # Aggregate parent device — unchanged behaviour for backward-compat.
-        published |= publisher.publish_many(build_readiness_discovery_messages(config, snapshot))
+        if readiness_entities:
+            published |= publisher.publish_many(
+                build_readiness_discovery_messages(config, snapshot)
+            )
         published |= publisher.publish_many(build_state_messages(config, specs, snapshot))
 
         # Per-source sub-devices.
         for source in source_snapshots:
+            if source_slugs is not None and source.slug not in source_slugs:
+                continue
             published |= publisher.publish_many(build_source_discovery_messages(config, source))
             published |= publisher.publish_many([build_source_state_message(config, source)])
 
@@ -97,6 +105,8 @@ async def _run_loop(
     heartbeat_path: str,
     publish_interval_seconds: int,
     now: Callable[[], float],
+    readiness_entities: bool = False,
+    source_slugs: frozenset[str] | None = None,
 ) -> None:
     """Drive the periodic publish cycle with liveness + heartbeat.
 
@@ -118,7 +128,13 @@ async def _run_loop(
         published = False
         try:
             published = await asyncio.wait_for(
-                publish_once(repository, publisher, publish_configs=publish_configs),
+                publish_once(
+                    repository,
+                    publisher,
+                    publish_configs=publish_configs,
+                    readiness_entities=readiness_entities,
+                    source_slugs=source_slugs,
+                ),
                 timeout=publish_cycle_timeout_s,
             )
         except TimeoutError:
@@ -154,6 +170,26 @@ async def _run_loop(
             )
 
 
+def _warn_for_reserved_prefixes(
+    publish_configs: tuple[HomeAssistantMQTTConfig, ...],
+) -> None:
+    reserved = sorted(
+        {
+            config.state_topic_prefix
+            for config in publish_configs
+            if config.state_topic_prefix.strip("/").lower() == "healthsave"
+        }
+    )
+    if not reserved:
+        return
+    log.warning(
+        "Home Assistant MQTT prefix(es) %s collide with the iOS app: "
+        "sensor.healthsave_* is reserved for the app's direct push; "
+        "configure a different canonical or legacy prefix",
+        ",".join(reserved),
+    )
+
+
 async def run() -> None:
     bridge_config = load_config_from_env()
     if not bridge_config.enabled:
@@ -162,6 +198,7 @@ async def run() -> None:
 
     repository = TimescaleHealthSnapshotRepository()
     publish_configs = bridge_config.publish_configs
+    _warn_for_reserved_prefixes(publish_configs)
 
     def session_messages() -> list[MQTTMessage]:
         """Availability(online) + discovery to (re)assert on every connect.
@@ -211,6 +248,8 @@ async def run() -> None:
             heartbeat_path=bridge_config.heartbeat_path,
             publish_interval_seconds=bridge_config.mqtt.publish_interval_seconds,
             now=loop.time,
+            readiness_entities=bridge_config.readiness_entities,
+            source_slugs=bridge_config.source_slugs,
         )
     finally:
         publisher.close()

@@ -50,36 +50,58 @@ The bridge publishes retained state and Home Assistant discovery topics.
 
 Aggregate parent device:
 
-- State topic: `healthsave/sensor/state`
-- Discovery topics: `homeassistant/sensor/healthsave/<metric>/config`
-- Availability topic: `healthsave/status`
+- State topic: `observatory/sensor/state`
+- Discovery topics: `homeassistant/sensor/observatory/<metric>/config`
+- Availability topic: `observatory/status`
 
 Default parent entities:
 
-- `sensor.healthsave_heart_rate`
-- `sensor.healthsave_hrv_7d_avg`
-- `sensor.healthsave_steps_today`
-- `sensor.healthsave_last_sleep_hours`
-- `sensor.healthsave_source_model`
-- `sensor.healthsave_room_health_state`
+- `sensor.observatory_heart_rate`
+- `sensor.observatory_hrv_7d_avg`
+- `sensor.observatory_steps_today`
+- `sensor.observatory_last_sleep_hours`
+- `sensor.observatory_source_model`
+- `sensor.observatory_room_health_state`
 
 Per-source sub-devices:
 
-- State topic: `healthsave/source/<slug>/state`
-- Discovery topics: `homeassistant/sensor/healthsave_<slug>/<metric>/config`
+- State topic: `observatory/source/<slug>/state`
+- Discovery topics: `homeassistant/sensor/observatory_<slug>/<metric>/config`
 - Metrics: `heart_rate`, `hrv_latest_ms`, `steps_today`, `last_sleep_hours`
 
-Sub-devices link to the parent HealthSave device through Home Assistant `via_device`, so Apple Watch, Whoop, iPhone, and other sources can appear as separate devices under HealthSave.
+Sub-devices link to the parent HealthSave Observatory device through Home Assistant `via_device`, so Apple Watch, Whoop, iPhone, and other sources can appear as separate devices under the Observatory.
 
 ## Defaults
 
 | Setting | Default |
 |---|---|
 | Discovery prefix | `homeassistant` |
-| State prefix | `healthsave` |
-| Device identifier | `healthsave` |
-| Device name | `HealthSave` |
+| State prefix | `observatory` |
+| Device identifier | `observatory` |
+| Device name | `HealthSave Observatory` |
 | Publish interval | `60` seconds |
+| Per-metric readiness entities | Off |
+| Source slug allowlist | Empty (publish all sources) |
+
+Set `HA_MQTT_READINESS_ENTITIES=true` only when you want per-metric readiness discovery entities. Readiness fields remain in the aggregate JSON state payload when this is off.
+
+Set `HA_MQTT_SOURCE_SLUGS` to a comma-separated allowlist when Home Assistant should expose only selected source devices:
+
+```bash
+HA_MQTT_SOURCE_SLUGS=apple_watch,whoop
+```
+
+## Namespace Migration
+
+The default Home Assistant entity namespace changed from `healthsave_*` to `observatory_*`. The `sensor.healthsave_*` namespace is reserved for the HealthSave iOS app's direct Home Assistant push; configuring `healthsave` as either the canonical or legacy MQTT prefix logs a startup warning because the two publishers can collide.
+
+Update dashboards and automations to use `observatory_*` entity IDs. For a temporary migration window, the generic legacy alias mechanism can publish a second config under the old namespace:
+
+```bash
+HA_MQTT_LEGACY_STATE_TOPIC_PREFIX=healthsave
+```
+
+The bridge does not remove old retained discovery or state topics. After updating Home Assistant references, clear obsolete retained `healthsave/#` and `healthtrack/#` topics and remove orphaned entities from the Home Assistant registry as an operator-side cleanup.
 
 If you have an older Home Assistant setup using a previous namespace, set legacy variables so both topic shapes publish during migration:
 

@@ -103,13 +103,12 @@ async def test_medication_dose_event_ingest_writes_dedicated_rows() -> None:
 
 
 def test_homeassistant_config_has_medication_status_sensor_shape() -> None:
-    specs = sensor_specs_for_config(
-        HomeAssistantMQTTConfig(device_identifier="healthsave", device_name="HealthSave")
-    )
+    specs = sensor_specs_for_config(HomeAssistantMQTTConfig())
     by_key = {spec.key: spec for spec in specs}
 
     assert (
-        by_key["latest_medication_status"].entity_id == "sensor.healthsave_latest_medication_status"
+        by_key["latest_medication_status"].entity_id
+        == "sensor.observatory_latest_medication_status"
     )
     assert by_key["latest_medication_status"].state_class == ""
     assert by_key["latest_medication_status"].icon == "mdi:pill"
