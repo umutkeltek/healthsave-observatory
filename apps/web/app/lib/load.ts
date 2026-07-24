@@ -75,7 +75,7 @@ export const GRID_METRICS: { id: string; title: string }[] = [
 
 export async function safeSeries(id: string, range = "7d"): Promise<MetricSeries | null> {
   try {
-    return await fetchSeries(id, range);
+    return await swrCache(`series:${id}:${range}`, 30_000, () => fetchSeries(id, range));
   } catch (error) {
     return swallow("loader", error);
   }
@@ -90,7 +90,9 @@ const batchSeriesCached = cache(
     const ids = idsKey.split("\u0000");
     const map = new Map<string, MetricSeries>();
     try {
-      const batch = await fetchSeriesBatch(ids, range);
+      const batch = await swrCache(`series-batch:${idsKey}:${range}`, 30_000, () =>
+        fetchSeriesBatch(ids, range),
+      );
       for (const item of batch.series) {
         if (item.metric && item.points) {
           map.set(item.metric.id, {
@@ -124,9 +126,10 @@ export function safeSeriesMany(ids: string[], range = "7d"): Promise<Map<string,
   return batchSeriesCached(ids.join("\u0000"), range);
 }
 
-// The static registry catalog and the two heavy coverage reads ride the
-// process-level SWR cache: first request after boot pays the real cost, every
-// later page view is served instantly and refreshed in the background.
+// The static registry catalog, the two heavy coverage reads, and the series
+// batch/per-metric reads ride the process-level SWR cache: first request
+// after boot pays the real cost, every later page view is served instantly
+// and refreshed in the background.
 export const safeMetrics = cache(async (): Promise<MetricSummary[] | null> => {
   try {
     return await swrCache("metrics-catalog", 300_000, fetchMetrics);
