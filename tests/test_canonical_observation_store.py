@@ -238,3 +238,74 @@ async def test_query_fused_series_groups_by_semantic_key_and_prefers_primary() -
     assert params["stream_id"] is None
     assert [p.semantic_key for p in points] == ["sem:v1:polar:user:exercise:E1"]
     assert points[0].is_primary is True
+
+
+@pytest.mark.asyncio
+async def test_query_fused_series_many_groups_rows_by_metric_id() -> None:
+    """One query, many metrics: rows come back grouped, not interleaved."""
+    repo = CanonicalObservationRepository()
+    rows = [
+        {
+            "metric_id": "vital.heart_rate",
+            "interval_start": _T,
+            "interval_end": _T,
+            "numeric_value": 61.0,
+            "code": None,
+            "canonical_unit": "bpm",
+            "source_id": _SOURCE,
+            "confidence": None,
+            "semantic_key": None,
+            "aggregation_scope": "interval_component",
+            "is_primary": True,
+        },
+        {
+            "metric_id": "sleep.stage",
+            "interval_start": _T,
+            "interval_end": _T,
+            "numeric_value": None,
+            "code": "deep",
+            "canonical_unit": None,
+            "source_id": _SOURCE,
+            "confidence": None,
+            "semantic_key": None,
+            "aggregation_scope": "interval_component",
+            "is_primary": True,
+        },
+    ]
+    session = _FakeSession(rows)
+
+    grouped = await repo.query_fused_series_many(
+        session,
+        owner_id=_SOURCE,
+        workspace_id=_SOURCE,
+        metric_ids=["vital.heart_rate", "sleep.stage"],
+        start=_T,
+        end=_T,
+    )
+
+    sql, params = session.calls[0]
+    assert "PARTITION BY metric_id, COALESCE(semantic_key, id::text)" in str(sql)
+    assert "PARTITION BY metric_id ORDER BY interval_start ASC" in str(sql)
+    assert params["metric_ids"] == ["vital.heart_rate", "sleep.stage"]
+    assert params["stream_id"] is None
+    assert set(grouped) == {"vital.heart_rate", "sleep.stage"}
+    assert grouped["vital.heart_rate"][0].value == 61.0
+    assert grouped["sleep.stage"][0].code == "deep"
+
+
+@pytest.mark.asyncio
+async def test_query_fused_series_many_empty_ids_is_a_noop() -> None:
+    repo = CanonicalObservationRepository()
+    session = _FakeSession()
+
+    grouped = await repo.query_fused_series_many(
+        session,
+        owner_id=_SOURCE,
+        workspace_id=_SOURCE,
+        metric_ids=[],
+        start=_T,
+        end=_T,
+    )
+
+    assert grouped == {}
+    assert session.calls == []
