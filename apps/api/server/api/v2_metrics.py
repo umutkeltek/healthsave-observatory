@@ -137,6 +137,48 @@ def _point_dicts(points) -> list[dict]:
     ]
 
 
+async def _batch_series_fused(
+    session: AsyncSession,
+    metric_ids: list[str],
+    *,
+    start: datetime,
+    end: datetime,
+) -> list[dict]:
+    """Assemble the batch route's ``series`` list via one fused multi-metric read.
+
+    Resolves known vs. unknown metric ids first (unknown ids keep the
+    unchanged ``{"metric_id", "error"}`` shape), then issues a single
+    :meth:`TimeSeriesQueryService.query_fused_series_many` call for the known
+    ids — replacing the N sequential per-id awaits this route used to run —
+    then reassembles items in the caller's original ``metric_ids`` order. A
+    known metric with no rows in range gets ``points: []``.
+    """
+    known: dict[str, MetricDefinition] = {}
+    for metric_id in metric_ids:
+        metric = get_metric(metric_id)
+        if metric is not None:
+            known[metric_id] = metric
+
+    points_by_metric = await _REPO.query_fused_series_many(
+        session,
+        owner_id=DEFAULT_OWNER_ID,
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        metric_ids=list(known),
+        start=start,
+        end=end,
+    )
+
+    series: list[dict] = []
+    for metric_id in metric_ids:
+        metric = known.get(metric_id)
+        if metric is None:
+            series.append({"metric_id": metric_id, "error": "unknown metric"})
+            continue
+        points = points_by_metric.get(metric_id, [])
+        series.append({"metric": _metric_summary(metric), "points": _point_dicts(points)})
+    return series
+
+
 @router.get("/series", dependencies=[Depends(verify_api_key)])
 async def metric_series_batch(
     ids: str,
@@ -169,20 +211,26 @@ async def metric_series_batch(
 
     end = datetime.now(UTC)
     start = end - window
-    series: list[dict] = []
-    for metric_id in metric_ids:
-        metric = get_metric(metric_id)
-        if metric is None:
-            series.append({"metric_id": metric_id, "error": "unknown metric"})
-            continue
-        points = await _query_metric_points(
-            session,
-            metric_id=metric_id,
-            start=start,
-            end=end,
-            stream_id=stream_id,
-        )
-        series.append({"metric": _metric_summary(metric), "points": _point_dicts(points)})
+    if stream_id is None:
+        # Dashboard path: one fused multi-metric query instead of N serialized awaits.
+        series = await _batch_series_fused(session, metric_ids, start=start, end=end)
+    else:
+        # Single-stream narrowing is rare and uses the non-fused per-id query path;
+        # out of scope for the batch fusion above.
+        series = []
+        for metric_id in metric_ids:
+            metric = get_metric(metric_id)
+            if metric is None:
+                series.append({"metric_id": metric_id, "error": "unknown metric"})
+                continue
+            points = await _query_metric_points(
+                session,
+                metric_id=metric_id,
+                start=start,
+                end=end,
+                stream_id=stream_id,
+            )
+            series.append({"metric": _metric_summary(metric), "points": _point_dicts(points)})
     return {
         "range": range,
         "start": start.isoformat(),

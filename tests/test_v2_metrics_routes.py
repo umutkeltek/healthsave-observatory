@@ -135,8 +135,10 @@ async def test_metric_series_unknown_range_422() -> None:
 
 @pytest.mark.asyncio
 async def test_batch_series_returns_item_per_metric() -> None:
+    """Rows come back tagged with metric_id; a known id with no rows gets []."""
     rows = [
         {
+            "metric_id": "vital.heart_rate",
             "interval_start": _T,
             "interval_end": _T,
             "numeric_value": 61.0,
@@ -156,6 +158,7 @@ async def test_batch_series_returns_item_per_metric() -> None:
     assert first["points"][0]["value"] == 61.0
     assert first["points"][0]["unit"] == "bpm"
     assert body["series"][1]["metric"]["id"] == "sleep.stage"
+    assert body["series"][1]["points"] == []
 
 
 @pytest.mark.asyncio
@@ -166,6 +169,65 @@ async def test_batch_series_unknown_id_is_per_item_error() -> None:
     )
     assert body["series"][0] == {"metric_id": "not.a.metric", "error": "unknown metric"}
     assert body["series"][1]["metric"]["id"] == "vital.heart_rate"
+    assert body["series"][1]["points"] == []
+
+
+@pytest.mark.asyncio
+async def test_batch_series_stream_id_none_issues_one_fused_query() -> None:
+    """The N+1 fix: mixed known/unknown ids in original order, ONE query call."""
+    rows = [
+        {
+            "metric_id": "sleep.stage",
+            "interval_start": _T,
+            "interval_end": _T,
+            "numeric_value": None,
+            "code": "deep",
+            "canonical_unit": None,
+            "source_id": _SOURCE,
+            "confidence": None,
+        },
+        {
+            "metric_id": "vital.heart_rate",
+            "interval_start": _T,
+            "interval_end": _T,
+            "numeric_value": 61.0,
+            "code": None,
+            "canonical_unit": "bpm",
+            "source_id": _SOURCE,
+            "confidence": None,
+        },
+    ]
+    session = _FakeSession(rows)
+
+    body = await metric_series_batch(
+        ids="vital.heart_rate,not.a.metric,sleep.stage", range="7d", session=session
+    )
+
+    # exactly one round trip for the whole batch, not one per known id
+    assert len(session.calls) == 1
+    _sql, params = session.calls[0]
+    assert params["metric_ids"] == ["vital.heart_rate", "sleep.stage"]
+    assert params["stream_id"] is None
+
+    ids_in_order = [
+        item.get("metric", {}).get("id") or item.get("metric_id") for item in body["series"]
+    ]
+    assert ids_in_order == ["vital.heart_rate", "not.a.metric", "sleep.stage"]
+    assert body["series"][1] == {"metric_id": "not.a.metric", "error": "unknown metric"}
+    assert body["series"][0]["points"][0]["value"] == 61.0
+    assert body["series"][2]["points"][0]["code"] == "deep"
+
+
+@pytest.mark.asyncio
+async def test_batch_series_known_id_with_zero_points() -> None:
+    """A known metric with no rows in range still gets an item, points: []."""
+    body = await metric_series_batch(
+        ids="vital.heart_rate,sleep.stage", range="7d", session=_FakeSession([])
+    )
+    assert body["series"][0]["metric"]["id"] == "vital.heart_rate"
+    assert body["series"][0]["points"] == []
+    assert body["series"][1]["metric"]["id"] == "sleep.stage"
+    assert body["series"][1]["points"] == []
 
 
 @pytest.mark.asyncio

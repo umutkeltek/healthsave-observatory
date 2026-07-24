@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from contracts.observation import Observation
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -186,6 +186,45 @@ _FUSED_SERIES_SQL = text(
     """
 )
 
+_FUSED_SERIES_MANY_SQL = text(
+    """
+    WITH ranked AS (
+      SELECT
+        metric_id, interval_start, interval_end, numeric_value, code, canonical_unit,
+        source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary,
+        ROW_NUMBER() OVER (
+          PARTITION BY metric_id, COALESCE(semantic_key, id::text)
+          ORDER BY is_primary DESC, recorded_at DESC NULLS LAST, created_at DESC, id
+        ) AS fusion_rank
+      FROM canonical_observations
+      WHERE owner_id = :owner_id
+        AND workspace_id = :workspace_id
+        AND metric_id IN :metric_ids
+        AND interval_start >= :start
+        AND interval_start < :end
+        AND status = 'active'
+        AND (CAST(:stream_id AS uuid) IS NULL OR stream_id = CAST(:stream_id AS uuid))
+    ),
+    fused AS (
+      SELECT metric_id, interval_start, interval_end, numeric_value, code, canonical_unit,
+             source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary
+      FROM ranked
+      WHERE fusion_rank = 1
+    ),
+    capped AS (
+      SELECT metric_id, interval_start, interval_end, numeric_value, code, canonical_unit,
+             source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary,
+             ROW_NUMBER() OVER (PARTITION BY metric_id ORDER BY interval_start ASC) AS rn
+      FROM fused
+    )
+    SELECT metric_id, interval_start, interval_end, numeric_value, code, canonical_unit,
+           source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary
+    FROM capped
+    WHERE rn <= :limit
+    ORDER BY metric_id, interval_start ASC
+    """
+).bindparams(bindparam("metric_ids", expanding=True))
+
 
 class CanonicalObservationRepository:
     """Write + read side of the canonical Observation store."""
@@ -260,6 +299,52 @@ class CanonicalObservationRepository:
             },
         )
         return [row_to_series_point(dict(row)) for row in result.mappings().all()]
+
+    async def query_fused_series_many(
+        self,
+        session: AsyncSession,
+        *,
+        owner_id: UUID,
+        workspace_id: UUID,
+        metric_ids: list[str],
+        start: datetime,
+        end: datetime,
+        limit: int = 5000,
+        stream_id: str | None = None,
+    ) -> dict[str, list[SeriesPoint]]:
+        """Read fused series for several metrics in one round trip.
+
+        Same fusion semantics as :meth:`query_fused_series` (collapse rows by
+        ``semantic_key`` within a metric, preferring the row marked
+        ``is_primary``), batched across ``metric_ids`` so the v2 batch route
+        can replace its N sequential per-metric awaits with a single query.
+        Fusion partitions by ``(metric_id, COALESCE(semantic_key, id::text))``
+        so semantic keys never fuse across metrics, and the per-metric row
+        cap is reapplied after fusion so each metric still yields at most
+        ``limit`` rows, ascending by ``interval_start`` — the same semantics
+        as the single-metric query. Returns a dict keyed by ``metric_id``;
+        a metric with no rows in range is simply absent (the caller fills in
+        ``[]``). Empty ``metric_ids`` returns ``{}`` without querying.
+        """
+        if not metric_ids:
+            return {}
+        result = await session.execute(
+            _FUSED_SERIES_MANY_SQL,
+            {
+                "owner_id": str(owner_id),
+                "workspace_id": str(workspace_id),
+                "metric_ids": list(metric_ids),
+                "start": start,
+                "end": end,
+                "limit": limit,
+                "stream_id": str(stream_id) if stream_id else None,
+            },
+        )
+        grouped: dict[str, list[SeriesPoint]] = {}
+        for row in result.mappings().all():
+            row = dict(row)
+            grouped.setdefault(row["metric_id"], []).append(row_to_series_point(row))
+        return grouped
 
 
 default_repository = CanonicalObservationRepository()
