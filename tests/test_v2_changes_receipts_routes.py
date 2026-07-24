@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 from fastapi import Response
-from server.api import v2_changes, v2_receipts
+from server.api import v2_changes, v2_readiness, v2_receipts
 
 _T = datetime(2026, 6, 10, 8, 0, tzinfo=UTC)
 
@@ -41,7 +41,11 @@ def _patch_repos(monkeypatch):
     monkeypatch.setattr(v2_changes, "_READINESS", _FakeReadiness())
     monkeypatch.setattr(v2_changes, "_SYNC", _FakeSync())
     monkeypatch.setattr(v2_changes, "_BRIEFINGS", _FakeBriefings())
-    monkeypatch.setattr(v2_receipts, "_READINESS", _FakeReadiness())
+    # v2_receipts no longer owns a repo attribute: canonical_sources now goes
+    # through the same session-owning loader /readiness uses
+    # (v2_readiness._load_canonical_sources), which calls through
+    # v2_readiness._READINESS_REPO — patch it there instead.
+    monkeypatch.setattr(v2_readiness, "_READINESS_REPO", _FakeReadiness())
     monkeypatch.setattr(v2_receipts, "_SYNC", _FakeSync())
 
 

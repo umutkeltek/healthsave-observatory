@@ -18,10 +18,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
-from storage.defaults import readiness_repository, sync_receipt_repository
-from storage.ports import ReadinessRepository, SyncReceiptRepository
+from storage.defaults import sync_receipt_repository
+from storage.ports import SyncReceiptRepository
 from storage.timescale import intelligence as intelligence_repo
 
+from . import v2_readiness
 from .deps import get_session, verify_api_key
 from .swr import v2_read_cache
 
@@ -29,7 +30,6 @@ _log = logging.getLogger("healthsave.api.v2_receipts")
 
 router = APIRouter(prefix="/api/v2", dependencies=[Depends(verify_api_key)])
 
-_READINESS: ReadinessRepository = readiness_repository()
 _SYNC: SyncReceiptRepository = sync_receipt_repository()
 # Injectable seam (monkeypatched in tests so route tests stay DB-free).
 _INTELLIGENCE = intelligence_repo
@@ -43,11 +43,10 @@ async def list_receipts(
     """Egress-relevant audit events (newest first) + ingest freshness."""
     # Ingest freshness first: if the audit table is absent (pre-017 DB), its
     # failed query aborts the transaction and would poison these reads.
-    # Source attribution is the whole-store aggregate — SWR-cached (shared
-    # key with /readiness); audit events stay live, they are the point here.
-    sources = await v2_read_cache.get(
-        "canonical_sources", lambda: _READINESS.fetch_canonical_sources(session)
-    )
+    # Source attribution is the whole-store aggregate — SWR-cached under the
+    # same key as /readiness, through the same session-owning loader (so the
+    # background refresh isn't tied to either route's request session).
+    sources = await v2_read_cache.get("canonical_sources", v2_readiness._load_canonical_sources)
     latest_run = await _SYNC.latest_sync_run(session)
 
     # Only the missing-table case (pre-migration-017 DB) degrades; anything
