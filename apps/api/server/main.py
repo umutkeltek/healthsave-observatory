@@ -21,6 +21,8 @@ counter is the runtime warning; this assertion is the build-time safety
 net.
 """
 
+import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -57,6 +59,7 @@ from .api import (
 )
 from .api.deps import warn_if_auth_disabled
 from .api.ingest import _load_apple_health_plugin
+from .api.swr import v2_read_cache
 from .db.session import async_session, engine
 from .ingestion.registry import resolve_from_env
 
@@ -88,6 +91,29 @@ def _assert_lifespan_state(a: FastAPI) -> None:
         raise RuntimeError(
             f"FastAPI lifespan did not populate required app.state attributes: "
             f"{missing}. This is a regression in apps/api/server/main.py::lifespan."
+        )
+
+
+async def _warm_v2_read_cache() -> None:
+    """Boot-time warmup for the process-level v2 SWR cache (``server.api.swr``).
+
+    The canonical-coverage and source-attribution aggregates are correct but
+    heavy (5-20s over the live 2M-row store). Without this, that cost lands on
+    whichever request is unlucky enough to be first after boot (or after every
+    TTL, before the SWR background-refresh fix). Paying it once here means the
+    live "cold path" is now genuinely rare. Best-effort: a warmup failure just
+    means the first real request pays the cold scan instead, same as before
+    this existed — never worth failing startup over.
+    """
+    try:
+        await asyncio.gather(
+            v2_read_cache.get("canonical_coverage", v2_readiness._load_canonical_coverage),
+            v2_read_cache.get("canonical_sources", v2_readiness._load_canonical_sources),
+        )
+    except Exception:
+        log.warning(
+            "v2 read-cache warmup failed; the first real request will pay the cold scan",
+            exc_info=True,
         )
 
 
@@ -129,9 +155,16 @@ async def lifespan(a: FastAPI):
         type(a.state.apple_health_plugin).__name__,
     )
     _assert_lifespan_state(a)
+    # Fire-and-forget: schedule, don't await, so a slow/cold canonical-store
+    # scan never delays the process reporting ready. Kept as a local so
+    # shutdown can cancel it cleanly instead of leaving it dangling.
+    warmup_task = asyncio.create_task(_warm_v2_read_cache())
     try:
         yield
     finally:
+        warmup_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await warmup_task
         await engine.dispose()
 
 

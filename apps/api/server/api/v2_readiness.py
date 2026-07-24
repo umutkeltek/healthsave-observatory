@@ -16,6 +16,7 @@ pure ``analysis.statistical.gates`` engine.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Any
 
@@ -23,15 +24,37 @@ from analysis.statistical.gates import check_sufficiency
 from analysis.types import DataSummary
 from contracts.ontology import get_metric
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 from storage.defaults import readiness_repository
 from storage.ports import ReadinessRepository
 
-from .deps import get_session, verify_api_key
+from ..db.session import async_session
+from .deps import verify_api_key
 from .swr import v2_read_cache
 
 router = APIRouter(prefix="/api/v2", dependencies=[Depends(verify_api_key)])
 _READINESS_REPO: ReadinessRepository = readiness_repository()
+
+
+async def _load_canonical_coverage() -> list[dict[str, Any]]:
+    """Session-owning loader for the ``"canonical_coverage"`` SWR cache key.
+
+    Opens its own session rather than closing over a request-scoped one, so
+    the SWR cache's background refresh (``server.api.swr``) can run detached
+    from any particular request after that request has already returned.
+    """
+    async with async_session() as session:
+        return await _READINESS_REPO.fetch_canonical_coverage(session)
+
+
+async def _load_canonical_sources() -> list[dict[str, Any]]:
+    """Session-owning loader for the ``"canonical_sources"`` SWR cache key.
+
+    Shared with ``/api/v2/receipts`` (same cache key, same aggregate) — see
+    ``v2_receipts.py``, which imports this loader rather than duplicating it.
+    """
+    async with async_session() as session:
+        return await _READINESS_REPO.fetch_canonical_sources(session)
+
 
 # The gates a single metric's coverage can actually evaluate: total
 # observations + distinct days. correlation/recovery need cross-metric or
@@ -67,16 +90,17 @@ def _grade(summary: DataSummary) -> dict[str, Any]:
 
 
 @router.get("/readiness")
-async def readiness(session: AsyncSession = Depends(get_session)) -> dict:
+async def readiness() -> dict:
     """Per-metric coverage + analyzability, plus source attribution and freshness."""
     # Both aggregates walk the whole canonical store — served through the
     # process-level SWR cache so the scan runs at most once per TTL, not per
-    # page load (the live 2M-row store took 5-20s per request).
-    coverage = await v2_read_cache.get(
-        "canonical_coverage", lambda: _READINESS_REPO.fetch_canonical_coverage(session)
-    )
-    sources = await v2_read_cache.get(
-        "canonical_sources", lambda: _READINESS_REPO.fetch_canonical_sources(session)
+    # page load (the live 2M-row store took 5-20s per request). Each loader
+    # owns its own session (see _load_canonical_* above), so a stale hit's
+    # background refresh can outlive this request, and the two gets can run
+    # concurrently instead of queuing behind one shared connection.
+    coverage, sources = await asyncio.gather(
+        v2_read_cache.get("canonical_coverage", _load_canonical_coverage),
+        v2_read_cache.get("canonical_sources", _load_canonical_sources),
     )
 
     metrics: list[dict[str, Any]] = []
