@@ -7,18 +7,18 @@ import { LiveStatus } from "./LiveStatus";
 import { ThemeToggle } from "./ThemeToggle";
 
 const TITLES: Record<string, { title: string; sub: string }> = {
-  "/": { title: "Today", sub: "Recovery, recent changes, and signals that need attention." },
-  "/demo": { title: "Today", sub: "A believable 30-day story using demo data." },
+  "/": { title: "Today", sub: "Recovery, recent changes, and signals worth attention." },
+  "/demo": { title: "Today", sub: "A 30-day story using local demo data." },
   "/experiments": { title: "Experiments", sub: "Try a change, then measure whether it helped." },
-  "/findings": { title: "Findings", sub: "Important changes first, calculations one layer deeper." },
+  "/findings": { title: "Findings", sub: "Important changes first; calculations one layer deeper." },
   "/sources": { title: "Sources", sub: "Where each number came from and how fresh it is." },
   "/data": { title: "Data", sub: "Metrics, coverage, readiness, and export." },
-  "/explore": { title: "Explore", sub: "Build your own view — panels, buckets, and overlays over any signals." },
+  "/explore": { title: "Explore", sub: "Compose your own panels over any signals." },
   "/compare": { title: "Compare", sub: "Compare periods, sources, and devices without losing provenance." },
   "/relationships": { title: "Relationships", sub: "Explore how signals move together." },
   "/privacy": { title: "Privacy", sub: "What stayed local, what left this host, and why." },
   "/library": { title: "Library", sub: "Every signal you collect, searchable and pinnable." },
-  "/intelligence": { title: "Intelligence", sub: "The narrator is local by default, cloud only by consent." },
+  "/intelligence": { title: "Intelligence", sub: "The narrator is local by default; cloud only by consent." },
   "/integrations": { title: "Integrations", sub: "Sources in, destinations out, with live posture." },
   "/settings": { title: "Settings", sub: "Preferences, services, and system state in one place." },
 };
