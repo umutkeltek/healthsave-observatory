@@ -112,14 +112,20 @@ export async function CompareSection({
       { label: "Later", values: vals(sorted.slice(mid)) },
     ];
     const ps = periodSplit(series.points);
-    const cmp = comparability(metricId, [...new Set(series.points.map((p) => p.source_id))]);
-    card = {
-      a: { label: "Earlier", value: round1(ps.a.mean), meta: `${ps.a.n} readings` },
-      b: { label: "Later", value: round1(ps.b.mean), meta: `${ps.b.n} readings` },
-      delta: { abs: round1(ps.delta.abs), pct: ps.delta.pct, direction: ps.delta.direction },
-      caveat: cmp.warn ? cmp.caveat : null,
-      warn: cmp.warn,
-    };
+    // Don't render a 0-vs-0 card when neither half has data — it reads as broken,
+    // not as "no signal yet". Surface a single honest note instead.
+    if (ps.a.n === 0 && ps.b.n === 0) {
+      note = "No readings in this range. Sync a few days of data, then compare.";
+    } else {
+      const cmp = comparability(metricId, [...new Set(series.points.map((p) => p.source_id))]);
+      card = {
+        a: { label: "Earlier", value: round1(ps.a.mean), meta: `${ps.a.n} readings` },
+        b: { label: "Later", value: round1(ps.b.mean), meta: `${ps.b.n} readings` },
+        delta: { abs: round1(ps.delta.abs), pct: ps.delta.pct, direction: ps.delta.direction },
+        caveat: cmp.warn ? cmp.caveat : null,
+        warn: cmp.warn,
+      };
+    }
   }
 
   const times = series.points.map((p) => p.t).filter(Boolean).sort();

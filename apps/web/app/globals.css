@@ -3049,6 +3049,33 @@ input.filter-select {
   animation: pulse-dot 3.2s var(--ease-io) infinite;
 }
 
+/* Mobile-only mini live indicator: when the pill text is hidden at narrow
+   widths, a bare dot in the same spot keeps the user oriented without
+   stealing horizontal room. Hidden everywhere the pill is visible. */
+.live-mini {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--signal-line);
+  color: var(--signal);
+}
+
+.live-mini-offline {
+  border-color: var(--warn-line, rgba(255, 159, 10, 0.3));
+  color: var(--warn, #FF9F0A);
+}
+
+.live-mini-offline::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
 .vault-audit {
   margin-top: var(--s3);
   padding-top: var(--s3);
@@ -5264,6 +5291,10 @@ body {
 .topbar-status .live-pill,
 .topbar-status .pill {
   display: none;
+}
+
+.topbar-status .live-mini {
+  display: inline-flex;
 }
 
 .content {

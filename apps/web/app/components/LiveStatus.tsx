@@ -58,15 +58,31 @@ export function LiveStatus() {
   if (state === "unknown") return null;
   if (state === "offline") {
     return (
-      <span className="pill mono live-pill offline" title="Live poll failing - backend unreachable">
-        offline
-      </span>
+      <>
+        <span className="pill mono live-pill offline" title="Live poll failing - backend unreachable">
+          offline
+        </span>
+        <span
+          className="live-mini live-mini-offline"
+          aria-label="Backend unreachable"
+          title="Backend unreachable"
+        />
+      </>
     );
   }
   return (
-    <span className="pill mono live-pill" title="Watching for new data (30s poll)">
-      <span className="live-dot" aria-hidden />
-      live
-    </span>
+    <>
+      <span className="pill mono live-pill" title="Watching for new data (30s poll)">
+        <span className="live-dot" aria-hidden />
+        live
+      </span>
+      <span
+        className="live-mini"
+        aria-label="Watching for new data"
+        title="Watching for new data (30s poll)"
+      >
+        <span className="live-dot" aria-hidden />
+      </span>
+    </>
   );
 }
