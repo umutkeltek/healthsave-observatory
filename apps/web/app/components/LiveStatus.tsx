@@ -55,18 +55,39 @@ export function LiveStatus() {
 
   // Never claim "live" before the first successful poll - but once it HAS
   // been live, a silent disappearance isn't feedback: show offline instead.
-  if (state === "unknown") return null;
+  // The mini indicator (used on mobile) renders in every state so phone users
+  // always have a sync cue - it just changes color as the poll resolves.
+  const miniOnly = (
+    <span
+      className={`live-mini${state === "offline" ? " live-mini-offline" : ""}${
+        state === "unknown" ? " live-mini-pending" : ""
+      }`}
+      aria-label={
+        state === "live"
+          ? "Watching for new data"
+          : state === "offline"
+            ? "Backend unreachable"
+            : "Polling for first response"
+      }
+      title={
+        state === "live"
+          ? "Watching for new data (30s poll)"
+          : state === "offline"
+            ? "Backend unreachable"
+            : "Polling for first response"
+      }
+    >
+      <span className="live-dot" aria-hidden />
+    </span>
+  );
+  if (state === "unknown") return miniOnly;
   if (state === "offline") {
     return (
       <>
         <span className="pill mono live-pill offline" title="Live poll failing - backend unreachable">
           offline
         </span>
-        <span
-          className="live-mini live-mini-offline"
-          aria-label="Backend unreachable"
-          title="Backend unreachable"
-        />
+        {miniOnly}
       </>
     );
   }
@@ -76,13 +97,7 @@ export function LiveStatus() {
         <span className="live-dot" aria-hidden />
         live
       </span>
-      <span
-        className="live-mini"
-        aria-label="Watching for new data"
-        title="Watching for new data (30s poll)"
-      >
-        <span className="live-dot" aria-hidden />
-      </span>
+      {miniOnly}
     </>
   );
 }
