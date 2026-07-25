@@ -3081,6 +3081,7 @@ input.filter-select {
 .live-mini-pending {
   border-color: var(--line);
   color: var(--muted);
+  background: var(--surface);
 }
 
 .live-mini-pending .live-dot {
@@ -5958,6 +5959,21 @@ body {
 @media (max-width: 620px) {
   .topbar-search,
   .topbar-health {
+    display: none;
+  }
+
+  /* Override: the live-mini lives inside .topbar-health which the wider
+     rule hides. Re-show only the mini (and the segment dividers that
+     would otherwise point to nothing) so phone users see a sync cue
+     without bringing back the full pill run. */
+  .topbar-health:has(.live-mini) {
+    display: inline-flex;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .topbar-health:has(.live-mini) .pill,
+  .topbar-health:has(.live-mini) .live-pill {
     display: none;
   }
 
