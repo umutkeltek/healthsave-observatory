@@ -3076,6 +3076,18 @@ input.filter-select {
   background: currentColor;
 }
 
+/* Pre-first-poll: faint dot, no pulse. Tells the user the bar is alive
+   but the backend hasn't answered yet. */
+.live-mini-pending {
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.live-mini-pending .live-dot {
+  background: var(--muted);
+  animation: none;
+}
+
 .vault-audit {
   margin-top: var(--s3);
   padding-top: var(--s3);
