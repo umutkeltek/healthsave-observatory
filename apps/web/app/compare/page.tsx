@@ -12,7 +12,9 @@ type SearchParams = { [key: string]: string | string[] | undefined };
 const one = (value: string | string[] | undefined): string =>
   Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 
-// Intro paints immediately; comparison streams in behind it.
+// No intro: the topbar title + subtitle already say "Compare periods, sources,
+// and devices without losing provenance." Repeating them under the title reads
+// as a duplicate. Controls + chart stream in behind the single boundary.
 export default async function ComparePage({
   searchParams,
 }: {
@@ -26,13 +28,6 @@ export default async function ComparePage({
 
   return (
     <>
-      <div className="prov-intro route-note">
-        <p>
-          Choose a metric and comparison mode. Both sides stay visible so differences remain
-          inspectable instead of being blended into one number.
-        </p>
-      </div>
-
       <Suspense
         key={`${metricSel}|${mode}|${range}`}
         fallback={

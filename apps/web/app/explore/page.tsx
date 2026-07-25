@@ -33,13 +33,6 @@ export default async function ExplorePage({
 
   return (
     <>
-      <div className="prov-intro route-note">
-        <p>
-          Build your own view. Add panels for any signals, choose the time bucket and how to
-          aggregate, and overlay metrics to see them move together — each on its own scale.
-        </p>
-      </div>
-
       <Suspense
         key={encodeExploreState(state)}
         fallback={
