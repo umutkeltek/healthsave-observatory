@@ -4985,6 +4985,32 @@ padding: 16px;
   line-height: 1.5;
 }
 
+.demo-return {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: 10px 14px;
+  margin: 0 0 var(--s4);
+  border-radius: 12px;
+  background: var(--accent-weak);
+  border: 1px solid var(--accent-line);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.demo-return .btn {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+@media (max-width: 620px) {
+  .demo-return {
+    flex-wrap: wrap;
+  }
+}
+
 .intel {
   display: grid;
   gap: 16px;

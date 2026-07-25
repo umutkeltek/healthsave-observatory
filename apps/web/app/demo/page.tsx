@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { BaselineRibbon } from "../components/BaselineRibbon";
 import { LocalVaultReceipt, type VaultStep } from "../components/LocalVaultReceipt";
+import { hasAnyData } from "../lib/load";
 
 // A seeded "first 60 seconds" Today - a believable 30-day story with one
 // recovery dip, so a fresh clone (or the README screenshot) shows the product
@@ -50,9 +51,20 @@ const EVIDENCE = [
   },
 ];
 
-export default function DemoToday() {
+export default async function DemoToday() {
+  // If the live backend already has data, the demo should be a courtesy, not
+  // a trap: paint a thin banner at the top so the user can return to live.
+  const live = await hasAnyData();
   return (
     <>
+      {live && (
+        <div className="route-note demo-return" role="status">
+          <span>Live data is available.</span>
+          <a className="btn btn-ghost" href="/">
+            Return to Today
+          </a>
+        </div>
+      )}
       <div className="today-grid">
         <section className="hero col-8">
           <div className="hero-eyebrow">Today · this morning</div>
