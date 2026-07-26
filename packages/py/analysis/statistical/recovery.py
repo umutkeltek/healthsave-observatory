@@ -4,15 +4,12 @@ Bridges the canonical period summary (``DataAggregator.summarize_period``) to th
 open composite in :mod:`analysis.statistical.scoring`. Brain-1 only: the single
 import is its sibling ``scoring`` — no DB, no HTTP, no LLM.
 
-**Honesty rule.** This returns ``None`` when *no* real recovery signal is present
-for the window, rather than manufacturing a score from neutral defaults. A score
-is computed only when at least one of HRV / resting-HR / respiratory-rate /
-temperature carried a usable value. Sleep efficiency is not yet derivable from
-the scalar period summary, so it is fed at the neutral midpoint (50) and listed
-under ``missing_inputs`` — on its own it never fabricates a score. The resulting
-``structured_data`` dict is the exact shape the v2 read API and the web hero
-already consume (``structured_data.score``), plus an audit trail of which
-signals were and were not available.
+**Evidence contract.** A score is produced only when at least three of the five
+published inputs are available and one is an autonomic anchor (HRV or resting
+heart rate). Missing inputs are excluded and the remaining published weights are
+renormalized; they are never replaced with neutral or ideal values. Sleep
+currently remains unavailable from this scalar summary, so today's score needs
+three of the four wearable inputs and is explicitly marked partial.
 """
 
 from __future__ import annotations
@@ -43,9 +40,18 @@ RECOVERY_INPUT_METRICS: tuple[str, ...] = (
     BODY_TEMP_METRIC,
 )
 
-# Sleep efficiency is not exposed by the scalar period summary yet; feed the
-# composite its neutral midpoint so a present HRV/RHR/etc. signal still scores.
-_NEUTRAL_SLEEP_EFFICIENCY = 50.0
+# Evidence contract for a user-facing composite. A single healthy-looking input
+# must never create a complete-looking recovery instrument.
+_RECOVERY_INPUT_COUNT = 5
+_MIN_AVAILABLE_INPUTS = 3
+_INPUT_WEIGHTS = {
+    "hrv": 0.40,
+    "sleep_efficiency": 0.25,
+    "resting_heart_rate": 0.15,
+    "temperature": 0.10,
+    "respiratory_rate": 0.10,
+}
+_AUTONOMIC_INPUTS = frozenset({"hrv", "resting_heart_rate"})
 
 
 def _delta_pct(metrics: Mapping[str, Mapping[str, Any]], metric_id: str) -> float | None:
@@ -99,27 +105,39 @@ def recovery_finding_data(
         ("temperature", temp),
     )
     signals_available = [name for name, value in inputs if value is not None]
-    if not signals_available:
-        return None  # honest: no real recovery signal — don't fabricate a score
+    if len(signals_available) < _MIN_AVAILABLE_INPUTS or not (
+        _AUTONOMIC_INPUTS & set(signals_available)
+    ):
+        return None
 
+    # Sleep efficiency is not derivable from the scalar summary yet. Keep it
+    # absent and renormalize over real inputs; do not let a placeholder influence
+    # the result.
     score = compute_recovery_score(
-        hrv_vs_baseline=hrv or 0.0,
-        rhr_vs_baseline=rhr or 0.0,
-        sleep_efficiency=_NEUTRAL_SLEEP_EFFICIENCY,
-        temp_deviation=temp or 0.0,
-        resp_rate_vs_baseline=resp or 0.0,
+        hrv_vs_baseline=hrv,
+        rhr_vs_baseline=rhr,
+        sleep_efficiency=None,
+        temp_deviation=temp,
+        resp_rate_vs_baseline=resp,
     )
+    if score is None:  # defensive: the evidence gate above guarantees inputs
+        return None
 
-    # sleep_efficiency is never available from the scalar summary yet, so it is
-    # always a missing input until a sleep-derivation lands.
     missing_inputs = [name for name, value in inputs if value is None]
     missing_inputs.append("sleep_efficiency")
+    available_weight = sum(_INPUT_WEIGHTS[name] for name in signals_available)
+    evidence_level = "complete" if len(signals_available) == _RECOVERY_INPUT_COUNT else "partial"
 
     return {
         "score": score,
-        "method": "supplement_v1",
+        "method": "supplement_v2_available_weight",
+        "formula_version": 2,
         "signals_available": signals_available,
         "missing_inputs": missing_inputs,
+        "input_count": len(signals_available),
+        "input_total": _RECOVERY_INPUT_COUNT,
+        "available_weight": round(available_weight, 2),
+        "evidence_level": evidence_level,
         "contributors": {
             "hrv_vs_baseline_pct": hrv,
             "rhr_vs_baseline_pct": rhr,
