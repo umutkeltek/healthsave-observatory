@@ -48,46 +48,57 @@ def _temp_deviation_to_score(deviation_c: float) -> float:
 
 
 def compute_recovery_score(
-    hrv_vs_baseline: float,
-    rhr_vs_baseline: float,
-    sleep_efficiency: float,
-    temp_deviation: float,
-    resp_rate_vs_baseline: float,
+    hrv_vs_baseline: float | None,
+    rhr_vs_baseline: float | None,
+    sleep_efficiency: float | None,
+    temp_deviation: float | None,
+    resp_rate_vs_baseline: float | None,
 ) -> int | None:
-    """Compute the 0-100 Recovery Score from the five component signals.
+    """Compute an evidence-weighted 0-100 Recovery Score.
+
+    The published weights remain the target formula, but unavailable inputs are
+    excluded rather than replaced with neutral (or accidentally ideal) values.
+    Remaining weights are renormalized over the evidence actually present. The
+    mapping layer enforces the minimum evidence contract before calling this
+    function; this pure scorer still returns ``None`` when every input is absent.
 
     Weights (from supplement §3, literature-backed):
 
-      * HRV vs baseline — **40%** (dominant signal, every platform agrees)
-      * Sleep efficiency — **25%** (the behavioral dimension users can act on)
-      * RHR vs baseline — **15%** (partially redundant with HRV, catches
-        overtraining when HRV crashes but RHR stays elevated)
-      * Temperature deviation — **10%** (early illness signal)
-      * Respiratory rate deviation — **10%** (top-2 clinical
-        deterioration predictor)
-
-    Arguments:
-      hrv_vs_baseline:      % deviation from 30-day rolling mean
-      rhr_vs_baseline:      % deviation (inverted — lower is better)
-      sleep_efficiency:     0-100
-      temp_deviation:       degrees C from personal baseline
-      resp_rate_vs_baseline: % deviation
-
-    Returns an integer 0..100. (Suppression — returning ``None`` for e.g.
-    beta-blocker users per supplement §5.6 — needs a medication-context input
-    this signature does not yet carry; deferred.)
+      * HRV vs baseline — **40%**
+      * Sleep efficiency — **25%**
+      * RHR vs baseline — **15%**
+      * Temperature deviation — **10%**
+      * Respiratory rate deviation — **10%**
     """
-    hrv_score = _baseline_deviation_to_score(hrv_vs_baseline, higher_is_better=True)
-    rhr_score = _baseline_deviation_to_score(rhr_vs_baseline, higher_is_better=False)
-    sleep_score = max(0.0, min(100.0, sleep_efficiency))  # already 0-100; clamp defensively
-    temp_score = _temp_deviation_to_score(temp_deviation)
-    resp_score = _baseline_deviation_to_score(resp_rate_vs_baseline, higher_is_better=False)
-
-    recovery = (
-        0.40 * hrv_score
-        + 0.25 * sleep_score
-        + 0.15 * rhr_score
-        + 0.10 * temp_score
-        + 0.10 * resp_score
+    weighted_inputs = (
+        (
+            0.40,
+            None
+            if hrv_vs_baseline is None
+            else _baseline_deviation_to_score(hrv_vs_baseline, higher_is_better=True),
+        ),
+        (
+            0.25,
+            None if sleep_efficiency is None else max(0.0, min(100.0, sleep_efficiency)),
+        ),
+        (
+            0.15,
+            None
+            if rhr_vs_baseline is None
+            else _baseline_deviation_to_score(rhr_vs_baseline, higher_is_better=False),
+        ),
+        (0.10, None if temp_deviation is None else _temp_deviation_to_score(temp_deviation)),
+        (
+            0.10,
+            None
+            if resp_rate_vs_baseline is None
+            else _baseline_deviation_to_score(resp_rate_vs_baseline, higher_is_better=False),
+        ),
     )
+    available = [(weight, score) for weight, score in weighted_inputs if score is not None]
+    available_weight = sum(weight for weight, _ in available)
+    if available_weight == 0:
+        return None
+
+    recovery = sum(weight * score for weight, score in available) / available_weight
     return max(0, min(100, round(recovery)))

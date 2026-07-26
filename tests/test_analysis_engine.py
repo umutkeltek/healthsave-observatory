@@ -655,6 +655,12 @@ async def test_run_recovery_check_persists_recovery_score_finding_without_llm():
                 "delta_pct_vs_baseline": -7.7,
                 "sample_count": 1,
             },
+            "vital.respiratory_rate": {
+                "avg": 14.0,
+                "baseline_avg": 15.0,
+                "delta_pct_vs_baseline": -6.7,
+                "sample_count": 1,
+            },
         },
     )
     engine = _make_engine(session, summary, AsyncMock())
@@ -672,6 +678,36 @@ async def test_run_recovery_check_persists_recovery_score_finding_without_llm():
     updates = session.all_update_statements()
     assert any("status = 'completed'" in sql for sql, _ in updates)
     engine.llm_client.generate_insight.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_run_recovery_check_skips_when_evidence_is_too_thin():
+    """Fewer than three qualified inputs → skipped, no authoritative score."""
+    session = _FakeSession(run_queue=[8550])
+    summary = PeriodSummary(
+        period="daily",
+        metrics={
+            "vital.hrv_sdnn": {
+                "avg": 60.0,
+                "baseline_avg": 50.0,
+                "delta_pct_vs_baseline": 20.0,
+                "sample_count": 1,
+            },
+            "vital.resting_heart_rate": {
+                "avg": 48.0,
+                "baseline_avg": 52.0,
+                "delta_pct_vs_baseline": -7.7,
+                "sample_count": 1,
+            },
+        },
+    )
+    engine = _make_engine(session, summary, AsyncMock())
+
+    run_id = await engine.run_recovery_check()
+
+    assert run_id is None
+    assert session.all_insert_params_for("analysis_findings") == []
+    assert any("status = 'skipped'" in sql for sql, _ in session.all_update_statements())
 
 
 @pytest.mark.asyncio

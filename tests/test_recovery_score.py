@@ -80,6 +80,27 @@ def test_result_is_always_clamped_to_0_100() -> None:
     assert score == 100
 
 
+def test_missing_inputs_are_excluded_and_weights_renormalized() -> None:
+    # HRV at its maximum and RHR at its minimum should remain 100 even when the
+    # other inputs are absent; missing values do not dilute or improve evidence.
+    score = compute_recovery_score(
+        hrv_vs_baseline=20.0,
+        rhr_vs_baseline=-20.0,
+        sleep_efficiency=None,
+        temp_deviation=None,
+        resp_rate_vs_baseline=None,
+    )
+    assert score == 100
+    assert compute_recovery_score(None, None, None, None, None) is None
+
+
+def test_missing_temperature_is_not_treated_as_perfect() -> None:
+    without_temp = compute_recovery_score(0.0, 0.0, None, None, 0.0)
+    with_ideal_temp = compute_recovery_score(0.0, 0.0, None, 0.0, 0.0)
+    assert without_temp == 50
+    assert with_ideal_temp > without_temp
+
+
 def test_hrv_dominates_respiratory_rate_by_weight() -> None:
     """Same-size improvement in HRV (40%) must move the score more than in
     respiratory rate (10%) — the weighting is the whole point."""
