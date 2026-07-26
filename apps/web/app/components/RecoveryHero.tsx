@@ -51,6 +51,7 @@ export function RecoveryHero({
   contributors = [],
   byline = [],
   deltaPct = null,
+  evidenceLabel = null,
 }: {
   freshness: string;
   score: number | null;
@@ -60,6 +61,7 @@ export function RecoveryHero({
   contributors?: Contributor[];
   byline?: BylineItem[];
   deltaPct?: number | null;
+  evidenceLabel?: string | null;
 }) {
   const state = score !== null ? stateFor(score) : null;
   const tone: DialTone = state ? state.tone : "muted";
@@ -94,6 +96,7 @@ export function RecoveryHero({
             ) : (
               <span className="hero-chip">Building</span>
             )}
+            {evidenceLabel && <span className="hero-evidence mono">{evidenceLabel}</span>}
             {finiteDeltaPct !== null && (
               <span className="hero-delta mono">
                 {finiteDeltaPct >= 0 ? "+" : "−"}

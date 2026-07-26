@@ -81,6 +81,38 @@ export function userFindingTitle(finding: Finding): string {
   return "Health signal";
 }
 
+export type RecoveryEvidence = {
+  score: number;
+  inputCount: number;
+  inputTotal: number;
+  evidenceLevel: "partial" | "complete";
+};
+
+// Recovery formula v2 is the first version with an explicit minimum-evidence
+// contract. Persisted v1/thin findings may still exist after an upgrade; never
+// let them drive the authoritative Today instrument.
+export function recoveryEvidence(finding: Finding | undefined): RecoveryEvidence | null {
+  if (!finding || finding.finding_type !== "recovery_score") return null;
+  const data = finding.structured_data ?? {};
+  const score = numberValue(data.score);
+  const inputCount = numberValue(data.input_count);
+  const inputTotal = numberValue(data.input_total);
+  const formulaVersion = numberValue(data.formula_version);
+  const evidenceLevel = textValue(data.evidence_level);
+  if (
+    score === null ||
+    inputCount === null ||
+    inputTotal === null ||
+    formulaVersion !== 2 ||
+    inputCount < 3 ||
+    inputTotal < inputCount ||
+    (evidenceLevel !== "partial" && evidenceLevel !== "complete")
+  ) {
+    return null;
+  }
+  return { score: Math.round(score), inputCount, inputTotal, evidenceLevel };
+}
+
 export function findingGroupId(finding: Finding): FindingGroupId {
   const type = finding.finding_type ?? "";
   const severity = (finding.severity ?? "").toLowerCase();

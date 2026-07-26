@@ -17,6 +17,7 @@ import {
   safeSeries,
   safeSeriesMany,
 } from "../../lib/load";
+import { recoveryEvidence } from "../../lib/findingPresentation";
 import { getFocusGoal, getPinnedMetrics } from "../../lib/prefs";
 import { EvidenceCard } from "../EvidenceCard";
 import { ExperimentsCard } from "../ExperimentsCard";
@@ -30,10 +31,17 @@ import { SleepCard } from "../SleepCard";
 import { TodayPlumbing } from "../TodayPlumbing";
 import { WeeklyBriefCard } from "../WeeklyBriefCard";
 
+function recoveryFinding(findings: Finding[] | null): Finding | undefined {
+  return findings?.find((finding) => finding.finding_type === "recovery_score");
+}
+
 function recoveryScore(findings: Finding[] | null): number | null {
-  const found = findings?.find((f) => f.finding_type === "recovery_score");
-  const score = found?.structured_data?.score;
-  return typeof score === "number" && Number.isFinite(score) ? Math.round(score) : null;
+  return recoveryEvidence(recoveryFinding(findings))?.score ?? null;
+}
+
+function recoveryCompleteness(findings: Finding[] | null): string | null {
+  const evidence = recoveryEvidence(recoveryFinding(findings));
+  return evidence ? `${evidence.inputCount}/${evidence.inputTotal} inputs` : null;
 }
 
 const CONTRIBUTOR_DEFS = [
@@ -44,7 +52,8 @@ const CONTRIBUTOR_DEFS = [
 ];
 
 function recoveryContributors(findings: Finding[] | null) {
-  const found = findings?.find((f) => f.finding_type === "recovery_score");
+  const found = recoveryFinding(findings);
+  if (!recoveryEvidence(found)) return [];
   const raw = found?.structured_data?.contributors as Record<string, unknown> | undefined;
   if (!raw) return [];
   return CONTRIBUTOR_DEFS.flatMap((def) => {
@@ -56,7 +65,8 @@ function recoveryContributors(findings: Finding[] | null) {
 }
 
 function recoveryDelta(findings: Finding[] | null): number | null {
-  const found = findings?.find((f) => f.finding_type === "recovery_score");
+  const found = recoveryFinding(findings);
+  if (!recoveryEvidence(found)) return null;
   const delta = found?.structured_data?.delta_pct_vs_baseline;
   return typeof delta === "number" && Number.isFinite(delta) ? delta : null;
 }
@@ -284,6 +294,7 @@ export async function HeroSection() {
         summary={todaySummary(score, findings, readiness)}
         byline={heroByline(readiness, freshness)}
         deltaPct={recoveryDelta(findings)}
+        evidenceLabel={recoveryCompleteness(findings)}
         ribbon={ribbonValues.length >= 2 ? { values: ribbonValues, axis: ["30 days ago", "today"] } : null}
       />
       <TodayPlumbing highlights={todayHighlights(readiness, findings, live)} live={live} />
