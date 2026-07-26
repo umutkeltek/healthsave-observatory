@@ -3733,10 +3733,15 @@ input.filter-select {
   color: color-mix(in srgb, var(--dial-color, var(--neutral)) 60%, var(--ink));
   background: color-mix(in srgb, var(--dial-color, var(--neutral)) 14%, transparent);
 }
+.hero-evidence,
 .hero-delta {
   color: var(--muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+.hero-evidence {
+  padding-right: 10px;
+  border-right: 1px solid var(--line);
 }
 
 /* Semantic tone → dial colour (prime/steady = health, caution = attention,

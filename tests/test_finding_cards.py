@@ -103,18 +103,35 @@ def test_correlation_card_non_controllable_pair_has_prose_only():
     assert card.next_question.prose  # rationale from the readiness classifier
 
 
-def test_recovery_card_lists_missing_inputs_as_limitations():
+def test_recovery_card_exposes_evidence_completeness_and_missing_inputs():
     sd = {
         "score": 63.0,
-        "method": "supplement_v1",
-        "signals_available": ["hrv", "resting_heart_rate"],
+        "method": "supplement_v2_available_weight",
+        "formula_version": 2,
+        "signals_available": ["hrv", "resting_heart_rate", "respiratory_rate"],
         "missing_inputs": ["temperature", "sleep_efficiency"],
+        "input_count": 3,
+        "input_total": 5,
+        "evidence_level": "partial",
     }
     card = build_card("recovery_score", "recovery", sd, "info")
+    assert card is not None
     assert card.claim == "Recovery score 63"
-    assert card.coverage.observation_count == 2
+    assert card.coverage.observation_count == 3
+    assert card.coverage.note == "3 of 5 recovery inputs available"
+    assert card.confidence == "medium"
     assert "temperature unavailable" in card.limitations
     assert "sleep_efficiency unavailable" in card.limitations
+
+
+def test_recovery_card_suppresses_legacy_or_thin_scores():
+    legacy = {
+        "score": 82.0,
+        "method": "supplement_v1",
+        "signals_available": ["hrv"],
+        "missing_inputs": ["resting_heart_rate", "temperature", "sleep_efficiency"],
+    }
+    assert build_card("recovery_score", "recovery", legacy, "info") is None
 
 
 def test_summary_card_uses_delta_when_sufficient_samples():

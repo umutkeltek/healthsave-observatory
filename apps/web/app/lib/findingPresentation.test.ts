@@ -8,6 +8,7 @@ import {
   effectSizeText,
   findingCardChips,
   groupFindingsForDisplay,
+  recoveryEvidence,
   userFindingTitle,
 } from "./findingPresentation";
 
@@ -63,6 +64,32 @@ describe("finding presentation", () => {
     expect(userFindingTitle(finding({ metric: "vital.hrv_sdnn" }))).toBe("Heart rate variability");
     expect(userFindingTitle(finding({ metric: "activity.steps" }))).toBe("Steps");
     expect(userFindingTitle(finding({ metric: "custom.metric_name" }))).toBe("Metric Name");
+  });
+
+  test("accepts only evidence-qualified recovery findings for the hero", () => {
+    expect(
+      recoveryEvidence(
+        finding({
+          finding_type: "recovery_score",
+          structured_data: {
+            score: 68,
+            formula_version: 2,
+            input_count: 3,
+            input_total: 5,
+            evidence_level: "partial",
+          },
+        }),
+      ),
+    ).toEqual({ score: 68, inputCount: 3, inputTotal: 5, evidenceLevel: "partial" });
+
+    expect(
+      recoveryEvidence(
+        finding({
+          finding_type: "recovery_score",
+          structured_data: { score: 91, signals_available: ["hrv"] },
+        }),
+      ),
+    ).toBeNull();
   });
 
   test("clusters repeated recovery checks into one display item", () => {

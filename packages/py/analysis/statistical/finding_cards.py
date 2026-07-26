@@ -254,26 +254,33 @@ def _correlation_card(metric: str | None, sd: dict[str, Any]) -> FindingCard | N
 
 def _recovery_card(metric: str | None, sd: dict[str, Any]) -> FindingCard | None:
     score = _num(sd.get("score"))
-    if score is None:
-        return None
-    signals = sd.get("signals_available") or []
+    input_count = sd.get("input_count")
+    input_total = sd.get("input_total")
+    formula_version = sd.get("formula_version")
     missing = sd.get("missing_inputs") or []
+    if (
+        score is None
+        or not isinstance(input_count, int)
+        or not isinstance(input_total, int)
+        or input_count < 3
+        or input_total < input_count
+        or formula_version != 2
+    ):
+        return None
+    evidence_level = sd.get("evidence_level")
     return FindingCard(
         claim=f"Recovery score {score:.0f}",
         metric=metric or "recovery",
         finding_type="recovery_score",
         coverage=Coverage(
-            is_sufficient=bool(signals),
-            observation_count=len(signals) if isinstance(signals, list) else None,
-            note=(
-                f"computed from {len(signals)} available signal(s)"
-                if isinstance(signals, list)
-                else None
-            ),
+            is_sufficient=True,
+            observation_count=input_count,
+            note=f"{input_count} of {input_total} recovery inputs available",
         ),
+        confidence="high" if evidence_level == "complete" else "medium",
         limitations=[f"{name} unavailable" for name in missing if isinstance(name, str)],
         next_question=NextQuestion(
-            prose="Which input is dragging recovery most — sleep, HRV, or resting heart rate?"
+            prose="Which input is moving recovery most — sleep, HRV, or resting heart rate?"
         ),
     )
 
