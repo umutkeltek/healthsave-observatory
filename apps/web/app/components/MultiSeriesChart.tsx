@@ -10,6 +10,7 @@
 // tellable apart (accent and signal are both system blue, so never pair them).
 import { dateDomainMs, dateTicks, declutterLabels, valueTicks } from "./chart/axis";
 import { niceTicks } from "./chart/scale";
+import { timedDomain, timedSegments, type TimedPoint } from "./chart/timedSeries";
 
 const PALETTE = [
   "var(--series-1)",
@@ -20,7 +21,7 @@ const PALETTE = [
   "var(--series-6)",
 ];
 
-export type ChartSeries = { label: string; values: number[] };
+export type ChartSeries = { label: string; points: TimedPoint[] };
 
 // viewBox coordinate system (uniform scaling; the SVG renders at height:auto).
 const RW = 720;
@@ -39,13 +40,16 @@ function fmtTick(v: number): string {
   return v.toFixed(a < 1 ? 2 : 1);
 }
 
-function path(values: number[], lo: number, hi: number): string {
-  if (values.length < 2) return "";
-  const span = hi - lo || 1;
-  const step = PLOT_W / (values.length - 1);
-  const y = (v: number) => M.t + (1 - (v - lo) / span) * PLOT_H;
-  return values
-    .map((v, i) => `${i === 0 ? "M" : "L"} ${(M.l + i * step).toFixed(1)} ${y(v).toFixed(1)}`)
+function path(points: TimedPoint[], lo: number, hi: number, startMs: number, endMs: number): string {
+  if (points.length < 2) return "";
+  const valueSpan = hi - lo || 1;
+  const timeSpan = endMs - startMs || 1;
+  const y = (v: number) => M.t + (1 - (v - lo) / valueSpan) * PLOT_H;
+  return points
+    .map((point, i) => {
+      const x = M.l + ((Date.parse(point.t) - startMs) / timeSpan) * PLOT_W;
+      return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y(point.value).toFixed(1)}`;
+    })
     .join(" ");
 }
 
@@ -58,10 +62,16 @@ export function MultiSeriesChart({
   unit?: string | null;
   dateDomain?: [string, string];
 }) {
-  const all = series.flatMap((s) => s.values);
+  const all = series.flatMap((s) => s.points.map((point) => point.value));
   if (all.length < 2) {
     return <p className="empty">Not enough data to chart this comparison.</p>;
   }
+  const resolvedDomain = dateDomain ?? timedDomain(series);
+  const domainMs = dateDomainMs(resolvedDomain);
+  if (!domainMs) {
+    return <p className="empty">These readings do not have a usable shared time range.</p>;
+  }
+  const [startMs, endMs] = domainMs;
   const min = Math.min(...all);
   const max = Math.max(...all);
   const yt = niceTicks(min, max, 4);
@@ -70,8 +80,7 @@ export function MultiSeriesChart({
   const span = hi - lo || 1;
   const yTicks = valueTicks(lo, hi, 4);
 
-  const domainMs = dateDomainMs(dateDomain);
-  const xTicks = domainMs ? dateTicks(domainMs[0], domainMs[1]) : [];
+  const xTicks = dateTicks(startMs, endMs);
 
   const direct = series.length <= 3;
   const yUser = (v: number) => M.t + (1 - (v - lo) / span) * PLOT_H;
@@ -80,9 +89,10 @@ export function MultiSeriesChart({
   // label would just duplicate the panel title, and >3 gets a legend instead.
   const showEndLabels = series.length >= 2 && series.length <= 3;
   const endLabels = showEndLabels
-    ? series.flatMap((s, i) =>
-        s.values.length >= 1 ? [{ label: s.label, color: PALETTE[i % PALETTE.length], y: yUser(s.values[s.values.length - 1]) }] : [],
-      )
+    ? series.flatMap((s, i) => {
+        const last = [...s.points].sort((a, b) => Date.parse(a.t) - Date.parse(b.t)).at(-1);
+        return last ? [{ label: s.label, color: PALETTE[i % PALETTE.length], y: yUser(last.value) }] : [];
+      })
     : [];
   // Push apart any labels that would otherwise stack on top of each other.
   const endLabelY = declutterLabels(
@@ -113,31 +123,38 @@ export function MultiSeriesChart({
               vectorEffect="non-scaling-stroke"
             />
           ))}
-          {series.map((s, i) => (
-            <path
-              key={s.label}
-              d={path(s.values, lo, hi)}
-              pathLength={1}
-              fill="none"
-              stroke={PALETTE[i % PALETTE.length]}
-              strokeWidth="1.6"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
+          {series.flatMap((s, i) =>
+            timedSegments(s.points)
+              .filter((segment) => segment.length >= 2)
+              .map((segment, segmentIndex) => (
+                <path
+                  key={`${s.label}-${segmentIndex}`}
+                  d={path(segment, lo, hi, startMs, endMs)}
+                  pathLength={1}
+                  fill="none"
+                  stroke={PALETTE[i % PALETTE.length]}
+                  strokeWidth="1.6"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+              )),
+          )}
           {direct &&
-            series.map((s, i) =>
-              s.values.length >= 1 ? (
+            series.map((s, i) => {
+              const last = [...s.points].sort((a, b) => Date.parse(a.t) - Date.parse(b.t)).at(-1);
+              if (!last) return null;
+              const cx = M.l + ((Date.parse(last.t) - startMs) / (endMs - startMs || 1)) * PLOT_W;
+              return (
                 <circle
                   key={`d${s.label}`}
-                  cx={M.l + PLOT_W}
-                  cy={yUser(s.values[s.values.length - 1])}
+                  cx={cx}
+                  cy={yUser(last.value)}
                   r="2.6"
                   fill={PALETTE[i % PALETTE.length]}
                 />
-              ) : null,
-            )}
+              );
+            })}
         </svg>
         <div className="multi-axis" aria-hidden>
           {unit ? (

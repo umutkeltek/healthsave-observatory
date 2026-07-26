@@ -112,9 +112,11 @@ export default async function MetricDetailPage({
     ? [...bySource.entries()]
         .map(([sourceId, pts]) => ({
           label: sourceLabel(sourceId),
-          values: pts.map((p) => p.value).filter((v): v is number => v !== null),
+          points: pts.flatMap((point) =>
+            point.value === null ? [] : [{ t: point.t, value: point.value }],
+          ),
         }))
-        .filter((s) => s.values.length >= 2)
+        .filter((s) => s.points.length >= 2)
     : [];
 
   const sourceSummaries = [...bySource.entries()]

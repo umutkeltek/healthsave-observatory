@@ -20,6 +20,12 @@ function vals(points: SeriesPoint[]): number[] {
   return points.map((p) => p.value).filter((v): v is number => v !== null);
 }
 
+function timed(points: SeriesPoint[]): { t: string; value: number }[] {
+  return points.flatMap((point) =>
+    point.value === null ? [] : [{ t: point.t, value: point.value }],
+  );
+}
+
 function mean(values: number[]): number {
   return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
 }
@@ -64,7 +70,7 @@ export async function CompareSection({
     const groups = [...groupByStream(series.points).entries()]
       .map(([id, pts]) => ({ id, label: streamLabel(id, streamLabels), pts: [...pts].sort(byTime) }))
       .sort((a, b) => b.pts.length - a.pts.length);
-    chart = groups.slice(0, 4).map((g) => ({ label: g.label, values: vals(g.pts) }));
+    chart = groups.slice(0, 4).map((g) => ({ label: g.label, points: timed(g.pts) }));
     if (groups.length < 2) {
       note = "Only one device stream for this metric. Connect another device to compare.";
     } else {
@@ -86,7 +92,7 @@ export async function CompareSection({
     const groups = [...groupBySource(series.points).entries()]
       .map(([source, pts]) => ({ source, pts: [...pts].sort(byTime) }))
       .sort((a, b) => b.pts.length - a.pts.length);
-    chart = groups.slice(0, 4).map((g) => ({ label: g.source, values: vals(g.pts) }));
+    chart = groups.slice(0, 4).map((g) => ({ label: g.source, points: timed(g.pts) }));
     if (groups.length < 2) {
       note = "Only one source for this metric. Connect another source to compare.";
     } else {
@@ -108,8 +114,8 @@ export async function CompareSection({
     const sorted = [...series.points].filter((p) => p.value !== null).sort(byTime);
     const mid = Math.floor(sorted.length / 2);
     chart = [
-      { label: "Earlier", values: vals(sorted.slice(0, mid)) },
-      { label: "Later", values: vals(sorted.slice(mid)) },
+      { label: "Earlier", points: timed(sorted.slice(0, mid)) },
+      { label: "Later", points: timed(sorted.slice(mid)) },
     ];
     const ps = periodSplit(series.points);
     // Don't render a 0-vs-0 card when neither half has data — it reads as broken,

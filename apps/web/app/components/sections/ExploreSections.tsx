@@ -21,11 +21,15 @@ import { HeatmapChart } from "../HeatmapChart";
 import { MultiSeriesChart, type ChartSeries } from "../MultiSeriesChart";
 import { ZoneBar } from "../ZoneBar";
 
-// Numeric values for a metric under the current grain/stat. "raw" keeps every
-// point; the others bucket-and-reduce (Grafana time_bucket + agg).
-function metricValues(points: SeriesPoint[], grain: GrainOpt, stat: Stat): number[] {
-  if (grain === "raw") return points.map((p) => p.value).filter((v): v is number => v !== null);
-  return bucketBy(points, grain, stat).map((b) => b.value);
+// Timestamped values under the current grain/stat. Keeping the timestamp with
+// every value prevents irregular samples from being drawn at equal spacing.
+function metricPoints(points: SeriesPoint[], grain: GrainOpt, stat: Stat): { t: string; value: number }[] {
+  if (grain === "raw") {
+    return points
+      .filter((point): point is SeriesPoint & { value: number } => point.value !== null)
+      .map((point) => ({ t: point.t, value: point.value }));
+  }
+  return bucketBy(points, grain, stat).map((bucket) => ({ t: bucket.t, value: bucket.value }));
 }
 
 function PanelChart({
@@ -46,21 +50,20 @@ function PanelChart({
   if (panel.chart === "line") {
     const overlay = panel.metrics.length > 1;
     const series: ChartSeries[] = panel.metrics.map((id) => {
-      const values = metricValues(pointsById.get(id) ?? [], grain, stat);
+      const points = metricPoints(pointsById.get(id) ?? [], grain, stat);
       // Overlaid metrics are normalized so different units share one axis
-      // honestly (each on its own scale); a single metric keeps real values.
-      return { label: nameById.get(id) ?? id, values: overlay ? normalize(values) : values };
+      // honestly (each on its own scale); timestamps remain unchanged.
+      const values = points.map((point) => point.value);
+      const normalized = overlay ? normalize(values) : values;
+      return {
+        label: nameById.get(id) ?? id,
+        points: points.map((point, index) => ({ ...point, value: normalized[index] })),
+      };
     });
-    // Real values carry a unit + a dated x-axis; normalized overlays are
-    // unitless (0-1, each on its own scale) so neither is shown.
-    const primaryPts = pointsById.get(panel.metrics[0]) ?? [];
-    const times = primaryPts.map((p) => p.t).filter(Boolean).sort();
-    const dateDomain: [string, string] | undefined =
-      times.length >= 2 ? [times[0], times[times.length - 1]] : undefined;
     const unit = overlay ? null : unitById.get(panel.metrics[0]) || null;
     return (
       <>
-        <MultiSeriesChart series={series} unit={unit} dateDomain={dateDomain} />
+        <MultiSeriesChart series={series} unit={unit} />
         {overlay && <p className="panel-note">Overlaid signals are normalized to their own 0–1 range.</p>}
       </>
     );
