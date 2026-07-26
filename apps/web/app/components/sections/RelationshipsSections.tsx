@@ -187,8 +187,14 @@ export async function ExplorePairSection({
   const overlay: ChartSeries[] =
     pairs.length >= 2
       ? [
-          { label: nameA, values: ownScale(pairs.map((p) => p.a)) },
-          { label: nameB, values: ownScale(pairs.map((p) => p.b)) },
+          {
+            label: nameA,
+            points: pairs.map((pair, index) => ({ t: pair.day, value: ownScale(pairs.map((p) => p.a))[index] })),
+          },
+          {
+            label: nameB,
+            points: pairs.map((pair, index) => ({ t: pair.day, value: ownScale(pairs.map((p) => p.b))[index] })),
+          },
         ]
       : [];
   const days = pairs.map((p) => p.day).sort();
