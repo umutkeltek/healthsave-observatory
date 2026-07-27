@@ -108,6 +108,15 @@ class SwrCache:
         """Drop every entry (tests; or after writes that must be visible now)."""
         self._entries.clear()
 
+    def drop(self, key: str) -> None:
+        """Drop one key after an upstream write so the next read re-aggregates.
+
+        Use this instead of ``clear()`` when a single canonical write only
+        invalidates one or two aggregates — unrelated read-page SWR entries
+        stay warm, so the cost of the cold rescan stays bounded.
+        """
+        self._entries.pop(key, None)
+
 
 # The shared instance for the v2 read surfaces. Keys in use:
 #   "canonical_coverage" — fetch_canonical_coverage (readiness)
