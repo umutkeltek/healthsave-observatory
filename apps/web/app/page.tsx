@@ -9,8 +9,9 @@ TodayStorySection,
 VaultSection,
 } from "./components/sections/TodaySections";
 import { DashboardCustomizer } from "./components/DashboardCustomizer";
+import { ExplorePanelCard } from "./components/ExplorePanelCard";
 import { CardSkeleton, GridSkeleton, HeroSkeleton, LeadSkeleton, RowSkeleton } from "./components/Skeletons";
-import { getDashboardSections } from "./lib/prefs";
+import { getDashboardSections, getSavedPanels } from "./lib/prefs";
 
 export const revalidate = 30;
 
@@ -20,6 +21,7 @@ export const revalidate = 30;
 // signal grid, findings panel, and vault entirely.
 export default async function Home() {
   const sections = await getDashboardSections();
+  const savedPanels = await getSavedPanels();
 
   return (
     <div className="today-page">
@@ -42,6 +44,22 @@ export default async function Home() {
       {sections.signals && (
         <Suspense fallback={<GridSkeleton />}>
           <SignalsSection />
+        </Suspense>
+      )}
+
+      {sections.savedPanels && savedPanels.length > 0 && (
+        <Suspense fallback={<GridSkeleton />}>
+          <div className="today-grid">
+            {savedPanels.map((panel) => (
+              <div key={panel.id} className="col-6">
+                <ExplorePanelCard
+                  id={panel.id}
+                  label={panel.label}
+                  encodedState={panel.state}
+                />
+              </div>
+            ))}
+          </div>
         </Suspense>
       )}
 

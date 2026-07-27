@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   CHART_KINDS,
   EXPLORE_GRAINS,
@@ -13,6 +13,7 @@ import {
   type ExplorePanel,
   type ExploreState,
 } from "../lib/explore";
+import { saveExplorePanelAction } from "../lib/actions";
 
 // Client islands for the Explore dashboard. They hold no data — they read the
 // current dashboard from the URL (via the `state` prop the server parsed) and
@@ -133,6 +134,58 @@ function SavedViews({ current }: { current: string }) {
   );
 }
 
+// Save-to-Today: persists the current explore dashboard as a compact card on
+// the Today page. Uses a server action (cookie-backed, revalidates /).
+function SaveToToday({ current }: { current: string }) {
+  const [, startTransition] = useTransition();
+  const [label, setLabel] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  const save = () => {
+    const name = label.trim();
+    if (!name) return;
+    startTransition(async () => {
+      const result = await saveExplorePanelAction(current, name);
+      if (result.ok) {
+        setSaved(true);
+        setLabel("");
+        setTimeout(() => setSaved(false), 2000);
+      }
+    });
+  };
+
+  return (
+    <div className="saved-views" style={{ marginTop: 8 }}>
+      <span className="saved-views-label">Pin to Today</span>
+      {saved ? (
+        <span className="panel-chip" style={{ color: "var(--up)", borderColor: "var(--up)" }}>
+          ✓ Saved!
+        </span>
+      ) : (
+        <>
+          <input
+            className="filter-select saved-view-input"
+            placeholder="Label this view…"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") save();
+            }}
+          />
+          <button
+            type="button"
+            className="btn-ghost panel-remove-btn"
+            onClick={save}
+            disabled={!label.trim()}
+          >
+            Pin
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 // Global dashboard controls + add-panel.
 export function ExploreControls({ state, metrics }: { state: ExploreState; metrics: MetricOpt[] }) {
   const nav = useExploreNav();
@@ -212,6 +265,9 @@ export function ExploreControls({ state, metrics }: { state: ExploreState; metri
         <MetricSelect metrics={metrics} placeholder="Pick a signal…" onPick={addPanel} />
       </div>
       <SavedViews current={encodeExploreState(state)} />
+
+      {/* Save-to-Today: persists this dashboard as a compact card on / */}
+      <SaveToToday current={encodeExploreState(state)} />
     </div>
   );
 }

@@ -36,7 +36,9 @@ import {
   parseFocusGoal,
   parsePinned,
   parseSections,
+  parseSavedPanels,
   PINNED_COOKIE,
+  SAVED_PANELS_COOKIE,
   type TemplateId,
   TEMPLATES,
 } from "./prefs";
@@ -281,6 +283,54 @@ export async function resetSectionsAction(): Promise<ActionResult> {
     return { ok: true };
   } catch (error) {
     return failure(error, "Could not reset dashboard sections.");
+  }
+}
+
+// ── Saved Explore panels → Today bridge ─────────────────────────────────
+
+export async function saveExplorePanelAction(
+  state: string,
+  label: string,
+): Promise<ActionResult> {
+  try {
+    if (!label.trim()) return { ok: false, error: "A label is required." };
+    const jar = await cookies();
+    const panels = parseSavedPanels(jar.get(SAVED_PANELS_COOKIE)?.value);
+    // Generate a stable id from label + timestamp so re-saving the same
+    // view updates in place rather than duplicating.
+    const id = `panel_${Date.now()}`;
+    const next = [...panels.filter((p) => p.label !== label.trim()), { id, label: label.trim(), state }];
+    jar.set(SAVED_PANELS_COOKIE, JSON.stringify(next), {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax",
+      httpOnly: true,
+    });
+    revalidatePath("/");
+    return { ok: true };
+  } catch (error) {
+    return failure(error, "Could not save this panel to Today.");
+  }
+}
+
+export async function removeSavedPanelAction(id: string): Promise<ActionResult> {
+  try {
+    const jar = await cookies();
+    const panels = parseSavedPanels(jar.get(SAVED_PANELS_COOKIE)?.value);
+    const next = panels.filter((p) => p.id !== id);
+    if (next.length === 0) jar.delete(SAVED_PANELS_COOKIE);
+    else {
+      jar.set(SAVED_PANELS_COOKIE, JSON.stringify(next), {
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365,
+        sameSite: "lax",
+        httpOnly: true,
+      });
+    }
+    revalidatePath("/");
+    return { ok: true };
+  } catch (error) {
+    return failure(error, "Could not remove the saved panel.");
   }
 }
 

@@ -14,6 +14,7 @@ const SECTION_LABELS: Record<keyof DashboardSections, string> = {
   signals: "Signal cards",
   vault: "Data privacy card",
   readiness: "Data readiness",
+  savedPanels: "Saved Explore panels",
 };
 
 function findTemplate(sections: DashboardSections): Template | null {

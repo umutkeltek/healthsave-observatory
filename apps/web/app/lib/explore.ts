@@ -149,3 +149,23 @@ export function normalize(values: number[]): number[] {
   if (span === 0) return values.map(() => 0.5);
   return values.map((v) => (v - min) / span);
 }
+
+// ─── Saved panels → Today bridge ───────────────────────────────────────────
+
+// Serialize a single panel's ExploreState to a URL-safe string (same format as
+// the explore page URL, so the saved-views and save-to-today flows share one
+// encoding). deserializeExplorePanel reconstructs the state; returns null when
+// the string is malformed or empty.
+export function serializeExploreState(state: ExploreState): string {
+  return encodeExploreState(state);
+}
+
+export function deserializeExploreState(raw: string): ExploreState | null {
+  if (!raw) return null;
+  try {
+    const params = new URLSearchParams(raw);
+    return parseExploreState(Object.fromEntries(params));
+  } catch {
+    return null;
+  }
+}

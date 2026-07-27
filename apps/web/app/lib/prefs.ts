@@ -33,6 +33,7 @@ export function parseSections(raw: string | undefined): DashboardSections {
       signals: obj.signals === true,
       vault: obj.vault === true,
       readiness: obj.readiness === true,
+      savedPanels: obj.savedPanels === true,
     };
   } catch {
     return defaultSections();
@@ -107,4 +108,41 @@ export function parseFocusGoal(raw: string | undefined): FocusGoal | null {
 export async function getFocusGoal(): Promise<FocusGoal | null> {
   const jar = await cookies();
   return parseFocusGoal(jar.get(FOCUS_GOAL_COOKIE)?.value);
+}
+
+// ── Saved Explore panels → Today bridge ──────────────────────────────────
+// Users can save an Explore dashboard view and have it appear as a compact
+// card on Today. Stored as a cookie (server-readable, no client hydration).
+
+export type SavedPanel = {
+  id: string;
+  label: string;
+  state: string; // serialized ExploreState (URL query string via explore.ts)
+};
+
+export const SAVED_PANELS_COOKIE = "saved_panels";
+const MAX_SAVED_PANELS = 8;
+
+export function parseSavedPanels(raw: string | undefined): SavedPanel[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr)
+      ? arr
+          .filter(
+            (p): p is SavedPanel =>
+              typeof p.id === "string" &&
+              typeof p.label === "string" &&
+              typeof p.state === "string",
+          )
+          .slice(0, MAX_SAVED_PANELS)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getSavedPanels(): Promise<SavedPanel[]> {
+  const jar = await cookies();
+  return parseSavedPanels(jar.get(SAVED_PANELS_COOKIE)?.value);
 }
