@@ -45,7 +45,6 @@ from ..ingestion.storage import (
     default_audit_log,
     default_storage,
 )
-from .swr import v2_read_cache
 from .deps import get_session, verify_api_key
 from .metrics import (
     CANONICAL_DUAL_WRITE,
@@ -57,6 +56,7 @@ from .metrics import (
     RAW_LOG_ORPHANED,
     SYNC_RECEIPT_WRITE_FAILURES,
 )
+from .swr import v2_read_cache
 
 # v2 canonical write (Decision C). Stable source id for the Apple Health /
 # HealthSave source; production adapter selection lives behind storage.defaults.
