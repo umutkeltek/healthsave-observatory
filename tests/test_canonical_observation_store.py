@@ -7,14 +7,15 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
-from contracts._base import Provenance
-from contracts.observation import Observation
-from contracts.values import CodedValue, QuantityValue
 from storage.timescale.observations import (
     CanonicalObservationRepository,
     observation_columns,
     row_to_series_point,
 )
+
+from contracts._base import Provenance
+from contracts.observation import Observation
+from contracts.values import CodedValue, QuantityValue
 
 _T = datetime(2026, 5, 28, 8, 0, tzinfo=UTC)
 _PROV = Provenance(source_plugin_id="apple_health", sdk_version="0.1.0", captured_at=_T)

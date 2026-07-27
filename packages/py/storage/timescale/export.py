@@ -17,8 +17,9 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, time
 from typing import TYPE_CHECKING, Any
 
-from contracts._base import DEFAULT_OWNER_ID
 from sqlalchemy import text
+
+from contracts._base import DEFAULT_OWNER_ID
 
 if TYPE_CHECKING:
     from uuid import UUID

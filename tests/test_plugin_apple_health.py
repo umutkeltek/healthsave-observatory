@@ -145,11 +145,11 @@ async def test_apple_health_ingest_projects_from_canonical_observations_when_sup
     """Canonical observations are the source for the per-metric projection path."""
     from datetime import UTC, datetime
 
+    from storage.results import IngestWriteResult
+
     from contracts._base import DEFAULT_OWNER_ID, Provenance
     from contracts.observation import Observation, build_dedup_key
     from contracts.values import QuantityValue
-    from storage.results import IngestWriteResult
-
     from plugins.sources.apple_health_healthsave import AppleHealthSource
 
     observed_at = datetime(2026, 5, 11, 8, 0, tzinfo=UTC)

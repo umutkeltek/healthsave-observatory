@@ -29,8 +29,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
-from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID, Provenance
 from normalization import normalize_apple_batch
+
+from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID, Provenance
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
