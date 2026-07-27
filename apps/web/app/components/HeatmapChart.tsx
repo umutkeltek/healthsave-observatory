@@ -1,10 +1,9 @@
 import type { HeatCell } from "../lib/analytics";
+import { DOW_LABELS } from "../lib/analytics";
 
-const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-// "When in the week" heatmap - a 7×24 grid coloured by value intensity. Empty
-// cells render blank. Pure presentational; the page reduces points via
-// analytics.weekHourPivot.
+// "When in the week" heatmap — a 7×24 grid coloured by value intensity. Empty
+// cells render blank. Weekday labels come from the shared analytics module so
+// they never drift from dayOfWeekPivot / DayOfWeekChart definitions.
 export function HeatmapChart({ cells, unit }: { cells: HeatCell[]; unit?: string }) {
   const values = cells.map((c) => c.value).filter((v): v is number => v !== null);
   if (values.length === 0) {
@@ -19,7 +18,7 @@ export function HeatmapChart({ cells, unit }: { cells: HeatCell[]; unit?: string
     <div className="heatmap">
       {Array.from({ length: 7 }, (_, dow) => (
         <div className="heat-row" key={dow}>
-          <span className="heat-rowlabel">{DOW[dow]}</span>
+          <span className="heat-rowlabel">{DOW_LABELS[dow]}</span>
           {Array.from({ length: 24 }, (_, hour) => {
             const cell = byKey.get(`${dow}-${hour}`);
             const v = cell?.value ?? null;
@@ -30,8 +29,8 @@ export function HeatmapChart({ cells, unit }: { cells: HeatCell[]; unit?: string
                 className="heat-cell"
                 title={
                   v === null
-                    ? `${DOW[dow]} ${hour}:00 - no data`
-                    : `${DOW[dow]} ${hour}:00 - ${v}${unit ? ` ${unit}` : ""} (n=${cell?.n})`
+                    ? `${DOW_LABELS[dow]} ${hour}:00 - no data`
+                    : `${DOW_LABELS[dow]} ${hour}:00 - ${v}${unit ? ` ${unit}` : ""} (n=${cell?.n})`
                 }
                 style={{
                   background: v === null ? "var(--raise)" : `color-mix(in srgb, var(--accent) ${intensity}%, transparent)`,

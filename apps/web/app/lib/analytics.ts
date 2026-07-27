@@ -142,7 +142,7 @@ export function hrZoneHistogram(points: SeriesPoint[], zones: Zone[] = HR_ZONES)
 
 export type DowCell = { dow: number; label: string; value: number; n: number };
 
-const DOW_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+export const DOW_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function dayOfWeekPivot(
   points: SeriesPoint[],

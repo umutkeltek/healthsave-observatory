@@ -10,6 +10,7 @@ import type { MetricSeries, SeriesPoint, StreamView } from "../../lib/api";
 import { DEMO_COMPARE_SERIES } from "../../lib/demoSeries";
 import { comparability } from "../../lib/healthOpinion";
 import { safeMetrics, safeSeries, safeStreams } from "../../lib/load";
+import { rangeLabel } from "../../lib/ranges";
 
 export const COMPARE_RANGES = ["7d", "30d", "90d", "1y", "all"];
 
@@ -150,7 +151,7 @@ export async function CompareSection({
         <article className="card">
           <div className="card-title">
             {series.metric.display_name}
-            {isDemo ? " · demo" : ` · ${range}`}
+            {isDemo ? " · demo" : ` · ${rangeLabel(range)}`}
           </div>
           <MultiSeriesChart series={chart} unit={unit || null} dateDomain={dateDomain} />
         </article>
@@ -186,7 +187,7 @@ export async function CompareSection({
       <footer className="foot">
         {isDemo
           ? "demo data · illustrative comparison · nothing left this host"
-          : `${series.metric.id} · ${range} · nothing left this host`}
+          : `${series.metric.id} · ${rangeLabel(range)} · nothing left this host`}
       </footer>
     </>
   );

@@ -1246,8 +1246,14 @@ html {
    Private Observatory - Today hero, signal ribbon, contributors, vault
    ───────────────────────────────────────────────────────────────────── */
 
-/* Human (non-mono) card title - reserve mono+uppercase for system metadata. */
+/* Human (non-mono) card title — reserve mono+uppercase for system metadata.
+   Uses flex so a label + inline action link (e.g. "Sleep · this week" with
+   "See your sleep →") stay on one row. */
 .card-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
   margin: 0 0 4px;
   font-family: var(--sans);
   font-size: 15px;
@@ -4606,8 +4612,7 @@ body {
   padding: 24px;
 }
 
-.card h2,
-.card-title {
+.card h2 {
   color: var(--ink);
   font-size: 15px;
   font-weight: 700;
@@ -4937,8 +4942,7 @@ body {
   border-width: 0.5px;
 }
 
-.card h2,
-.card-title {
+.card h2 {
   font-size: 15px;
   font-weight: 650;
 }
