@@ -134,10 +134,7 @@ class StorageBreakdownSession(FakeSession):
                 batch_size = max(len(indices), 1) if indices else 1
             else:
                 batch_size = 1
-            rows = [
-                {"inserted_new": bool(self.insert_flags.pop(0))}
-                for _ in range(batch_size)
-            ]
+            rows = [{"inserted_new": bool(self.insert_flags.pop(0))} for _ in range(batch_size)]
             return FakeResult(rows=rows)
         if sql.startswith("SELECT id FROM devices"):
             return FakeResult(row=(1,))

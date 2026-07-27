@@ -121,7 +121,7 @@ async def _execute_batch_insert_with_flags(
     ``inserted_new``/``deduped_existing`` accounting.
 
     The caller supplies ``sql_prefix`` up to (but not including) ``VALUES``,
-    e.g. ``"INSERT INTO heart_rate (time, device_id, value) ON CONFLICT ... RETURNING (xmax = 0) AS inserted_new"``.
+    e.g. ``"INSERT INTO heart_rate (...) ON CONFLICT ... RETURNING (xmax = 0) AS inserted_new"``.
     """
     if not rows:
         return []
@@ -555,8 +555,7 @@ async def _ingest_activity(
             for col in metric_cols:
                 row.setdefault(col, None)
         updates = ", ".join(
-            f"{k} = COALESCE(EXCLUDED.{k}, daily_activity.{k})"
-            for k in metric_cols + ["source_id"]
+            f"{k} = COALESCE(EXCLUDED.{k}, daily_activity.{k})" for k in metric_cols + ["source_id"]
         )
         # Reorder dicts so columns are in the agreed order.
         ordered_rows = [{c: r.get(c) for c in cols} for r in rows]
