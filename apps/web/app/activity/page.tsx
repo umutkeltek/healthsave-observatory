@@ -185,21 +185,31 @@ async function WeeklyStrain() {
   );
 }
 
+async function ActivityIntroNote() {
+  const ids = STRAIN_CARDS.map((c) => c.metricId);
+  const seriesMap = await safeSeriesMany(ids, "7d");
+  const anyData = [...seriesMap.values()].some(
+    (s) => s?.points.some((p) => p.value !== null && Number.isFinite(p.value)),
+  );
+  if (anyData) return null;
+  return (
+    <section className="route-note">
+      <p>
+        Steps and exercise minutes come from Apple Health. Sync from the HealthSave app to see your
+        daily strain.{" "}
+        <a href="/demo" style={{ color: "var(--accent)", fontWeight: 500 }}>
+          Explore demo →
+        </a>
+      </p>
+    </section>
+  );
+}
+
 export default function ActivityPage() {
   return (
     <div className="activity-page">
-      <section className="route-note">
-        <p>
-          Steps and exercise minutes come from Apple Health. Sync from the HealthSave app to see your
-          daily strain.{" "}
-          <a href="/demo" style={{ color: "var(--accent)", fontWeight: 500 }}>
-            Explore demo →
-          </a>
-        </p>
-      </section>
-
-      <Suspense fallback={<StrainSectionFallback />}>
-        <StrainCards />
+      <Suspense fallback={null}>
+        <ActivityIntroNote />
       </Suspense>
 
       <Suspense fallback={<CardSkeleton />}>

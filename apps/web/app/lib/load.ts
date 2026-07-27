@@ -48,6 +48,7 @@ import {
   type SourceView,
   type StreamView,
 } from "./api";
+import { hasUsablePoints } from "./ranges";
 import { swrCache } from "./ttlCache";
 
 // The one logged choke point for swallowed fetch failures: a card rendering
@@ -276,6 +277,26 @@ export async function dataState(): Promise<DataState> {
 
 export async function hasAnyData(): Promise<boolean> {
   return (await dataState()) === "data";
+}
+
+// ── Range-fallback loader ────────────────────────────────────────────────
+// When the requested period holds no usable observations, re-fetch with the
+// widest available window so the UI can show the oldest data it actually has.
+// The caller receives `{ requested, fallback }`; it should render the
+// fallback data with an explicit disclosure, never relabel old data as
+// belonging to the requested period.
+export async function safeSeriesWithFallback(
+  id: string,
+  range: string,
+): Promise<{ requested: MetricSeries | null; fallback: MetricSeries | null }> {
+  if (range === "all") {
+    const series = await safeSeries(id, "all");
+    return { requested: series, fallback: null };
+  }
+  const requested = await safeSeries(id, range);
+  if (hasUsablePoints(requested)) return { requested, fallback: null };
+  const fallback = await safeSeries(id, "all");
+  return { requested, fallback: hasUsablePoints(fallback) ? fallback : null };
 }
 
 // Identity / provenance loaders - the Sources view. Each returns the inner

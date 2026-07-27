@@ -11,7 +11,7 @@ import { DEMO_COMPARE_SERIES } from "../../lib/demoSeries";
 import { comparability } from "../../lib/healthOpinion";
 import { safeMetrics, safeSeries, safeStreams } from "../../lib/load";
 
-export const COMPARE_RANGES = ["7d", "30d", "90d", "1y"];
+export const COMPARE_RANGES = ["7d", "30d", "90d", "1y", "all"];
 
 const round1 = (n: number): number => Number(n.toFixed(1));
 const byTime = (a: SeriesPoint, b: SeriesPoint): number => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0);

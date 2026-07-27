@@ -5,10 +5,11 @@ import { detectDivergence, groupBySource } from "../../lib/analytics";
 import { anomalyPinIndices } from "../../lib/annotations";
 import { quantile } from "../../components/chart/scale";
 import { comparability } from "../../lib/healthOpinion";
-import { agoLabel, safeFindings, safeMetrics, safeReadiness, safeSeries, safeStreams } from "../../lib/load";
+import { agoLabel, safeFindings, safeMetrics, safeReadiness, safeSeriesWithFallback, safeStreams } from "../../lib/load";
 import { METRIC_NOTES } from "../../lib/metricNotes";
 import { getPinnedMetrics } from "../../lib/prefs";
 import { friendlyName, shortId } from "../../lib/provenance";
+import { rangeLabel, seriesCoverage, shortDate } from "../../lib/ranges";
 import { BaselineRibbon } from "../../components/BaselineRibbon";
 import { MultiSeriesChart } from "../../components/MultiSeriesChart";
 import { PinButton } from "../../components/PinButton";
@@ -16,8 +17,16 @@ import { PinButton } from "../../components/PinButton";
 export const revalidate = 30;
 export const metadata: Metadata = { title: "Signal · HealthSave Observatory" };
 
-const RANGES = ["7d", "30d", "90d", "1y"] as const;
+const RANGES = ["7d", "30d", "90d", "1y", "all"] as const;
 type Range = (typeof RANGES)[number];
+
+const RANGE_CHIPS: Record<Range, string> = {
+  "7d": "7 days",
+  "30d": "30 days",
+  "90d": "90 days",
+  "1y": "1 year",
+  all: "All time",
+};
 
 function numberLabel(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return "-";
@@ -44,8 +53,8 @@ export default async function MetricDetailPage({
   const sp = await searchParams;
   const range: Range = RANGES.includes(sp.range as Range) ? (sp.range as Range) : "30d";
 
-  const [series, metrics, readiness, pinned, findings, streams] = await Promise.all([
-    metricId ? safeSeries(metricId, range) : Promise.resolve(null),
+  const [{ requested: series, fallback: fallbackSeries }, metrics, readiness, pinned, findings, streams] = await Promise.all([
+    metricId ? safeSeriesWithFallback(metricId, range) : Promise.resolve({ requested: null, fallback: null }),
     safeMetrics(),
     safeReadiness(),
     getPinnedMetrics(),
@@ -55,6 +64,9 @@ export default async function MetricDetailPage({
 
   const metric = metrics?.find((m) => m.id === metricId) ?? series?.metric;
   const stat = readiness?.metrics.find((m) => m.metric_id === metricId);
+  const effective = series ?? fallbackSeries;
+  const usingFallback = series === null && fallbackSeries !== null;
+  const coverage = effective ? seriesCoverage(effective.points) : null;
 
   if (!metric) {
     return (
@@ -70,7 +82,7 @@ export default async function MetricDetailPage({
     );
   }
 
-  const points = series?.points ?? [];
+  const points = effective?.points ?? [];
   const numericPoints = points.filter((p): p is typeof p & { value: number } => p.value !== null);
   const values = numericPoints.map((p) => p.value);
   const sorted = [...values].sort((a, b) => a - b);
@@ -156,7 +168,7 @@ export default async function MetricDetailPage({
                     href={`/library/${encodeURIComponent(metricId)}?range=${r}`}
                     className={`chip ${r === range ? "chip-active" : ""}`}
                   >
-                    {r}
+                    {RANGE_CHIPS[r]}
                   </Link>
                 ))}
               </nav>
@@ -218,10 +230,14 @@ export default async function MetricDetailPage({
               />
             )}
             {values.length < 2 && (
-              <p className="empty">
+              <p className="empty lib-fallback-note">
                 {stat?.observation_count
-                  ? `No numeric readings in the last ${range}. Try a longer range.`
-                  : "No data for this signal yet. It appears here when a source streams it."}
+                  ? `No numeric readings in the ${rangeLabel(range)} range. Try a longer range.`
+                  : usingFallback
+                    ? coverage
+                      ? `No data in the requested ${rangeLabel(range)} range — showing all available observations (${coverage.count} readings, ${shortDate(coverage.first)} → ${shortDate(coverage.last)}).`
+                      : `No data in the requested ${rangeLabel(range)} range, and no data available overall.`
+                    : "No data for this signal yet. It appears here when a source streams it."}
               </p>
             )}
           </div>
