@@ -1,4 +1,4 @@
-import { type Finding, isNarratorOff, type Privacy, type Readiness } from "../../lib/api";
+import { type Finding, isNarratorOff, type MetricSeries, type Privacy, type Readiness } from "../../lib/api";
 import {
   agoLabel,
   dataState,
@@ -25,6 +25,7 @@ import { FocusGoalPicker } from "../FocusGoalPicker";
 import { GoalRibbon } from "../GoalRibbon";
 import { LocalVaultReceipt, type VaultStep } from "../LocalVaultReceipt";
 import { MetricCard } from "../MetricCard";
+import { MobilityCard } from "../MobilityCard";
 import { ReadinessCard } from "../ReadinessCard";
 import { type BylineItem, RecoveryHero, type TodayHighlight } from "../RecoveryHero";
 import { SleepCard } from "../SleepCard";
@@ -353,7 +354,25 @@ export async function SignalsSection() {
     const goalSet = new Set(goal.metricIds);
     defs = [...defs.filter((d) => goalSet.has(d.id)), ...defs.filter((d) => !goalSet.has(d.id))];
   }
-  const [map, sleep] = await Promise.all([todaySeries7d(), safeSeries("sleep.stage", "7d")]);
+  // Pull both the metric grid series and the dedicated mobility-card series in
+  // one batch — fewer round-trips to the backend per Today page render.
+  const mobilityIds = [
+    "vital.walking_heart_rate_average",
+    "mobility.walking_speed",
+    "mobility.walking_step_length",
+    "mobility.walking_asymmetry",
+  ];
+  const [map, sleep, mobility] = await Promise.all([
+    todaySeries7d(),
+    safeSeries("sleep.stage", "7d"),
+    safeSeriesMany(mobilityIds, "7d"),
+  ]);
+  const mobilitySeries: Record<string, MetricSeries | null> = {
+    "vital.walking_heart_rate_average": mobility.get("vital.walking_heart_rate_average") ?? null,
+    "mobility.walking_speed": mobility.get("mobility.walking_speed") ?? null,
+    "mobility.walking_step_length": mobility.get("mobility.walking_step_length") ?? null,
+    "mobility.walking_asymmetry": mobility.get("mobility.walking_asymmetry") ?? null,
+  };
   return (
     <>
       <div className="section-label">Signals{pinned ? " - pinned" : ""}</div>
@@ -362,6 +381,7 @@ export async function SignalsSection() {
           <MetricCard key={metric.id} series={map.get(metric.id) ?? null} fallbackTitle={metric.title} />
         ))}
         <SleepCard series={sleep} />
+        <MobilityCard seriesByMetric={mobilitySeries} />
       </section>
     </>
   );

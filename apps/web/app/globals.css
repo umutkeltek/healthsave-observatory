@@ -6522,3 +6522,50 @@ font-size: 17px;
   display: block;
   font-weight: 600;
 }
+
+/* ── Mobility card (Walking) ───────────────────────────────────────────────── */
+
+.mobility-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+.mobility-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.mobility-stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.mobility-stat-value {
+  font-size: 22px;
+  line-height: 1.15;
+  color: var(--ink);
+  font-weight: 600;
+}
+.mobility-stat-meta {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+/* ── Explore: data-density hint ───────────────────────────────────────────── */
+
+.explore-density {
+  display: inline-block;
+  padding: 4px 10px;
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
