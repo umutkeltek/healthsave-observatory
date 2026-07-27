@@ -12,6 +12,7 @@ export type PaletteMetric = { id: string; name: string; category: string };
 const PAGES: { label: string; href: string }[] = [
   { label: "Today", href: "/" },
   { label: "Sleep", href: "/sleep" },
+  { label: "Activity", href: "/activity" },
   { label: "Findings", href: "/findings" },
   { label: "Data", href: "/data" },
   { label: "Experiments", href: "/experiments" },
