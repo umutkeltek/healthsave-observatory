@@ -273,13 +273,13 @@ def normalize_band_data(payload: dict[str, Any]) -> dict[str, list[dict[str, Any
         stp = summary.get("stp") or {}
         if isinstance(stp, dict) and date_str:
             steps = stp.get("ttl")
-            if isinstance(steps, (int, float)) and steps >= 0:
+            if isinstance(steps, int | float) and steps >= 0:
                 step_count.append({"date": date_str, "qty": int(steps), "source": SOURCE_TAG})
             dist = stp.get("dis")
-            if isinstance(dist, (int, float)) and dist >= 0:
+            if isinstance(dist, int | float) and dist >= 0:
                 distance.append({"date": date_str, "qty": float(dist), "source": SOURCE_TAG})
             cal = stp.get("cal")
-            if isinstance(cal, (int, float)) and cal >= 0:
+            if isinstance(cal, int | float) and cal >= 0:
                 active_energy.append({"date": date_str, "qty": float(cal), "source": SOURCE_TAG})
 
         # Sleep — Zepp surfaces slp.st / slp.ed as minute-resolution
