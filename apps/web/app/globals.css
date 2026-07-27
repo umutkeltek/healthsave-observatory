@@ -6511,6 +6511,7 @@ font-size: 17px;
   font-weight: 650;
   letter-spacing: -0.035em;
   line-height: 1;
+  overflow-wrap: anywhere;
 }
 
 .sleep-hero-meta {
@@ -6939,6 +6940,7 @@ font-size: 17px;
   margin: 0 auto;
   max-height: 88vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 28px 32px 32px;
   background: var(--surface);
   border: 1px solid var(--line);
