@@ -9,6 +9,7 @@ import { MultiSeriesChart, type ChartSeries } from "../MultiSeriesChart";
 import { RelateControls } from "../RelateControls";
 import { RunCorrelationButton } from "../RunCorrelationButton";
 import { ScatterChart } from "../ScatterChart";
+import { timeBasisLabel, UTC_TIME_BASIS } from "../../lib/analyticalTime";
 import {
   type AlignedPair,
   alignDaily,
@@ -17,7 +18,7 @@ import {
 } from "../../lib/analytics";
 import type { Correlation, MetricSeries, MetricSummary } from "../../lib/api";
 import { DEMO_CORRELATIONS, DEMO_RELATE_METRICS, demoRelatedPair } from "../../lib/demoSeries";
-import { agoLabel, safeCorrelations, safeMetrics, safeSeries } from "../../lib/load";
+import { agoLabel, safeAnalyticalTime, safeCorrelations, safeMetrics, safeSeries } from "../../lib/load";
 
 export const REL_RANGES = ["30d", "90d", "1y"];
 
@@ -158,7 +159,8 @@ export async function ExplorePairSection({
   bId: string;
   range: string;
 }) {
-  const { unreachable, catalog } = await loadCatalog();
+  const [{ unreachable, catalog }, analyticalTime] = await Promise.all([loadCatalog(), safeAnalyticalTime()]);
+  const timeBasis = analyticalTime ?? UTC_TIME_BASIS;
 
   // Pair series: live when reachable, the coupled demo pair when not.
   let seriesA: MetricSeries | null = null;
@@ -180,7 +182,7 @@ export async function ExplorePairSection({
     }
   }
 
-  const pairs: AlignedPair[] = seriesA && seriesB ? alignDaily(seriesA.points, seriesB.points) : [];
+  const pairs: AlignedPair[] = seriesA && seriesB ? alignDaily(seriesA.points, seriesB.points, timeBasis) : [];
   const stat = pearson(pairs);
   const nameA = aId ? prettyName(catalog, aId) : "";
   const nameB = bId ? prettyName(catalog, bId) : "";
@@ -213,6 +215,7 @@ export async function ExplorePairSection({
           <p className="rel-sub">
             Day means over shared days - both signals kept verbatim, each on its own scale.
           </p>
+          <p className="meta">{timeBasisLabel(timeBasis)}</p>
           <RelateControls metrics={options} ranges={REL_RANGES} />
 
           {!pairChosen && aId && aId === bId && (

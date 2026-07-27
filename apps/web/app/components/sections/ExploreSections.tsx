@@ -4,6 +4,7 @@
 // interactive bits are client islands (ExploreControls / PanelToolbar); the
 // charts are server-rendered and re-run whenever the URL state changes.
 
+import { timeBasisLabel, UTC_TIME_BASIS } from "../../lib/analyticalTime";
 import { bucketBy, dayOfWeekPivot, hrZoneHistogram, weekHourPivot, type Stat } from "../../lib/analytics";
 import type { SeriesPoint } from "../../lib/api";
 import {
@@ -14,7 +15,7 @@ import {
   type ExploreState,
   type GrainOpt,
 } from "../../lib/explore";
-import { safeMetrics, safeSeries } from "../../lib/load";
+import { safeAnalyticalTime, safeMetrics, safeSeries } from "../../lib/load";
 import { DayOfWeekChart } from "../DayOfWeekChart";
 import { ExploreControls, PanelToolbar, type MetricOpt } from "../ExploreControls";
 import { HeatmapChart } from "../HeatmapChart";
@@ -23,13 +24,18 @@ import { ZoneBar } from "../ZoneBar";
 
 // Timestamped values under the current grain/stat. Keeping the timestamp with
 // every value prevents irregular samples from being drawn at equal spacing.
-function metricPoints(points: SeriesPoint[], grain: GrainOpt, stat: Stat): { t: string; value: number }[] {
+function metricPoints(
+  points: SeriesPoint[],
+  grain: GrainOpt,
+  stat: Stat,
+  timeBasis: typeof UTC_TIME_BASIS,
+): { t: string; value: number }[] {
   if (grain === "raw") {
     return points
       .filter((point): point is SeriesPoint & { value: number } => point.value !== null)
       .map((point) => ({ t: point.t, value: point.value }));
   }
-  return bucketBy(points, grain, stat).map((bucket) => ({ t: bucket.t, value: bucket.value }));
+  return bucketBy(points, grain, stat, timeBasis).map((bucket) => ({ t: bucket.t, value: bucket.value }));
 }
 
 function PanelChart({
@@ -38,19 +44,21 @@ function PanelChart({
   pointsById,
   nameById,
   unitById,
+  timeBasis,
 }: {
   panel: ExplorePanel;
   state: ExploreState;
   pointsById: Map<string, SeriesPoint[]>;
   nameById: Map<string, string>;
   unitById: Map<string, string>;
+  timeBasis: typeof UTC_TIME_BASIS;
 }) {
   const { grain, stat } = state;
 
   if (panel.chart === "line") {
     const overlay = panel.metrics.length > 1;
     const series: ChartSeries[] = panel.metrics.map((id) => {
-      const points = metricPoints(pointsById.get(id) ?? [], grain, stat);
+      const points = metricPoints(pointsById.get(id) ?? [], grain, stat, timeBasis);
       // Overlaid metrics are normalized so different units share one axis
       // honestly (each on its own scale); timestamps remain unchanged.
       const values = points.map((point) => point.value);
@@ -72,13 +80,15 @@ function PanelChart({
   const primary = panel.metrics[0];
   const pts = pointsById.get(primary) ?? [];
   const unit = unitById.get(primary) ?? "";
-  if (panel.chart === "heatmap") return <HeatmapChart cells={weekHourPivot(pts, stat)} unit={unit} />;
-  if (panel.chart === "weekday") return <DayOfWeekChart cells={dayOfWeekPivot(pts, stat)} unit={unit} />;
+  if (panel.chart === "heatmap") return <><p className="meta">{timeBasisLabel(timeBasis)}</p><HeatmapChart cells={weekHourPivot(pts, stat, timeBasis)} unit={unit} /></>;
+  if (panel.chart === "weekday") return <><p className="meta">{timeBasisLabel(timeBasis)}</p><DayOfWeekChart cells={dayOfWeekPivot(pts, stat, timeBasis)} unit={unit} /></>;
   return <ZoneBar zones={hrZoneHistogram(pts)} />;
 }
 
 export async function ExploreSections({ state }: { state: ExploreState }) {
-  const metrics = (await safeMetrics()) ?? [];
+  const [loadedMetrics, analyticalTime] = await Promise.all([safeMetrics(), safeAnalyticalTime()]);
+  const metrics = loadedMetrics ?? [];
+  const timeBasis = analyticalTime ?? UTC_TIME_BASIS;
   const metricOpts: MetricOpt[] = metrics.map((m) => ({
     id: m.id,
     display_name: m.display_name,
@@ -113,6 +123,7 @@ export async function ExploreSections({ state }: { state: ExploreState }) {
                 pointsById={pointsById}
                 nameById={nameById}
                 unitById={unitById}
+                timeBasis={timeBasis}
               />
             </article>
           ))}

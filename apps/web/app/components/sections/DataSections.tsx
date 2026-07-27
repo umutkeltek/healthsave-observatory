@@ -14,12 +14,14 @@ import { ReadinessCard } from "../ReadinessCard";
 import { SleepCard } from "../SleepCard";
 import { SourceDistribution } from "../SourceDistribution";
 import { ZoneBar } from "../ZoneBar";
+import { timeBasisLabel, UTC_TIME_BASIS } from "../../lib/analyticalTime";
 import { dayOfWeekPivot, distribution, hrZoneHistogram, weekHourPivot } from "../../lib/analytics";
 import type { MetricSeries, MetricSummary, SeriesPoint } from "../../lib/api";
 import { demoPatternSeries } from "../../lib/demoSeries";
 import {
   GRID_METRICS,
   loadReadinessSparklines,
+  safeAnalyticalTime,
   safeExportMetrics,
   safeMetrics,
   safeReadiness,
@@ -64,7 +66,12 @@ function sortCards(cards: Card[], sort: string): Card[] {
 export async function ExplorerSection({ filters }: { filters: DataFilters }) {
   const { metricSel, categorySel, sourceSel, deviceSel, sortSel, range } = filters;
 
-  const [metrics, streams] = await Promise.all([safeMetrics(), safeStreams()]);
+  const [metrics, streams, analyticalTime] = await Promise.all([
+    safeMetrics(),
+    safeStreams(),
+    safeAnalyticalTime(),
+  ]);
+  const timeBasis = analyticalTime ?? UTC_TIME_BASIS;
   const all = metrics ?? [];
   const categories = [...new Set(all.map((m) => m.category).filter(Boolean))].sort();
 
@@ -195,11 +202,13 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
           <div className="today-grid prov-grid">
             <article className="card col-8">
               <div className="card-title">When in the week</div>
-              <HeatmapChart cells={weekHourPivot(patterns.points)} unit={patterns.unit} />
+              <p className="meta">{timeBasisLabel(timeBasis)}</p>
+              <HeatmapChart cells={weekHourPivot(patterns.points, "mean", timeBasis)} unit={patterns.unit} />
             </article>
             <article className="card col-4">
               <div className="card-title">By weekday</div>
-              <DayOfWeekChart cells={dayOfWeekPivot(patterns.points)} unit={patterns.unit} />
+              <p className="meta">{timeBasisLabel(timeBasis)}</p>
+              <DayOfWeekChart cells={dayOfWeekPivot(patterns.points, "mean", timeBasis)} unit={patterns.unit} />
             </article>
             {patterns.isHr && (
               <article className="card col-12">

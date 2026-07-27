@@ -11,10 +11,12 @@ import { cache } from "react";
 
 import {
   ApiError,
+  type AnalyticalTimeSettings,
   type Candidates,
   type Correlation,
   type ExperimentList,
   type ExportMetricInfo,
+  fetchAnalyticalTime,
   fetchCandidates,
   fetchCorrelations,
   fetchExperiments,
@@ -72,6 +74,14 @@ export const GRID_METRICS: { id: string; title: string }[] = [
   { id: "activity.active_energy", title: "Active Energy" },
   { id: "body.weight", title: "Body Weight" },
 ];
+
+export async function safeAnalyticalTime(): Promise<AnalyticalTimeSettings | null> {
+  try {
+    return await swrCache("analytical-time", 30_000, fetchAnalyticalTime);
+  } catch (error) {
+    return swallow("analytical-time", error);
+  }
+}
 
 export async function safeSeries(id: string, range = "7d"): Promise<MetricSeries | null> {
   try {
