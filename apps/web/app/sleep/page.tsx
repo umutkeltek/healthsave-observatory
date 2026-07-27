@@ -28,6 +28,7 @@ function Hypnogram({ segments }: { segments: SleepSegment[] }) {
         <span
           key={i}
           className="sleep-seg"
+          aria-hidden="true"
           style={{ background: STAGE_COLOR[seg.stage] ?? "var(--neutral)" }}
           title={`${STAGE_LABEL[seg.stage] ?? seg.stage} · ${new Date(seg.t).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`}
         />
@@ -69,7 +70,7 @@ function ConsistencyGauge({ score }: { score: number | null }) {
   const tone = score >= 80 ? "good" : score >= 50 ? "warn" : "down";
   return (
     <div className={`sleep-gauge sleep-gauge-${tone}`}>
-      <svg viewBox="0 0 120 120" className="sleep-gauge-ring">
+      <svg viewBox="0 0 120 120" className="sleep-gauge-ring" role="img" aria-label={`Sleep consistency ${score} of 100`}>
         <circle cx="60" cy="60" r="52" className="sleep-gauge-track" />
         <circle
           cx="60"
@@ -141,11 +142,13 @@ export default async function SleepPage() {
                   <h1>{durationLabel(lastNight.durationMin)}</h1>
                   <p className="sleep-hero-meta">
                     {bedtimeLabel(lastNight.bedtime)} → {bedtimeLabel(lastNight.wakeTime)}
-                    {bedDelta !== null && (
-                      <span className={`sleep-delta ${bedDelta > 30 ? "warn" : ""}`}>
+                    {(bedDelta !== null || wakeDelta !== null) && (
+                      <span className="sleep-delta">
                         {" · "}
-                        {bedDelta > 0 ? "+" : ""}
-                        {bedDelta} min vs usual
+                        {bedDelta !== null && `${bedDelta > 0 ? "+" : ""}${bedDelta} min bed`}
+                        {bedDelta !== null && wakeDelta !== null && ", "}
+                        {wakeDelta !== null && `${wakeDelta > 0 ? "+" : ""}${wakeDelta} min wake`}
+                        {" vs usual"}
                       </span>
                     )}
                   </p>
