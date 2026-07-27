@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { BaselineRibbon } from "../components/BaselineRibbon";
 import { ConsistencyGauge, Hypnogram, StageBreakdown } from "../components/SleepVisuals";
 import { safeSeries } from "../lib/load";
+import { hasUsablePoints } from "../lib/ranges";
 import {
   bedtimeDelta,
   bedtimeLabel,
@@ -21,7 +22,7 @@ export const metadata: Metadata = { title: "Sleep · HealthSave Observatory" };
 export default async function SleepPage() {
   const series = await safeSeries("sleep.stage", "30d");
 
-  if (!series || series.points.length === 0) {
+  if (!hasUsablePoints(series)) {
     return (
       <section className="lead">
         <article className="hero sleep-hero firstrun">
