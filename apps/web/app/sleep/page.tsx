@@ -31,9 +31,17 @@ export default async function SleepPage() {
             Sync sleep data from HealthSave to see your nightly patterns, stage breakdown, and trends.
           </p>
           <p className="empty">
-            Apple Watch tracks sleep automatically. Once HealthSave syncs, your hypnogram and sleep
-            trends appear here.
+            Apple Watch tracks sleep automatically. Open HealthSave → Settings → Server Sync to stream
+            your nights here.
           </p>
+          <div style={{ marginTop: 16, display: "flex", gap: 12 }}>
+            <a href="/" className="btn btn-ghost">
+              ← Today
+            </a>
+            <a href="/demo" className="btn btn-ghost">
+              Explore demo →
+            </a>
+          </div>
         </article>
       </section>
     );

@@ -171,6 +171,16 @@ async function WeeklyStrain() {
 export default function ActivityPage() {
   return (
     <div className="activity-page">
+      <section className="route-note">
+        <p>
+          Steps and exercise minutes come from Apple Health. Sync from the HealthSave app to see your
+          daily strain.{" "}
+          <a href="/demo" style={{ color: "var(--accent)", fontWeight: 500 }}>
+            Explore demo →
+          </a>
+        </p>
+      </section>
+
       <Suspense fallback={<StrainSectionFallback />}>
         <StrainCards />
       </Suspense>
