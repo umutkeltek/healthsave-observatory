@@ -11,13 +11,14 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from normalization.fusion import DeviceLinkConfidence
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.timescale import registry
 from storage.timescale.fusion import default_repository as fusion_repository
+
+from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
 
 from .deps import get_session, verify_api_key
 

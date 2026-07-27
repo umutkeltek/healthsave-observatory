@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import get_args
 
-from contracts.values import ObservationValue
 from pydantic import TypeAdapter
+
+from contracts.values import ObservationValue
 
 OBSERVATION_VALUE_ADAPTER = TypeAdapter(ObservationValue)
 

@@ -21,9 +21,10 @@ from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
-from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
 
 
 @dataclass(frozen=True, slots=True)

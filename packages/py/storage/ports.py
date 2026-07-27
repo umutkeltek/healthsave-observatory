@@ -45,8 +45,9 @@ if TYPE_CHECKING:
     from datetime import date, datetime
     from uuid import UUID
 
-    from contracts.observation import Observation
     from sqlalchemy.ext.asyncio import AsyncSession
+
+    from contracts.observation import Observation
 
     from .results import IngestWriteResult
     from .timescale.agents import (

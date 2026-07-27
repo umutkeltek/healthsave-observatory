@@ -22,10 +22,11 @@ from typing import Any
 
 from analysis.statistical.gates import check_sufficiency
 from analysis.types import DataSummary
-from contracts.ontology import get_metric
 from fastapi import APIRouter, Depends
 from storage.defaults import readiness_repository
 from storage.ports import ReadinessRepository
+
+from contracts.ontology import get_metric
 
 from ..db.session import async_session
 from .deps import verify_api_key
