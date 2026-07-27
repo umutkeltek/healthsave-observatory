@@ -3,7 +3,7 @@
 // metric. Used by Today's saved-panels section (app/page.tsx).
 
 import { BaselineRibbon } from "./BaselineRibbon";
-import { deserializeExploreState } from "../lib/explore";
+import { deserializeExploreState, fetchRange, filterWindow } from "../lib/explore";
 import { safeSeriesMany } from "../lib/load";
 import { removeSavedPanelAction } from "../lib/actions";
 
@@ -16,7 +16,6 @@ type Props = {
 async function removePanel(id: string) {
   "use server";
   await removeSavedPanelAction(id);
-  return;
 }
 
 export async function ExplorePanelCard({ id, label, encodedState }: Props) {
@@ -27,7 +26,7 @@ export async function ExplorePanelCard({ id, label, encodedState }: Props) {
   const metricIds = [...new Set(state.panels.flatMap((p) => p.metrics))];
   if (metricIds.length === 0) return null;
 
-  const seriesMap = await safeSeriesMany(metricIds, state.range);
+  const seriesMap = await safeSeriesMany(metricIds, fetchRange(state));
 
   return (
     <article className="card explore-panel-card">
@@ -49,7 +48,7 @@ export async function ExplorePanelCard({ id, label, encodedState }: Props) {
         {state.panels.map((panel, pi) =>
           panel.metrics.map((metricId) => {
             const series = seriesMap.get(metricId);
-            const points = series?.points ?? [];
+            const points = filterWindow(series?.points ?? [], state.from, state.to);
             const values = points.filter((p): p is typeof p & { value: number } => p.value !== null);
             const numeric = values.map((p) => p.value);
             const hoverLabels = values.map((p) =>

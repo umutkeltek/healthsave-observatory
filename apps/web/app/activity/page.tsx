@@ -5,6 +5,7 @@ import { BaselineRibbon } from "../components/BaselineRibbon";
 import { CountUp } from "../components/CountUp";
 import { CardSkeleton } from "../components/Skeletons";
 import { agoLabel, safeSeries, safeSeriesMany } from "../lib/load";
+import { summarizeNumericSeries } from "../lib/series";
 
 export const revalidate = 30;
 export const metadata: Metadata = { title: "Activity · HealthSave Observatory" };
@@ -55,11 +56,7 @@ async function StrainCards() {
       {STRAIN_CARDS.map((card) => {
         const series = seriesMap.get(card.metricId) ?? null;
         const points = series?.points ?? [];
-        const numeric = points.filter((p): p is typeof p & { value: number } => p.value !== null);
-        const sorted = [...numeric].map((p) => p.value).sort((a, b) => a - b);
-        const latest = sorted.at(-1);
-        const avg = sorted.length > 0 ? sorted.reduce((a, b) => a + b, 0) / sorted.length : null;
-        const lastObs = numeric.at(-1);
+        const { latest: lastObs, average: avg } = summarizeNumericSeries(points);
         const fresh = lastObs ? agoLabel(lastObs.t) : "no data";
 
         return (
@@ -69,10 +66,10 @@ async function StrainCards() {
               <h2>{card.title}</h2>
             </div>
             <div className="activity-card-value">
-              {latest !== undefined ? (
+              {lastObs ? (
                 <>
                   <span className="activity-big">
-                    <CountUp value={Math.round(latest)} />
+                    <CountUp value={Math.round(lastObs.value)} />
                   </span>
                   <span className="activity-unit">{card.unit}</span>
                 </>

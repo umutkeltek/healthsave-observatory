@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  bedtimeDelta,
   consistencyScore,
   deriveNight,
   durationLabel,
@@ -58,6 +59,14 @@ describe("deriveNight", () => {
       sp("2026-06-01T23:00:00Z", "core"),
       sp("2026-06-01T23:30:00Z", "core"),
     ];
+    expect(deriveNight("2026-06-01", points)).toBeNull();
+  });
+
+  it("rejects nights whose raw points have no stage codes", () => {
+    const points: SeriesPoint[] = Array.from({ length: 5 }, (_, index) => ({
+      ...sp(`2026-06-01T23:0${index}:00Z`, "core"),
+      code: null,
+    }));
     expect(deriveNight("2026-06-01", points)).toBeNull();
   });
 
@@ -149,6 +158,60 @@ describe("sleepDebt", () => {
     ];
     const trend = sleepTrends(nights);
     expect(sleepDebt(trend)).toBe(0); // -0.5h → 0h rounded
+  });
+});
+
+describe("bedtimeDelta", () => {
+  it("compares clock times without including calendar-day distance", () => {
+    const trend = sleepTrends([
+      {
+        date: "2026-06-01",
+        bedtime: "2026-06-01T23:00:00Z",
+        wakeTime: "2026-06-02T07:00:00Z",
+        durationMin: 480,
+        stageMinutes: {},
+        segments: [],
+      },
+      {
+        date: "2026-06-02",
+        bedtime: "2026-06-02T23:10:00Z",
+        wakeTime: "2026-06-03T07:10:00Z",
+        durationMin: 480,
+        stageMinutes: {},
+        segments: [],
+      },
+      {
+        date: "2026-06-03",
+        bedtime: "2026-06-03T23:20:00Z",
+        wakeTime: "2026-06-04T07:20:00Z",
+        durationMin: 480,
+        stageMinutes: {},
+        segments: [],
+      },
+    ]);
+    expect(bedtimeDelta(trend)).toEqual({ bedDelta: 15, wakeDelta: 15 });
+  });
+
+  it("handles a bedtime that crosses midnight", () => {
+    const trend = sleepTrends([
+      {
+        date: "2026-06-01",
+        bedtime: "2026-06-01T23:50:00Z",
+        wakeTime: "2026-06-02T07:00:00Z",
+        durationMin: 430,
+        stageMinutes: {},
+        segments: [],
+      },
+      {
+        date: "2026-06-02",
+        bedtime: "2026-06-03T00:10:00Z",
+        wakeTime: "2026-06-03T07:10:00Z",
+        durationMin: 420,
+        stageMinutes: {},
+        segments: [],
+      },
+    ]);
+    expect(bedtimeDelta(trend)).toEqual({ bedDelta: 20, wakeDelta: 10 });
   });
 });
 

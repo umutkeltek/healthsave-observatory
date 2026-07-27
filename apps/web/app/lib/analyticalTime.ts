@@ -48,6 +48,14 @@ export function analyticalDayOfWeek(dayKey: string): number {
   return (new Date(`${dayKey}T00:00:00Z`).getUTCDay() + 6) % 7;
 }
 
+export function currentAnalyticalDayOfWeek(
+  basis: AnalyticalTimeBasis,
+  now: Date = new Date(),
+): number | null {
+  const day = analyticalDayKey(now.toISOString(), basis);
+  return day ? analyticalDayOfWeek(day) : null;
+}
+
 export function timeBasisLabel(basis: AnalyticalTimeBasis): string {
   const hours = Math.floor(basis.day_boundary_minutes / 60);
   const minutes = basis.day_boundary_minutes % 60;

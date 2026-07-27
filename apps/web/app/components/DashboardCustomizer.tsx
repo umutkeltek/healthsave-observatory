@@ -30,9 +30,14 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
   const [open, setOpen] = useState(false);
   const [, startTransition] = useTransition();
   const sheetRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [error, setError] = useState<string | null>(null);
   const active = findTemplate(sections);
 
-  const close = useCallback(() => setOpen(false), []);
+  const close = useCallback(() => {
+    setOpen(false);
+    requestAnimationFrame(() => triggerRef.current?.focus());
+  }, []);
 
   // Focus trap: first focusable element on open, close on Escape, trap Tab
   useEffect(() => {
@@ -71,23 +76,29 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
   }, [open, close]);
 
   const applyTemplate = (id: string) => {
+    setError(null);
     startTransition(async () => {
-      await applyTemplateAction(id as Template["id"]);
-      router.refresh();
+      const result = await applyTemplateAction(id as Template["id"]);
+      if (!result.ok) setError(result.error ?? "Could not apply this template.");
+      else router.refresh();
     });
   };
 
   const toggleSection = (key: keyof DashboardSections) => {
+    setError(null);
     startTransition(async () => {
-      await toggleSectionAction(key);
-      router.refresh();
+      const result = await toggleSectionAction(key);
+      if (!result.ok) setError(result.error ?? "Could not update this section.");
+      else router.refresh();
     });
   };
 
   const reset = () => {
+    setError(null);
     startTransition(async () => {
-      await resetSectionsAction();
-      router.refresh();
+      const result = await resetSectionsAction();
+      if (!result.ok) setError(result.error ?? "Could not reset the dashboard.");
+      else router.refresh();
     });
   };
 
@@ -97,6 +108,7 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
         <button
           type="button"
           className="btn dashboard-customize-btn"
+          ref={triggerRef}
           onClick={() => setOpen(true)}
         >
           {active ? `${active.icon} ${active.label}` : "◆ Customize"}
@@ -112,7 +124,7 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
         type="button"
         className="nav-scrim dashboard-scrim"
         aria-label="Close dashboard customizer"
-        onClick={() => setOpen(false)}
+        onClick={close}
       />
 
       <div className="dashboard-sheet" role="dialog" aria-modal="true" aria-label="Customize dashboard" ref={sheetRef}>
@@ -122,7 +134,7 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
             type="button"
             className="palette-btn"
             aria-label="Close"
-            onClick={() => setOpen(false)}
+            onClick={close}
           >
             ✕
           </button>
@@ -169,6 +181,12 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
           ))}
         </div>
 
+        {error && (
+          <p className="exp-error" role="status">
+            {error}
+          </p>
+        )}
+
         {/* Reset */}
         <button type="button" className="btn dashboard-reset-btn" onClick={reset}>
           Reset to full layout
@@ -177,7 +195,7 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
         <button
           type="button"
           className="btn dashboard-apply-btn"
-          onClick={() => setOpen(false)}
+          onClick={close}
         >
           Done
         </button>

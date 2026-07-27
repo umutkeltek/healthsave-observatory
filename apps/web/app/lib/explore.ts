@@ -9,6 +9,10 @@ export type ChartKind = "line" | "heatmap" | "weekday" | "zones";
 export type GrainOpt = Grain | "raw";
 
 export type ExplorePanel = { chart: ChartKind; metrics: string[] };
+export const MAX_EXPLORE_PANELS = 8;
+export const MAX_EXPLORE_METRICS_PER_PANEL = 4;
+const METRIC_ID_RE = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/;
+
 export type ExploreState = {
   range: string;
   grain: GrainOpt;
@@ -79,9 +83,13 @@ export function parsePanels(raw: string | undefined): ExplorePanel[] {
   if (!raw) return DEFAULT_PANELS;
   const panels = raw
     .split(";")
+    .slice(0, MAX_EXPLORE_PANELS)
     .map((seg) => {
       const [chart, metrics] = seg.split(":");
-      const ms = (metrics ?? "").split(",").filter(Boolean);
+      const ms = (metrics ?? "")
+        .split(",")
+        .filter((metric) => METRIC_ID_RE.test(metric))
+        .slice(0, MAX_EXPLORE_METRICS_PER_PANEL);
       return { chart: isChart(chart) ? chart : "line", metrics: ms } as ExplorePanel;
     })
     .filter((p) => p.metrics.length > 0);
@@ -122,11 +130,12 @@ export function encodeExploreState(state: ExploreState): string {
   return qs.toString();
 }
 
-// The preset to actually fetch: a custom window pulls the widest preset (the page
-// then slices it), otherwise the chosen preset. "all" is its own widest preset.
+// The preset to actually fetch: a custom window pulls the full available
+// history (the page then slices it), otherwise the chosen preset. Fetching only
+// one year made valid older custom ranges render empty.
 export function fetchRange(state: ExploreState): string {
-  if (state.range === "all") return "all";
-  return state.from || state.to ? "1y" : state.range;
+  if (state.from || state.to) return "all";
+  return state.range;
 }
 
 // Slice points to a custom [from, to] window (inclusive). ISO timestamps compare

@@ -30,9 +30,12 @@ import {
   type Density,
   DENSITY_COOKIE,
   DASHBOARD_COOKIE,
+  appendSavedPanel,
   type FocusGoal,
   FOCUS_GOAL_COOKIE,
   MAX_PINS,
+  MAX_SAVED_PANEL_LABEL,
+  MAX_SAVED_PANEL_STATE,
   parseFocusGoal,
   parsePinned,
   parseSections,
@@ -293,13 +296,15 @@ export async function saveExplorePanelAction(
   label: string,
 ): Promise<ActionResult> {
   try {
-    if (!label.trim()) return { ok: false, error: "A label is required." };
+    const cleanLabel = label.trim().slice(0, MAX_SAVED_PANEL_LABEL);
+    if (!cleanLabel) return { ok: false, error: "A label is required." };
+    if (!state || state.length > MAX_SAVED_PANEL_STATE) {
+      return { ok: false, error: "This Explore view is too large to save to Today." };
+    }
     const jar = await cookies();
     const panels = parseSavedPanels(jar.get(SAVED_PANELS_COOKIE)?.value);
-    // Generate a stable id from label + timestamp so re-saving the same
-    // view updates in place rather than duplicating.
     const id = `panel_${Date.now()}`;
-    const next = [...panels.filter((p) => p.label !== label.trim()), { id, label: label.trim(), state }];
+    const next = appendSavedPanel(panels, { id, label: cleanLabel, state });
     jar.set(SAVED_PANELS_COOKIE, JSON.stringify(next), {
       path: "/",
       maxAge: 60 * 60 * 24 * 365,

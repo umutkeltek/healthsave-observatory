@@ -4,7 +4,7 @@
 // interactive bits are client islands (ExploreControls / PanelToolbar); the
 // charts are server-rendered and re-run whenever the URL state changes.
 
-import { timeBasisLabel, UTC_TIME_BASIS } from "../../lib/analyticalTime";
+import { currentAnalyticalDayOfWeek, timeBasisLabel, UTC_TIME_BASIS } from "../../lib/analyticalTime";
 import { bucketBy, dayOfWeekPivot, hrZoneHistogram, weekHourPivot, type Stat } from "../../lib/analytics";
 import type { SeriesPoint } from "../../lib/api";
 import {
@@ -136,7 +136,7 @@ function PanelChart({
   const pts = pointsById.get(primary) ?? [];
   const unit = unitById.get(primary) ?? "";
   if (panel.chart === "heatmap") return <><p className="meta">{timeBasisLabel(timeBasis)}</p><HeatmapChart cells={weekHourPivot(pts, stat, timeBasis)} unit={unit} /></>;
-  if (panel.chart === "weekday") return <><p className="meta">{timeBasisLabel(timeBasis)}</p><DayOfWeekChart cells={dayOfWeekPivot(pts, stat, timeBasis)} unit={unit} /></>;
+  if (panel.chart === "weekday") return <><p className="meta">{timeBasisLabel(timeBasis)}</p><DayOfWeekChart cells={dayOfWeekPivot(pts, stat, timeBasis)} unit={unit} todayDow={currentAnalyticalDayOfWeek(timeBasis)} /></>;
   return <ZoneBar zones={hrZoneHistogram(pts)} />;
 }
 

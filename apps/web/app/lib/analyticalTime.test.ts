@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { analyticalDayKey, analyticalDayOfWeek, analyticalWeekKey, localHour } from "./analyticalTime";
+import {
+  analyticalDayKey,
+  analyticalDayOfWeek,
+  analyticalWeekKey,
+  currentAnalyticalDayOfWeek,
+  localHour,
+} from "./analyticalTime";
 
 const ISTANBUL = { time_zone: "Europe/Istanbul", day_boundary_minutes: 240 };
 
@@ -13,6 +19,12 @@ describe("person-local analytical time", () => {
   test("uses the selected timezone for local hour", () => {
     expect(localHour("2026-07-10T00:30:00Z", ISTANBUL)).toBe(3);
     expect(localHour("2026-07-10T00:30:00Z", { time_zone: "America/New_York", day_boundary_minutes: 240 })).toBe(20);
+  });
+
+  test("highlights today using the shifted analytical day", () => {
+    // Monday 03:30 in Istanbul is still Sunday's physiological day at a 04:00 boundary.
+    expect(currentAnalyticalDayOfWeek(ISTANBUL, new Date("2026-07-13T00:30:00Z"))).toBe(6);
+    expect(currentAnalyticalDayOfWeek(ISTANBUL, new Date("2026-07-13T01:30:00Z"))).toBe(0);
   });
 
   test("derives weekday and week from the shifted analytical day", () => {
