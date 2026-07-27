@@ -151,9 +151,14 @@ export default async function DemoToday() {
   const debt = sleepDebt(sleepTrend);
   const { bedDelta, wakeDelta } = bedtimeDelta(sleepTrend);
 
+  const durationValues = sleepTrend.durations;
+  const sortedDurations = [...durationValues].sort((a, b) => a - b);
   const lastEfficiency = sleepTrend.efficiencies.length > 0
     ? sleepTrend.efficiencies[sleepTrend.efficiencies.length - 1]
     : null;
+  const avgDuration = sortedDurations.length > 0
+    ? Math.round(sortedDurations.reduce((a, b) => a + b) / sortedDurations.length)
+    : 0;
   const hasShortNight = debt !== null && debt > 0;
 
   return (
@@ -235,12 +240,12 @@ export default async function DemoToday() {
               <h1>{durationLabel(lastNight.durationMin)}</h1>
               <p className="sleep-hero-meta">
                 {bedtimeLabel(lastNight.bedtime)} → {bedtimeLabel(lastNight.wakeTime)}
-                {(bedDelta !== null || wakeDelta !== null) && (
+                {(bedDelta != null || wakeDelta != null) && (
                   <span className="sleep-delta">
                     {" · "}
-                    {bedDelta !== null && `${bedDelta > 0 ? "+" : ""}${bedDelta} min bed`}
-                    {bedDelta !== null && wakeDelta !== null && ", "}
-                    {wakeDelta !== null && `${wakeDelta > 0 ? "+" : ""}${wakeDelta} min wake`}
+                    {bedDelta != null && `${bedDelta > 0 ? "+" : ""}${bedDelta} min bed`}
+                    {bedDelta != null && wakeDelta != null && ", "}
+                    {wakeDelta != null && `${wakeDelta > 0 ? "+" : ""}${wakeDelta} min wake`}
                     {" vs usual"}
                   </span>
                 )}
@@ -277,6 +282,13 @@ export default async function DemoToday() {
               ) : (
                 <p className="empty">No data.</p>
               )}
+            </div>
+            <div className="sleep-stat-card">
+              <span className="sleep-stat-label">Avg duration</span>
+              <div className="sleep-debt">
+                <strong>{durationLabel(avgDuration)}</strong>
+                <span>{sleepTrend.dates.length} nights</span>
+              </div>
             </div>
           </div>
         </section>
