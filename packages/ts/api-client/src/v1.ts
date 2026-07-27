@@ -805,6 +805,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/moments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Moments */
+        get: operations["list_moments_api_v2_moments_get"];
+        put?: never;
+        /** Create Moment */
+        post: operations["create_moment_api_v2_moments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/moments/{moment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Moment */
+        put: operations["update_moment_api_v2_moments__moment_id__put"];
+        post?: never;
+        /** Delete Moment */
+        delete: operations["delete_moment_api_v2_moments__moment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/privacy": {
         parameters: {
             query?: never;
@@ -1238,6 +1274,24 @@ export interface components {
             /** Start Date */
             start_date?: string | null;
         };
+        /** CreateMomentRequest */
+        CreateMomentRequest: {
+            /** End At */
+            end_at?: string | null;
+            /** Grade */
+            grade?: string | null;
+            /** Kind */
+            kind: string;
+            /** Note */
+            note?: string | null;
+            /**
+             * Start At
+             * Format: date-time
+             */
+            start_at: string;
+            /** Title */
+            title: string;
+        };
         /** DailyBriefingResponse */
         DailyBriefingResponse: {
             /** Created At */
@@ -1443,6 +1497,37 @@ export interface components {
             /** Recent Findings */
             recent_findings?: components["schemas"]["FindingResponse"][];
             weekly_summary?: components["schemas"]["WeeklySummaryResponse"] | null;
+        };
+        /** MomentListResponse */
+        MomentListResponse: {
+            /** Count */
+            count: number;
+            /** Moments */
+            moments: components["schemas"]["MomentView"][];
+        };
+        /** MomentView */
+        MomentView: {
+            /** Created At */
+            created_at: string | null;
+            /** End At */
+            end_at: string | null;
+            /** Grade */
+            grade: string | null;
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /** Note */
+            note: string | null;
+            /**
+             * Start At
+             * Format: date-time
+             */
+            start_at: string;
+            /** Title */
+            title: string;
+            /** Updated At */
+            updated_at: string | null;
         };
         /** PhaseView */
         PhaseView: {
@@ -1766,6 +1851,24 @@ export interface components {
             day_boundary_minutes: number;
             /** Time Zone */
             time_zone: string;
+        };
+        /** UpdateMomentRequest */
+        UpdateMomentRequest: {
+            /** End At */
+            end_at?: string | null;
+            /** Grade */
+            grade?: string | null;
+            /** Kind */
+            kind: string;
+            /** Note */
+            note?: string | null;
+            /**
+             * Start At
+             * Format: date-time
+             */
+            start_at: string;
+            /** Title */
+            title: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -3007,6 +3110,144 @@ export interface operations {
             };
             path: {
                 metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_moments_api_v2_moments_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MomentListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_moment_api_v2_moments_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMomentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MomentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_moment_api_v2_moments__moment_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                moment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMomentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MomentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_moment_api_v2_moments__moment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                moment_id: number;
             };
             cookie?: never;
         };
