@@ -59,7 +59,7 @@ export function DataTable({ points, unit }: { points: SeriesPoint[]; unit?: stri
         </thead>
         <tbody>
           {rows.map((p, i) => (
-            <tr key={`${p.t}-${i}`}>
+            <tr key={`${p.t}-${p.source_id}-${i}`}>
               <td className="prov-sync">{p.t.slice(0, 16).replace("T", " ")}</td>
               <td className="dt-val">
                 {p.value ?? "-"}

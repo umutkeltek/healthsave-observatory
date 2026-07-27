@@ -10,6 +10,7 @@ import { METRIC_NOTES } from "../../lib/metricNotes";
 import { getPinnedMetrics } from "../../lib/prefs";
 import { friendlyName, shortId } from "../../lib/provenance";
 import { rangeLabel, seriesCoverage, shortDate } from "../../lib/ranges";
+import { summarizeNumericSeries } from "../../lib/series";
 import { BaselineRibbon } from "../../components/BaselineRibbon";
 import { MultiSeriesChart } from "../../components/MultiSeriesChart";
 import { PinButton } from "../../components/PinButton";
@@ -86,6 +87,8 @@ export default async function MetricDetailPage({
   const numericPoints = points.filter((p): p is typeof p & { value: number } => p.value !== null);
   const values = numericPoints.map((p) => p.value);
   const sorted = [...values].sort((a, b) => a - b);
+  const { latest: latestObs } = summarizeNumericSeries(points);
+  const last = latestObs?.value ?? null;
   const bySource = groupBySource(points);
   const sourceIds = [...bySource.keys()];
 
@@ -106,7 +109,6 @@ export default async function MetricDetailPage({
   const divergence = detectDivergence(points);
   const notes = METRIC_NOTES[metricId] ?? [];
   const multiSource = sourceIds.length > 1;
-  const last = values.at(-1);
 
   const stats =
     sorted.length >= 2
@@ -197,7 +199,7 @@ export default async function MetricDetailPage({
             <div className="lib-summary-tile">
               <span>Trend status</span>
               <strong>{Object.values(stat?.analyzable ?? {}).some((g) => g.is_sufficient) ? "Ready" : "Building"}</strong>
-              <small>{range} range selected</small>
+              <small>{rangeLabel(range)} range selected</small>
             </div>
           </div>
 
@@ -211,7 +213,7 @@ export default async function MetricDetailPage({
                 values={values}
                 anomalies={anomalies}
                 height={132}
-                axis={[`${range} ago`, "today"]}
+                axis={[`${rangeLabel(range)}`, "today"]}
                 hoverLabels={numericPoints.map((p) =>
                   new Date(p.t).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
                 )}
