@@ -59,3 +59,66 @@ export function GridSkeleton({ count = 8 }: { count?: number }) {
 export function LeadSkeleton() {
   return <CardSkeleton />;
 }
+
+export function SleepPageSkeleton() {
+  return (
+    <div className="sleep-page" aria-hidden>
+      <section className="lead">
+        <article className="hero sleep-hero skeleton-card">
+          <div className="sleep-hero-main">
+            <div className="sleep-hero-lede">
+              <div className="sk sk-line lg" style={{ height: 48, maxWidth: 240, marginBottom: 12 }} />
+              <div className="sk sk-line sm" style={{ maxWidth: "60%", marginBottom: 20 }} />
+              <div style={{ height: 24, background: "var(--hover)", borderRadius: "var(--radius-sm)" }} />
+            </div>
+            <div className="sleep-hero-side">
+              <div className="sk sk-line" style={{ height: 16, marginBottom: 8 }} />
+              <div className="sk sk-line" style={{ height: 16, marginBottom: 8 }} />
+              <div className="sk sk-line" style={{ height: 16, marginBottom: 8 }} />
+              <div className="sk sk-line sm" style={{ height: 16 }} />
+            </div>
+          </div>
+        </article>
+      </section>
+      <section className="sleep-stats-row">
+        <div className="card sleep-stat-card skeleton-card">
+          <div className="sk sk-eyebrow" />
+          <div className="sk sk-line lg" style={{ height: 40, maxWidth: 80 }} />
+        </div>
+        <div className="card sleep-stat-card skeleton-card">
+          <div className="sk sk-eyebrow" />
+          <div className="sk sk-line lg" style={{ height: 40, maxWidth: 80 }} />
+        </div>
+        <div className="card sleep-stat-card skeleton-card">
+          <div className="sk sk-eyebrow" />
+          <div className="sk sk-line lg" style={{ height: 40, maxWidth: 80 }} />
+        </div>
+        <div className="card sleep-stat-card skeleton-card">
+          <div className="sk sk-eyebrow" />
+          <div className="sk sk-line lg" style={{ height: 40, maxWidth: 80 }} />
+        </div>
+      </section>
+      <CardSkeleton />
+      <CardSkeleton />
+    </div>
+  );
+}
+
+export function ActivityPageSkeleton() {
+  return (
+    <div className="activity-page" aria-hidden>
+      <div className="activity-grid">
+        {Array.from({ length: 5 }, (_, i) => (
+          <article key={i} className="card activity-card skeleton-card">
+            <div className="sk sk-eyebrow" />
+            <div className="sk sk-line lg" style={{ height: 32, maxWidth: 100 }} />
+            <div className="sk sk-line sm" style={{ maxWidth: "60%" }} />
+          </article>
+        ))}
+      </div>
+      <CardSkeleton />
+      <CardSkeleton />
+      <CardSkeleton />
+    </div>
+  );
+}
