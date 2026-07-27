@@ -26,6 +26,8 @@ from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, TypeVar
 
+from contracts.analytical_time import AnalyticalTime, analytical_day_bounds
+
 from .llm.client import HealthLLMClient
 from .llm.prompts.daily_briefing import DAILY_BRIEFING_PROMPT_TEMPLATE
 from .llm.prompts.weekly_summary import WEEKLY_SUMMARY_PROMPT_TEMPLATE
@@ -496,6 +498,16 @@ class AnalysisEngine:
             await session.commit()
             return run_id
 
+    async def _analytical_time(self, session) -> AnalyticalTime:
+        from storage.timescale.observatory_settings import default_repository
+
+        settings = await default_repository.get(session)
+        return (
+            AnalyticalTime(settings.time_zone, settings.day_boundary_minutes)
+            if settings
+            else AnalyticalTime()
+        )
+
     async def _fetch_metric_daily_series(self, metric_id: str, days: int) -> dict[date, float]:
         """Daily-series fetcher injected into :class:`CorrelationAnalyzer`.
 
@@ -504,10 +516,19 @@ class AnalysisEngine:
         Opens its own session per metric, mirroring how the trend analyzer
         self-manages reads.
         """
-        end = datetime.now(tz=UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-        start = end - timedelta(days=days)
         async with self.session_factory() as session:
-            rows = await _sql().fetch_metric_daily_series(session, metric_id, start, end)
+            time_basis = await self._analytical_time(session)
+            today = datetime.now(tz=UTC).astimezone(time_basis.zone).date()
+            end, _ = analytical_day_bounds(today, time_basis)
+            start = end - timedelta(days=days)
+            rows = await _sql().fetch_metric_daily_series(
+                session,
+                metric_id,
+                start,
+                end,
+                time_zone=time_basis.time_zone,
+                day_boundary_minutes=time_basis.day_boundary_minutes,
+            )
         return {
             row.day: float(row.value)
             for row in rows

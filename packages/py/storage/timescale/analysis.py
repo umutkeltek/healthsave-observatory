@@ -31,8 +31,9 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
 from sqlalchemy import text
+
+from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -551,6 +552,8 @@ async def fetch_metric_daily_series(
     *,
     owner_id: UUID = DEFAULT_OWNER_ID,
     workspace_id: UUID = DEFAULT_WORKSPACE_ID,
+    time_zone: str = "UTC",
+    day_boundary_minutes: int = 0,
 ) -> list[Any]:
     """Daily mean of a canonical metric's numeric values over ``[start, end)``.
 
@@ -564,7 +567,11 @@ async def fetch_metric_daily_series(
     result = await session.execute(
         text(
             """
-            SELECT date_trunc('day', interval_start)::date AS day,
+            SELECT date_trunc(
+                       'day',
+                       (interval_start AT TIME ZONE :time_zone)
+                       - make_interval(mins => :day_boundary_minutes)
+                   )::date AS day,
                    avg(numeric_value)::float AS value,
                    count(*) AS sample_count
             FROM canonical_observations
@@ -585,6 +592,8 @@ async def fetch_metric_daily_series(
             "metric_id": metric_id,
             "start": start,
             "end": end,
+            "time_zone": time_zone,
+            "day_boundary_minutes": day_boundary_minutes,
         },
     )
     return _fetchall(result)

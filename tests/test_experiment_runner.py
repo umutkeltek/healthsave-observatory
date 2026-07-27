@@ -15,6 +15,8 @@ from uuid import UUID
 import pytest
 from analysis.experiments import ExperimentRunner
 
+from contracts.analytical_time import AnalyticalTime
+
 EXP_ID = UUID("11111111-1111-1111-1111-111111111111")
 START = date(2026, 1, 1)
 
@@ -52,7 +54,7 @@ class _StubTimeSeries:
         metric_id = kw["metric_id"]
         series = self.series_by_metric.get(metric_id, {})
         return [
-            SimpleNamespace(t=datetime(day.year, day.month, day.day, tzinfo=UTC), value=value)
+            SimpleNamespace(t=datetime(day.year, day.month, day.day, 12, tzinfo=UTC), value=value)
             for day, value in series.items()
         ]
 
@@ -116,6 +118,7 @@ def make_runner():
             _factory(session),
             time_series=_StubTimeSeries(series_by_metric),
             experiment_repository=experiments,
+            analytical_time=AnalyticalTime(),
         )
         return runner, experiments
 
@@ -200,6 +203,30 @@ async def test_run_retrospective_persists_observational(make_runner):
     assert res["inference"] == "observational"
     assert res["direction"] == "decrease"
     assert res["structured_data"]["method"] == "lever_median_split"
+
+
+async def test_series_assigns_instants_by_person_local_analytical_day() -> None:
+    class _TimedSeries:
+        async def query_series(self, session, **kw):
+            return [
+                SimpleNamespace(t=datetime(2026, 7, 10, 0, 30, tzinfo=UTC), value=10.0),
+                SimpleNamespace(t=datetime(2026, 7, 10, 1, 30, tzinfo=UTC), value=20.0),
+            ]
+
+    runner = ExperimentRunner(
+        _factory(_FakeSession()),
+        time_series=_TimedSeries(),
+        experiment_repository=_StubExperiments(),
+        analytical_time=AnalyticalTime("Europe/Istanbul", 240),
+    )
+    values = await runner._series(
+        _FakeSession(),
+        "activity.steps",
+        datetime(2026, 7, 1, tzinfo=UTC),
+        datetime(2026, 7, 20, tzinfo=UTC),
+        AnalyticalTime("Europe/Istanbul", 240),
+    )
+    assert values == {date(2026, 7, 9): 10.0, date(2026, 7, 10): 20.0}
 
 
 @pytest.mark.asyncio

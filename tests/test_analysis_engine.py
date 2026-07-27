@@ -738,15 +738,28 @@ async def test_fetch_metric_daily_series_maps_rows_to_day_value_and_skips_nulls(
         _Row(day=date(2026, 5, 3), value=None, sample_count=0),  # no value → dropped
     ]
 
+    calls: list[dict] = []
+
     async def fake_fetch(session, metric_id, start, end, **kwargs):
+        calls.append({"start": start, "end": end, **kwargs})
         return canned
 
     monkeypatch.setattr(analysis_sql, "fetch_metric_daily_series", fake_fetch)
 
     engine = _make_plain_engine(_FakeSession(run_queue=[]))
+
+    async def analytical_time(_session):
+        from contracts.analytical_time import AnalyticalTime
+
+        return AnalyticalTime("Europe/Istanbul", 240)
+
+    monkeypatch.setattr(engine, "_analytical_time", analytical_time)
     series = await engine._fetch_metric_daily_series("vital.hrv_sdnn", days=90)
 
     assert series == {d1: 55.0, d2: 58.0}
+    assert calls[0]["time_zone"] == "Europe/Istanbul"
+    assert calls[0]["day_boundary_minutes"] == 240
+    assert calls[0]["end"].minute == 0
 
 
 @pytest.mark.asyncio
