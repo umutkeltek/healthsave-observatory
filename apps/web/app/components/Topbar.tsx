@@ -9,6 +9,7 @@ import { ThemeToggle } from "./ThemeToggle";
 const TITLES: Record<string, { title: string; sub: string }> = {
   "/": { title: "Today", sub: "Recovery, recent changes, and signals worth attention." },
   "/sleep": { title: "Sleep", sub: "Stages, duration, consistency, and sleep debt — night by night." },
+  "/activity": { title: "Activity", sub: "Daily strain, steps, energy, and cardiovascular load." },
   "/demo": { title: "Today", sub: "A 30-day story using local demo data." },
   "/experiments": { title: "Experiments", sub: "Try a change, then measure whether it helped." },
   "/timeline": { title: "Timeline", sub: "Your health story at a glance — moments, changes, and decisions." },

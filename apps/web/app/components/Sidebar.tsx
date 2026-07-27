@@ -122,6 +122,7 @@ type NavItem = { href: string; label: string; icon: string; group: NavGroup };
 const NAV: readonly NavItem[] = [
   { href: "/", label: "Today", icon: "overview", group: "essentials" },
   { href: "/sleep", label: "Sleep", icon: "sleep", group: "essentials" },
+  { href: "/activity", label: "Activity", icon: "activity", group: "essentials" },
   { href: "/findings", label: "Findings", icon: "findings", group: "essentials" },
   { href: "/data", label: "Data", icon: "data", group: "essentials" },
   { href: "/sources", label: "Sources", icon: "sources", group: "essentials" },
