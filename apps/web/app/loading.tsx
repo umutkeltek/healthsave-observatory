@@ -1,23 +1,12 @@
+import { HeroSkeleton, RowSkeleton } from "./components/Skeletons";
+
 // Shown in the content area during route navigation (the shell persists).
+// Mirrors the today-page layout so the skeleton → content swap has no shift.
 export default function Loading() {
   return (
-    <>
-      <section className="lead">
-        <div className="card skeleton-card" aria-hidden>
-          <div className="sk sk-eyebrow" />
-          <div className="sk sk-line lg" />
-          <div className="sk sk-line" />
-          <div className="sk sk-line sm" />
-        </div>
-      </section>
-      <section className="lead">
-        <div className="card skeleton-card" aria-hidden>
-          <div className="sk sk-eyebrow" />
-          <div className="sk sk-line" />
-          <div className="sk sk-line" />
-          <div className="sk sk-line sm" />
-        </div>
-      </section>
-    </>
+    <div className="today-page">
+      <HeroSkeleton />
+      <RowSkeleton />
+    </div>
   );
 }
