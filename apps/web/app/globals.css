@@ -2346,6 +2346,20 @@ input.filter-select {
   grid-template-columns: 36px 1fr max-content;
   align-items: center;
   gap: 10px;
+  padding: 3px 0;
+  border-radius: 6px;
+  transition: background var(--dur-1) ease;
+}
+.dow-row:hover {
+  background: var(--hover);
+}
+.dow-row.today .dow-label {
+  color: var(--accent);
+  font-weight: 650;
+}
+.dow-row.today .dow-fill {
+  background: var(--accent);
+  filter: brightness(1.15);
 }
 .dow-label {
   font-size: 12px;
@@ -2363,6 +2377,7 @@ input.filter-select {
   height: 100%;
   border-radius: 999px;
   background: var(--accent);
+  transition: filter var(--dur-1) ease, background var(--dur-1) ease;
 }
 .dow-val {
   font-family: var(--mono);
@@ -3567,10 +3582,13 @@ input.filter-select {
 .scatter-dot {
   fill: var(--signal);
   fill-opacity: 0.66;
-  transition: fill-opacity var(--dur-1) ease;
+  transition: fill-opacity var(--dur-1) ease, r var(--dur-1) var(--ease-out), filter var(--dur-1) ease;
 }
 .scatter-dot:hover {
   fill-opacity: 1;
+  r: 5.5;
+  filter: drop-shadow(0 0 6px var(--accent-line));
+  cursor: pointer;
 }
 .scatter-cap {
   display: flex;
@@ -3764,6 +3782,13 @@ input.filter-select {
 }
 .body-dial-wrap {
   position: relative;
+  /* Entrance: the dial fades up from below and settles into place. The
+     fill sweep is a separate client-driven animation (DialFill). */
+  animation: dial-enter var(--dur-4) var(--ease-out) both;
+}
+@keyframes dial-enter {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 .body-dial svg {
   display: block;
@@ -5545,6 +5570,25 @@ body {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--raise) 82%, transparent), transparent),
     var(--raise);
+  /* Hover: the well brightens and the trace thickens — a subtle "inspect"
+     affordance without a client-side tooltip island. */
+  transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+}
+.metric-chart-well:hover {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent-weak) 45%, var(--raise) 82%, transparent), transparent),
+    var(--surface);
+  border-color: var(--accent-line);
+}
+.metric-chart-well:hover .signal-spark .spark-dot {
+  r: 5;
+}
+.metric-chart-well:hover .signal-spark path {
+  stroke-width: 2.4;
+}
+.metric-chart-well .signal-spark path,
+.metric-chart-well .signal-spark .spark-dot {
+  transition: stroke-width var(--dur-1) var(--ease-out);
 }
 
 .signal-spark {
