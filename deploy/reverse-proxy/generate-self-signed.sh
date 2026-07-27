@@ -31,7 +31,7 @@ C  = TR
 ST = Istanbul
 L  = Istanbul
 O  = HealthSave Observatory (homelab)
-CN = apps-vm.internal
+CN = apps-vm.lan
 
 [v3_req]
 basicConstraints = CA:FALSE
@@ -39,11 +39,12 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 subjectAltName = @alt_names
 
 [alt_names]
-DNS.1 = apps-vm.internal
-DNS.2 = apps-vm
-DNS.3 = apps-vm.local
-DNS.4 = localhost
-DNS.5 = observatory.local
+DNS.1 = apps-vm.lan
+DNS.2 = apps-vm.internal
+DNS.3 = apps-vm
+DNS.4 = apps-vm.local
+DNS.5 = localhost
+DNS.6 = observatory.local
 IP.1  = 127.0.0.1
 IP.2  = 192.168.33.123
 CNF
