@@ -5,7 +5,7 @@ import { BriefSection, FindingsEvidenceSection } from "../components/sections/Fi
 import { LeadSkeleton } from "../components/Skeletons";
 
 export const metadata: Metadata = { title: "Findings · HealthSave" };
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 // The page awaits nothing: each card streams in through its own Suspense
 // boundary (data fetching lives in components/sections/FindingsSections.tsx).

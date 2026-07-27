@@ -6,7 +6,7 @@ import { CardSkeleton } from "../components/Skeletons";
 import { encodeExploreState, parseExploreState } from "../lib/explore";
 
 export const metadata: Metadata = { title: "Explore · HealthSave" };
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 type SearchParams = { [key: string]: string | string[] | undefined };
 

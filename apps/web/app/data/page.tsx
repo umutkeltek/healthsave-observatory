@@ -11,7 +11,7 @@ import {
 import { CardSkeleton, GridSkeleton, LeadSkeleton } from "../components/Skeletons";
 
 export const metadata: Metadata = { title: "Data · HealthSave" };
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 type SearchParams = { [key: string]: string | string[] | undefined };
 function one(value: string | string[] | undefined): string {

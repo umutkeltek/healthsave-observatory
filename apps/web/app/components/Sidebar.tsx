@@ -16,6 +16,14 @@ const ICONS: Record<string, ReactNode> = {
       <rect x="9" y="9" width="4.5" height="4.5" rx="1.2" />
     </>
   ),
+  sleep: (
+    <path d="M13.2 9.5A5.5 5.5 0 1 1 6.5 2.8 7 7 0 1 0 13.2 9.5z" />
+  ),
+  activity: (
+    <>
+      <path d="M2.5 13.5 5.5 7l2.5 5 3-9 2.5 6.5" />
+    </>
+  ),
   overview: (
     <>
       <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" />
@@ -103,11 +111,17 @@ const ICONS: Record<string, ReactNode> = {
 // holds the analytical / power surfaces; Manage holds config + routes. All three
 // show by default so no feature is hidden — the density toggle can slim the nav
 // to Essentials-only for a calmer view (Explore/Manage stay URL-reachable).
+//
+// The three-pillar structure mirrors Whoop's Strain / Recovery / Sleep:
+//   Today = Recovery (the hero instrument)
+//   Sleep = Sleep quality, stages, consistency, debt
+//   Activity = Strain (cardio load, steps, exercise)
 type NavGroup = "essentials" | "explore" | "manage";
 type NavItem = { href: string; label: string; icon: string; group: NavGroup };
 
 const NAV: readonly NavItem[] = [
   { href: "/", label: "Today", icon: "overview", group: "essentials" },
+  { href: "/sleep", label: "Sleep", icon: "sleep", group: "essentials" },
   { href: "/findings", label: "Findings", icon: "findings", group: "essentials" },
   { href: "/data", label: "Data", icon: "data", group: "essentials" },
   { href: "/sources", label: "Sources", icon: "sources", group: "essentials" },

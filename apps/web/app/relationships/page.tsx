@@ -9,7 +9,7 @@ import {
 import { LeadSkeleton } from "../components/Skeletons";
 
 export const metadata: Metadata = { title: "Relationships · HealthSave" };
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 const ID_RE = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/;
 

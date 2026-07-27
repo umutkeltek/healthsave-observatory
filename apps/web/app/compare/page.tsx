@@ -5,7 +5,7 @@ import { COMPARE_RANGES, CompareSection } from "../components/sections/CompareSe
 import { CardSkeleton, LeadSkeleton } from "../components/Skeletons";
 
 export const metadata: Metadata = { title: "Compare · HealthSave" };
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 type SearchParams = { [key: string]: string | string[] | undefined };
 

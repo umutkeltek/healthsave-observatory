@@ -10,7 +10,7 @@ VaultSection,
 } from "./components/sections/TodaySections";
 import { CardSkeleton, GridSkeleton, HeroSkeleton, LeadSkeleton, RowSkeleton } from "./components/Skeletons";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export default function Home() {
 return (
