@@ -39,6 +39,7 @@
   --accent-weak: rgba(0, 122, 255, 0.1);
   --accent-line: rgba(0, 122, 255, 0.3);
   --brand-weak: rgba(0, 122, 255, 0.1);
+  --on-accent: #ffffff; /* text on filled accent — always white */
 
   /* Signal = physiology / live / local proof — kept on-accent (one blue, no second language). */
   --signal: #007aff;
@@ -1014,7 +1015,7 @@ a {
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;
-  color: #0a0d12;
+  color: var(--ink);
   background: var(--accent);
   border: 1px solid var(--accent);
   border-radius: var(--radius-sm);
@@ -3065,7 +3066,7 @@ input.filter-select {
 
 .live-mini-offline {
   border-color: var(--warn-line, rgba(255, 159, 10, 0.3));
-  color: var(--warn, #FF9F0A);
+  color: var(--warn);
 }
 
 .live-mini-offline::after {
@@ -4888,14 +4889,14 @@ body {
 }
 
 .nav-item.active {
-  color: #ffffff;
+  color: var(--on-accent);
   background: var(--accent);
   border-color: var(--accent);
   box-shadow: none;
 }
 
 .nav-item.active .nav-icon {
-  color: #ffffff;
+  color: var(--on-accent);
 }
 
 .topbar {
