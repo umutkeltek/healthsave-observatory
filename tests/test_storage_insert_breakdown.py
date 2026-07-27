@@ -96,7 +96,11 @@ async def test_batched_upsert_does_one_round_trip_per_metric():
     session = _BreakdownSession(insert_flags=[True] * 50)
 
     samples = [
-        {"date": f"2026-05-28T10:{i // 60:02d}:{i % 60:02d}Z", "qty": 70 + i, "source": "Apple Watch"}
+        {
+            "date": f"2026-05-28T10:{i // 60:02d}:{i % 60:02d}Z",
+            "qty": 70 + i,
+            "source": "Apple Watch",
+        }
         for i in range(50)
     ]
 
