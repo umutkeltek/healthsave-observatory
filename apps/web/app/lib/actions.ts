@@ -21,6 +21,8 @@ import {
   postTestConnection,
   type TestConnectionPayload,
   type TestConnectionResult,
+  type UpdateAnalyticalTimePayload,
+  updateAnalyticalTime,
 } from "./api";
 import {
   type Density,
@@ -121,6 +123,21 @@ export async function detectLocalAction(): Promise<DetectActionResult> {
     return { ok: true, candidates };
   } catch (error) {
     return failure(error, "Could not probe for a local model.");
+  }
+}
+
+export async function updateAnalyticalTimeAction(
+  payload: UpdateAnalyticalTimePayload,
+): Promise<ActionResult> {
+  try {
+    await updateAnalyticalTime(payload);
+    revalidatePath("/settings");
+    revalidatePath("/data");
+    revalidatePath("/explore");
+    revalidatePath("/relationships");
+    return { ok: true };
+  } catch (error) {
+    return failure(error, "Could not save analytical time settings.");
   }
 }
 

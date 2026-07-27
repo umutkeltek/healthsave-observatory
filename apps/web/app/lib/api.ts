@@ -250,6 +250,29 @@ export function fetchMeta(): Promise<MetaView> {
   return getJson<MetaView>("/api/v2/meta");
 }
 
+export type AnalyticalTimeSettings = {
+  time_zone: string;
+  day_boundary_minutes: number;
+  day_boundary: string;
+  revision: number;
+  sleep_day_assignment: string;
+};
+
+export type UpdateAnalyticalTimePayload = {
+  time_zone: string;
+  day_boundary_minutes: number;
+};
+
+export function fetchAnalyticalTime(): Promise<AnalyticalTimeSettings> {
+  return getJson<AnalyticalTimeSettings>("/api/v2/settings/analytical-time");
+}
+
+export function updateAnalyticalTime(
+  payload: UpdateAnalyticalTimePayload,
+): Promise<AnalyticalTimeSettings> {
+  return putJson<AnalyticalTimeSettings>("/api/v2/settings/analytical-time", payload);
+}
+
 // Data-readiness - Insight Action Loop card #1. Mirrors server/api/v2_readiness.py.
 
 export type GateVerdict = {

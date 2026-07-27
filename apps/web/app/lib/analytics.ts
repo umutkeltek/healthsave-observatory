@@ -9,6 +9,14 @@
 // comparison work (see docs_private/plans/2026-06-09-grafana-parity-frontend-plan.md).
 // It is intentionally standalone - nothing imports it yet.
 
+import {
+  analyticalDayKey,
+  analyticalDayOfWeek,
+  analyticalWeekKey,
+  localHour,
+  type AnalyticalTimeBasis,
+  UTC_TIME_BASIS,
+} from "./analyticalTime";
 import type { SeriesPoint } from "./api";
 
 type Valued = SeriesPoint & { value: number };
@@ -77,29 +85,27 @@ function reduceStat(values: number[], stat: Stat): number {
 
 export type Grain = "hour" | "day" | "week";
 
-// Deterministic UTC bucket key for an ISO timestamp (no Date.now()).
-function bucketKey(iso: string, grain: Grain): string {
-  const d = new Date(iso);
-  const y = d.getUTCFullYear();
-  const mo = `${d.getUTCMonth() + 1}`.padStart(2, "0");
-  const day = `${d.getUTCDate()}`.padStart(2, "0");
-  if (grain === "hour") return `${y}-${mo}-${day}T${`${d.getUTCHours()}`.padStart(2, "0")}`;
-  if (grain === "day") return `${y}-${mo}-${day}`;
-  // week: anchor to the UTC Monday of this date's week.
-  const mondayOffset = (d.getUTCDay() + 6) % 7;
-  const monday = new Date(d);
-  monday.setUTCDate(d.getUTCDate() - mondayOffset);
-  const wmo = `${monday.getUTCMonth() + 1}`.padStart(2, "0");
-  const wday = `${monday.getUTCDate()}`.padStart(2, "0");
-  return `${monday.getUTCFullYear()}-${wmo}-${wday}`;
+function bucketKey(iso: string, grain: Grain, basis: AnalyticalTimeBasis): string | null {
+  const day = analyticalDayKey(iso, basis);
+  if (!day) return null;
+  if (grain === "day") return day;
+  if (grain === "week") return analyticalWeekKey(day);
+  const hour = localHour(iso, basis);
+  return hour === null ? null : `${day}T${String(hour).padStart(2, "0")}`;
 }
 
 export type Bucket = { t: string; value: number; n: number };
 
-export function bucketBy(points: SeriesPoint[], grain: Grain, stat: Stat): Bucket[] {
+export function bucketBy(
+  points: SeriesPoint[],
+  grain: Grain,
+  stat: Stat,
+  basis: AnalyticalTimeBasis = UTC_TIME_BASIS,
+): Bucket[] {
   const groups = new Map<string, number[]>();
   for (const p of valued(points)) {
-    const key = bucketKey(p.t, grain);
+    const key = bucketKey(p.t, grain, basis);
+    if (!key) continue;
     const arr = groups.get(key);
     if (arr) arr.push(p.value);
     else groups.set(key, [p.value]);
@@ -138,10 +144,16 @@ export type DowCell = { dow: number; label: string; value: number; n: number };
 
 const DOW_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-export function dayOfWeekPivot(points: SeriesPoint[], stat: Stat = "mean"): DowCell[] {
+export function dayOfWeekPivot(
+  points: SeriesPoint[],
+  stat: Stat = "mean",
+  basis: AnalyticalTimeBasis = UTC_TIME_BASIS,
+): DowCell[] {
   const buckets: number[][] = [[], [], [], [], [], [], []];
   for (const p of valued(points)) {
-    const dow = (new Date(p.t).getUTCDay() + 6) % 7;
+    const day = analyticalDayKey(p.t, basis);
+    if (!day) continue;
+    const dow = analyticalDayOfWeek(day);
     buckets[dow].push(p.value);
   }
   return buckets.map((vals, dow) => ({
@@ -158,12 +170,18 @@ export type HeatCell = { dow: number; hour: number; value: number | null; n: num
 
 // A 7×24 grid (Mon..Sun × 0..23, UTC) of the stat over points - the "when in
 // the week" heatmap. Empty cells carry value null (rendered blank).
-export function weekHourPivot(points: SeriesPoint[], stat: Stat = "mean"): HeatCell[] {
+export function weekHourPivot(
+  points: SeriesPoint[],
+  stat: Stat = "mean",
+  basis: AnalyticalTimeBasis = UTC_TIME_BASIS,
+): HeatCell[] {
   const buckets = new Map<string, number[]>();
   for (const p of valued(points)) {
-    const d = new Date(p.t);
-    const dow = (d.getUTCDay() + 6) % 7;
-    const key = `${dow}-${d.getUTCHours()}`;
+    const day = analyticalDayKey(p.t, basis);
+    const hour = localHour(p.t, basis);
+    if (!day || hour === null) continue;
+    const dow = analyticalDayOfWeek(day);
+    const key = `${dow}-${hour}`;
     const arr = buckets.get(key);
     if (arr) arr.push(p.value);
     else buckets.set(key, [p.value]);
@@ -286,10 +304,14 @@ export function detectDivergence(points: SeriesPoint[]): SourceDivergence {
 
 export type AlignedPair = { day: string; a: number; b: number };
 
-export function alignDaily(a: SeriesPoint[], b: SeriesPoint[]): AlignedPair[] {
-  const other = new Map(bucketBy(b, "day", "mean").map((bucket) => [bucket.t, bucket.value]));
+export function alignDaily(
+  a: SeriesPoint[],
+  b: SeriesPoint[],
+  basis: AnalyticalTimeBasis = UTC_TIME_BASIS,
+): AlignedPair[] {
+  const other = new Map(bucketBy(b, "day", "mean", basis).map((bucket) => [bucket.t, bucket.value]));
   const out: AlignedPair[] = [];
-  for (const bucket of bucketBy(a, "day", "mean")) {
+  for (const bucket of bucketBy(a, "day", "mean", basis)) {
     const value = other.get(bucket.t);
     if (value !== undefined) out.push({ day: bucket.t, a: bucket.value, b: value });
   }

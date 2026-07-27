@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import {
+  AnalyticalTimeSection,
   PreferencesSection,
   ServicesSection,
   SystemSection,
@@ -27,6 +28,9 @@ export default function SettingsPage() {
         }
       >
         <PreferencesSection />
+      </Suspense>
+      <Suspense fallback={<CardSkeleton />}>
+        <AnalyticalTimeSection />
       </Suspense>
       <Suspense fallback={<RowSkeleton />}>
         <ServicesSection />

@@ -36,6 +36,7 @@ API_TS = REPO_ROOT / "apps" / "web" / "app" / "lib" / "api.ts"
 # Root response type (api.ts) -> server modules whose source/models emit it.
 # Mirrors the getJson/postJson calls in api.ts; extend both together.
 TYPE_TO_MODULES: dict[str, list[str]] = {
+    "AnalyticalTimeSettings": ["server.api.v2_settings"],
     "MetricSummary": ["server.api.v2_metrics"],
     "MetricSeries": ["server.api.v2_metrics"],
     "SeriesBatch": ["server.api.v2_metrics"],

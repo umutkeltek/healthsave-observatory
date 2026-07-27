@@ -4,7 +4,8 @@
 
 import Link from "next/link";
 
-import { fetchMeta, isNarratorOff } from "../../lib/api";
+import { fetchAnalyticalTime, fetchMeta, isNarratorOff } from "../../lib/api";
+import { AnalyticalTimeSettingsForm } from "../AnalyticalTimeSettings";
 import { PinButton } from "../PinButton";
 import { StandaloneDensityToggle } from "../DensityToggle";
 import { safeIntelligence, safeMetrics, safePrivacy, safeSources } from "../../lib/load";
@@ -16,6 +17,29 @@ async function safeMeta() {
   } catch {
     return null;
   }
+}
+
+async function safeAnalyticalTime() {
+  try {
+    return await fetchAnalyticalTime();
+  } catch {
+    return null;
+  }
+}
+
+export async function AnalyticalTimeSection() {
+  const settings = await safeAnalyticalTime();
+  if (!settings) {
+    return (
+      <section className="lead">
+        <article className="card">
+          <h2>Analytical day</h2>
+          <p className="empty">Time-basis settings unavailable (backend unreachable).</p>
+        </article>
+      </section>
+    );
+  }
+  return <section className="lead"><AnalyticalTimeSettingsForm initial={settings} /></section>;
 }
 
 export async function PreferencesSection() {
