@@ -40,11 +40,14 @@ function eventsFrom(moments: Moment[], findings: Finding[]): TimelineEvent[] {
 }
 
 function findingTitle(finding: Finding): string {
-  const claim =
+  // Prefer the typed FindingCard schema, fall back to legacy
+  // ``structured_data.claim``, finally to a type/metric breadcrumb.
+  if (finding.card?.claim) return finding.card.claim;
+  const legacyClaim =
     typeof finding.structured_data?.claim === "string"
       ? finding.structured_data.claim
       : null;
-  return claim ?? `${finding.finding_type} · ${finding.metric ?? ""}`;
+  return legacyClaim ?? `${finding.finding_type ?? "finding"} · ${finding.metric ?? ""}`;
 }
 
 export function TimelineView({
