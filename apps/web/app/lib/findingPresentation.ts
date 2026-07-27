@@ -101,6 +101,8 @@ export function recoveryEvidence(finding: Finding | undefined): RecoveryEvidence
   const evidenceLevel = textValue(data.evidence_level);
   if (
     score === null ||
+    score < 0 ||
+    score > 100 ||
     inputCount === null ||
     inputTotal === null ||
     formulaVersion !== 2 ||

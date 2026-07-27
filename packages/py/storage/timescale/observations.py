@@ -145,16 +145,21 @@ _SERIES_SQL = text(
     """
     SELECT interval_start, interval_end, numeric_value, code, canonical_unit,
            source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary
-    FROM canonical_observations
-    WHERE owner_id = :owner_id
-      AND workspace_id = :workspace_id
-      AND metric_id = :metric_id
-      AND interval_start >= :start
-      AND interval_start < :end
-      AND status = 'active'
-      AND (CAST(:stream_id AS uuid) IS NULL OR stream_id = CAST(:stream_id AS uuid))
+    FROM (
+      SELECT interval_start, interval_end, numeric_value, code, canonical_unit,
+             source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary
+      FROM canonical_observations
+      WHERE owner_id = :owner_id
+        AND workspace_id = :workspace_id
+        AND metric_id = :metric_id
+        AND interval_start >= :start
+        AND interval_start < :end
+        AND status = 'active'
+        AND (CAST(:stream_id AS uuid) IS NULL OR stream_id = CAST(:stream_id AS uuid))
+      ORDER BY interval_start DESC
+      LIMIT :limit
+    ) AS recent
     ORDER BY interval_start ASC
-    LIMIT :limit
     """
 )
 
@@ -176,13 +181,19 @@ _FUSED_SERIES_SQL = text(
         AND interval_start < :end
         AND status = 'active'
         AND (CAST(:stream_id AS uuid) IS NULL OR stream_id = CAST(:stream_id AS uuid))
+    ),
+    recent AS (
+      SELECT interval_start, interval_end, numeric_value, code, canonical_unit,
+             source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary
+      FROM ranked
+      WHERE fusion_rank = 1
+      ORDER BY interval_start DESC
+      LIMIT :limit
     )
     SELECT interval_start, interval_end, numeric_value, code, canonical_unit,
            source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary
-    FROM ranked
-    WHERE fusion_rank = 1
+    FROM recent
     ORDER BY interval_start ASC
-    LIMIT :limit
     """
 )
 
@@ -214,7 +225,7 @@ _FUSED_SERIES_MANY_SQL = text(
     capped AS (
       SELECT metric_id, interval_start, interval_end, numeric_value, code, canonical_unit,
              source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary,
-             ROW_NUMBER() OVER (PARTITION BY metric_id ORDER BY interval_start ASC) AS rn
+             ROW_NUMBER() OVER (PARTITION BY metric_id ORDER BY interval_start DESC) AS rn
       FROM fused
     )
     SELECT metric_id, interval_start, interval_end, numeric_value, code, canonical_unit,
@@ -321,8 +332,8 @@ class CanonicalObservationRepository:
         Fusion partitions by ``(metric_id, COALESCE(semantic_key, id::text))``
         so semantic keys never fuse across metrics, and the per-metric row
         cap is reapplied after fusion so each metric still yields at most
-        ``limit`` rows, ascending by ``interval_start`` — the same semantics
-        as the single-metric query. Returns a dict keyed by ``metric_id``;
+        ``limit`` rows. The cap keeps the newest rows, then presents them
+        ascending by ``interval_start`` for chart consumers. Returns a dict keyed
         a metric with no rows in range is simply absent (the caller fills in
         ``[]``). Empty ``metric_ids`` returns ``{}`` without querying.
         """

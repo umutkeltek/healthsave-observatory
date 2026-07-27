@@ -8,6 +8,8 @@ import {
   EXPLORE_RANGE_LABELS,
   EXPLORE_RANGES,
   EXPLORE_STATS,
+  MAX_EXPLORE_METRICS_PER_PANEL,
+  MAX_EXPLORE_PANELS,
   encodeExploreState,
   type ChartKind,
   type ExplorePanel,
@@ -140,16 +142,20 @@ function SaveToToday({ current }: { current: string }) {
   const [, startTransition] = useTransition();
   const [label, setLabel] = useState("");
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const save = () => {
     const name = label.trim();
     if (!name) return;
+    setError(null);
     startTransition(async () => {
       const result = await saveExplorePanelAction(current, name);
       if (result.ok) {
         setSaved(true);
         setLabel("");
         setTimeout(() => setSaved(false), 2000);
+      } else {
+        setError(result.error ?? "Could not save this view to Today.");
       }
     });
   };
@@ -182,6 +188,11 @@ function SaveToToday({ current }: { current: string }) {
           </button>
         </>
       )}
+      {error && (
+        <span className="exp-error" role="status">
+          {error}
+        </span>
+      )}
     </div>
   );
 }
@@ -190,8 +201,10 @@ function SaveToToday({ current }: { current: string }) {
 export function ExploreControls({ state, metrics }: { state: ExploreState; metrics: MetricOpt[] }) {
   const nav = useExploreNav();
   const set = (patch: Partial<ExploreState>) => nav({ ...state, ...patch });
-  const addPanel = (metricId: string) =>
+  const addPanel = (metricId: string) => {
+    if (state.panels.length >= MAX_EXPLORE_PANELS) return;
     nav({ ...state, panels: [...state.panels, { chart: "line", metrics: [metricId] }] });
+  };
 
   return (
     <div className="explore-controls card">
@@ -262,7 +275,11 @@ export function ExploreControls({ state, metrics }: { state: ExploreState; metri
       </div>
       <div className="explore-control explore-control-grow">
         <label>Add panel</label>
-        <MetricSelect metrics={metrics} placeholder="Pick a signal…" onPick={addPanel} />
+        {state.panels.length < MAX_EXPLORE_PANELS ? (
+          <MetricSelect metrics={metrics} placeholder="Pick a signal…" onPick={addPanel} />
+        ) : (
+          <span className="meta">Maximum {MAX_EXPLORE_PANELS} panels</span>
+        )}
       </div>
       <SavedViews current={encodeExploreState(state)} />
 
@@ -301,7 +318,9 @@ export function PanelToolbar({
   };
   const setChart = (chart: ChartKind) => update({ ...panel, chart });
   const addMetric = (id: string) =>
-    !panel.metrics.includes(id) && update({ ...panel, metrics: [...panel.metrics, id] });
+    panel.metrics.length < MAX_EXPLORE_METRICS_PER_PANEL &&
+    !panel.metrics.includes(id) &&
+    update({ ...panel, metrics: [...panel.metrics, id] });
   const removeMetric = (id: string) =>
     panel.metrics.length > 1 && update({ ...panel, metrics: panel.metrics.filter((m) => m !== id) });
 
@@ -326,7 +345,7 @@ export function PanelToolbar({
             )}
           </span>
         ))}
-        {canOverlay && (
+        {canOverlay && panel.metrics.length < MAX_EXPLORE_METRICS_PER_PANEL && (
           <MetricSelect
             metrics={metrics}
             exclude={panel.metrics}

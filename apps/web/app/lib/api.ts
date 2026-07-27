@@ -106,13 +106,18 @@ async function getJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise
 async function postJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (API_KEY) headers["X-API-Key"] = API_KEY;
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    cache: "no-store",
-    headers,
-    body: JSON.stringify(body ?? {}),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      cache: "no-store",
+      headers,
+      body: JSON.stringify(body ?? {}),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (cause) {
+    throw new ApiError(`${path} -> ${cause instanceof Error ? cause.name : "network error"}`, null);
+  }
   if (!res.ok) {
     let detail = `${path} -> ${res.status}`;
     try {
@@ -132,13 +137,18 @@ async function postJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIME
 async function putJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (API_KEY) headers["X-API-Key"] = API_KEY;
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "PUT",
-    cache: "no-store",
-    headers,
-    body: JSON.stringify(body ?? {}),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: "PUT",
+      cache: "no-store",
+      headers,
+      body: JSON.stringify(body ?? {}),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (cause) {
+    throw new ApiError(`${path} -> ${cause instanceof Error ? cause.name : "network error"}`, null);
+  }
   if (!res.ok) {
     let detail = `${path} -> ${res.status}`;
     try {
@@ -158,12 +168,17 @@ async function putJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEO
 async function deleteJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
   const headers: Record<string, string> = {};
   if (API_KEY) headers["X-API-Key"] = API_KEY;
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "DELETE",
-    cache: "no-store",
-    headers,
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: "DELETE",
+      cache: "no-store",
+      headers,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (cause) {
+    throw new ApiError(`${path} -> ${cause instanceof Error ? cause.name : "network error"}`, null);
+  }
   if (!res.ok) {
     let detail = `${path} -> ${res.status}`;
     try {

@@ -27,6 +27,16 @@ describe("explore panel encoding", () => {
     expect(parsePanels("line:").length).toBeGreaterThan(0);
   });
 
+  it("bounds URL-driven work and drops invalid metric ids", () => {
+    const raw = Array.from({ length: 12 }, (_, index) =>
+      `line:vital.metric_${index},activity.steps,mobility.walking_speed,vital.hrv_sdnn,extra.metric`,
+    ).join(";");
+    const panels = parsePanels(raw);
+    expect(panels).toHaveLength(8);
+    expect(panels.every((panel) => panel.metrics.length === 4)).toBe(true);
+    expect(parsePanels("line:not-a-metric")[0].metrics).not.toContain("not-a-metric");
+  });
+
   it("coerces an unknown chart kind to line", () => {
     expect(parsePanels("bogus:vital.hrv_sdnn")[0].chart).toBe("line");
   });
@@ -81,7 +91,7 @@ describe("custom date window", () => {
 
   it("fetchRange pulls the widest preset when a window is set, else the preset", () => {
     expect(fetchRange(parseExploreState({ range: "7d" }))).toBe("7d");
-    expect(fetchRange(parseExploreState({ range: "7d", from: "2026-06-01" }))).toBe("1y");
+    expect(fetchRange(parseExploreState({ range: "7d", from: "2026-06-01" }))).toBe("all");
   });
 
   it("filterWindow slices inclusively and passes through with no bounds", () => {

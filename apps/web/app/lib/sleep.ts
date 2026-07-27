@@ -60,6 +60,8 @@ export function deriveNight(key: string, points: SeriesPoint[]): SleepNight | nu
     .filter((p) => p.code !== null)
     .map((p) => ({ t: p.t, stage: p.code! }));
 
+  if (segments.length < MIN_SEGMENTS) return null;
+
   const bedtime = segments[0].t;
   const wakeTime = segments[segments.length - 1].t;
   const durationMin =
@@ -172,17 +174,34 @@ export function sleepDebt(trend: SleepTrend): number | null {
   return Math.max(0, Math.round(debt / 60)); // hours; floors at 0
 }
 
-// Compute last night's bedtime/wake time change vs. average of prior nights.
+// Compute last night's bedtime/wake clock-time change vs. the circular mean of
+// prior nights. Comparing epoch timestamps would accidentally include the days
+// between nights and report shifts measured in thousands of minutes.
 export function bedtimeDelta(trend: SleepTrend): { bedDelta: number | null; wakeDelta: number | null } {
   if (trend.bedtimes.length < 2) return { bedDelta: null, wakeDelta: null };
-  const lastBed = new Date(trend.bedtimes[trend.bedtimes.length - 1]);
-  const lastWake = new Date(trend.waketimes[trend.waketimes.length - 1]);
-  const priorBeds = trend.bedtimes.slice(0, -1).map((t) => new Date(t).getTime());
-  const priorWakes = trend.waketimes.slice(0, -1).map((t) => new Date(t).getTime());
-  const avgBed = priorBeds.reduce((a, b) => a + b) / priorBeds.length;
-  const avgWake = priorWakes.reduce((a, b) => a + b) / priorWakes.length;
+
+  const clockMinutes = (iso: string): number => {
+    const date = new Date(iso);
+    return date.getUTCHours() * 60 + date.getUTCMinutes();
+  };
+  const circularMeanMinutes = (values: number[]): number => {
+    const angles = values.map((value) => (value / 1440) * 2 * Math.PI);
+    const sin = angles.reduce((sum, angle) => sum + Math.sin(angle), 0);
+    const cos = angles.reduce((sum, angle) => sum + Math.cos(angle), 0);
+    const angle = Math.atan2(sin / values.length, cos / values.length);
+    return (((angle < 0 ? angle + 2 * Math.PI : angle) / (2 * Math.PI)) * 1440) % 1440;
+  };
+  const shortestClockDelta = (value: number, baseline: number): number => {
+    const raw = value - baseline;
+    return Math.round(((raw + 720) % 1440 + 1440) % 1440 - 720);
+  };
+
+  const lastBed = clockMinutes(trend.bedtimes[trend.bedtimes.length - 1]);
+  const lastWake = clockMinutes(trend.waketimes[trend.waketimes.length - 1]);
+  const priorBedMean = circularMeanMinutes(trend.bedtimes.slice(0, -1).map(clockMinutes));
+  const priorWakeMean = circularMeanMinutes(trend.waketimes.slice(0, -1).map(clockMinutes));
   return {
-    bedDelta: Math.round((lastBed.getTime() - avgBed) / 60000),
-    wakeDelta: Math.round((lastWake.getTime() - avgWake) / 60000),
+    bedDelta: shortestClockDelta(lastBed, priorBedMean),
+    wakeDelta: shortestClockDelta(lastWake, priorWakeMean),
   };
 }

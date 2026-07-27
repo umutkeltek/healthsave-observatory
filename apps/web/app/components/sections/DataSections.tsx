@@ -14,7 +14,7 @@ import { ReadinessCard } from "../ReadinessCard";
 import { SleepCard } from "../SleepCard";
 import { SourceDistribution } from "../SourceDistribution";
 import { ZoneBar } from "../ZoneBar";
-import { timeBasisLabel, UTC_TIME_BASIS } from "../../lib/analyticalTime";
+import { currentAnalyticalDayOfWeek, timeBasisLabel, UTC_TIME_BASIS } from "../../lib/analyticalTime";
 import { dayOfWeekPivot, distribution, hrZoneHistogram, weekHourPivot } from "../../lib/analytics";
 import type { MetricSeries, MetricSummary, SeriesPoint } from "../../lib/api";
 import { demoPatternSeries } from "../../lib/demoSeries";
@@ -48,17 +48,20 @@ export type DataFilters = {
 type Card = { metric: MetricSummary; series: MetricSeries | null };
 
 // Sort the visible cards by the chosen key, derived from each series.
-function sortCards(cards: Card[], sort: string): Card[] {
+export function sortCards(cards: Card[], sort: string): Card[] {
   if (sort === "name") {
     return [...cards].sort((a, b) => a.metric.display_name.localeCompare(b.metric.display_name));
   }
-  const lastValue = (c: Card): number => {
-    const vals = (c.series?.points ?? []).map((p) => p.value).filter((v): v is number => v !== null);
-    if (sort === "coverage") return vals.length;
-    return vals.at(-1) ?? Number.NEGATIVE_INFINITY; // "recent"
+  const sortValue = (card: Card): number => {
+    const points = (card.series?.points ?? []).filter(
+      (point) => point.value !== null && Number.isFinite(point.value),
+    );
+    if (sort === "coverage") return points.length;
+    const timestamps = points.map((point) => Date.parse(point.t)).filter(Number.isFinite);
+    return timestamps.length > 0 ? Math.max(...timestamps) : Number.NEGATIVE_INFINITY;
   };
   if (sort === "recent" || sort === "coverage") {
-    return [...cards].sort((a, b) => lastValue(b) - lastValue(a));
+    return [...cards].sort((a, b) => sortValue(b) - sortValue(a));
   }
   return cards; // default order
 }
@@ -208,7 +211,11 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
             <article className="card col-4">
               <div className="card-title">By weekday</div>
               <p className="meta">{timeBasisLabel(timeBasis)}</p>
-              <DayOfWeekChart cells={dayOfWeekPivot(patterns.points, "mean", timeBasis)} unit={patterns.unit} />
+              <DayOfWeekChart
+                cells={dayOfWeekPivot(patterns.points, "mean", timeBasis)}
+                unit={patterns.unit}
+                todayDow={currentAnalyticalDayOfWeek(timeBasis)}
+              />
             </article>
             {patterns.isHr && (
               <article className="card col-12">

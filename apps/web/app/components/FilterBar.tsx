@@ -13,7 +13,7 @@ export type MetricOption = { id: string; display_name: string; category: string 
 const SORTS = [
   { value: "", label: "Default order" },
   { value: "name", label: "Name (A-Z)" },
-  { value: "recent", label: "Latest value" },
+  { value: "recent", label: "Most recently observed" },
   { value: "coverage", label: "Most readings" },
 ];
 

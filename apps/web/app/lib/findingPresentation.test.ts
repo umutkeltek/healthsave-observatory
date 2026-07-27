@@ -90,6 +90,21 @@ describe("finding presentation", () => {
         }),
       ),
     ).toBeNull();
+
+    expect(
+      recoveryEvidence(
+        finding({
+          finding_type: "recovery_score",
+          structured_data: {
+            score: 140,
+            formula_version: 2,
+            input_count: 3,
+            input_total: 5,
+            evidence_level: "partial",
+          },
+        }),
+      ),
+    ).toBeNull();
   });
 
   test("clusters repeated recovery checks into one display item", () => {

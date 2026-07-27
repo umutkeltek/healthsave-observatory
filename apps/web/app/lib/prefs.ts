@@ -33,7 +33,10 @@ export function parseSections(raw: string | undefined): DashboardSections {
       signals: obj.signals === true,
       vault: obj.vault === true,
       readiness: obj.readiness === true,
-      savedPanels: obj.savedPanels === true,
+      // Added after the original dashboard cookie shipped. Missing means the
+      // user has an older cookie and should inherit the new default, not have a
+      // successfully saved Explore panel remain invisibly disabled.
+      savedPanels: obj.savedPanels !== false,
     };
   } catch {
     return defaultSections();
@@ -121,25 +124,50 @@ export type SavedPanel = {
 };
 
 export const SAVED_PANELS_COOKIE = "saved_panels";
-const MAX_SAVED_PANELS = 8;
+export const MAX_SAVED_PANELS = 8;
+export const MAX_SAVED_PANEL_LABEL = 60;
+export const MAX_SAVED_PANEL_STATE = 1200;
+// Leave headroom for the cookie name + attributes and browser implementation
+// differences under the common 4096-byte per-cookie ceiling.
+export const MAX_SAVED_PANELS_COOKIE_BYTES = 3500;
+
+function validSavedPanel(value: unknown): value is SavedPanel {
+  if (typeof value !== "object" || value === null) return false;
+  const panel = value as Partial<SavedPanel>;
+  return (
+    typeof panel.id === "string" &&
+    panel.id.length > 0 &&
+    panel.id.length <= 80 &&
+    typeof panel.label === "string" &&
+    panel.label.trim().length > 0 &&
+    panel.label.length <= MAX_SAVED_PANEL_LABEL &&
+    typeof panel.state === "string" &&
+    panel.state.length > 0 &&
+    panel.state.length <= MAX_SAVED_PANEL_STATE
+  );
+}
 
 export function parseSavedPanels(raw: string | undefined): SavedPanel[] {
   if (!raw) return [];
   try {
     const arr = JSON.parse(raw);
-    return Array.isArray(arr)
-      ? arr
-          .filter(
-            (p): p is SavedPanel =>
-              typeof p.id === "string" &&
-              typeof p.label === "string" &&
-              typeof p.state === "string",
-          )
-          .slice(0, MAX_SAVED_PANELS)
-      : [];
+    return Array.isArray(arr) ? arr.filter(validSavedPanel).slice(-MAX_SAVED_PANELS) : [];
   } catch {
     return [];
   }
+}
+
+export function appendSavedPanel(panels: SavedPanel[], panel: SavedPanel): SavedPanel[] {
+  const candidates = [...panels.filter((saved) => saved.label !== panel.label), panel].slice(
+    -MAX_SAVED_PANELS,
+  );
+  while (
+    candidates.length > 1 &&
+    encodeURIComponent(JSON.stringify(candidates)).length > MAX_SAVED_PANELS_COOKIE_BYTES
+  ) {
+    candidates.shift();
+  }
+  return candidates;
 }
 
 export async function getSavedPanels(): Promise<SavedPanel[]> {

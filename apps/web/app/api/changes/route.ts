@@ -3,6 +3,8 @@
 // key is injected server-side. ETag/304 semantics pass straight through, so
 // an unchanged state costs a header exchange and nothing more.
 
+import { clearSwrCache } from "../../lib/ttlCache";
+
 export const dynamic = "force-dynamic";
 
 const API_BASE = process.env.API_BASE ?? "http://localhost:8000";
@@ -28,6 +30,11 @@ export async function GET(request: Request): Promise<Response> {
     }
     const body = await res.json();
     const etag = res.headers.get("etag");
+    // A 200 after the browser supplied an ETag means the backend fingerprint
+    // changed. Drop process-level SWR entries before LiveStatus refreshes the
+    // route, otherwise router.refresh() can keep serving stale values until
+    // each entry's independent TTL expires.
+    if (inm && etag && etag !== inm) clearSwrCache();
     return Response.json(body, { headers: etag ? { ETag: etag } : undefined });
   } catch {
     return Response.json({ error: "backend unreachable" }, { status: 502 });

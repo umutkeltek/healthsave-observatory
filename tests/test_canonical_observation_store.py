@@ -201,6 +201,10 @@ async def test_query_series_maps_rows_to_points() -> None:
         end=_T,
     )
     assert [p.value for p in points] == [61.0, 64.0]
+    sql, _ = session.calls[0]
+    sql_text = str(sql)
+    assert "ORDER BY interval_start DESC" in sql_text
+    assert "ORDER BY interval_start ASC" in sql_text
 
 
 @pytest.mark.asyncio
@@ -235,6 +239,8 @@ async def test_query_fused_series_groups_by_semantic_key_and_prefers_primary() -
     sql, params = session.calls[0]
     assert "COALESCE(semantic_key, id::text)" in str(sql)
     assert "is_primary DESC" in str(sql)
+    assert "ORDER BY interval_start DESC" in str(sql)
+    assert "ORDER BY interval_start ASC" in str(sql)
     assert params["stream_id"] is None
     assert [p.semantic_key for p in points] == ["sem:v1:polar:user:exercise:E1"]
     assert points[0].is_primary is True
@@ -285,7 +291,8 @@ async def test_query_fused_series_many_groups_rows_by_metric_id() -> None:
 
     sql, params = session.calls[0]
     assert "PARTITION BY metric_id, COALESCE(semantic_key, id::text)" in str(sql)
-    assert "PARTITION BY metric_id ORDER BY interval_start ASC" in str(sql)
+    assert "PARTITION BY metric_id ORDER BY interval_start DESC" in str(sql)
+    assert "ORDER BY metric_id, interval_start ASC" in str(sql)
     assert params["metric_ids"] == ["vital.heart_rate", "sleep.stage"]
     assert params["stream_id"] is None
     assert set(grouped) == {"vital.heart_rate", "sleep.stage"}
