@@ -21,7 +21,18 @@ export type ExploreState = {
   panels: ExplorePanel[];
 };
 
-export const EXPLORE_RANGES = ["7d", "30d", "90d", "1y"] as const;
+// Range presets. "all" hits the backend with the widest possible window so the
+// page is never hiding data the user actually has — the earlier presets mask
+// sparse back-histories from the iOS device's full-export cadence.
+export const EXPLORE_RANGES = ["24h", "7d", "30d", "90d", "1y", "all"] as const;
+export const EXPLORE_RANGE_LABELS: Record<(typeof EXPLORE_RANGES)[number], string> = {
+  "24h": "24 hours",
+  "7d": "7 days",
+  "30d": "30 days",
+  "90d": "90 days",
+  "1y": "1 year",
+  "all": "All time",
+};
 export const EXPLORE_GRAINS: { id: GrainOpt; label: string }[] = [
   { id: "raw", label: "Raw" },
   { id: "hour", label: "Hourly" },
@@ -41,9 +52,17 @@ export const CHART_KINDS: { id: ChartKind; label: string }[] = [
   { id: "zones", label: "HR zones" },
 ];
 
+// Default Explore dashboard covers the five richest dimensions in the catalog:
+// autonomic recovery (HRV, RHR), walking load (walking HR + step length +
+// asymmetry in one overlay), activity (steps + exercise minutes), and a weekday
+// pivot over HRV so "when in the week I'm actually recovered" is one glance.
+// Curated, not random — every panel answers a question a returning user asks.
 const DEFAULT_PANELS: ExplorePanel[] = [
   { chart: "line", metrics: ["vital.hrv_sdnn"] },
   { chart: "line", metrics: ["vital.resting_heart_rate"] },
+  { chart: "line", metrics: ["vital.walking_heart_rate_average", "mobility.walking_step_length", "mobility.walking_asymmetry"] },
+  { chart: "line", metrics: ["activity.steps", "activity.exercise_minutes"] },
+  { chart: "weekday", metrics: ["vital.hrv_sdnn"] },
 ];
 
 const isGrain = (v: string): v is GrainOpt => EXPLORE_GRAINS.some((g) => g.id === v);
@@ -104,8 +123,9 @@ export function encodeExploreState(state: ExploreState): string {
 }
 
 // The preset to actually fetch: a custom window pulls the widest preset (the page
-// then slices it), otherwise the chosen preset.
+// then slices it), otherwise the chosen preset. "all" is its own widest preset.
 export function fetchRange(state: ExploreState): string {
+  if (state.range === "all") return "all";
   return state.from || state.to ? "1y" : state.range;
 }
 
