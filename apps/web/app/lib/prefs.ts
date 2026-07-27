@@ -3,12 +3,46 @@
 // actions.ts.
 
 import { cookies } from "next/headers";
+import { defaultSections, TEMPLATES } from "./templates";
+import type { DashboardSections, DashboardSectionKeys, Template, TemplateId } from "./templates";
 
 export type Density = "essentials" | "observatory";
 
 export const DENSITY_COOKIE = "density";
 export const PINNED_COOKIE = "pinned_metrics";
 export const MAX_PINS = 16;
+
+// ── Dashboard Templates ──────────────────────────────────────────────────
+// Template definitions live in lib/templates.ts (no server imports) so client
+// components can import them. This file re-exports + adds cookie persistence.
+
+export type { DashboardSections, DashboardSectionKeys, Template, TemplateId };
+export { TEMPLATES, defaultSections };
+
+export const DASHBOARD_COOKIE = "dashboard_sections";
+
+export function parseSections(raw: string | undefined): DashboardSections {
+  if (!raw) return defaultSections();
+  try {
+    const obj = JSON.parse(raw);
+    if (typeof obj !== "object" || obj === null) return defaultSections();
+    return {
+      hero: obj.hero === true,
+      goal: obj.goal === true,
+      story: obj.story === true,
+      signals: obj.signals === true,
+      vault: obj.vault === true,
+      readiness: obj.readiness === true,
+    };
+  } catch {
+    return defaultSections();
+  }
+}
+
+export async function getDashboardSections(): Promise<DashboardSections> {
+  const jar = await cookies();
+  return parseSections(jar.get(DASHBOARD_COOKIE)?.value);
+}
 
 export async function getDensity(): Promise<Density> {
   const jar = await cookies();

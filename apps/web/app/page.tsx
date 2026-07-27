@@ -8,39 +8,61 @@ SignalsSection,
 TodayStorySection,
 VaultSection,
 } from "./components/sections/TodaySections";
+import { DashboardCustomizer } from "./components/DashboardCustomizer";
 import { CardSkeleton, GridSkeleton, HeroSkeleton, LeadSkeleton, RowSkeleton } from "./components/Skeletons";
+import { getDashboardSections } from "./lib/prefs";
 
 export const revalidate = 30;
 
-export default function Home() {
-return (
-<div className="today-page">
-<Suspense fallback={<HeroSkeleton />}>
-<HeroSection />
-</Suspense>
+// Today reads the user's dashboard cookie to decide which sections to show.
+// The hero is always present — it's the anchor of every template. Everything
+// else is optional, so a user who only wants recovery + sleep can hide the
+// signal grid, findings panel, and vault entirely.
+export default async function Home() {
+  const sections = await getDashboardSections();
 
-      <Suspense fallback={null}>
-        <GoalSection />
+  return (
+    <div className="today-page">
+      <Suspense fallback={<HeroSkeleton />}>
+        <HeroSection />
       </Suspense>
 
-<Suspense fallback={<RowSkeleton />}>
-<TodayStorySection />
-</Suspense>
-
-      <Suspense fallback={<GridSkeleton />}>
-        <SignalsSection />
-      </Suspense>
-
-      <div className="row-2 today-proof-row">
-        <Suspense fallback={<CardSkeleton />}>
-          <VaultSection />
+      {sections.goal && (
+        <Suspense fallback={null}>
+          <GoalSection />
         </Suspense>
-        <Suspense fallback={<LeadSkeleton />}>
-          <ReadinessSection />
-        </Suspense>
-      </div>
+      )}
 
-<footer className="foot">HealthSave Observatory · canonical observations · local-first</footer>
-</div>
-);
+      {sections.story && (
+        <Suspense fallback={<RowSkeleton />}>
+          <TodayStorySection />
+        </Suspense>
+      )}
+
+      {sections.signals && (
+        <Suspense fallback={<GridSkeleton />}>
+          <SignalsSection />
+        </Suspense>
+      )}
+
+      {(sections.vault || sections.readiness) && (
+        <div className="row-2 today-proof-row">
+          {sections.vault && (
+            <Suspense fallback={<CardSkeleton />}>
+              <VaultSection />
+            </Suspense>
+          )}
+          {sections.readiness && (
+            <Suspense fallback={<LeadSkeleton />}>
+              <ReadinessSection />
+            </Suspense>
+          )}
+        </div>
+      )}
+
+      <DashboardCustomizer sections={sections} />
+
+      <footer className="foot">HealthSave Observatory · canonical observations · local-first</footer>
+    </div>
+  );
 }

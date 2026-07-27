@@ -9,7 +9,7 @@ import {
 } from "../components/sections/SettingsSections";
 import { CardSkeleton, LeadSkeleton, RowSkeleton } from "../components/Skeletons";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 export const metadata: Metadata = { title: "Settings · HealthSave Observatory" };
 
 // One place to see and manage everything configurable, end to end. Each

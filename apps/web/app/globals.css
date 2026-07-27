@@ -6980,3 +6980,219 @@ font-size: 17px;
   color: var(--ink);
   font-weight: 650;
 }
+
+/* ── Dashboard Customizer ─────────────────────────────────────────────────── */
+
+.dashboard-customizer-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 32px;
+  padding: 12px 0;
+}
+
+.dashboard-customize-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background var(--dur-1) ease, border-color var(--dur-1) ease;
+}
+
+.dashboard-customize-btn:hover {
+  background: var(--accent-weak);
+  border-color: var(--accent-line);
+}
+
+.dashboard-customizer-hint {
+  color: var(--faint);
+  font-size: 12px;
+}
+
+/* The sheet: slides up from the bottom on desktop, full-screen drawer on mobile. */
+.dashboard-scrim {
+  z-index: 50;
+}
+
+.dashboard-sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 60;
+  max-width: 640px;
+  margin: 0 auto;
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 28px 32px 32px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -4px 48px rgba(0, 0, 0, 0.12);
+}
+
+.dashboard-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.dashboard-sheet-head h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 650;
+}
+
+.dashboard-sheet-desc {
+  margin: 0 0 20px;
+  max-width: 48ch;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+/* Template grid — 5 cards in a row, wrapping densely. */
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.template-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--raise);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--dur-1) ease, background var(--dur-1) ease;
+}
+
+.template-card:hover {
+  border-color: var(--accent-line);
+}
+
+.template-card.template-active {
+  border-color: var(--accent);
+  background: var(--accent-weak);
+}
+
+.template-card strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.template-card .template-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.template-short {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+/* Section toggles */
+.dashboard-section-toggles {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.dashboard-section-toggles h3 {
+  margin: 0 0 4px;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.section-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--dur-1) ease;
+}
+
+.section-toggle-row:hover {
+  background: var(--hover);
+}
+
+.section-toggle-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.section-toggle-label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+.section-toggle-label em {
+  color: var(--faint);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.section-toggle-row:has(input:disabled) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Reset / Done buttons */
+.dashboard-reset-btn {
+  margin-right: 8px;
+  background: var(--raise);
+  border-color: var(--line);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.dashboard-reset-btn:hover {
+  color: var(--down);
+  border-color: var(--down);
+}
+
+.dashboard-apply-btn {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+@media (max-width: 620px) {
+  .dashboard-sheet {
+    max-width: 100%;
+    padding: 24px 18px 28px;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .template-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-customizer-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}

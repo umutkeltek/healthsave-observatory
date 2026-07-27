@@ -29,12 +29,16 @@ import {
 import {
   type Density,
   DENSITY_COOKIE,
+  DASHBOARD_COOKIE,
   type FocusGoal,
   FOCUS_GOAL_COOKIE,
   MAX_PINS,
   parseFocusGoal,
   parsePinned,
+  parseSections,
   PINNED_COOKIE,
+  type TemplateId,
+  TEMPLATES,
 } from "./prefs";
 
 export type ActionResult = { ok: boolean; error?: string };
@@ -227,6 +231,56 @@ export async function clearFocusGoalAction(): Promise<ActionResult> {
     return { ok: true };
   } catch (error) {
     return failure(error, "Could not clear the focus goal.");
+  }
+}
+
+// ── Dashboard template / section toggle actions ──────────────────────────
+
+export async function applyTemplateAction(templateId: TemplateId): Promise<ActionResult> {
+  try {
+    const template = TEMPLATES.find((t) => t.id === templateId);
+    if (!template) return { ok: false, error: "Unknown template." };
+    const jar = await cookies();
+    jar.set(DASHBOARD_COOKIE, JSON.stringify(template.sections), {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax",
+      httpOnly: true,
+    });
+    revalidatePath("/");
+    return { ok: true };
+  } catch (error) {
+    return failure(error, "Could not apply the dashboard template.");
+  }
+}
+
+export async function toggleSectionAction(section: string): Promise<ActionResult> {
+  try {
+    const jar = await cookies();
+    const current = parseSections(jar.get(DASHBOARD_COOKIE)?.value);
+    if (!(section in current)) return { ok: false, error: `Unknown section: ${section}` };
+    (current as Record<string, boolean>)[section] = !(current as Record<string, boolean>)[section];
+    jar.set(DASHBOARD_COOKIE, JSON.stringify(current), {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax",
+      httpOnly: true,
+    });
+    revalidatePath("/");
+    return { ok: true };
+  } catch (error) {
+    return failure(error, "Could not toggle the dashboard section.");
+  }
+}
+
+export async function resetSectionsAction(): Promise<ActionResult> {
+  try {
+    const jar = await cookies();
+    jar.delete(DASHBOARD_COOKIE);
+    revalidatePath("/");
+    return { ok: true };
+  } catch (error) {
+    return failure(error, "Could not reset dashboard sections.");
   }
 }
 
