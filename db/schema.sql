@@ -608,3 +608,17 @@ CREATE INDEX IF NOT EXISTS idx_experiments_owner_status
     ON experiments (owner_id, workspace_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_experiment_results_experiment
     ON experiment_results (experiment_id, computed_at DESC);
+
+-- ─── Observatory analytical-time settings (migration 022) ──────────
+-- Absolute observation timestamps stay in UTC. These settings control only
+-- person-local derived calendar grouping and experiment-day interpretation.
+CREATE TABLE IF NOT EXISTS observatory_settings (
+    owner_id                  UUID PRIMARY KEY
+        DEFAULT '00000000-0000-0000-0000-000000000001',
+    time_zone                 TEXT NOT NULL DEFAULT 'UTC',
+    day_boundary_minutes      INTEGER NOT NULL DEFAULT 240
+        CHECK (day_boundary_minutes BETWEEN 0 AND 720),
+    revision                  BIGINT NOT NULL DEFAULT 1,
+    created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
