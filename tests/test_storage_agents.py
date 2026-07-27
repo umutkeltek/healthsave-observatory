@@ -424,7 +424,7 @@ async def test_ingest_ecg_writes_average_hr_to_quantity_samples():
 
     [params] = _params_for(session, sql_substring="INSERT INTO quantity_samples")
     assert count == 1
-    assert params["metric"] == "ecg_average_heart_rate"
+    assert params["metric_name"] == "ecg_average_heart_rate"
     assert params["value"] == 58.0
 
 
