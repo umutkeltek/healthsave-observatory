@@ -55,6 +55,7 @@ from .api import (
     v2_privacy,
     v2_readiness,
     v2_receipts,
+    v2_settings,
     v2_sources,
 )
 from .api.deps import warn_if_auth_disabled
@@ -214,4 +215,5 @@ app.include_router(v2_metrics.router)
 app.include_router(v2_privacy.router)
 app.include_router(v2_readiness.router)
 app.include_router(v2_receipts.router)
+app.include_router(v2_settings.router)
 app.include_router(v2_sources.router)

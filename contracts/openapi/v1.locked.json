@@ -1,6 +1,40 @@
 {
   "components": {
     "schemas": {
+      "AnalyticalTimeView": {
+        "additionalProperties": false,
+        "properties": {
+          "day_boundary": {
+            "title": "Day Boundary",
+            "type": "string"
+          },
+          "day_boundary_minutes": {
+            "title": "Day Boundary Minutes",
+            "type": "integer"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "sleep_day_assignment": {
+            "default": "wake_time",
+            "title": "Sleep Day Assignment",
+            "type": "string"
+          },
+          "time_zone": {
+            "title": "Time Zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "time_zone",
+          "day_boundary_minutes",
+          "day_boundary",
+          "revision"
+        ],
+        "title": "AnalyticalTimeView",
+        "type": "object"
+      },
       "AnomaliesListResponse": {
         "properties": {
           "anomalies": {
@@ -1738,6 +1772,29 @@
           }
         },
         "title": "TriggerResponse",
+        "type": "object"
+      },
+      "UpdateAnalyticalTimeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "day_boundary_minutes": {
+            "maximum": 720.0,
+            "minimum": 0.0,
+            "title": "Day Boundary Minutes",
+            "type": "integer"
+          },
+          "time_zone": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Time Zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "time_zone",
+          "day_boundary_minutes"
+        ],
+        "title": "UpdateAnalyticalTimeRequest",
         "type": "object"
       },
       "ValidationError": {
@@ -4075,6 +4132,94 @@
           }
         },
         "summary": "Metric Series Batch"
+      }
+    },
+    "/api/v2/settings/analytical-time": {
+      "get": {
+        "operationId": "get_analytical_time_api_v2_settings_analytical_time_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticalTimeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Analytical Time"
+      },
+      "put": {
+        "operationId": "update_analytical_time_api_v2_settings_analytical_time_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAnalyticalTimeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticalTimeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Analytical Time"
       }
     },
     "/api/v2/setup/diagnostics": {
