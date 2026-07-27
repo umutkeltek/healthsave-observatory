@@ -116,6 +116,11 @@ ALLOWLIST: dict[str, str] = {
         "storage.timescale.intelligence) and runs the pure analysis.egress policy — no "
         "raw SQL here."
     ),
+    "apps/api/server/api/v2_settings.py": (
+        "stays — Observatory analytical-time settings API. AsyncSession typing for "
+        "Depends(); the route passes the session to the storage-backed observatory "
+        "settings repository — no raw SQL in the route module."
+    ),
     "apps/api/server/api/health_routes.py": (
         "stays — readiness probe runs SELECT 1; trivial enough to skip migration"
     ),

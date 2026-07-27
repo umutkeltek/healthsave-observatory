@@ -147,6 +147,16 @@ The egress trust-boundary posture (the moat, made inspectable).
                 "reason": "raw rows never cross the host boundary" } ] }
 ```
 
+### `GET /api/v2/settings/analytical-time` · `PUT /api/v2/settings/analytical-time` — keyed
+Observatory person-local analytical calendar: time zone and day-start boundary for reproducible daily/weekly/hour analyses. Observation timestamps remain UTC; these settings control only the derived calendar grouping.
+```json
+// GET response
+{ "time_zone": "Europe/Istanbul", "day_boundary_minutes": 240,
+  "day_boundary": "04:00", "revision": 1, "sleep_day_assignment": "wake_time" }
+// PUT body
+{ "time_zone": "Europe/Istanbul", "day_boundary_minutes": 240 }
+```
+
 ### `GET /api/v2/intelligence` · `PUT /api/v2/intelligence` — keyed
 The LLM-narrator ("Intelligence") settings. `GET` returns the current posture with **no secrets** (only `key_last4`); `managed_by_env` is true when deploy-time env config is still the effective source. `PUT` applies `mode` (off/local/cloud) + the primary provider/model (+ optional write-only `api_key`) + the fallback chain. The server classifies each route's trust zone; `PUT` does **not** grant cloud egress (see `/consent`).
 ```json
