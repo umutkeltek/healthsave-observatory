@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { IntegrationsSection } from "../components/sections/IntegrationsSections";
 import { GridSkeleton } from "../components/Skeletons";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 export const metadata: Metadata = { title: "Integrations · HealthSave Observatory" };
 
 // Intro paints immediately; live integration state streams in behind it.
