@@ -45,6 +45,7 @@ from ..ingestion.storage import (
     default_audit_log,
     default_storage,
 )
+from .swr import v2_read_cache
 from .deps import get_session, verify_api_key
 from .metrics import (
     CANONICAL_DUAL_WRITE,
@@ -336,6 +337,13 @@ async def apple_batch(
         # here. The delivery receipt is written separately, best-effort, below —
         # a receipt-write failure must never roll back a landed ingest.
         await session.commit()
+        # The v2 readiness aggregates are cached at boot AND every TTL; an
+        # ingest can land 100 rows but the next /api/v2/readiness returns
+        # the empty-list snapshot taken pre-ingest (e2e flakes immediately
+        # after every fresh deploy). Drop only the affected keys so unrelated
+        # read-page SWR entries stay warm.
+        for key in ("canonical_coverage", "canonical_sources"):
+            v2_read_cache.drop(key)
     except Exception as exc:
         try:
             RAW_LOG_ORPHANED.labels(metric=metric).inc()
