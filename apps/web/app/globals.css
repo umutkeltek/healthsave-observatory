@@ -159,7 +159,6 @@ a {
   animation-duration: var(--dur-3);
   animation-timing-function: var(--ease-io);
 }
-.sidebar { view-transition-name: sidebar; }
 .topbar { view-transition-name: topbar; }
 .content { view-transition-name: content-pane; }
 
@@ -171,46 +170,53 @@ a {
 }
 
 .sidebar {
+  view-transition-name: sidebar;
   position: sticky;
   top: 0;
   height: 100vh;
-  width: 240px;
-  flex: 0 0 240px;
+  width: 256px;
+  flex: 0 0 256px;
   display: flex;
   flex-direction: column;
-  padding: 22px 14px 16px;
+  padding: 24px 16px 16px;
   background: var(--surface-2);
   border-right: 1px solid var(--line);
+  backdrop-filter: blur(40px) saturate(180%);
+  box-shadow: inset -0.5px 0 0 var(--line), inset 1px 0 0 rgba(255, 255, 255, 0.35);
 }
 
 .brand {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 6px 10px 24px;
+  padding: 4px 8px 24px;
+  margin-bottom: 8px;
 }
 
 .brand-mark {
   color: var(--accent);
   font-size: 15px;
+  filter: none;
 }
 
 .brand-name {
   font-weight: 600;
   letter-spacing: -0.01em;
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .brand-sub {
   font-family: var(--mono);
   font-size: 11px;
   color: var(--faint);
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .nav-group {
@@ -237,8 +243,9 @@ a {
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 9px 11px;
-  border-radius: var(--radius-sm);
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 8px;
   border: 1px solid transparent;
   color: var(--muted);
   font-size: 14px;
@@ -254,9 +261,10 @@ a {
 }
 
 .nav-item.active {
-  color: var(--ink);
-  background: var(--accent-weak);
-  border-color: var(--accent-line);
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: none;
 }
 
 .nav-icon {
@@ -264,14 +272,17 @@ a {
   flex: 0 0 16px;
 }
 
-.nav-item:hover .nav-icon,
-.nav-item.active .nav-icon {
+.nav-item:hover .nav-icon {
   color: var(--accent);
+}
+
+.nav-item.active .nav-icon {
+  color: var(--on-accent);
 }
 
 .sidebar-foot {
   margin-top: auto;
-  padding: 14px 11px 4px;
+  padding: 16px 8px 4px;
   border-top: 1px solid var(--line);
   font-size: 12px;
   color: var(--muted);
@@ -4491,59 +4502,6 @@ body {
   min-height: 100dvh;
 }
 
-.sidebar {
-  width: 258px;
-  flex-basis: 258px;
-  padding: 24px 16px 18px;
-  background: color-mix(in srgb, var(--surface) 84%, var(--surface-2));
-  border-right: 1px solid var(--line);
-}
-
-.brand {
-  gap: 9px;
-  padding: 3px 8px 22px;
-  margin-bottom: 10px;
-}
-
-.brand-mark {
-  color: var(--accent);
-  filter: none;
-}
-
-.brand-name {
-  font-size: 15px;
-  letter-spacing: -0.01em;
-}
-
-.brand-sub {
-  color: var(--faint);
-  font-size: 11px;
-  letter-spacing: 0.03em;
-}
-
-.nav {
-  gap: 4px;
-}
-
-.nav-item {
-  min-height: 42px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  color: var(--muted);
-  font-size: 14.5px;
-}
-
-.nav-item.active {
-  color: var(--ink);
-  background: var(--accent-weak);
-  border-color: var(--accent-line);
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-
-.sidebar-foot {
-  padding: 16px 8px 4px;
-}
-
 .app-main {
   min-height: 100dvh;
 }
@@ -4902,54 +4860,6 @@ html,
 body {
   font-family: var(--sans);
   font-size: 16px;
-}
-
-.sidebar {
-  width: 256px;
-  flex-basis: 256px;
-  padding: 24px 16px 16px;
-  background: var(--surface-2);
-  backdrop-filter: blur(40px) saturate(180%);
-  box-shadow: inset -0.5px 0 0 var(--line), inset 1px 0 0 rgba(255, 255, 255, 0.35);
-}
-
-.brand {
-  gap: 8px;
-  padding: 4px 8px 24px;
-  margin-bottom: 8px;
-}
-
-.brand-name {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.brand-sub {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.nav {
-  gap: 4px;
-}
-
-.nav-item {
-  min-height: 44px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 14px;
-}
-
-.nav-item.active {
-  color: var(--on-accent);
-  background: var(--accent);
-  border-color: var(--accent);
-  box-shadow: none;
-}
-
-.nav-item.active .nav-icon {
-  color: var(--on-accent);
 }
 
 .topbar {
