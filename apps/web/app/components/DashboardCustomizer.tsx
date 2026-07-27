@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { applyTemplateAction, resetSectionsAction, toggleSectionAction } from "../lib/actions";
 import type { DashboardSections, Template } from "../lib/templates";
@@ -29,7 +29,46 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [, startTransition] = useTransition();
+  const sheetRef = useRef<HTMLDivElement>(null);
   const active = findTemplate(sections);
+
+  const close = useCallback(() => setOpen(false), []);
+
+  // Focus trap: first focusable element on open, close on Escape, trap Tab
+  useEffect(() => {
+    if (!open || !sheetRef.current) return;
+    const sheet = sheetRef.current;
+    const focusables = sheet.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+
+    first?.focus();
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        close();
+        return;
+      }
+      if (e.key === "Tab") {
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last?.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first?.focus();
+          }
+        }
+      }
+    };
+
+    sheet.addEventListener("keydown", onKeyDown);
+    return () => sheet.removeEventListener("keydown", onKeyDown);
+  }, [open, close]);
 
   const applyTemplate = (id: string) => {
     startTransition(async () => {
@@ -76,7 +115,7 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
         onClick={() => setOpen(false)}
       />
 
-      <div className="dashboard-sheet" role="dialog" aria-label="Customize dashboard">
+      <div className="dashboard-sheet" role="dialog" aria-modal="true" aria-label="Customize dashboard" ref={sheetRef}>
         <header className="dashboard-sheet-head">
           <h2>Customize dashboard</h2>
           <button
@@ -102,6 +141,7 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
               type="button"
               className={`template-card ${active?.id === t.id ? "template-active" : ""}`}
               onClick={() => applyTemplate(t.id)}
+              aria-pressed={active?.id === t.id}
             >
               <span className="template-icon">{t.icon}</span>
               <strong>{t.label}</strong>

@@ -6996,6 +6996,13 @@ font-size: 17px;
   border-color: var(--accent-line);
 }
 
+.template-card:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-line);
+  transform: scale(1.02);
+}
+
 .template-card.template-active {
   border-color: var(--accent);
   background: var(--accent-weak);
@@ -7044,6 +7051,10 @@ font-size: 17px;
 
 .section-toggle-row:hover {
   background: var(--hover);
+}
+
+.section-toggle-row:focus-within {
+  background: var(--accent-weak);
 }
 
 .section-toggle-row input[type="checkbox"] {
