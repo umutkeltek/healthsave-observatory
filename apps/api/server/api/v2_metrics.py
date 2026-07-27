@@ -11,13 +11,12 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
+from contracts.ontology import MetricDefinition, all_metrics, get_metric
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.defaults import time_series_query_service
 from storage.ports import TimeSeriesQueryService
-
-from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
-from contracts.ontology import MetricDefinition, all_metrics, get_metric
 
 from .deps import get_session, verify_api_key
 

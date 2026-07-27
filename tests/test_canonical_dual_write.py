@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from server.api.ingest import _write_canonical_observations
-
 from contracts._base import DEFAULT_OWNER_ID
+from server.api.ingest import _write_canonical_observations
 
 _HR_SAMPLES = [
     {"date": "2026-05-28T08:00:00Z", "qty": 61, "source": "Apple Watch"},

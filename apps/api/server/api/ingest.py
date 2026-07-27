@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from compat_v1.models import BatchPayload
+from contracts._base import Provenance
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from normalization import identity, normalize_apple_batch
 from plugin_sdk import SDK_VERSION
@@ -35,8 +36,6 @@ from storage.timescale.sync_receipts import (
     assert_receipt_idempotency,
     record_sync_receipt,
 )
-
-from contracts._base import Provenance
 
 from ..ingestion.owner import OWNER_HEADER, resolve_owner_id
 from ..ingestion.parsers import group_samples_by_device

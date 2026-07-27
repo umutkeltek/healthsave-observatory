@@ -34,14 +34,13 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
+from contracts._base import V2Model
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.defaults import agent_repository
 from storage.ports import AgentRepository
-
-from contracts._base import V2Model
 
 from .deps import get_session, verify_api_key
 

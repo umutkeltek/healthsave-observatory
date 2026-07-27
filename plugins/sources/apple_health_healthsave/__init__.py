@@ -36,9 +36,8 @@ from server.ingestion.parsers import group_samples_by_device
 from storage.results import IngestWriteResult, coerce_ingest_result
 
 if TYPE_CHECKING:
-    from storage.ports import IngestStorage, MeasurementProjectionRepository
-
     from contracts.observation import Observation
+    from storage.ports import IngestStorage, MeasurementProjectionRepository
 
 log = logging.getLogger("healthsave.plugins.apple_health_healthsave")
 

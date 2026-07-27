@@ -10,6 +10,7 @@ import ast
 from pathlib import Path
 
 import pytest
+from contracts._base import V2Model as BaseV2Model
 
 import contracts
 from contracts import (
@@ -20,7 +21,6 @@ from contracts import (
     V2Model,
     WithOwnership,
 )
-from contracts._base import V2Model as BaseV2Model
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONTRACTS_DIR = REPO_ROOT / "packages" / "py" / "contracts"

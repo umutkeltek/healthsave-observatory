@@ -5,12 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated
 
+from contracts._base import V2Model
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field, StringConstraints, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.timescale.moments import GRADES, MOMENT_KINDS, default_repository
-
-from contracts._base import V2Model
 
 from .deps import get_session, verify_api_key
 

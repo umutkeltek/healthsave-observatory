@@ -47,12 +47,11 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from normalization import identity
-from normalization.fusion import exact_ingest_key
-
 from contracts._base import DEFAULT_WORKSPACE_ID, Provenance
 from contracts.observation import Observation, build_dedup_key
 from contracts.values import EventValue
+from normalization import identity
+from normalization.fusion import exact_ingest_key
 
 SOURCE_TAG = "Whoop"
 ORIGIN_PROVIDER = "whoop-healthsave"

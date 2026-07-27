@@ -465,11 +465,10 @@ def test_timescale_measurement_projection_repository_satisfies_protocol() -> Non
 
 @pytest.mark.asyncio
 async def test_timescale_measurement_projection_projects_quantity_observations() -> None:
-    from storage.timescale.measurements import TimescaleMeasurementProjectionRepository
-
     from contracts._base import DEFAULT_OWNER_ID, Provenance
     from contracts.observation import Observation, build_dedup_key
     from contracts.values import QuantityValue
+    from storage.timescale.measurements import TimescaleMeasurementProjectionRepository
 
     class _ProjectionResult:
         def __init__(self, row: dict[str, object]) -> None:

@@ -20,6 +20,7 @@ from json import dumps
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from contracts._base import DEFAULT_OWNER_ID
 from normalization.mappers import (
     ACTIVITY_FIELDS,
     DAILY_ACTIVITY_QUANTITY_FIELDS,
@@ -36,7 +37,6 @@ from normalization.parsers import (
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from contracts._base import DEFAULT_OWNER_ID
 from storage.results import IngestWriteResult
 
 if TYPE_CHECKING:

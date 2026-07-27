@@ -6,10 +6,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
+from contracts._base import DEFAULT_OWNER_ID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from contracts._base import DEFAULT_OWNER_ID
 
 
 @dataclass(frozen=True, slots=True)

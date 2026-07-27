@@ -9,7 +9,6 @@ detectors already persist in ``structured_data``.
 from __future__ import annotations
 
 from analysis.statistical.finding_cards import build_card
-
 from contracts.findings import FINDING_CARD_SCHEMA_VERSION, FindingCard
 
 

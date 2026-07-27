@@ -11,10 +11,9 @@ from typing import Any
 from uuid import UUID
 
 import pytest
+from contracts._base import DEFAULT_OWNER_ID
 from replay.orchestrator import ReplayReport, replay_apple_raw_payloads
 from storage.timescale.ingest import fetch_raw_payloads
-
-from contracts._base import DEFAULT_OWNER_ID
 
 _SOURCE_ID = UUID("00000000-0000-0000-0000-0000000000aa")
 _RUN_ID = UUID("00000000-0000-0000-0000-0000000000bb")

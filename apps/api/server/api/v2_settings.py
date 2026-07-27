@@ -5,11 +5,6 @@ from __future__ import annotations
 from typing import Annotated
 from zoneinfo import available_timezones
 
-from fastapi import APIRouter, Depends
-from pydantic import Field, StringConstraints, field_validator
-from sqlalchemy.ext.asyncio import AsyncSession
-from storage.timescale.observatory_settings import default_repository
-
 from contracts._base import V2Model
 from contracts.analytical_time import (
     DEFAULT_DAY_BOUNDARY_MINUTES,
@@ -17,6 +12,10 @@ from contracts.analytical_time import (
     MAX_DAY_BOUNDARY_MINUTES,
     AnalyticalTime,
 )
+from fastapi import APIRouter, Depends
+from pydantic import Field, StringConstraints, field_validator
+from sqlalchemy.ext.asyncio import AsyncSession
+from storage.timescale.observatory_settings import default_repository
 
 from .deps import get_session, verify_api_key
 

@@ -10,11 +10,10 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
+from contracts._base import DEFAULT_OWNER_ID, Provenance
 from homeassistant_mqtt.bridge import HomeAssistantMQTTConfig, sensor_specs_for_config
 from normalization.apple import normalize_apple_batch
 from storage.timescale.measurements import _ingest_metric
-
-from contracts._base import DEFAULT_OWNER_ID, Provenance
 
 
 class _InsertResult:
