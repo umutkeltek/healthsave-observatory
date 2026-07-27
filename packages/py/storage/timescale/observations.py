@@ -17,9 +17,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import bindparam, text
-
 from contracts.observation import Observation
+from sqlalchemy import bindparam, text
 
 if TYPE_CHECKING:
     from uuid import UUID

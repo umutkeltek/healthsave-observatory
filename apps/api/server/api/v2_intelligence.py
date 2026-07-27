@@ -35,13 +35,12 @@ from analysis.config import LLMConfig
 from analysis.egress import Destination, EgressRoute, classify_destination
 from analysis.llm.client import HealthLLMClient
 from analysis.netguard import SsrfError
+from contracts._base import V2Model
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.timescale import intelligence as repo_module
 from storage.timescale.intelligence import FallbackRouteInput
-
-from contracts._base import V2Model
 
 from .deps import get_session, verify_api_key
 

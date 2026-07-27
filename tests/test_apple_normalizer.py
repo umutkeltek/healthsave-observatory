@@ -7,9 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
-from normalization import identity, normalize_apple_batch
-
 from contracts._base import DEFAULT_OWNER_ID, Provenance
+from normalization import identity, normalize_apple_batch
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "apple_healthsave"
 _PROV = Provenance(

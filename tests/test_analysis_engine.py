@@ -23,7 +23,6 @@ from analysis.llm.client import InsightResult, LLMUnavailableError  # noqa: E402
 from analysis.statistical.aggregator import DataAggregator  # noqa: E402
 from analysis.statistical.finding_cards import build_card  # noqa: E402
 from analysis.types import Anomaly, Correlation, Finding, PeriodSummary, Trend  # noqa: E402
-
 from contracts.findings import FINDING_CARD_SCHEMA_VERSION, FindingCard  # noqa: E402
 
 

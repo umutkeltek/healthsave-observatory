@@ -14,7 +14,6 @@ from uuid import UUID
 
 import pytest
 from analysis.experiments import ExperimentRunner
-
 from contracts.analytical_time import AnalyticalTime
 
 EXP_ID = UUID("11111111-1111-1111-1111-111111111111")

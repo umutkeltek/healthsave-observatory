@@ -157,9 +157,7 @@ async def test_publish_once_is_a_noop_for_per_source_when_no_sources_active():
     per_source_topics = [m[0] for m in publisher.published if "/source/" in m[0]]
     assert per_source_topics == []
     discovery_topics = [
-        m[0]
-        for m in publisher.published
-        if m[0].startswith("homeassistant/sensor/observatory_")
+        m[0] for m in publisher.published if m[0].startswith("homeassistant/sensor/observatory_")
     ]
     assert discovery_topics == []
 

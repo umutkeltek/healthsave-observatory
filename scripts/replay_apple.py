@@ -27,12 +27,11 @@ import asyncio
 import os
 import uuid
 
+from contracts._base import DEFAULT_OWNER_ID
 from replay.orchestrator import replay_apple_raw_payloads
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from storage.timescale.ingest import fetch_raw_payloads
 from storage.timescale.observations import CanonicalObservationRepository
-
-from contracts._base import DEFAULT_OWNER_ID
 
 # Must match apps/api/server/api/ingest.py::APPLE_HEALTHKIT_SOURCE_ID.
 APPLE_HEALTHKIT_SOURCE_ID = uuid.UUID("a9b1e7e0-0000-4000-8000-000000000001")

@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from db.migrate import apply_migrations, list_migrations
 
 
