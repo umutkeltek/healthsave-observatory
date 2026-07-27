@@ -25,6 +25,7 @@ import {
   fetchIntelligence,
   fetchLatest,
   fetchMetrics,
+  fetchMoments,
   fetchNarratives,
   fetchPrivacy,
   fetchReadiness,
@@ -39,6 +40,7 @@ import {
   type InsightsLatest,
   type MetricSeries,
   type MetricSummary,
+  type Moment,
   type NarrativeHistoryItem,
   type Privacy,
   type Readiness,
@@ -271,6 +273,15 @@ export async function hasAnyData(): Promise<boolean> {
 // Identity / provenance loaders - the Sources view. Each returns the inner
 // array (mirroring safeFindings) and degrades to null when the backend is
 // unreachable so the page can fall back to a clearly-labelled demo.
+
+export async function safeMoments(limit = 50): Promise<Moment[]> {
+  try {
+    const result = await swrCache("moments", 30_000, () => fetchMoments(limit));
+    return result.moments;
+  } catch (error) {
+    return swallow("moments", error) ?? [];
+  }
+}
 
 export async function safeSources(): Promise<SourceView[] | null> {
   try {

@@ -117,6 +117,7 @@ const NAV: readonly NavItem[] = [
   { href: "/compare", label: "Compare", icon: "compare", group: "explore" },
   { href: "/relationships", label: "Relationships", icon: "relationships", group: "explore" },
   { href: "/experiments", label: "Experiments", icon: "experiments", group: "explore" },
+  { href: "/timeline", label: "Timeline", icon: "findings", group: "explore" },
   { href: "/integrations", label: "Integrations", icon: "integrations", group: "manage" },
   { href: "/intelligence", label: "Intelligence", icon: "intelligence", group: "manage" },
   { href: "/settings", label: "Settings", icon: "settings", group: "manage" },

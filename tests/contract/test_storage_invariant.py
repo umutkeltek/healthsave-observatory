@@ -121,6 +121,11 @@ ALLOWLIST: dict[str, str] = {
         "Depends(); the route passes the session to the storage-backed observatory "
         "settings repository — no raw SQL in the route module."
     ),
+    "apps/api/server/api/v2_moments.py": (
+        "stays — Personal-context moments CRUD. AsyncSession typing for Depends(); "
+        "the route passes the session to the storage-backed moments repository — "
+        "no raw SQL in the route module."
+    ),
     "apps/api/server/api/health_routes.py": (
         "stays — readiness probe runs SELECT 1; trivial enough to skip migration"
     ),
