@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { LibrarySection } from "../components/sections/LibrarySections";
 import { CardSkeleton, LeadSkeleton } from "../components/Skeletons";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 export const metadata: Metadata = { title: "Library · HealthSave Observatory" };
 
 export default function LibraryPage() {

@@ -6,7 +6,7 @@ import { TimelineView } from "../components/TimelineView";
 import { CardSkeleton } from "../components/Skeletons";
 import { safeFindings, safeMoments } from "../lib/load";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 export const metadata: Metadata = { title: "Timeline · HealthSave Observatory" };
 
 async function TimelineSection() {

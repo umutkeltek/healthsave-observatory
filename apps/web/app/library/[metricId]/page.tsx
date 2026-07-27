@@ -13,7 +13,7 @@ import { BaselineRibbon } from "../../components/BaselineRibbon";
 import { MultiSeriesChart } from "../../components/MultiSeriesChart";
 import { PinButton } from "../../components/PinButton";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 export const metadata: Metadata = { title: "Signal · HealthSave Observatory" };
 
 const RANGES = ["7d", "30d", "90d", "1y"] as const;

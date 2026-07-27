@@ -5,7 +5,7 @@ import { ProvenanceSection } from "../components/sections/SourcesSections";
 import { CardSkeleton } from "../components/Skeletons";
 
 export const metadata: Metadata = { title: "Sources · HealthSave" };
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 // Data Provenance - where each reading came from, and how fresh it is. The
 // intro paints immediately; the identity reads stream in behind it.
