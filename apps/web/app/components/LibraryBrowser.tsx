@@ -43,7 +43,7 @@ function coverageStyle(row: LibraryRow): CSSProperties {
 function statusLabel(row: LibraryRow): string {
   if (row.analyzable) return "Ready";
   if (row.count > 0) return "Collecting";
-  return "No data";
+  return "No data yet";
 }
 
 export type LibraryRow = {

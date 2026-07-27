@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { BaselineRibbon } from "../components/BaselineRibbon";
 import { ConsistencyGauge, Hypnogram, StageBreakdown } from "../components/SleepVisuals";
 import { safeSeries } from "../lib/load";
-import { hasUsablePoints } from "../lib/ranges";
+import { hasUsablePoints, seriesCoverage, shortDate } from "../lib/ranges";
 import {
   bedtimeDelta,
   bedtimeLabel,
@@ -20,7 +20,18 @@ export const revalidate = 30;
 export const metadata: Metadata = { title: "Sleep · HealthSave Observatory" };
 
 export default async function SleepPage() {
-  const series = await safeSeries("sleep.stage", "30d");
+  let series = await safeSeries("sleep.stage", "30d");
+  let usingFallback = false;
+
+  // If 30d returns no usable data, try the widest available window so a
+  // brand-new sync has a chance to show something before the full 30d fills.
+  if (!hasUsablePoints(series)) {
+    const fallback = await safeSeries("sleep.stage", "all");
+    if (hasUsablePoints(fallback)) {
+      series = fallback;
+      usingFallback = true;
+    }
+  }
 
   if (!hasUsablePoints(series)) {
     return (
@@ -71,6 +82,16 @@ export default async function SleepPage() {
       {/* Hero: last night */}
       <section className="lead">
         <article className="hero sleep-hero">
+          {usingFallback && series ? (
+            (() => {
+              const cov = seriesCoverage(series.points);
+              return (
+                <p className="meta" style={{ marginBottom: 12 }}>
+                  Only {cov ? `${shortDate(cov.first)} → ${shortDate(cov.last)}` : "limited sleep data"} available. The Sleep page usually shows the last 30 days.
+                </p>
+              );
+            })()
+          ) : null}
           <div className="hero-eyebrow">Last night</div>
           {lastNight ? (
             <>
