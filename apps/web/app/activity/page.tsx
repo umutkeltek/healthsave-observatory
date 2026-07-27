@@ -140,7 +140,27 @@ async function WeeklyStrain() {
   const rhrAvg = rhrVals.length > 0 ? rhrVals.reduce((a, p) => a + p.value, 0) / rhrVals.length : null;
   const walkAvg = walkHrVals.length > 0 ? walkHrVals.reduce((a, p) => a + p.value, 0) / walkHrVals.length : null;
 
-  // Simple strain proxy: walking HR ÷ resting HR delta. Wider gap = higher strain.
+  // ── Cardiovascular load (strain) ────────────────────────────────────────
+  //
+  // Formula: strain = (walkingHR − restingHR) / restingHR × 100
+  //
+  // This is a simple proxy for cardiovascular strain. A healthy adult at rest
+  // has a narrow gap (10-25%); a wider gap (30-40%+) indicates the heart is
+  // working harder during daily movement. The absolute number matters less than
+  // the week-over-week trend — rising strain with no change in routine can
+  // signal overtraining, stress, or illness onset.
+  //
+  // Assumptions:
+  //  • Walking HR is a representative sub-maximal load. A true strain model
+  //    would incorporate max HR, HR reserve, METs, and training impulse (TRIMP).
+  //  • Resting HR is the floor. In practice, Apple Watch resting HR is a daily
+  //    summary (not truly basal), but it's the best available floor.
+  //  • 30-day window smooths daily noise. A 7-day window is more responsive
+  //    but noisier; the 30-day avg trades latency for stability.
+  //
+  // TODO(calibration): population-norm tuning. A 25% threshold for "elevated"
+  //   is a heuristic. With enough population data, this threshold can be
+  //   calibrated against age, sex, fitness level, and HRV.
   const strain = rhrAvg && walkAvg ? Math.round(((walkAvg - rhrAvg) / rhrAvg) * 100) : null;
 
   return (

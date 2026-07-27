@@ -18,6 +18,19 @@ export type SleepSegment = {
 // Group raw sleep stage points into nights. A night boundary is noon UTC
 // (the analytical-time default): any stage before noon belongs to the
 // previous calendar date's night. Stages are bucketed by their date key.
+//
+// ── Noon-split heuristic ──────────────────────────────────────────────
+// This heuristic is necessary because Apple Watch sleep data from HealthSave
+// arrives as independent ~30 s sleep.stage samples — there is no per-night
+// "bedtime" / "waketime" envelope. The noon split is a robust default:
+// virtually all sleep ends well before noon and begins well after noon, so
+// the boundary is unambiguous for 99% of nights.
+//
+// TODO: when the HealthSave iOS ingest pipeline starts streaming per-night
+// bedtime/waketime timestamps (planned for the full-export payload format),
+// switch `groupSleepNights` to use those deterministic boundaries. At that
+// point the noon split becomes a fallback for sources that don't emit
+// per-night metadata, and the derivation is exact rather than heuristic.
 export function groupSleepNights(points: SeriesPoint[]): Map<string, SeriesPoint[]> {
   const nights = new Map<string, SeriesPoint[]>();
   for (const p of points) {
