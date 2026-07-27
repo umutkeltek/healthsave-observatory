@@ -5,7 +5,7 @@ import { IntelligenceSection } from "../components/sections/IntelligenceSections
 import { CardSkeleton } from "../components/Skeletons";
 
 export const metadata: Metadata = { title: "Intelligence · HealthSave" };
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 // The topbar owns the page title; the settings surface streams in behind it.
 export default function IntelligencePage() {

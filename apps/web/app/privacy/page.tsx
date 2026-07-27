@@ -5,7 +5,7 @@ import { PrivacySection } from "../components/sections/PrivacySections";
 import { CardSkeleton } from "../components/Skeletons";
 
 export const metadata: Metadata = { title: "Privacy · HealthSave" };
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export default function PrivacyPage() {
   return (

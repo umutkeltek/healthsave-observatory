@@ -6,7 +6,7 @@ import { LeadSkeleton } from "../components/Skeletons";
 import { parseExperimentPrefill } from "../lib/experimentPrefill";
 
 export const metadata: Metadata = { title: "Experiments · HealthSave" };
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export default async function ExperimentsPage({
   searchParams,
