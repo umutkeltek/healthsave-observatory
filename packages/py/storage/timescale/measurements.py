@@ -108,30 +108,60 @@ async def _execute_insert_with_result(
 
 async def _execute_batch_insert_with_flags(
     session: AsyncSession,
-    sql_prefix: str,
+    table: str,
+    sql_columns: list[str],
+    bind_keys: list[str],
     rows: list[dict],
+    *,
+    conflict_clause: str | None = None,
+    update_set: str = "",
     flag_column: str = "inserted_new",
 ) -> list[bool | None]:
     """PERFORMANCE-001: single-round-trip upsert of N rows; returns per-row flags.
 
-    Single-row batches keep the named-param contract (``{column: value}``)
-    so existing tests that inspect ``params['source_id']`` continue to work;
-    larger batches bind positionally as ``:column_<index>``. RETURNING flags
-    are returned in input order, preserving the per-row
-    ``inserted_new``/``deduped_existing`` accounting.
+    Builds the canonical upsert shape:
 
-    The caller supplies ``sql_prefix`` up to (but not including) ``VALUES``,
-    e.g. ``"INSERT INTO heart_rate (...) ON CONFLICT ... RETURNING (xmax = 0) AS inserted_new"``.
+        INSERT INTO <table> (<sql_columns>) VALUES ...[, ...]
+        [ON CONFLICT (<cols>) DO UPDATE SET ...]
+        RETURNING (xmax = 0) AS inserted_new
+
+    ``sql_columns`` is the column list inside INSERT INTO (...) — DB column
+    names. ``bind_keys`` is the names of dict keys in each row, which become
+    the bind-parameter names ``:bind_key``. The two lists are paired
+    positionally: the i-th ``:bind_key_i`` placeholder gets the value of
+    dict[i][bind_keys[i]], and Postgres resolves the SQL column list
+    against the positional values. This handles legacy aliasing like
+    ``metric`` (bind) vs ``metric_name`` (column) without breaking.
+
+    Single-row batches keep the named-param contract (``{bind_key: value}``)
+    so existing tests that inspect bound parameters continue to work;
+    larger batches bind positionally as ``:bind_key_<index>``. RETURNING
+    flags are returned in input order.
+
+    PostgreSQL requires ``VALUES`` to come BEFORE ``ON CONFLICT``; the
+    helper handles that automatically.
     """
     if not rows:
         return []
-    columns = list(rows[0].keys())
+    if not sql_columns or not bind_keys or len(sql_columns) != len(bind_keys):
+        return [None] * len(rows)
+
+    insert_prefix = f"INSERT INTO {table} ({', '.join(sql_columns)})"
+    if conflict_clause:
+        update_clause = (
+            f" ON CONFLICT {conflict_clause} DO UPDATE SET {update_set}"
+            if update_set
+            else f" ON CONFLICT {conflict_clause} DO NOTHING"
+        )
+    else:
+        update_clause = ""
+    returning_clause = f" RETURNING (xmax = 0) AS {flag_column}"
 
     if len(rows) == 1:
-        # Named-param path: preserves the original single-row contract used
-        # by callers/tests that inspect bound parameters.
-        sql = f"{sql_prefix} VALUES ({', '.join(':' + col for col in columns)})"
-        result = await session.execute(text(sql), rows[0])
+        placeholders = ", ".join(f":{key}" for key in bind_keys)
+        sql = f"{insert_prefix} VALUES ({placeholders}){update_clause}{returning_clause}"
+        params = {key: rows[0].get(key) for key in bind_keys}
+        result = await session.execute(text(sql), params)
         mappings = getattr(result, "mappings", None)
         if mappings is None:
             return [None]
@@ -141,15 +171,15 @@ async def _execute_batch_insert_with_flags(
         value = row.get(flag_column) if hasattr(row, "get") else None
         return [None if value is None else bool(value)]
 
-    # Multi-row batched path: positional binds ``:column_<index>``.
+    # Multi-row batched path: positional binds ``:bind_key_<index>``.
     tuples = ", ".join(
-        "(" + ", ".join(f":{col}_{i}" for col in columns) + ")" for i in range(len(rows))
+        "(" + ", ".join(f":{key}_{i}" for key in bind_keys) + ")" for i in range(len(rows))
     )
-    sql = f"{sql_prefix} VALUES {tuples}"
+    sql = f"{insert_prefix} VALUES {tuples}{update_clause}{returning_clause}"
     bound: dict[str, object] = {}
     for i, row in enumerate(rows):
-        for col in columns:
-            bound[f"{col}_{i}"] = row[col]
+        for key in bind_keys:
+            bound[f"{key}_{i}"] = row.get(key)
     result = await session.execute(text(sql), bound)
     mappings = getattr(result, "mappings", None)
     flags: list[bool | None] = []
@@ -173,11 +203,6 @@ async def _execute_batch_insert_with_flags(
     while len(flags) < len(rows):
         flags.append(None)
     return flags[: len(rows)]
-
-
-# ──────────────────────────────────────────────────────────────────
-#  Devices + raw-payload audit log
-# ──────────────────────────────────────────────────────────────────
 
 
 async def _get_or_create_device(session: AsyncSession, device_type: str) -> int:
@@ -305,18 +330,21 @@ async def _ingest_dedicated(
     rows = list(seen.values())
 
     conflict_sql = ", ".join(conflict_cols)
-    col_names = ", ".join(rows[0].keys())
+    columns = list(rows[0].keys())
     update_set = ", ".join(f"{c} = EXCLUDED.{c}" for c in rows[0] if c not in conflict_cols)
 
     # PERFORMANCE-001: single multi-row VALUES for the whole batch — N rows in
     # one round-trip instead of N. RETURNING preserves order with parameter-
     # stable binding, so per-row inserted_new flags stay accurate.
-    sql_prefix = (
-        f"INSERT INTO {spec['table']} ({col_names}) "
-        f"ON CONFLICT ({conflict_sql}) DO UPDATE SET {update_set} "
-        "RETURNING (xmax = 0) AS inserted_new"
+    flags = await _execute_batch_insert_with_flags(
+        session,
+        spec["table"],
+        columns,  # sql_columns
+        columns,  # bind_keys == sql_columns for dedicated-table writers
+        rows,
+        conflict_clause=f"({conflict_sql})",
+        update_set=update_set,
     )
-    flags = await _execute_batch_insert_with_flags(session, sql_prefix, rows)
 
     result = IngestWriteResult()
     for inserted_new in flags:
@@ -349,10 +377,10 @@ async def _ingest_generic(
             {
                 "time": t,
                 "device_id": device_id,
-                "metric": sample_metric,
+                "metric_name": sample_metric,
                 "value": v,
                 "unit": s.get("unit", ""),
-                "source": s.get("source", ""),
+                "source_id": s.get("source", ""),
                 "owner_id": str(owner_id),
             }
         )
@@ -361,14 +389,12 @@ async def _ingest_generic(
         # PERFORMANCE-001: single multi-row VALUES for the whole batch.
         flags = await _execute_batch_insert_with_flags(
             session,
-            """
-                INSERT INTO quantity_samples
-                    (time, device_id, metric_name, value, unit, source_id, owner_id)
-                ON CONFLICT (time, device_id, metric_name, owner_id) DO UPDATE
-                SET value = EXCLUDED.value, unit = EXCLUDED.unit
-                RETURNING (xmax = 0) AS inserted_new
-            """,
+            "quantity_samples",
+            ["time", "device_id", "metric_name", "value", "unit", "source_id", "owner_id"],
+            ["time", "device_id", "metric_name", "value", "unit", "source_id", "owner_id"],
             rows,
+            conflict_clause="(time, device_id, metric_name, owner_id)",
+            update_set="value = EXCLUDED.value, unit = EXCLUDED.unit",
         )
         for inserted_new in flags:
             result = result.with_insert_flag(inserted_new)
@@ -407,10 +433,10 @@ async def _ingest_ecg(
             {
                 "time": start,
                 "device_id": device_id,
-                "metric": "ecg_average_heart_rate",
+                "metric_name": "ecg_average_heart_rate",
                 "value": average_heart_rate,
                 "unit": "bpm",
-                "source": _sample_source(sample),
+                "source_id": _sample_source(sample),
                 "owner_id": str(owner_id),
             }
         )
@@ -419,14 +445,12 @@ async def _ingest_ecg(
         # PERFORMANCE-001: single multi-row VALUES for the whole batch.
         flags = await _execute_batch_insert_with_flags(
             session,
-            """
-                INSERT INTO quantity_samples
-                    (time, device_id, metric_name, value, unit, source_id, owner_id)
-                ON CONFLICT (time, device_id, metric_name, owner_id) DO UPDATE
-                SET value = EXCLUDED.value, unit = EXCLUDED.unit
-                RETURNING (xmax = 0) AS inserted_new
-            """,
+            "quantity_samples",
+            ["time", "device_id", "metric_name", "value", "unit", "source_id", "owner_id"],
+            ["time", "device_id", "metric_name", "value", "unit", "source_id", "owner_id"],
             rows,
+            conflict_clause="(time, device_id, metric_name, owner_id)",
+            update_set="value = EXCLUDED.value, unit = EXCLUDED.unit",
         )
         for inserted_new in flags:
             result = result.with_insert_flag(inserted_new)
@@ -478,7 +502,7 @@ async def _ingest_medication_dose_events(
                 "scheduled_dose_quantity": to_float(s.get("scheduled_dose_quantity")),
                 "dose_quantity": to_float(s.get("dose_quantity")),
                 "unit": s.get("medication_unit") or s.get("unit", ""),
-                "source": s.get("source", ""),
+                "source_id": s.get("source", ""),
                 "medication_concept_id": s.get("medication_concept_id", ""),
                 "owner_id": str(owner_id),
             }
@@ -488,27 +512,47 @@ async def _ingest_medication_dose_events(
         # PERFORMANCE-001: single multi-row VALUES for the whole batch.
         flags = await _execute_batch_insert_with_flags(
             session,
-            """
-                INSERT INTO medication_dose_events
-                    (
-                        time, scheduled_time, device_id, medication_metric,
-                        medication_name, status, scheduled_dose_quantity,
-                        dose_quantity, unit, source_id, medication_concept_id,
-                        owner_id
-                    )
-                ON CONFLICT (time, device_id, medication_metric, owner_id) DO UPDATE
-                SET
-                    scheduled_time = EXCLUDED.scheduled_time,
-                    medication_name = EXCLUDED.medication_name,
-                    status = EXCLUDED.status,
-                    scheduled_dose_quantity = EXCLUDED.scheduled_dose_quantity,
-                    dose_quantity = EXCLUDED.dose_quantity,
-                    unit = EXCLUDED.unit,
-                    source_id = EXCLUDED.source_id,
-                    medication_concept_id = EXCLUDED.medication_concept_id
-                RETURNING (xmax = 0) AS inserted_new
-            """,
+            "medication_dose_events",
+            [
+                "time",
+                "scheduled_time",
+                "device_id",
+                "medication_metric",
+                "medication_name",
+                "status",
+                "scheduled_dose_quantity",
+                "dose_quantity",
+                "unit",
+                "source_id",
+                "medication_concept_id",
+                "owner_id",
+            ],
+            [
+                "time",
+                "scheduled_time",
+                "device_id",
+                "medication_metric",
+                "medication_name",
+                "status",
+                "scheduled_dose_quantity",
+                "dose_quantity",
+                "unit",
+                "source_id",
+                "medication_concept_id",
+                "owner_id",
+            ],
             rows,
+            conflict_clause="(time, device_id, medication_metric, owner_id)",
+            update_set=(
+                "scheduled_time = EXCLUDED.scheduled_time, "
+                "medication_name = EXCLUDED.medication_name, "
+                "status = EXCLUDED.status, "
+                "scheduled_dose_quantity = EXCLUDED.scheduled_dose_quantity, "
+                "dose_quantity = EXCLUDED.dose_quantity, "
+                "unit = EXCLUDED.unit, "
+                "source_id = EXCLUDED.source_id, "
+                "medication_concept_id = EXCLUDED.medication_concept_id"
+            ),
         )
         for inserted_new in flags:
             result = result.with_insert_flag(inserted_new)
@@ -561,12 +605,12 @@ async def _ingest_activity(
         ordered_rows = [{c: r.get(c) for c in cols} for r in rows]
         flags = await _execute_batch_insert_with_flags(
             session,
-            f"""
-                INSERT INTO daily_activity ({", ".join(cols)})
-                ON CONFLICT (date, device_id, owner_id) DO UPDATE SET {updates}
-                RETURNING (xmax = 0) AS inserted_new
-            """,
+            "daily_activity",
+            cols,  # sql_columns
+            cols,  # bind_keys — keys already match column names
             ordered_rows,
+            conflict_clause="(date, device_id, owner_id)",
+            update_set=updates,
         )
         for inserted_new in flags:
             result = result.with_insert_flag(inserted_new)
@@ -607,14 +651,15 @@ async def _ingest_daily_quantity(
         # PERFORMANCE-001: single multi-row VALUES for the whole batch.
         flags = await _execute_batch_insert_with_flags(
             session,
-            f"""
-                INSERT INTO daily_activity (date, device_id, owner_id, source_id, {column})
-                ON CONFLICT (date, device_id, owner_id) DO UPDATE
-                SET {column} = EXCLUDED.{column},
-                    source_id = COALESCE(EXCLUDED.source_id, daily_activity.source_id)
-                RETURNING (xmax = 0) AS inserted_new
-            """,
+            "daily_activity",
+            ["date", "device_id", "owner_id", "source_id", column],  # sql_columns
+            ["date", "device_id", "owner_id", "source_id", column],  # bind_keys
             rows,
+            conflict_clause="(date, device_id, owner_id)",
+            update_set=(
+                f"{column} = EXCLUDED.{column}, "
+                "source_id = COALESCE(EXCLUDED.source_id, daily_activity.source_id)"
+            ),
         )
         for inserted_new in flags:
             result = result.with_insert_flag(inserted_new)
@@ -648,14 +693,14 @@ async def _ingest_workouts(
         rows.append(
             {
                 "device_id": device_id,
-                "sport": first_present(s, "sport_type", "sportType", "name") or "unknown",
-                "start": start,
-                "end": end,
-                "dur": duration_ms,
+                "sport_type": first_present(s, "sport_type", "sportType", "name") or "unknown",
+                "start_time": start,
+                "end_time": end,
+                "duration_ms": duration_ms,
                 "avg_hr": to_float(first_present(s, "avg_hr", "avgHeartRate")),
                 "max_hr": to_float(first_present(s, "max_hr", "maxHeartRate")),
-                "cal": to_float(first_present(s, "calories", "activeEnergy")),
-                "dist": to_float(first_present(s, "distance_m", "distance")),
+                "calories": to_float(first_present(s, "calories", "activeEnergy")),
+                "distance_m": to_float(first_present(s, "distance_m", "distance")),
                 "source_id": _sample_source(s),
                 "owner_id": str(owner_id),
             }
@@ -665,21 +710,45 @@ async def _ingest_workouts(
         # PERFORMANCE-001: single multi-row VALUES for the whole batch.
         flags = await _execute_batch_insert_with_flags(
             session,
-            """
-                INSERT INTO workouts (device_id, sport_type, start_time, end_time,
-                    duration_ms, avg_hr, max_hr, calories, distance_m, source_id, owner_id)
-                ON CONFLICT (device_id, start_time, owner_id) DO UPDATE SET
-                    sport_type = EXCLUDED.sport_type,
-                    end_time = EXCLUDED.end_time,
-                    duration_ms = EXCLUDED.duration_ms,
-                    avg_hr = EXCLUDED.avg_hr,
-                    max_hr = EXCLUDED.max_hr,
-                    calories = EXCLUDED.calories,
-                    distance_m = EXCLUDED.distance_m,
-                    source_id = COALESCE(EXCLUDED.source_id, workouts.source_id)
-                RETURNING (xmax = 0) AS inserted_new
-            """,
+            "workouts",
+            [
+                "device_id",
+                "sport_type",
+                "start_time",
+                "end_time",
+                "duration_ms",
+                "avg_hr",
+                "max_hr",
+                "calories",
+                "distance_m",
+                "source_id",
+                "owner_id",
+            ],
+            [
+                "device_id",
+                "sport_type",
+                "start_time",
+                "end_time",
+                "duration_ms",
+                "avg_hr",
+                "max_hr",
+                "calories",
+                "distance_m",
+                "source_id",
+                "owner_id",
+            ],
             rows,
+            conflict_clause="(device_id, start_time, owner_id)",
+            update_set=(
+                "sport_type = EXCLUDED.sport_type, "
+                "end_time = EXCLUDED.end_time, "
+                "duration_ms = EXCLUDED.duration_ms, "
+                "avg_hr = EXCLUDED.avg_hr, "
+                "max_hr = EXCLUDED.max_hr, "
+                "calories = EXCLUDED.calories, "
+                "distance_m = EXCLUDED.distance_m, "
+                "source_id = COALESCE(EXCLUDED.source_id, workouts.source_id)"
+            ),
         )
         for inserted_new in flags:
             result = result.with_insert_flag(inserted_new)
@@ -842,16 +911,17 @@ async def _upsert_sleep_stages(
         )
     if not rows:
         return
+    # PERFORMANCE-001: one multi-row INSERT for the whole sleep session's stages
+    # instead of one execute() per stage row. No RETURNING needed here — we
+    # only care that the writes happened; the caller counts via rowcount.
     await _execute_batch_insert_with_flags(
         session,
-        """
-            INSERT INTO sleep_stages
-                (time, device_id, session_id, stage, duration_ms, owner_id)
-            ON CONFLICT (time, device_id, stage, owner_id) DO UPDATE SET
-                session_id = EXCLUDED.session_id,
-                duration_ms = EXCLUDED.duration_ms
-        """,
+        "sleep_stages",
+        ["time", "device_id", "session_id", "stage", "duration_ms", "owner_id"],
+        ["time", "device_id", "session_id", "stage", "duration_ms", "owner_id"],
         rows,
+        conflict_clause="(time, device_id, stage, owner_id)",
+        update_set="session_id = EXCLUDED.session_id, duration_ms = EXCLUDED.duration_ms",
     )
 
 

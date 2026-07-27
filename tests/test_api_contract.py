@@ -409,7 +409,7 @@ async def test_non_summary_daily_metrics_remain_quantity_samples(metric):
     insert_params = session.insert_params_for("quantity_samples")
     assert result["records"] == 1
     assert insert_params is not None
-    assert insert_params["metric"] == metric
+    assert insert_params["metric_name"] == metric
     assert session.insert_params_for("daily_activity") is None
 
 
@@ -440,7 +440,7 @@ async def test_blood_pressure_correlation_preserves_inner_metric_names():
 
     inserts = session.all_insert_params_for("quantity_samples")
     assert result["records"] == 2
-    assert [row["metric"] for row in inserts] == [
+    assert [row["metric_name"] for row in inserts] == [
         "blood_pressure_systolic",
         "blood_pressure_diastolic",
     ]
