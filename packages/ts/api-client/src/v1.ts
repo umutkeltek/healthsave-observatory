@@ -894,6 +894,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/settings/analytical-time": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Analytical Time */
+        get: operations["get_analytical_time_api_v2_settings_analytical_time_get"];
+        /** Update Analytical Time */
+        put: operations["update_analytical_time_api_v2_settings_analytical_time_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/setup/diagnostics": {
         parameters: {
             query?: never;
@@ -1121,6 +1139,22 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AnalyticalTimeView */
+        AnalyticalTimeView: {
+            /** Day Boundary */
+            day_boundary: string;
+            /** Day Boundary Minutes */
+            day_boundary_minutes: number;
+            /** Revision */
+            revision: number;
+            /**
+             * Sleep Day Assignment
+             * @default wake_time
+             */
+            sleep_day_assignment: string;
+            /** Time Zone */
+            time_zone: string;
+        };
         /** AnomaliesListResponse */
         AnomaliesListResponse: {
             /** Anomalies */
@@ -1725,6 +1759,13 @@ export interface components {
              * @default accepted
              */
             status: string;
+        };
+        /** UpdateAnalyticalTimeRequest */
+        UpdateAnalyticalTimeRequest: {
+            /** Day Boundary Minutes */
+            day_boundary_minutes: number;
+            /** Time Zone */
+            time_zone: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -3108,6 +3149,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_analytical_time_api_v2_settings_analytical_time_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticalTimeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_analytical_time_api_v2_settings_analytical_time_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAnalyticalTimeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticalTimeView"];
                 };
             };
             /** @description Validation Error */
