@@ -9,6 +9,12 @@ const nextConfig = {
   output: "standalone",
   devIndicators: false,
   allowedDevOrigins: ["127.0.0.1"],
+  // View Transitions: crossfade between page navigations so the shell (sidebar,
+  // topbar) stays stable and only the content pane morphs. Natively supported in
+  // Next.js 16.2+; browsers that don't support it fall back to full navigation.
+  experimental: {
+    viewTransition: true,
+  },
   turbopack: {
     root: appRoot,
   },

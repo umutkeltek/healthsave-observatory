@@ -149,6 +149,20 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
+/* ── View Transitions: stable shell / crossfade content ────────────────────
+   The sidebar and topbar are the persistent chrome — they stay put during
+   navigation. Only the content pane crossfades, matching the system-level
+   sheet push feel the design tokens call for (~280ms). Browsers that don't
+   support the View Transitions API ignore these rules entirely. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--dur-3);
+  animation-timing-function: var(--ease-io);
+}
+.sidebar { view-transition-name: sidebar; }
+.topbar { view-transition-name: topbar; }
+.content { view-transition-name: content-pane; }
+
 /* ── App shell ─────────────────────────────────────────────────────── */
 
 .app {
