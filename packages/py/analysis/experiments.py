@@ -31,6 +31,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
+from contracts.analytical_time import AnalyticalTime, analytical_day
 
 from .statistical import experiment_readiness as readiness
 from .statistical import experiments as stats
@@ -126,13 +127,32 @@ class ExperimentRunner:
         *,
         time_series: TimeSeriesQueryService | None = None,
         experiment_repository: ExperimentRepository | None = None,
+        analytical_time: AnalyticalTime | None = None,
     ) -> None:
         self.session_factory = session_factory
         self.time_series = time_series or _default_time_series()
         self.experiment_repository = experiment_repository or _default_experiment_repository()
+        self.analytical_time = analytical_time
+
+    async def _time_basis(self, session) -> AnalyticalTime:
+        if self.analytical_time is not None:
+            return self.analytical_time
+        from storage.timescale.observatory_settings import default_repository
+
+        settings = await default_repository.get(session)
+        return (
+            AnalyticalTime(settings.time_zone, settings.day_boundary_minutes)
+            if settings
+            else AnalyticalTime()
+        )
 
     async def _series(
-        self, session, metric_id: str, start: datetime, end: datetime
+        self,
+        session,
+        metric_id: str,
+        start: datetime,
+        end: datetime,
+        time_basis: AnalyticalTime,
     ) -> dict[date, float]:
         """``{day: daily_mean}`` for a metric over ``[start, end)`` via the time-series port."""
         rows = await self.time_series.query_series(
@@ -150,7 +170,7 @@ class ExperimentRunner:
             t = getattr(row, "t", None)
             if value is None or t is None:
                 continue
-            day = t.date() if isinstance(t, datetime) else t
+            day = analytical_day(t, time_basis) if isinstance(t, datetime) else t
             values_by_day.setdefault(day, []).append(float(value))
         return {day: statistics.fmean(values) for day, values in values_by_day.items()}
 
@@ -186,8 +206,13 @@ class ExperimentRunner:
         start_dt = end_dt - timedelta(days=lookback_days)
 
         async with self.session_factory() as session:
-            outcome = await self._series(session, experiment.outcome_metric_id, start_dt, end_dt)
-            lever = await self._series(session, experiment.lever_metric_id, start_dt, end_dt)
+            time_basis = await self._time_basis(session)
+            outcome = await self._series(
+                session, experiment.outcome_metric_id, start_dt, end_dt, time_basis
+            )
+            lever = await self._series(
+                session, experiment.lever_metric_id, start_dt, end_dt, time_basis
+            )
 
             pc = stats.analyze_median_split(outcome, lever)
             if pc.status != "ok":
@@ -210,6 +235,10 @@ class ExperimentRunner:
                     "outcome": _pc_dict(pc),
                     "lookback_days": lookback_days,
                     "method": "lever_median_split",
+                    "analytical_time": {
+                        "time_zone": time_basis.time_zone,
+                        "day_boundary": time_basis.boundary_label,
+                    },
                 },
             )
             if not persist:
@@ -238,8 +267,13 @@ class ExperimentRunner:
         end_dt = _midnight(min(window_end, effective_end))
 
         async with self.session_factory() as session:
-            outcome = await self._series(session, experiment.outcome_metric_id, start_dt, end_dt)
-            lever = await self._series(session, experiment.lever_metric_id, start_dt, end_dt)
+            time_basis = await self._time_basis(session)
+            outcome = await self._series(
+                session, experiment.outcome_metric_id, start_dt, end_dt, time_basis
+            )
+            lever = await self._series(
+                session, experiment.lever_metric_id, start_dt, end_dt, time_basis
+            )
 
             pc = stats.analyze_abab(outcome, calendar)
             adherence = stats.adherence_from_lever(lever, calendar)
@@ -262,6 +296,10 @@ class ExperimentRunner:
                     "window": {"start": window_start.isoformat(), "end": window_end.isoformat()},
                     "design": experiment.design,
                     "block_days": experiment.block_days,
+                    "analytical_time": {
+                        "time_zone": time_basis.time_zone,
+                        "day_boundary": time_basis.boundary_label,
+                    },
                 },
             )
             if not persist:
