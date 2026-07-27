@@ -9,7 +9,7 @@ function numberLabel(value: number): string {
   return Math.round(value).toLocaleString();
 }
 
-function Sparkline({ values }: { values: number[] }) {
+function Sparkline({ values, unit, label }: { values: number[]; unit?: string; label: string }) {
   if (values.length < 2) return null;
 
   const sorted = [...values].sort((a, b) => a - b);
@@ -41,7 +41,9 @@ function Sparkline({ values }: { values: number[] }) {
         cy={y(last)}
         r="3.5"
         vectorEffect="non-scaling-stroke"
-      />
+      >
+        <title>{`${numberLabel(last)}${unit ? ` ${unit}` : ""} · ${label}`}</title>
+      </circle>
     </svg>
   );
 }
@@ -107,7 +109,7 @@ export function MetricCard({
       </div>
 
       <div className="metric-chart-well">
-        <Sparkline values={values} />
+        <Sparkline values={values} unit={series.metric.canonical_unit ?? undefined} label={`latest of ${values.length} readings`} />
       </div>
 
       <div className="metric-foot">
