@@ -1273,6 +1273,9 @@ html {
 .col-7 {
   grid-column: span 7;
 }
+.col-6 {
+  grid-column: span 6;
+}
 .col-5 {
   grid-column: span 5;
 }
@@ -1285,6 +1288,7 @@ html {
   }
   .col-8,
   .col-7,
+  .col-6,
   .col-5,
   .col-4 {
     grid-column: 1 / -1;
@@ -2154,6 +2158,32 @@ table.prov {
 input.filter-select {
   background-image: none;
   padding-right: 12px;
+}
+
+/* ── Saved Explore panels on Today ──────────────────────────────────── */
+.explore-panel-card {
+  min-height: 120px;
+}
+
+.explore-panel-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.explore-panel-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.explore-panel-metric-name {
+  font-size: 11px;
+  color: var(--faint);
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .source-dist {
@@ -4817,6 +4847,9 @@ body {
   }
 
   .col-4,
+  .col-5,
+  .col-6,
+  .col-7,
   .col-8,
   .col-12 {
     grid-column: auto;

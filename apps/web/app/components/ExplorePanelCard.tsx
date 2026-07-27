@@ -58,7 +58,9 @@ export async function ExplorePanelCard({ id, label, encodedState }: Props) {
 
             return (
               <div key={`${pi}-${metricId}`} className="explore-panel-metric">
-                <span className="explore-panel-metric-name mono">{metricId}</span>
+                <span className="explore-panel-metric-name mono">
+                  {series?.metric?.display_name ?? metricId}
+                </span>
                 {numeric.length >= 3 ? (
                   <BaselineRibbon
                     values={numeric}
