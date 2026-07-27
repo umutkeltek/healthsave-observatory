@@ -197,7 +197,7 @@ async function EmptyToday({ state }: { state: "empty" | "unreachable" }) {
         <div className="hero-eyebrow">Welcome</div>
         <h2>Your private observatory is ready</h2>
         <p className="recovery-line" style={{ marginTop: 8 }}>
-          Connect HealthSave, explore demo data, then set one focus so Today knows what to highlight.
+          Sync Apple Health from the app, then explore your data across three surfaces.
         </p>
         <ol className="firstrun-steps">
           <li className="firstrun-step">
@@ -205,21 +205,32 @@ async function EmptyToday({ state }: { state: "empty" | "unreachable" }) {
             <div>
               <strong>Pair HealthSave app.</strong>
               <span className="firstrun-hint">
-                Open <strong>HealthSave - Settings - Server Sync</strong> on your phone and enter this server.
+                Open <strong>HealthSave → Settings → Server Sync</strong> on your phone and enter this server&apos;s URL.
               </span>
             </div>
           </li>
           <li className="firstrun-step">
             <span className="firstrun-n">2</span>
             <div>
-              <strong>See what changes look like.</strong>
+              <strong>Explore the three pillars.</strong>
               <span className="firstrun-hint">
-                <a href="/demo">Explore demo</a> with a 30-day recovery story.
+                <a href="/">Today</a> tracks recovery.{" "}
+                <a href="/sleep">Sleep</a> shows your nights.{" "}
+                <a href="/activity">Activity</a> measures daily strain.
               </span>
             </div>
           </li>
           <li className="firstrun-step">
             <span className="firstrun-n">3</span>
+            <div>
+              <strong>Try the demo.</strong>
+              <span className="firstrun-hint">
+                <a href="/demo">Explore demo</a> — a 30-day recovery story with real-looking data.
+              </span>
+            </div>
+          </li>
+          <li className="firstrun-step">
+            <span className="firstrun-n">4</span>
             <div>
               <strong>Set your focus.</strong>
               <span className="firstrun-hint">

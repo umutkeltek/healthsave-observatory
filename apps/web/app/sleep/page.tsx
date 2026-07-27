@@ -221,6 +221,35 @@ export default async function SleepPage() {
           </article>
         </section>
       )}
+
+      {/* How to read this */}
+      <section className="lead">
+        <article className="card">
+          <h2>How to read this</h2>
+          <div className="sleep-notes">
+            <div className="sleep-note">
+              <strong>Hypnogram.</strong> Each thin bar represents ~30 seconds of sleep. Colours match standard sleep stages:{" "}
+              <span style={{ color: "var(--sleep-deep)" }}>deep</span>,{" "}
+              <span style={{ color: "var(--sleep-core)" }}>core</span>,{" "}
+              <span style={{ color: "var(--sleep-rem)" }}>REM</span>, and{" "}
+              <span style={{ color: "var(--sleep-awake)" }}>awake</span>. A typical night cycles through these ~4–6 times.
+            </div>
+            <div className="sleep-note">
+              <strong>Consistency.</strong> A score from 0–100 that measures how regular your bedtime and wake time are.{" "}
+              80+ is excellent — you go to bed and wake up within ~30 minutes of the same time each night.{" "}
+              Below 50 means your schedule varies widely and your circadian rhythm may feel the shift.
+            </div>
+            <div className="sleep-note">
+              <strong>Sleep debt.</strong> The cumulative shortfall against an 8-hour target over the visible window.{" "}
+              Positive hours means you&apos;re behind — a few hours is normal after a short night, a double-digit debt deserves attention.
+            </div>
+            <div className="sleep-note">
+              <strong>Efficiency.</strong> Time asleep ÷ time in bed. 85%+ is typical for healthy adults.{" "}
+              Fragmented sleep (many awake segments) drives this number down.
+            </div>
+          </div>
+        </article>
+      </section>
     </div>
   );
 }

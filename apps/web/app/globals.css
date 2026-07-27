@@ -6954,3 +6954,23 @@ font-size: 17px;
     font-size: 28px;
   }
 }
+
+/* Shared metric-explanation card — compact prose notes on how to read a surface. */
+.sleep-notes,
+.activity-notes {
+  display: grid;
+  gap: 12px;
+}
+
+.sleep-note,
+.activity-note {
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.sleep-note strong,
+.activity-note strong {
+  color: var(--ink);
+  font-weight: 650;
+}
