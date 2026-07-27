@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   CHART_KINDS,
   EXPLORE_GRAINS,
+  EXPLORE_RANGE_LABELS,
   EXPLORE_RANGES,
   EXPLORE_STATS,
   encodeExploreState,
@@ -152,7 +153,7 @@ export function ExploreControls({ state, metrics }: { state: ExploreState; metri
         >
           {EXPLORE_RANGES.map((r) => (
             <option key={r} value={r}>
-              {r}
+              {EXPLORE_RANGE_LABELS[r]}
             </option>
           ))}
         </select>

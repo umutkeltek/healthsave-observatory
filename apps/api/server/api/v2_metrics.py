@@ -31,6 +31,10 @@ RANGE_WINDOWS: dict[str, timedelta] = {
     "30d": timedelta(days=30),
     "90d": timedelta(days=90),
     "1y": timedelta(days=365),
+    # ``all`` returns everything we have for the metric. A floor of 1970 is
+    # far enough for any health record; the upper bound stays ``now()`` so
+    # series endpoints don't accidentally include future rows from bad clocks.
+    "all": timedelta(days=365 * 50),
 }
 
 # One batch request replaces the dashboard's per-metric fan-out; the cap keeps

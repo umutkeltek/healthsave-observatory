@@ -101,15 +101,23 @@ export async function ExploreSections({ state }: { state: ExploreState }) {
   const neededIds = [...new Set(state.panels.flatMap((p) => p.metrics))];
   const seriesEntries = await Promise.all(
     neededIds.map(async (id) => {
-      const pts = (await safeSeries(id, range))?.points ?? [];
-      return [id, filterWindow(pts, state.from, state.to)] as const;
+      const series = await safeSeries(id, range);
+      const pts = series?.points ?? [];
+      return [id, { points: filterWindow(pts, state.from, state.to), series }] as const;
     }),
   );
   const pointsById = new Map(seriesEntries);
 
+  // Honest data-density hint: counts the non-null samples across every panel
+  // and reports the actual span of the data we have. "All time" hides the
+  // calendar interval; "30d" shows it. Helps users see why a sparse-looking
+  // chart is actually their full history.
+  const density = computeDensity([...pointsById.values()]);
+
   return (
     <>
       <ExploreControls state={state} metrics={metricOpts} />
+      {density && <DataDensityHint density={density} range={range} />}
       {state.panels.length === 0 ? (
         <p className="empty">No panels yet — add a signal above to start building your view.</p>
       ) : (
