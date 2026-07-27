@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
+import { MomentForm } from "../components/MomentForm";
 import { TimelineView } from "../components/TimelineView";
 import { CardSkeleton } from "../components/Skeletons";
 import { safeFindings, safeMoments } from "../lib/load";
@@ -17,7 +18,14 @@ export default function TimelinePage() {
   return (
     <>
       <Suspense fallback={<CardSkeleton />}>
-        <TimelineSection />
+        <section className="lead">
+          <MomentForm />
+        </section>
+      </Suspense>
+      <Suspense fallback={<CardSkeleton />}>
+        <section className="lead">
+          <TimelineSection />
+        </section>
       </Suspense>
     </>
   );
