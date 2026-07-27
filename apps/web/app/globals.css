@@ -6836,6 +6836,12 @@ font-size: 17px;
   min-height: 150px;
 }
 
+/* Walking HR is a canary — a sudden rise can signal overtraining or illness.
+   The subtle amber border distinguishes it from the neutral signal cards. */
+.activity-tone-warn {
+  border-left: 3px solid var(--warn);
+}
+
 .activity-card-head {
   display: flex;
   align-items: center;

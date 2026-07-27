@@ -63,7 +63,7 @@ async function StrainCards() {
         const fresh = lastObs ? agoLabel(lastObs.t) : "no data";
 
         return (
-          <article key={card.metricId} className={`card activity-card ${card.tone ?? ""}`}>
+          <article key={card.metricId} className={`card activity-card${card.tone === "warn" ? " activity-tone-warn" : ""}`}>
             <div className="activity-card-head">
               <span className="activity-card-icon" aria-hidden>{card.icon}</span>
               <h2>{card.title}</h2>
@@ -98,6 +98,10 @@ async function StrainCards() {
 }
 
 async function StepsTimeline() {
+  // Fetch steps at 30d directly. StrainCards requests steps at 7d via
+  // safeSeriesMany — that's a separate purpose (grid card) and different
+  // cache key. The process-level SWR cache means the upstream API only
+  // pays once for the overlapping window; no duplicate network cost.
   const series = await safeSeries("activity.steps", "30d");
   if (!series || series.points.length < 3) return null;
   const values = series.points
@@ -125,19 +129,19 @@ async function StepsTimeline() {
 }
 
 async function WeeklyStrain() {
-  const [hrSeries, walkHrSeries] = await Promise.all([
-    safeSeries("vital.heart_rate", "30d"),
+  const [rhrSeries, walkHrSeries] = await Promise.all([
+    safeSeries("vital.resting_heart_rate", "30d"),
     safeSeries("vital.walking_heart_rate_average", "30d"),
   ]);
 
-  const hrVals = hrSeries?.points.filter((p): p is typeof p & { value: number } => p.value !== null) ?? [];
+  const rhrVals = rhrSeries?.points.filter((p): p is typeof p & { value: number } => p.value !== null) ?? [];
   const walkHrVals = walkHrSeries?.points.filter((p): p is typeof p & { value: number } => p.value !== null) ?? [];
 
-  const hrAvg = hrVals.length > 0 ? hrVals.reduce((a, p) => a + p.value, 0) / hrVals.length : null;
+  const rhrAvg = rhrVals.length > 0 ? rhrVals.reduce((a, p) => a + p.value, 0) / rhrVals.length : null;
   const walkAvg = walkHrVals.length > 0 ? walkHrVals.reduce((a, p) => a + p.value, 0) / walkHrVals.length : null;
 
-  // Simple strain proxy: walking HR vs resting delta. Higher = more strain.
-  const strain = hrAvg && walkAvg ? Math.round(((walkAvg - hrAvg) / hrAvg) * 100) : null;
+  // Simple strain proxy: walking HR ÷ resting HR delta. Wider gap = higher strain.
+  const strain = rhrAvg && walkAvg ? Math.round(((walkAvg - rhrAvg) / rhrAvg) * 100) : null;
 
   return (
     <section className="lead">
@@ -156,7 +160,7 @@ async function WeeklyStrain() {
           <p className="empty">Not enough heart rate data for a strain estimate.</p>
         )}
         <div className="activity-strain-meta mono">
-          {hrAvg ? <span>Resting avg: {Math.round(hrAvg)} bpm</span> : null}
+          {rhrAvg ? <span>Resting avg: {Math.round(rhrAvg)} bpm</span> : null}
           {walkAvg ? <span>Walking avg: {Math.round(walkAvg)} bpm</span> : null}
         </div>
       </article>

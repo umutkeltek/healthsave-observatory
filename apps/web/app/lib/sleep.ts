@@ -112,24 +112,40 @@ export const STAGE_LABEL: Record<string, string> = {
   deep: "Deep",
 };
 
-// Score sleep consistency — lower is more regular. Returns a 0-100 score
-// where 100 = bed/wake within 30 min every night.
+// Score sleep consistency — lower variance = higher score. Returns 0-100 where
+// 100 = bed/wake within ~30 min every night. Uses circular mean for clock times
+// so a schedule at 23:00 and 01:00 is correctly measured as 2h apart, not 22h.
+// Sample std (N-1) since we only require 3 nights of data.
 export function consistencyScore(trend: SleepTrend): number | null {
   if (trend.bedtimes.length < 3) return null;
-  const bedMins = trend.bedtimes.map((t) => {
-    const d = new Date(t);
+
+  const toMinutes = (iso: string): number => {
+    const d = new Date(iso);
     return d.getUTCHours() * 60 + d.getUTCMinutes();
-  });
-  const wakeMins = trend.waketimes.map((t) => {
-    const d = new Date(t);
-    return d.getUTCHours() * 60 + d.getUTCMinutes();
-  });
-  const std = (arr: number[], mean: number) =>
-    Math.sqrt(arr.reduce((s, v) => s + (v - mean) ** 2, 0) / arr.length);
-  const bedMean = bedMins.reduce((a, b) => a + b) / bedMins.length;
-  const wakeMean = wakeMins.reduce((a, b) => a + b) / wakeMins.length;
-  const bedStd = std(bedMins, bedMean);
-  const wakeStd = std(wakeMins, wakeMean);
+  };
+
+  const bedMins = trend.bedtimes.map(toMinutes);
+  const wakeMins = trend.waketimes.map(toMinutes);
+  const n = bedMins.length;
+
+  // Circular std — treat minutes as angles on a 24h (1440 min) circle.
+  const circularStd = (mins: number[]): number => {
+    const angles = mins.map((m) => (m / 1440) * 2 * Math.PI);
+    const sinSum = angles.reduce((s, a) => s + Math.sin(a), 0);
+    const cosSum = angles.reduce((s, a) => s + Math.cos(a), 0);
+    const R = Math.sqrt(sinSum * sinSum + cosSum * cosSum) / n;
+    // R = 1 (all same angle) → std = 0; R → 0 → std blows up; 1-R maps 0→1 sensibly.
+    // Convert radians back to minutes: sqrt(-2 * ln(R)) * (1440 / (2π))
+    // For small variance, 1-R ≈ variance/2, so std ≈ sqrt(2*(1-R)) * 1440/(2π)
+    const clampR = Math.min(1, Math.max(0, R));
+    const angularStd = clampR < 0.999
+      ? Math.sqrt(-2 * Math.log(clampR)) * (1440 / (2 * Math.PI))
+      : 0;
+    return Math.min(angularStd, 720); // cap at 12h
+  };
+
+  const bedStd = circularStd(bedMins);
+  const wakeStd = circularStd(wakeMins);
   const avgStd = (bedStd + wakeStd) / 2;
   // 0 min variance → 100, 180 min variance → 0
   return Math.max(0, Math.round(100 - (avgStd / 180) * 100));
@@ -140,7 +156,7 @@ export function sleepDebt(trend: SleepTrend): number | null {
   if (trend.durations.length === 0) return null;
   const targetMin = 480; // 8 hours
   const debt = trend.durations.reduce((sum, d) => sum + (targetMin - d), 0);
-  return Math.round(debt / 60); // hours
+  return Math.max(0, Math.round(debt / 60)); // hours; floors at 0
 }
 
 // Compute last night's bedtime/wake time change vs. average of prior nights.
