@@ -14,6 +14,8 @@ import {
   type ApplyIntelligencePayload,
   type ConsentPayload,
   createExperiment,
+  type CreateMomentPayload,
+  createMoment,
   type DetectCandidate,
   fetchDetectLocal,
   postConsent,
@@ -138,6 +140,21 @@ export async function updateAnalyticalTimeAction(
     return { ok: true };
   } catch (error) {
     return failure(error, "Could not save analytical time settings.");
+  }
+}
+
+// ── Moment actions ──────────────────────────────────────────────────
+
+export async function createMomentAction(
+  payload: CreateMomentPayload,
+): Promise<ActionResult> {
+  try {
+    await createMoment(payload);
+    revalidatePath("/timeline");
+    revalidatePath("/");
+    return { ok: true };
+  } catch (error) {
+    return failure(error, "Could not add this moment.");
   }
 }
 

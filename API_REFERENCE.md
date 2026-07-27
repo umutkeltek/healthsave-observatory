@@ -157,6 +157,22 @@ Observatory person-local analytical calendar: time zone and day-start boundary f
 { "time_zone": "Europe/Istanbul", "day_boundary_minutes": 240 }
 ```
 
+### `GET /api/v2/moments` · `POST /api/v2/moments` — keyed
+Personal-context moments: illness, travel, lifestyle events that may explain or confound physiological changes. Host-local — never eligible for egress.
+```json
+// GET response
+{ "moments": [{ "id": 1, "kind": "illness", "grade": "moderate", "title": "Mild cold",
+  "note": "Started Monday evening", "start_at": "2026-07-20T18:00:00Z",
+  "end_at": "2026-07-22T12:00:00Z", "created_at": "2026-07-20T18:05:00Z" }],
+  "count": 1 }
+// POST/PUT body
+{ "kind": "illness", "title": "Mild cold", "start_at": "2026-07-20T18:00:00Z",
+  "end_at": "2026-07-22T12:00:00Z", "grade": "moderate", "note": "Started Monday evening" }
+```
+
+### `PUT /api/v2/moments/{id}` · `DELETE /api/v2/moments/{id}` — keyed
+Update or delete one personal-context moment by id.
+
 ### `GET /api/v2/intelligence` · `PUT /api/v2/intelligence` — keyed
 The LLM-narrator ("Intelligence") settings. `GET` returns the current posture with **no secrets** (only `key_last4`); `managed_by_env` is true when deploy-time env config is still the effective source. `PUT` applies `mode` (off/local/cloud) + the primary provider/model (+ optional write-only `api_key`) + the fallback chain. The server classifies each route's trust zone; `PUT` does **not** grant cloud egress (see `/consent`).
 ```json

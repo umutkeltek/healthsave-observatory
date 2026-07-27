@@ -664,6 +664,8 @@ Example response:
 | `/api/v2/intelligence/test-connection` | POST | key | SSRF-guarded provider probe (one token, no health data) |
 | `/api/v2/intelligence/detect-local` | GET | key | probe known local Ollama endpoints (sidecar / host) for easy local-AI setup |
 | `/api/v2/settings/analytical-time` | GET, PUT | key | person-local time zone and physiological-day boundary for reproducible calendar analyses |
+| `/api/v2/moments` | GET, POST | key | list / create personal-context moments (illness, travel, lifestyle events) |
+| `/api/v2/moments/{moment_id}` | PUT, DELETE | key | update / delete one moment |
 | `/api/v2/export/metrics` | GET | key | list exportable metrics with counts + date ranges |
 | `/api/v2/export` | GET | key | export one metric (or `all`) as JSON or CSV |
 | `/api/v2/sources/whoop/webhook` | POST | HMAC | Whoop push webhook; authenticity via `X-WHOOP-Signature` |

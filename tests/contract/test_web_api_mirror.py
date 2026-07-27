@@ -61,8 +61,9 @@ TYPE_TO_MODULES: dict[str, list[str]] = {
     "IntelligenceView": ["server.api.v2_intelligence"],
     "DetectLocalResult": ["server.api.v2_intelligence"],
     "TestConnectionResult": ["server.api.v2_intelligence"],
-    "SourcesResponse": ["server.api.v2_identity"],
-    "StreamsResponse": ["server.api.v2_identity"],
+    "Moment": ["server.api.v2_moments"],
+    "MomentListResponse": ["server.api.v2_moments"],
+    "SourcesResponse": ["server.api.v2_identity"],    "StreamsResponse": ["server.api.v2_identity"],
     "DevicesResponse": ["server.api.v2_identity"],
 }
 

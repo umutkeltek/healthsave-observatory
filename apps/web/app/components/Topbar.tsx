@@ -10,6 +10,7 @@ const TITLES: Record<string, { title: string; sub: string }> = {
   "/": { title: "Today", sub: "Recovery, recent changes, and signals worth attention." },
   "/demo": { title: "Today", sub: "A 30-day story using local demo data." },
   "/experiments": { title: "Experiments", sub: "Try a change, then measure whether it helped." },
+  "/timeline": { title: "Timeline", sub: "Your health story at a glance — moments, changes, and decisions." },
   "/findings": { title: "Findings", sub: "Important changes first; calculations one layer deeper." },
   "/sources": { title: "Sources", sub: "Where each number came from and how fresh it is." },
   "/data": { title: "Data", sub: "Metrics, coverage, readiness, and export." },

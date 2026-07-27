@@ -154,6 +154,31 @@ async function putJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEO
   return res.json() as Promise<T>;
 }
 
+// Server-side DELETE. The key never reaches the browser.
+async function deleteJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (API_KEY) headers["X-API-Key"] = API_KEY;
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "DELETE",
+    cache: "no-store",
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) {
+    let detail = `${path} -> ${res.status}`;
+    try {
+      const payload = (await res.json()) as { detail?: unknown };
+      if (payload?.detail) {
+        detail = typeof payload.detail === "string" ? payload.detail : JSON.stringify(payload.detail);
+      }
+    } catch {
+      // non-JSON error body - keep the status line
+    }
+    throw new Error(detail);
+  }
+  return res.json() as Promise<T>;
+}
+
 export function fetchMetrics(): Promise<MetricSummary[]> {
   return getJson<MetricSummary[]>("/api/v2/metrics");
 }
@@ -271,6 +296,59 @@ export function updateAnalyticalTime(
   payload: UpdateAnalyticalTimePayload,
 ): Promise<AnalyticalTimeSettings> {
   return putJson<AnalyticalTimeSettings>("/api/v2/settings/analytical-time", payload);
+}
+
+export type MomentKind =
+  | "illness"
+  | "alcohol"
+  | "late_meal"
+  | "travel"
+  | "medication_change"
+  | "supplement_change"
+  | "hard_training"
+  | "stress"
+  | "caffeine"
+  | "injury"
+  | "menstrual"
+  | "custom";
+
+export type Moment = {
+  id: number;
+  kind: MomentKind;
+  grade: "mild" | "moderate" | "severe" | null;
+  title: string;
+  note: string | null;
+  start_at: string;
+  end_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type MomentListResponse = { moments: Moment[]; count: number };
+
+export type CreateMomentPayload = {
+  kind: string;
+  title: string;
+  start_at: string;
+  end_at?: string | null;
+  grade?: string | null;
+  note?: string | null;
+};
+
+export function fetchMoments(limit = 50): Promise<MomentListResponse> {
+  return getJson<MomentListResponse>(`/api/v2/moments?limit=${limit}`);
+}
+
+export function createMoment(payload: CreateMomentPayload): Promise<Moment> {
+  return postJson<Moment>("/api/v2/moments", payload);
+}
+
+export function updateMoment(id: number, payload: CreateMomentPayload): Promise<Moment> {
+  return putJson<Moment>(`/api/v2/moments/${id}`, payload);
+}
+
+export function deleteMoment(id: number): Promise<{ ok: boolean }> {
+  return deleteJson<{ ok: boolean }>(`/api/v2/moments/${id}`);
 }
 
 // Data-readiness - Insight Action Loop card #1. Mirrors server/api/v2_readiness.py.
