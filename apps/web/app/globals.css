@@ -452,7 +452,7 @@ a {
     width: 240px;
     flex-basis: 240px;
     transform: translateX(-100%);
-    transition: transform 0.22s ease;
+    transition: transform var(--dur-2) var(--ease-out);
   }
   .app.nav-open .sidebar {
     transform: translateX(0);
@@ -466,7 +466,7 @@ a {
     background: rgba(0, 0, 0, 0.5);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.22s ease;
+    transition: opacity var(--dur-1) var(--ease-io);
   }
   .app.nav-open .nav-scrim {
     opacity: 1;
@@ -3951,6 +3951,20 @@ input.filter-select {
   letter-spacing: -0.01em;
   text-wrap: balance;
 }
+
+/* Connector — a thin accent bar bridges the claim to its proof chips, so
+   the evidence row reads as belonging to the finding above, not as a
+   separate badge strip. */
+.fc-claim + .fc-fig,
+.fc-claim + .fc-nofig {
+  margin-top: 14px;
+}
+
+.fc-claim + .fc-chips {
+  margin-top: 4px;
+  padding-left: 10px;
+  border-left: 2px solid var(--line-glow);
+}
 .fc-fig {
   margin: 2px 0;
 }
@@ -5404,6 +5418,12 @@ body {
   background: color-mix(in srgb, var(--surface) 88%, transparent);
   border-color: var(--line);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.48) inset;
+}
+
+.topbar-search:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 .topbar-health {
