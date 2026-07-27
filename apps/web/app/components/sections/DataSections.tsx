@@ -28,8 +28,9 @@ import {
   safeSeries,
   safeStreams,
 } from "../../lib/load";
+import { rangeLabel } from "../../lib/ranges";
 
-export const RANGES = ["24h", "7d", "30d", "90d", "1y"];
+export const RANGES = ["24h", "7d", "30d", "90d", "1y", "all"];
 // N+1 guard: never fetch more than this many series in one render. The default
 // (unfiltered) grid uses the smaller ceiling; an explicit category filter may
 // show a few more, but stays bounded.
@@ -186,7 +187,7 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
         <div className="section-label">
           {metrics === null
             ? "Metrics"
-            : `${visible.length} metric${visible.length === 1 ? "" : "s"} · ${range}${sourceSel ? ` · ${sourceSel}` : ""}${deviceSel ? ` · ${streamLabels.get(deviceSel) ?? deviceSel}` : ""}`}
+            : `${visible.length} metric${visible.length === 1 ? "" : "s"} · ${rangeLabel(range)}${sourceSel ? ` · ${sourceSel}` : ""}${deviceSel ? ` · ${streamLabels.get(deviceSel) ?? deviceSel}` : ""}`}
         </div>
       )}
       <section className="grid">

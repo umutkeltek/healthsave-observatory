@@ -20,7 +20,7 @@ import type { Correlation, MetricSeries, MetricSummary } from "../../lib/api";
 import { DEMO_CORRELATIONS, DEMO_RELATE_METRICS, demoRelatedPair } from "../../lib/demoSeries";
 import { agoLabel, safeAnalyticalTime, safeCorrelations, safeMetrics, safeSeries } from "../../lib/load";
 
-export const REL_RANGES = ["30d", "90d", "1y"];
+export const REL_RANGES = ["30d", "90d", "1y", "all"];
 
 // Display name from the catalog, else a prettified metric-id tail (the
 // /compare fallback idiom) - never a raw dotted id in running copy.
