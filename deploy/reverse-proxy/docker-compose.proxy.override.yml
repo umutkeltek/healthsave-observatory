@@ -23,12 +23,14 @@ services:
       - api
     volumes:
       - ./deploy/reverse-proxy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      # TLS (optional): mount your certs here and uncomment the :443 block in
-      # nginx.conf + the 443 port mapping below.
-      # - ./deploy/reverse-proxy/certs:/etc/nginx/certs:ro
+      # TLS: the cert directory outside the project tree. ``deploy/remote-vm/deploy.sh``
+      # materialises a self-signed cert on the first ``make up-proxy`` (see
+      # deploy/reverse-proxy/README.md) and ops can swap to a real CA-issued
+      # pair at any time without touching this file.
+      - /srv/localappdata/health-data-hub/certs:/etc/nginx/certs:ro
     ports:
       - "${PROXY_HTTP_PORT:-80}:80"
-      # - "${PROXY_HTTPS_PORT:-443}:443"
+      - "${PROXY_HTTPS_PORT:-443}:443"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]
       interval: 30s
