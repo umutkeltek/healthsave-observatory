@@ -106,6 +106,75 @@ async def _execute_insert_with_result(
     return _inserted_new_flag(result)
 
 
+async def _execute_batch_insert_with_flags(
+    session: AsyncSession,
+    sql_prefix: str,
+    rows: list[dict],
+    flag_column: str = "inserted_new",
+) -> list[bool | None]:
+    """PERFORMANCE-001: single-round-trip upsert of N rows; returns per-row flags.
+
+    Single-row batches keep the named-param contract (``{column: value}``)
+    so existing tests that inspect ``params['source_id']`` continue to work;
+    larger batches bind positionally as ``:column_<index>``. RETURNING flags
+    are returned in input order, preserving the per-row
+    ``inserted_new``/``deduped_existing`` accounting.
+
+    The caller supplies ``sql_prefix`` up to (but not including) ``VALUES``,
+    e.g. ``"INSERT INTO heart_rate (time, device_id, value) ON CONFLICT ... RETURNING (xmax = 0) AS inserted_new"``.
+    """
+    if not rows:
+        return []
+    columns = list(rows[0].keys())
+
+    if len(rows) == 1:
+        # Named-param path: preserves the original single-row contract used
+        # by callers/tests that inspect bound parameters.
+        sql = f"{sql_prefix} VALUES ({', '.join(':' + col for col in columns)})"
+        result = await session.execute(text(sql), rows[0])
+        mappings = getattr(result, "mappings", None)
+        if mappings is None:
+            return [None]
+        row = mappings().first()
+        if row is None:
+            return [None]
+        value = row.get(flag_column) if hasattr(row, "get") else None
+        return [None if value is None else bool(value)]
+
+    # Multi-row batched path: positional binds ``:column_<index>``.
+    tuples = ", ".join(
+        "(" + ", ".join(f":{col}_{i}" for col in columns) + ")" for i in range(len(rows))
+    )
+    sql = f"{sql_prefix} VALUES {tuples}"
+    bound: dict[str, object] = {}
+    for i, row in enumerate(rows):
+        for col in columns:
+            bound[f"{col}_{i}"] = row[col]
+    result = await session.execute(text(sql), bound)
+    mappings = getattr(result, "mappings", None)
+    flags: list[bool | None] = []
+    if mappings is None:
+        flags = [None] * len(rows)
+    else:
+        rows_obj = mappings()
+        if hasattr(rows_obj, "all"):
+            all_rows = rows_obj.all()
+            for row in all_rows:
+                value = row.get(flag_column) if hasattr(row, "get") else None
+                flags.append(None if value is None else bool(value))
+        else:
+            for _ in range(len(rows)):
+                row = rows_obj.first()
+                if row is None:
+                    flags.append(None)
+                    continue
+                value = row.get(flag_column) if hasattr(row, "get") else None
+                flags.append(None if value is None else bool(value))
+    while len(flags) < len(rows):
+        flags.append(None)
+    return flags[: len(rows)]
+
+
 # ──────────────────────────────────────────────────────────────────
 #  Devices + raw-payload audit log
 # ──────────────────────────────────────────────────────────────────
@@ -237,19 +306,20 @@ async def _ingest_dedicated(
 
     conflict_sql = ", ".join(conflict_cols)
     col_names = ", ".join(rows[0].keys())
-    placeholders = ", ".join(f":{k}" for k in rows[0])
     update_set = ", ".join(f"{c} = EXCLUDED.{c}" for c in rows[0] if c not in conflict_cols)
 
-    sql = f"""
-        INSERT INTO {spec["table"]} ({col_names})
-        VALUES ({placeholders})
-        ON CONFLICT ({conflict_sql}) DO UPDATE SET {update_set}
-        RETURNING (xmax = 0) AS inserted_new
-    """
+    # PERFORMANCE-001: single multi-row VALUES for the whole batch — N rows in
+    # one round-trip instead of N. RETURNING preserves order with parameter-
+    # stable binding, so per-row inserted_new flags stay accurate.
+    sql_prefix = (
+        f"INSERT INTO {spec['table']} ({col_names}) "
+        f"ON CONFLICT ({conflict_sql}) DO UPDATE SET {update_set} "
+        "RETURNING (xmax = 0) AS inserted_new"
+    )
+    flags = await _execute_batch_insert_with_flags(session, sql_prefix, rows)
 
     result = IngestWriteResult()
-    for row in rows:
-        inserted_new = await _execute_insert_with_result(session, sql, row)
+    for inserted_new in flags:
         result = result.with_insert_flag(inserted_new)
 
     return result.with_counts(rejected=rejected_count, deduped_in_batch=dedup_count)
@@ -266,6 +336,7 @@ async def _ingest_generic(
     """Insert into the catch-all quantity_samples table."""
     result = IngestWriteResult()
     rejected_count = 0
+    rows: list[dict] = []
     for s in samples:
         t = parse_ts(s.get("date"))
         v = to_float(s.get("qty"))
@@ -274,16 +345,7 @@ async def _ingest_generic(
             _bump_rejected(metric, "missing_or_unparseable_date_or_qty")
             continue
         sample_metric = s.get("metric") if isinstance(s.get("metric"), str) else metric
-        inserted_new = await _execute_insert_with_result(
-            session,
-            """
-                INSERT INTO quantity_samples
-                    (time, device_id, metric_name, value, unit, source_id, owner_id)
-                VALUES (:time, :device_id, :metric, :value, :unit, :source, :owner_id)
-                ON CONFLICT (time, device_id, metric_name, owner_id) DO UPDATE
-                SET value = EXCLUDED.value, unit = EXCLUDED.unit
-                RETURNING (xmax = 0) AS inserted_new
-            """,
+        rows.append(
             {
                 "time": t,
                 "device_id": device_id,
@@ -292,9 +354,25 @@ async def _ingest_generic(
                 "unit": s.get("unit", ""),
                 "source": s.get("source", ""),
                 "owner_id": str(owner_id),
-            },
+            }
         )
-        result = result.with_insert_flag(inserted_new)
+
+    if rows:
+        # PERFORMANCE-001: single multi-row VALUES for the whole batch.
+        flags = await _execute_batch_insert_with_flags(
+            session,
+            """
+                INSERT INTO quantity_samples
+                    (time, device_id, metric_name, value, unit, source_id, owner_id)
+                ON CONFLICT (time, device_id, metric_name, owner_id) DO UPDATE
+                SET value = EXCLUDED.value, unit = EXCLUDED.unit
+                RETURNING (xmax = 0) AS inserted_new
+            """,
+            rows,
+        )
+        for inserted_new in flags:
+            result = result.with_insert_flag(inserted_new)
+
     return result.with_counts(rejected=rejected_count)
 
 
@@ -317,6 +395,7 @@ async def _ingest_ecg(
     # them honestly as rejected instead of inflating an aggregate skip number.
     result = IngestWriteResult()
     rejected_count = 0
+    rows: list[dict] = []
     for sample in samples:
         start = parse_ts(sample.get("start"))
         average_heart_rate = to_float(sample.get("averageHeartRate"))
@@ -324,16 +403,7 @@ async def _ingest_ecg(
             rejected_count += 1
             _bump_rejected("ecg", "missing_start_or_average_hr")
             continue
-        inserted_new = await _execute_insert_with_result(
-            session,
-            """
-                INSERT INTO quantity_samples
-                    (time, device_id, metric_name, value, unit, source_id, owner_id)
-                VALUES (:time, :device_id, :metric, :value, :unit, :source, :owner_id)
-                ON CONFLICT (time, device_id, metric_name, owner_id) DO UPDATE
-                SET value = EXCLUDED.value, unit = EXCLUDED.unit
-                RETURNING (xmax = 0) AS inserted_new
-            """,
+        rows.append(
             {
                 "time": start,
                 "device_id": device_id,
@@ -342,9 +412,25 @@ async def _ingest_ecg(
                 "unit": "bpm",
                 "source": _sample_source(sample),
                 "owner_id": str(owner_id),
-            },
+            }
         )
-        result = result.with_insert_flag(inserted_new)
+
+    if rows:
+        # PERFORMANCE-001: single multi-row VALUES for the whole batch.
+        flags = await _execute_batch_insert_with_flags(
+            session,
+            """
+                INSERT INTO quantity_samples
+                    (time, device_id, metric_name, value, unit, source_id, owner_id)
+                ON CONFLICT (time, device_id, metric_name, owner_id) DO UPDATE
+                SET value = EXCLUDED.value, unit = EXCLUDED.unit
+                RETURNING (xmax = 0) AS inserted_new
+            """,
+            rows,
+        )
+        for inserted_new in flags:
+            result = result.with_insert_flag(inserted_new)
+
     return result.with_counts(rejected=rejected_count)
 
 
@@ -366,6 +452,7 @@ async def _ingest_medication_dose_events(
         "not_logged",
         "unknown",
     }
+    rows: list[dict] = []
     for s in samples:
         t = parse_ts(s.get("date"))
         status = s.get("status") or s.get("medication_status")
@@ -380,36 +467,7 @@ async def _ingest_medication_dose_events(
             rejected_count += 1
             _bump_rejected("medication_dose_event", "missing_or_invalid_time_status_or_metric")
             continue
-
-        inserted_new = await _execute_insert_with_result(
-            session,
-            """
-                INSERT INTO medication_dose_events
-                    (
-                        time, scheduled_time, device_id, medication_metric,
-                        medication_name, status, scheduled_dose_quantity,
-                        dose_quantity, unit, source_id, medication_concept_id,
-                        owner_id
-                    )
-                VALUES
-                    (
-                        :time, :scheduled_time, :device_id, :medication_metric,
-                        :medication_name, :status, :scheduled_dose_quantity,
-                        :dose_quantity, :unit, :source, :medication_concept_id,
-                        :owner_id
-                    )
-                ON CONFLICT (time, device_id, medication_metric, owner_id) DO UPDATE
-                SET
-                    scheduled_time = EXCLUDED.scheduled_time,
-                    medication_name = EXCLUDED.medication_name,
-                    status = EXCLUDED.status,
-                    scheduled_dose_quantity = EXCLUDED.scheduled_dose_quantity,
-                    dose_quantity = EXCLUDED.dose_quantity,
-                    unit = EXCLUDED.unit,
-                    source_id = EXCLUDED.source_id,
-                    medication_concept_id = EXCLUDED.medication_concept_id
-                RETURNING (xmax = 0) AS inserted_new
-            """,
+        rows.append(
             {
                 "time": t,
                 "scheduled_time": parse_ts(s.get("scheduled_date")),
@@ -423,9 +481,38 @@ async def _ingest_medication_dose_events(
                 "source": s.get("source", ""),
                 "medication_concept_id": s.get("medication_concept_id", ""),
                 "owner_id": str(owner_id),
-            },
+            }
         )
-        result = result.with_insert_flag(inserted_new)
+
+    if rows:
+        # PERFORMANCE-001: single multi-row VALUES for the whole batch.
+        flags = await _execute_batch_insert_with_flags(
+            session,
+            """
+                INSERT INTO medication_dose_events
+                    (
+                        time, scheduled_time, device_id, medication_metric,
+                        medication_name, status, scheduled_dose_quantity,
+                        dose_quantity, unit, source_id, medication_concept_id,
+                        owner_id
+                    )
+                ON CONFLICT (time, device_id, medication_metric, owner_id) DO UPDATE
+                SET
+                    scheduled_time = EXCLUDED.scheduled_time,
+                    medication_name = EXCLUDED.medication_name,
+                    status = EXCLUDED.status,
+                    scheduled_dose_quantity = EXCLUDED.scheduled_dose_quantity,
+                    dose_quantity = EXCLUDED.dose_quantity,
+                    unit = EXCLUDED.unit,
+                    source_id = EXCLUDED.source_id,
+                    medication_concept_id = EXCLUDED.medication_concept_id
+                RETURNING (xmax = 0) AS inserted_new
+            """,
+            rows,
+        )
+        for inserted_new in flags:
+            result = result.with_insert_flag(inserted_new)
+
     return result.with_counts(rejected=rejected_count)
 
 
@@ -438,6 +525,8 @@ async def _ingest_activity(
 ) -> IngestWriteResult:
     result = IngestWriteResult()
     rejected_count = 0
+    rows: list[dict] = []
+    all_metric_cols: set[str] = set()
     for s in samples:
         d = parse_date(s.get("date"))
         if not d:
@@ -445,32 +534,44 @@ async def _ingest_activity(
             _bump_rejected("activity_summaries", "missing_or_unparseable_date")
             continue
 
-        row = {"date": d, "device_id": device_id, "owner_id": str(owner_id)}
+        row: dict = {"date": d, "device_id": device_id, "owner_id": str(owner_id)}
         for src_key, dst_col in ACTIVITY_FIELDS.items():
             if src_key in s:
                 row[dst_col] = s[src_key]
+                all_metric_cols.add(dst_col)
         source_id = _sample_source(s)
         if source_id is not None:
             row["source_id"] = source_id
+        rows.append(row)
 
-        cols = ", ".join(row.keys())
-        vals = ", ".join(f":{k}" for k in row)
+    if rows:
+        # PERFORMANCE-001: single multi-row VALUES for the whole batch.
+        # Union of all metric columns across rows; pad missing with NULL so
+        # every tuple has the same shape (required by the batch helper).
+        fixed_cols = ["date", "device_id", "owner_id", "source_id"]
+        metric_cols = sorted(all_metric_cols)
+        cols = fixed_cols + metric_cols
+        for row in rows:
+            for col in metric_cols:
+                row.setdefault(col, None)
         updates = ", ".join(
             f"{k} = COALESCE(EXCLUDED.{k}, daily_activity.{k})"
-            for k in row
-            if k not in ("date", "device_id", "owner_id")
+            for k in metric_cols + ["source_id"]
         )
-
-        inserted_new = await _execute_insert_with_result(
+        # Reorder dicts so columns are in the agreed order.
+        ordered_rows = [{c: r.get(c) for c in cols} for r in rows]
+        flags = await _execute_batch_insert_with_flags(
             session,
             f"""
-                INSERT INTO daily_activity ({cols}) VALUES ({vals})
+                INSERT INTO daily_activity ({", ".join(cols)})
                 ON CONFLICT (date, device_id, owner_id) DO UPDATE SET {updates}
                 RETURNING (xmax = 0) AS inserted_new
             """,
-            row,
+            ordered_rows,
         )
-        result = result.with_insert_flag(inserted_new)
+        for inserted_new in flags:
+            result = result.with_insert_flag(inserted_new)
+
     return result.with_counts(rejected=rejected_count)
 
 
@@ -485,6 +586,7 @@ async def _ingest_daily_quantity(
     column, converter = DAILY_ACTIVITY_QUANTITY_FIELDS[metric]
     result = IngestWriteResult()
     rejected_count = 0
+    rows: list[dict] = []
     for sample in samples:
         d = parse_date(sample.get("date"))
         value = converter(sample.get("qty"))
@@ -492,27 +594,32 @@ async def _ingest_daily_quantity(
             rejected_count += 1
             _bump_rejected(metric, "missing_or_unparseable_date_or_qty")
             continue
+        rows.append(
+            {
+                "date": d,
+                "device_id": device_id,
+                "owner_id": str(owner_id),
+                "source_id": _sample_source(sample),
+                column: value,
+            }
+        )
 
-        source_id = _sample_source(sample)
-        inserted_new = await _execute_insert_with_result(
+    if rows:
+        # PERFORMANCE-001: single multi-row VALUES for the whole batch.
+        flags = await _execute_batch_insert_with_flags(
             session,
             f"""
                 INSERT INTO daily_activity (date, device_id, owner_id, source_id, {column})
-                VALUES (:date, :device_id, :owner_id, :source_id, :{column})
                 ON CONFLICT (date, device_id, owner_id) DO UPDATE
                 SET {column} = EXCLUDED.{column},
                     source_id = COALESCE(EXCLUDED.source_id, daily_activity.source_id)
                 RETURNING (xmax = 0) AS inserted_new
             """,
-            {
-                "date": d,
-                "device_id": device_id,
-                "owner_id": str(owner_id),
-                "source_id": source_id,
-                column: value,
-            },
+            rows,
         )
-        result = result.with_insert_flag(inserted_new)
+        for inserted_new in flags:
+            result = result.with_insert_flag(inserted_new)
+
     return result.with_counts(rejected=rejected_count)
 
 
@@ -525,6 +632,7 @@ async def _ingest_workouts(
 ) -> IngestWriteResult:
     result = IngestWriteResult()
     rejected_count = 0
+    rows: list[dict] = []
     for s in samples:
         start = parse_ts(first_present(s, "start_date", "startDate", "start", "date"))
         end = parse_ts(first_present(s, "end_date", "endDate", "end"))
@@ -538,24 +646,7 @@ async def _ingest_workouts(
             duration_ms = int(duration_seconds * 1000) if duration_seconds is not None else None
         else:
             duration_ms = to_int(duration_ms)
-        inserted_new = await _execute_insert_with_result(
-            session,
-            """
-                INSERT INTO workouts (device_id, sport_type, start_time, end_time,
-                    duration_ms, avg_hr, max_hr, calories, distance_m, source_id, owner_id)
-                VALUES (:device_id, :sport, :start, :end, :dur, :avg_hr, :max_hr, :cal, :dist,
-                    :source_id, :owner_id)
-                ON CONFLICT (device_id, start_time, owner_id) DO UPDATE SET
-                    sport_type = EXCLUDED.sport_type,
-                    end_time = EXCLUDED.end_time,
-                    duration_ms = EXCLUDED.duration_ms,
-                    avg_hr = EXCLUDED.avg_hr,
-                    max_hr = EXCLUDED.max_hr,
-                    calories = EXCLUDED.calories,
-                    distance_m = EXCLUDED.distance_m,
-                    source_id = COALESCE(EXCLUDED.source_id, workouts.source_id)
-                RETURNING (xmax = 0) AS inserted_new
-            """,
+        rows.append(
             {
                 "device_id": device_id,
                 "sport": first_present(s, "sport_type", "sportType", "name") or "unknown",
@@ -568,9 +659,32 @@ async def _ingest_workouts(
                 "dist": to_float(first_present(s, "distance_m", "distance")),
                 "source_id": _sample_source(s),
                 "owner_id": str(owner_id),
-            },
+            }
         )
-        result = result.with_insert_flag(inserted_new)
+
+    if rows:
+        # PERFORMANCE-001: single multi-row VALUES for the whole batch.
+        flags = await _execute_batch_insert_with_flags(
+            session,
+            """
+                INSERT INTO workouts (device_id, sport_type, start_time, end_time,
+                    duration_ms, avg_hr, max_hr, calories, distance_m, source_id, owner_id)
+                ON CONFLICT (device_id, start_time, owner_id) DO UPDATE SET
+                    sport_type = EXCLUDED.sport_type,
+                    end_time = EXCLUDED.end_time,
+                    duration_ms = EXCLUDED.duration_ms,
+                    avg_hr = EXCLUDED.avg_hr,
+                    max_hr = EXCLUDED.max_hr,
+                    calories = EXCLUDED.calories,
+                    distance_m = EXCLUDED.distance_m,
+                    source_id = COALESCE(EXCLUDED.source_id, workouts.source_id)
+                RETURNING (xmax = 0) AS inserted_new
+            """,
+            rows,
+        )
+        for inserted_new in flags:
+            result = result.with_insert_flag(inserted_new)
+
     return result.with_counts(rejected=rejected_count)
 
 
@@ -711,19 +825,13 @@ async def _upsert_sleep_stages(
     *,
     owner_id: UUID = DEFAULT_OWNER_ID,
 ) -> None:
+    # PERFORMANCE-001: gather rows, then one multi-row INSERT.
+    rows: list[dict] = []
     for segment in segments:
         duration_ms = duration_ms_between(segment["start"], segment["end"])
         if duration_ms <= 0:
             continue
-        await session.execute(
-            text("""
-                INSERT INTO sleep_stages
-                    (time, device_id, session_id, stage, duration_ms, owner_id)
-                VALUES (:time, :device_id, :session_id, :stage, :duration_ms, :owner_id)
-                ON CONFLICT (time, device_id, stage, owner_id) DO UPDATE SET
-                    session_id = EXCLUDED.session_id,
-                    duration_ms = EXCLUDED.duration_ms
-            """),
+        rows.append(
             {
                 "time": segment["start"],
                 "device_id": device_id,
@@ -731,8 +839,21 @@ async def _upsert_sleep_stages(
                 "stage": segment["stage"],
                 "duration_ms": duration_ms,
                 "owner_id": str(owner_id),
-            },
+            }
         )
+    if not rows:
+        return
+    await _execute_batch_insert_with_flags(
+        session,
+        """
+            INSERT INTO sleep_stages
+                (time, device_id, session_id, stage, duration_ms, owner_id)
+            ON CONFLICT (time, device_id, stage, owner_id) DO UPDATE SET
+                session_id = EXCLUDED.session_id,
+                duration_ms = EXCLUDED.duration_ms
+        """,
+        rows,
+    )
 
 
 async def ingest_sleep(

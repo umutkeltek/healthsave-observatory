@@ -25,6 +25,33 @@ import server  # noqa: E402
 from analysis.config import AnalysisConfig  # noqa: E402
 
 
+def _explode_batched_params(params: dict) -> list[dict]:
+    """Normalize PERFORMANCE-001 batched binds into per-row dicts.
+
+    Production code binds multi-row inserts positionally as ``:column_i``.
+    Tests historically expected one row per call; this helper decodes the
+    positional binds back to ``{column: value}`` dicts, one per row, while
+    leaving named-binds (single-row or upstream paths) unchanged.
+    """
+    column_to_values: dict[str, dict[int, object]] = {}
+    for key, value in params.items():
+        if "_" in key:
+            column, _, index = key.rpartition("_")
+            if index.isdigit():
+                column_to_values.setdefault(column, {})[int(index)] = value
+                continue
+        # Already a named bind — leave it untouched; tests treat single-row
+        # params as one logical row.
+        return [dict(params)]
+    if not column_to_values:
+        return [dict(params)]
+    row_count = max(len(values) for values in column_to_values.values())
+    rows = []
+    for i in range(row_count):
+        rows.append({col: values.get(i) for col, values in column_to_values.items()})
+    return rows
+
+
 class FakeResult:
     def __init__(self, row=None, rows=None, scalar_value=1):
         self.row = row
@@ -72,24 +99,46 @@ class FakeSession:
         needle = f"INSERT INTO {table_name}"
         for sql, params in self.calls:
             if needle in sql:
-                return params
+                rows = _explode_batched_params(params)
+                return rows[0] if rows else None
         return None
 
     def all_insert_params_for(self, table_name: str) -> list[dict]:
         needle = f"INSERT INTO {table_name}"
-        return [params for sql, params in self.calls if needle in sql]
+        rows: list[dict] = []
+        for sql, params in self.calls:
+            if needle in sql:
+                rows.extend(_explode_batched_params(params))
+        return rows
 
 
 class StorageBreakdownSession(FakeSession):
     def __init__(self, insert_flags: list[bool]):
         super().__init__()
-        self.insert_flags = insert_flags
+        self.insert_flags = list(insert_flags)
 
     async def execute(self, statement, params=None):
         sql = " ".join(str(statement).split())
         self.calls.append((sql, params or {}))
         if "INSERT INTO heart_rate" in sql:
-            return FakeResult(row={"inserted_new": self.insert_flags.pop(0)})
+            # PERFORMANCE-001: one execute call carries the whole batch.
+            # Count distinct positional indices across the bound params to
+            # figure out how many rows are in this batch, then return one
+            # ``inserted_new`` row per sample in order.
+            if params:
+                indices = {
+                    int(key.rpartition("_")[2])
+                    for key in params
+                    if "_" in key and key.rpartition("_")[2].isdigit()
+                }
+                batch_size = max(len(indices), 1) if indices else 1
+            else:
+                batch_size = 1
+            rows = [
+                {"inserted_new": bool(self.insert_flags.pop(0))}
+                for _ in range(batch_size)
+            ]
+            return FakeResult(rows=rows)
         if sql.startswith("SELECT id FROM devices"):
             return FakeResult(row=(1,))
         if sql.startswith("SELECT count(*)"):
