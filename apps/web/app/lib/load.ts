@@ -67,12 +67,20 @@ function swallow(label: string, error: unknown): null {
 
 // Curated sparkline metrics for the Data view grid. Each is a real ontology
 // metric_id the v2 series endpoint serves; an empty one renders its own state.
+// Default Today grid: the cardiovascular core + the activity/mobility surface
+// the iOS device actually has. Walking metrics were added when full-export
+// support landed — they're sparse but real, so the UI must surface them so
+// users see they exist and have data, not bury them.
 export const GRID_METRICS: { id: string; title: string }[] = [
   { id: "vital.heart_rate", title: "Heart Rate" },
   { id: "vital.resting_heart_rate", title: "Resting Heart Rate" },
+  { id: "vital.walking_heart_rate_average", title: "Walking Heart Rate" },
   { id: "vital.hrv_sdnn", title: "Heart Rate Variability" },
   { id: "vital.respiratory_rate", title: "Respiratory Rate" },
+  { id: "mobility.walking_speed", title: "Walking Speed" },
+  { id: "mobility.walking_step_length", title: "Step Length" },
   { id: "activity.steps", title: "Steps" },
+  { id: "activity.exercise_minutes", title: "Exercise Minutes" },
   { id: "activity.active_energy", title: "Active Energy" },
   { id: "body.weight", title: "Body Weight" },
 ];
