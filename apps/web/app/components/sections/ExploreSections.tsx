@@ -22,6 +22,61 @@ import { HeatmapChart } from "../HeatmapChart";
 import { MultiSeriesChart, type ChartSeries } from "../MultiSeriesChart";
 import { ZoneBar } from "../ZoneBar";
 
+// Honest data-density hint: tells the user how many samples their dashboard
+// actually pulled and the calendar span. "All time" hides nothing — the user
+// sees the full history's earliest/latest stamp. "30d" with only 6 days of
+// data is honest too: the user can see why their chart looks sparse.
+type Density = {
+  totalPoints: number;
+  metricsWithData: number;
+  metricsTotal: number;
+  earliest: string | null;
+  latest: string | null;
+};
+
+function computeDensity(
+  pointArrays: { t: string; value: number | null }[][],
+): Density | null {
+  let total = 0;
+  let metricsWithData = 0;
+  let earliest: string | null = null;
+  let latest: string | null = null;
+  for (const points of pointArrays) {
+    const valued = points.filter((p): p is { t: string; value: number } => p.value !== null);
+    if (valued.length > 0) metricsWithData += 1;
+    total += valued.length;
+    for (const p of valued) {
+      if (!earliest || p.t < earliest) earliest = p.t;
+      if (!latest || p.t > latest) latest = p.t;
+    }
+  }
+  const metricsTotal = pointArrays.length;
+  if (total === 0) return null;
+  return { totalPoints: total, metricsWithData, metricsTotal, earliest, latest };
+}
+
+function DataDensityHint({ density, range }: { density: Density; range: string }) {
+  const fmt = (iso: string): string => {
+    const d = new Date(iso);
+    return Number.isFinite(d.getTime())
+      ? d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+      : iso;
+  };
+  return (
+    <p className="explore-density mono">
+      {density.totalPoints.toLocaleString()} samples across{" "}
+      {density.metricsWithData}/{density.metricsTotal} signals
+      {density.earliest && density.latest && (
+        <>
+          {" · "}
+          {fmt(density.earliest)} → {fmt(density.latest)}
+          {range === "all" ? " (entire history)" : ""}
+        </>
+      )}
+    </p>
+  );
+}
+
 // Timestamped values under the current grain/stat. Keeping the timestamp with
 // every value prevents irregular samples from being drawn at equal spacing.
 function metricPoints(
@@ -106,7 +161,7 @@ export async function ExploreSections({ state }: { state: ExploreState }) {
       return [id, { points: filterWindow(pts, state.from, state.to), series }] as const;
     }),
   );
-  const pointsById = new Map(seriesEntries);
+  const pointsById = new Map(seriesEntries.map(([id, data]) => [id, data.points]));
 
   // Honest data-density hint: counts the non-null samples across every panel
   // and reports the actual span of the data we have. "All time" hides the
