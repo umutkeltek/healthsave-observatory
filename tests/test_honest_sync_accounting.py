@@ -123,3 +123,54 @@ async def test_genuinely_invalid_samples_are_counted_as_rejected():
     assert result.accepted == 1
     assert result.rejected == 2
     assert result.deduped_in_batch == 0
+
+
+@pytest.mark.asyncio
+async def test_generic_metric_in_batch_duplicate_is_deduped_not_rejected():
+    """CardinalityViolation regression (2026-07-28): the catch-all
+    ``quantity_samples`` path batches N rows into ONE upsert, and Postgres
+    rejects the statement if two rows share the conflict key. Same-timestamp
+    duplicates are legitimate HealthKit overlap — they must collapse before
+    the insert and count as ``deduped_in_batch``, never crash the batch."""
+    session = _FakeSession()
+    samples = [
+        {"date": "2026-07-28T08:00:00Z", "qty": 14.5, "source": "Apple Watch"},
+        {"date": "2026-07-28T08:00:00Z", "qty": 14.8, "source": "Apple Watch"},
+        {"date": "2026-07-28T08:01:00Z", "qty": 15.1, "source": "Apple Watch"},
+    ]
+
+    result = await _ingest_metric(session, device_id=42, metric="respiratory_rate", samples=samples)
+
+    assert result.accepted == 2
+    assert result.rejected == 0
+    assert result.deduped_in_batch == 1
+
+    # Structural guard: the bound rows sent to quantity_samples carry unique
+    # conflict keys — the property whose violation 422'd every live batch.
+    batch_calls = [
+        (sql, params) for sql, params in session.calls if "INSERT INTO quantity_samples" in sql
+    ]
+    assert batch_calls, "expected a quantity_samples upsert"
+    sql, params = batch_calls[0]
+    bound_times = [v for k, v in params.items() if k == "time" or k.startswith("time_")]
+    assert len(bound_times) == len(set(bound_times)) == 2
+
+
+def test_dedupe_helper_merge_non_null_folds_later_values_per_column():
+    """COALESCE-style update sets (daily_activity) need column-wise merge:
+    later non-None values win, earlier values survive a later None."""
+    from storage.timescale.measurements import _dedupe_rows_for_upsert
+
+    rows = [
+        {"date": "2026-07-28", "device_id": 1, "owner_id": "o", "steps": 100, "source_id": "a"},
+        {"date": "2026-07-28", "device_id": 1, "owner_id": "o", "steps": 250, "source_id": None},
+    ]
+
+    deduped, count = _dedupe_rows_for_upsert(
+        rows, ["date", "device_id", "owner_id"], "activity_summaries", merge_non_null=True
+    )
+
+    assert count == 1
+    assert len(deduped) == 1
+    assert deduped[0]["steps"] == 250
+    assert deduped[0]["source_id"] == "a"
