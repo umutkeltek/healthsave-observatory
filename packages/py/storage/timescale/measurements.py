@@ -106,6 +106,41 @@ async def _execute_insert_with_result(
     return _inserted_new_flag(result)
 
 
+def _dedupe_rows_for_upsert(
+    rows: list[dict],
+    key_cols: list[str],
+    metric: str,
+    *,
+    merge_non_null: bool = False,
+) -> tuple[list[dict], int]:
+    """Collapse same-conflict-key rows so one multi-row upsert stays valid.
+
+    Postgres rejects a single ``INSERT ... ON CONFLICT DO UPDATE`` whose VALUES
+    touch the same conflict key twice (CardinalityViolationError), and real
+    HealthKit exports do produce same-timestamp duplicates in one batch. The
+    per-row upsert loop absorbed those as sequential updates; the batched path
+    must collapse them first. Last row wins, matching sequential semantics;
+    ``merge_non_null`` makes later non-None values override per column instead,
+    matching COALESCE-style update sets. An in-batch collision is legitimate
+    full-export overlap, NOT a rejection — callers count it as
+    ``deduped_in_batch`` so the receipt never calls it "rejected".
+    """
+    seen: dict[tuple, dict] = {}
+    dedup_count = 0
+    for row in rows:
+        key = tuple(row.get(c) for c in key_cols)
+        if key in seen:
+            dedup_count += 1
+            _bump_rejected(metric, "in_batch_dedupe")
+            if merge_non_null:
+                merged = dict(seen[key])
+                merged.update({k: v for k, v in row.items() if v is not None})
+                seen[key] = merged
+                continue
+        seen[key] = row
+    return list(seen.values()), dedup_count
+
+
 async def _execute_batch_insert_with_flags(
     session: AsyncSession,
     table: str,
@@ -316,18 +351,8 @@ async def _ingest_dedicated(
         return IngestWriteResult(rejected=rejected_count)
 
     # Dedup within batch (conflict_cols already include owner_id via the schema).
-    # An in-batch collision is legitimate HealthKit full-export overlap, NOT a
-    # rejection — count it separately so the receipt never calls it "rejected".
     conflict_cols = list(spec["conflict"]) + ["owner_id"]
-    seen = {}
-    dedup_count = 0
-    for row in rows:
-        key = tuple(row.get(c) for c in conflict_cols)
-        if key in seen:
-            dedup_count += 1
-            _bump_rejected(metric, "in_batch_dedupe")
-        seen[key] = row
-    rows = list(seen.values())
+    rows, dedup_count = _dedupe_rows_for_upsert(rows, conflict_cols, metric)
 
     conflict_sql = ", ".join(conflict_cols)
     columns = list(rows[0].keys())
@@ -385,7 +410,11 @@ async def _ingest_generic(
             }
         )
 
+    dedup_count = 0
     if rows:
+        rows, dedup_count = _dedupe_rows_for_upsert(
+            rows, ["time", "device_id", "metric_name", "owner_id"], metric
+        )
         # PERFORMANCE-001: single multi-row VALUES for the whole batch.
         flags = await _execute_batch_insert_with_flags(
             session,
@@ -399,7 +428,7 @@ async def _ingest_generic(
         for inserted_new in flags:
             result = result.with_insert_flag(inserted_new)
 
-    return result.with_counts(rejected=rejected_count)
+    return result.with_counts(rejected=rejected_count, deduped_in_batch=dedup_count)
 
 
 async def _ingest_ecg(
@@ -441,7 +470,11 @@ async def _ingest_ecg(
             }
         )
 
+    dedup_count = 0
     if rows:
+        rows, dedup_count = _dedupe_rows_for_upsert(
+            rows, ["time", "device_id", "metric_name", "owner_id"], "ecg"
+        )
         # PERFORMANCE-001: single multi-row VALUES for the whole batch.
         flags = await _execute_batch_insert_with_flags(
             session,
@@ -455,7 +488,7 @@ async def _ingest_ecg(
         for inserted_new in flags:
             result = result.with_insert_flag(inserted_new)
 
-    return result.with_counts(rejected=rejected_count)
+    return result.with_counts(rejected=rejected_count, deduped_in_batch=dedup_count)
 
 
 async def _ingest_medication_dose_events(
@@ -508,7 +541,13 @@ async def _ingest_medication_dose_events(
             }
         )
 
+    dedup_count = 0
     if rows:
+        rows, dedup_count = _dedupe_rows_for_upsert(
+            rows,
+            ["time", "device_id", "medication_metric", "owner_id"],
+            "medication_dose_event",
+        )
         # PERFORMANCE-001: single multi-row VALUES for the whole batch.
         flags = await _execute_batch_insert_with_flags(
             session,
@@ -557,7 +596,7 @@ async def _ingest_medication_dose_events(
         for inserted_new in flags:
             result = result.with_insert_flag(inserted_new)
 
-    return result.with_counts(rejected=rejected_count)
+    return result.with_counts(rejected=rejected_count, deduped_in_batch=dedup_count)
 
 
 async def _ingest_activity(
@@ -588,7 +627,13 @@ async def _ingest_activity(
             row["source_id"] = source_id
         rows.append(row)
 
+    dedup_count = 0
     if rows:
+        # Merge same-day rows column-wise: the update set is COALESCE-style, so
+        # sequential upserts let later non-None values win per column.
+        rows, dedup_count = _dedupe_rows_for_upsert(
+            rows, ["date", "device_id", "owner_id"], "activity_summaries", merge_non_null=True
+        )
         # PERFORMANCE-001: single multi-row VALUES for the whole batch.
         # Union of all metric columns across rows; pad missing with NULL so
         # every tuple has the same shape (required by the batch helper).
@@ -615,7 +660,7 @@ async def _ingest_activity(
         for inserted_new in flags:
             result = result.with_insert_flag(inserted_new)
 
-    return result.with_counts(rejected=rejected_count)
+    return result.with_counts(rejected=rejected_count, deduped_in_batch=dedup_count)
 
 
 async def _ingest_daily_quantity(
@@ -647,7 +692,13 @@ async def _ingest_daily_quantity(
             }
         )
 
+    dedup_count = 0
     if rows:
+        # Merge same-day rows: value column always present (last wins), source_id
+        # COALESCE-style (last non-None wins) — merge_non_null matches both.
+        rows, dedup_count = _dedupe_rows_for_upsert(
+            rows, ["date", "device_id", "owner_id"], metric, merge_non_null=True
+        )
         # PERFORMANCE-001: single multi-row VALUES for the whole batch.
         flags = await _execute_batch_insert_with_flags(
             session,
@@ -664,7 +715,7 @@ async def _ingest_daily_quantity(
         for inserted_new in flags:
             result = result.with_insert_flag(inserted_new)
 
-    return result.with_counts(rejected=rejected_count)
+    return result.with_counts(rejected=rejected_count, deduped_in_batch=dedup_count)
 
 
 async def _ingest_workouts(
@@ -706,7 +757,11 @@ async def _ingest_workouts(
             }
         )
 
+    dedup_count = 0
     if rows:
+        rows, dedup_count = _dedupe_rows_for_upsert(
+            rows, ["device_id", "start_time", "owner_id"], "workouts"
+        )
         # PERFORMANCE-001: single multi-row VALUES for the whole batch.
         flags = await _execute_batch_insert_with_flags(
             session,
@@ -753,7 +808,7 @@ async def _ingest_workouts(
         for inserted_new in flags:
             result = result.with_insert_flag(inserted_new)
 
-    return result.with_counts(rejected=rejected_count)
+    return result.with_counts(rejected=rejected_count, deduped_in_batch=dedup_count)
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -911,6 +966,9 @@ async def _upsert_sleep_stages(
         )
     if not rows:
         return
+    rows, _ = _dedupe_rows_for_upsert(
+        rows, ["time", "device_id", "stage", "owner_id"], "sleep_stages"
+    )
     # PERFORMANCE-001: one multi-row INSERT for the whole sleep session's stages
     # instead of one execute() per stage row. No RETURNING needed here — we
     # only care that the writes happened; the caller counts via rowcount.
