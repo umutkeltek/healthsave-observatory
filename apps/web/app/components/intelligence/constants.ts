@@ -1,14 +1,61 @@
 import type { IntelMode } from "../../lib/api";
 
-// Known cloud providers plus sensible default models. Users can still type a
-// provider/model route manually; these just make common paths fast.
+// Known cloud providers and tested LiteLLM routes. These are conveniences, not
+// an allow-list: the Model field remains free-form so a newly released route can
+// be used without waiting for an Observatory release.
 export const CLOUD_PROVIDERS = [
-  { id: "deepseek", label: "DeepSeek", model: "deepseek/deepseek-chat" },
-  { id: "openai", label: "OpenAI", model: "openai/gpt-4o-mini" },
-  { id: "anthropic", label: "Anthropic", model: "anthropic/claude-sonnet" },
-  { id: "gemini", label: "Google Gemini", model: "gemini/gemini-2.5-flash" },
-  { id: "openrouter", label: "OpenRouter", model: "openrouter/openai/gpt-oss-120b:free" },
+  {
+    id: "deepseek",
+    label: "DeepSeek",
+    model: "deepseek/deepseek-chat",
+    models: ["deepseek/deepseek-chat", "deepseek/deepseek-reasoner"],
+  },
+  {
+    id: "openai",
+    label: "OpenAI",
+    model: "openai/gpt-5.6-sol",
+    models: [
+      "openai/gpt-5.6-sol",
+      "openai/gpt-5.6",
+      "openai/gpt-5.4-mini",
+      "openai/gpt-5.4",
+      "openai/gpt-5.1",
+    ],
+  },
+  {
+    id: "zai",
+    label: "Z.AI / GLM",
+    model: "zai/glm-5.1",
+    models: ["zai/glm-5.1", "zai/glm-5", "zai/glm-4.7", "zai/glm-4.5v"],
+  },
+  {
+    id: "anthropic",
+    label: "Anthropic",
+    model: "anthropic/claude-sonnet-4-6",
+    models: ["anthropic/claude-sonnet-4-6", "anthropic/claude-opus-4-6"],
+  },
+  {
+    id: "gemini",
+    label: "Google Gemini",
+    model: "gemini/gemini-2.5-flash",
+    models: ["gemini/gemini-2.5-flash", "gemini/gemini-2.5-pro"],
+  },
+  {
+    id: "openrouter",
+    label: "OpenRouter",
+    model: "openrouter/z-ai/glm-5.1",
+    models: [
+      "openrouter/z-ai/glm-5.1",
+      "openrouter/z-ai/glm-5",
+      "openrouter/openai/gpt-5.2",
+      "openrouter/openai/gpt-5-mini",
+    ],
+  },
 ] as const;
+
+export function modelsForProvider(provider: string): readonly string[] {
+  return CLOUD_PROVIDERS.find((candidate) => candidate.id === provider)?.models ?? [];
+}
 
 export const OLLAMA_DEFAULT_BASE = "http://ollama:11434";
 

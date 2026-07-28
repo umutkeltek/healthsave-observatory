@@ -1,7 +1,7 @@
 "use client";
 
 import type { IntelligenceView } from "../../lib/api";
-import { CLOUD_PROVIDERS, OLLAMA_DEFAULT_BASE } from "./constants";
+import { CLOUD_PROVIDERS, modelsForProvider, OLLAMA_DEFAULT_BASE } from "./constants";
 import { ConnectionTestPanel } from "./ConnectionTestPanel";
 import type { ConnectionTest } from "./useConnectionTest";
 import type { IntelligenceForm } from "./useIntelligenceForm";
@@ -18,6 +18,8 @@ export function ProviderConfig({
   view: IntelligenceView;
 }) {
   const { mode } = form;
+  const suggestedModels = modelsForProvider(form.provider);
+  const modelListId = `models-${form.provider}`;
   return (
     <section className="intel-card">
       <h3 className="intel-h">{mode === "local" ? "Local model" : "Cloud provider"}</h3>
@@ -46,8 +48,23 @@ export function ProviderConfig({
           value={form.model}
           onChange={(e) => form.setModel(e.target.value)}
           placeholder={mode === "local" ? "llama3.1:8b" : "provider/model"}
+          list={mode === "cloud" && suggestedModels.length > 0 ? modelListId : undefined}
           spellCheck={false}
         />
+        {mode === "cloud" && suggestedModels.length > 0 && (
+          <datalist id={modelListId}>
+            {suggestedModels.map((model) => (
+              <option key={model} value={model} />
+            ))}
+          </datalist>
+        )}
+        {mode === "cloud" && (
+          <span className="field-hint">
+            Free-form LiteLLM route. GLM 5.1 and GPT-5.6 SOL are supported for text narration.
+            Observatory currently sends redacted text findings only; vision-capable models do not
+            receive images yet.
+          </span>
+        )}
       </label>
 
       {mode === "local" && (
