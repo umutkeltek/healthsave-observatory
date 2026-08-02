@@ -12,6 +12,59 @@ HealthSave Observatory is the self-hosted backend for HealthSave. The iOS app ca
 
 Raw observations stay on hardware you control unless you enable an egress route.
 
+## See it in action
+
+One crisp clip, zero marketing fluff — the real product talking to a real local vault. Rendered at native **1920×1080** with a locally-synthesised neural voiceover (no cloud TTS, no stock footage): every pixel is the live dashboard rebuilt in vector, so it stays sharp at any size.
+
+<p align="center">
+  <video src="docs/assets/observatory-showcase.mp4" controls poster="docs/assets/poster-showcase.jpg" preload="metadata" width="100%"></video>
+</p>
+
+<sub>[▶ Open the narrated showcase (33s, 1080p)](docs/assets/observatory-showcase.mp4) if the player above doesn't load.</sub>
+
+### Product tour — the three screens that matter
+
+**Today.** A live nervous-load score, the week's recovery narrative, and the Local Vault panel that proves where every number lives. The vault below holds **3,285,859 rows** in a self-hosted TimescaleDB — the *No cloud egress* badge is the point.
+
+<p align="center">
+  <img src="docs/assets/screenshots/today.png" alt="Observatory Today view: nervous-load score 64, recovery narrative, Local Vault with 3.28M rows and No cloud egress badge" width="100%">
+  &nbsp;&nbsp;
+  <img src="docs/assets/screenshots/mobile-today.png" alt="Observatory Today view on iPhone" width="220">
+</p>
+
+**Findings.** Statistics compute anomalies, trends and correlations; the local AI *narrates* them on Ollama and is badged **Interpreted locally** — it summarises real measurements, it never invents a health fact. The weekly brief below cites resting HR 45.5 bpm (↓5.8%), HRV 89.7 ms (↑8.9%), walking HR 83.3 bpm (↓14.3%), SpO₂ stable at 97.6%.
+
+<p align="center"><img src="docs/assets/screenshots/findings.png" alt="Findings view: locally interpreted weekly brief with evidence-linked numbers and 48 findings" width="100%"></p>
+
+**Sources.** Every stream is mapped to its hardware origin with a freshness score — imperfect or conflicting signals are kept as immutable records, never averaged into a fake consensus.
+
+<p align="center"><img src="docs/assets/screenshots/sources.png" alt="Sources view: data provenance, 16 connections, 89% mean device freshness" width="100%"></p>
+
+<details>
+<summary><strong>More surfaces</strong> — privacy posture, signal relationships, raw data explorer</summary>
+
+| Privacy & egress | Relationships | Data explorer |
+|:---:|:---:|:---:|
+| <img src="docs/assets/screenshots/privacy.png" alt="Privacy view" width="100%"> | <img src="docs/assets/screenshots/relationships.png" alt="Relationships view" width="100%"> | <img src="docs/assets/screenshots/data.png" alt="Data explorer view" width="100%"> |
+
+</details>
+
+### By the numbers — pulled from a live demo vault + the repo
+
+| Signal | Value | Where it comes from |
+|---|---|---|
+| Live vault size | **3,285,859 rows** | Today → Local Vault (self-hosted TimescaleDB) |
+| Nervous-load score | **64 — Steady** | Today |
+| Weekly recovery | resting HR **45.5 bpm** (↓5.8%), HRV **89.7 ms** (↑8.9%) | Findings → Weekly Brief |
+| Source connections | **16**, **89%** mean device freshness | Sources → Data Provenance |
+| Evidence-linked findings | **48** this week | Findings → What changed |
+| Local AI | on-device narration, raw rows never leave | Findings → *Interpreted locally* |
+| Automated tests | **1,298** | `pytest` suite |
+| API routes | **60** | FastAPI app |
+| Source connectors | **5+** — Whoop, Amazfit, Polar, Google Health, Apple Health | `plugins/sources/` |
+| Codebase | **~66.7k** lines of Python | repo |
+| License | **Elastic 2.0 — source-available** (not OSI open-source) | `LICENSE` |
+
 ## Quick Install
 
 If Node.js is already available:
