@@ -1,12 +1,18 @@
-# HealthSave Observatory
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/github/hero-dark.png">
+    <img src="docs/assets/github/hero-light.png" alt="HealthSave Observatory — your health data never touches our servers" width="760">
+  </picture>
+</p>
 
-[![CI](https://github.com/umutkeltek/healthsave-observatory/actions/workflows/ci.yml/badge.svg)](https://github.com/umutkeltek/healthsave-observatory/actions/workflows/ci.yml)
-[![License: Elastic 2.0](https://img.shields.io/badge/License-Elastic--2.0-005571.svg)](LICENSE)
-[![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![TimescaleDB](https://img.shields.io/badge/TimescaleDB-PostgreSQL-FDB515.svg?logo=postgresql&logoColor=white)](https://www.timescale.com/)
-[![Docker](https://img.shields.io/badge/Docker-ready-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com/)
-[![Download on the App Store](https://img.shields.io/badge/Download-App%20Store-0D96F6?logo=apple&logoColor=white)](https://apps.apple.com/app/id6759843047)
+<p align="center">
+  <a href="https://github.com/umutkeltek/healthsave-observatory/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/umutkeltek/healthsave-observatory/ci.yml?style=for-the-badge&label=CI&logo=githubactions&logoColor=white&color=111318" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Elastic%202.0-111318?style=for-the-badge" alt="License: Elastic 2.0"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.12-111318?style=for-the-badge&logo=python&logoColor=4B8BBE" alt="Python 3.12"></a>
+  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-0.115-111318?style=for-the-badge&logo=fastapi&logoColor=009688" alt="FastAPI"></a>
+  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-Ready-111318?style=for-the-badge&logo=docker&logoColor=2496ED" alt="Docker ready"></a>
+  <a href="https://apps.apple.com/app/id6759843047"><img src="https://img.shields.io/badge/Download%20on%20the-App%20Store-0D96F6?style=for-the-badge&logo=apple&logoColor=white" alt="Download on the App Store"></a>
+</p>
 
 HealthSave Observatory is the self-hosted backend for HealthSave. The iOS app can export and sync Apple Health data; Observatory gives that data a private server, web surface, Grafana dashboards, API, optional local AI briefings, and Home Assistant/MQTT routes.
 
@@ -27,25 +33,25 @@ One crisp clip, zero marketing fluff — the real product talking to a real loca
 **Today.** A live nervous-load score, the week's recovery narrative, and the Local Vault panel that proves where every number lives. The vault below holds **3,285,859 rows** in a self-hosted TimescaleDB — the *No cloud egress* badge is the point.
 
 <p align="center">
-  <img src="docs/assets/screenshots/today.png" alt="Observatory Today view: nervous-load score 64, recovery narrative, Local Vault with 3.28M rows and No cloud egress badge" width="100%">
+  <img src="docs/assets/screenshots/framed/today.png" alt="Observatory Today view: nervous-load score 64, recovery narrative, Local Vault with 3.28M rows and No cloud egress badge" width="100%">
   &nbsp;&nbsp;
-  <img src="docs/assets/screenshots/mobile-today.png" alt="Observatory Today view on iPhone" width="220">
+  <img src="docs/assets/screenshots/framed/mobile-today.png" alt="Observatory Today view on iPhone" width="300">
 </p>
 
 **Findings.** Statistics compute anomalies, trends and correlations; the local AI *narrates* them on Ollama and is badged **Interpreted locally** — it summarises real measurements, it never invents a health fact. The weekly brief below cites resting HR 45.5 bpm (↓5.8%), HRV 89.7 ms (↑8.9%), walking HR 83.3 bpm (↓14.3%), SpO₂ stable at 97.6%.
 
-<p align="center"><img src="docs/assets/screenshots/findings.png" alt="Findings view: locally interpreted weekly brief with evidence-linked numbers and 48 findings" width="100%"></p>
+<p align="center"><img src="docs/assets/screenshots/framed/findings.png" alt="Findings view: locally interpreted weekly brief with evidence-linked numbers and 48 findings" width="100%"></p>
 
 **Sources.** Every stream is mapped to its hardware origin with a freshness score — imperfect or conflicting signals are kept as immutable records, never averaged into a fake consensus.
 
-<p align="center"><img src="docs/assets/screenshots/sources.png" alt="Sources view: data provenance, 16 connections, 89% mean device freshness" width="100%"></p>
+<p align="center"><img src="docs/assets/screenshots/framed/sources.png" alt="Sources view: data provenance, 16 connections, 89% mean device freshness" width="100%"></p>
 
 <details>
 <summary><strong>More surfaces</strong> — privacy posture, signal relationships, raw data explorer</summary>
 
 | Privacy & egress | Relationships | Data explorer |
 |:---:|:---:|:---:|
-| <img src="docs/assets/screenshots/privacy.png" alt="Privacy view" width="100%"> | <img src="docs/assets/screenshots/relationships.png" alt="Relationships view" width="100%"> | <img src="docs/assets/screenshots/data.png" alt="Data explorer view" width="100%"> |
+| <img src="docs/assets/screenshots/framed/privacy.png" alt="Privacy view" width="100%"> | <img src="docs/assets/screenshots/framed/relationships.png" alt="Relationships view" width="100%"> | <img src="docs/assets/screenshots/framed/data.png" alt="Data explorer view" width="100%"> |
 
 </details>
 
