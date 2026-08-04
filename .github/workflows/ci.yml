@@ -54,6 +54,9 @@ jobs:
       - name: Web tests
         run: bun run --cwd apps/web test
 
+      - name: Web production build
+        run: bun run --cwd apps/web build
+
       - name: Test
         run: pytest -q
 
