@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/github/hero-dark.png">
-    <img src="docs/assets/github/hero-light.png" alt="HealthSave Observatory — your health data never touches our servers" width="760">
+    <img src="docs/assets/github/hero-light.png" alt="HealthSave Observatory — raw health data never leaves your host; cloud narration is opt-in and derived-only" width="760">
   </picture>
 </p>
 
@@ -30,28 +30,50 @@ One crisp clip, zero marketing fluff — the real product talking to a real loca
 
 ### Product tour — the three screens that matter
 
-**Today.** A live nervous-load score, the week's recovery narrative, and the Local Vault panel that proves where every number lives. The vault below holds **3,285,859 rows** in a self-hosted TimescaleDB — the *No cloud egress* badge is the point.
+**Today.** A live nervous-load score, the week's recovery narrative, and the Local Vault panel that proves where every number lives. The vault below holds **3,285,859 rows** in a self-hosted TimescaleDB — the Local Vault panel is the point: your rows, on your disk, raw readings never leaving the host.
 
 <p align="center">
-  <img src="docs/assets/screenshots/framed/today.png" alt="Observatory Today view: nervous-load score 64, recovery narrative, Local Vault with 3.28M rows and No cloud egress badge" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/panels/today-dark.png">
+    <img src="docs/assets/screenshots/panels/today-light.png" alt="Observatory Today view: nervous-load score 64, recovery narrative, Local Vault with 3.28M self-hosted rows" width="100%">
+  </picture>
   &nbsp;&nbsp;
   <img src="docs/assets/screenshots/framed/mobile-today.png" alt="Observatory Today view on iPhone" width="300">
 </p>
 
-**Findings.** Statistics compute anomalies, trends and correlations; the local AI *narrates* them on Ollama and is badged **Interpreted locally** — it summarises real measurements, it never invents a health fact. The weekly brief below cites resting HR 45.5 bpm (↓5.8%), HRV 89.7 ms (↑8.9%), walking HR 83.3 bpm (↓14.3%), SpO₂ stable at 97.6%.
+**Findings.** Statistics compute anomalies, trends and correlations; the local AI *narrates* them on Ollama and is badged **Interpreted locally** — it summarises real measurements, it never invents a health fact. If you opt into cloud narration, only derived findings leave the host — consented, redacted, and listed in the Privacy view; briefs stay dated and badged, stale included. The weekly brief below cites resting HR 45.5 bpm (↓5.8%), HRV 89.7 ms (↑8.9%), walking HR 83.3 bpm (↓14.3%), SpO₂ stable at 97.6%.
 
-<p align="center"><img src="docs/assets/screenshots/framed/findings.png" alt="Findings view: locally interpreted weekly brief with evidence-linked numbers and 48 findings" width="100%"></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/panels/findings-dark.png">
+    <img src="docs/assets/screenshots/panels/findings-light.png" alt="Findings view: weekly brief interpreted locally, evidence-linked numbers, 48 findings" width="100%">
+  </picture>
+</p>
 
 **Sources.** Every stream is mapped to its hardware origin with a freshness score — imperfect or conflicting signals are kept as immutable records, never averaged into a fake consensus.
 
-<p align="center"><img src="docs/assets/screenshots/framed/sources.png" alt="Sources view: data provenance, 16 connections, 89% mean device freshness" width="100%"></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/panels/sources-dark.png">
+    <img src="docs/assets/screenshots/panels/sources-light.png" alt="Sources view: data provenance, 16 connections, 89% mean device freshness" width="100%">
+  </picture>
+</p>
+
+**Privacy.** The egress ledger, in the open: raw observations are blocked from every route; only policy-approved, derived findings may leave, and only while cloud narration stays consented — with prompt redaction on.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/panels/privacy-dark.png">
+    <img src="docs/assets/screenshots/panels/privacy-light.png" alt="Privacy view: raw observations blocked, derived findings leave only while consented, prompt redaction on" width="100%">
+  </picture>
+</p>
 
 <details>
-<summary><strong>More surfaces</strong> — privacy posture, signal relationships, raw data explorer</summary>
+<summary><strong>More surfaces</strong> — signal relationships, raw data explorer</summary>
 
-| Privacy & egress | Relationships | Data explorer |
-|:---:|:---:|:---:|
-| <img src="docs/assets/screenshots/framed/privacy.png" alt="Privacy view" width="100%"> | <img src="docs/assets/screenshots/framed/relationships.png" alt="Relationships view" width="100%"> | <img src="docs/assets/screenshots/framed/data.png" alt="Data explorer view" width="100%"> |
+| Relationships | Data explorer |
+|:---:|:---:|
+| <img src="docs/assets/screenshots/framed/relationships.png" alt="Relationships view" width="100%"> | <img src="docs/assets/screenshots/framed/data.png" alt="Data explorer view" width="100%"> |
 
 </details>
 
