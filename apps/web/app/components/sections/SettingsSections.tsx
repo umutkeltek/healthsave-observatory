@@ -6,8 +6,11 @@ import Link from "next/link";
 
 import { fetchAnalyticalTime, fetchMeta, isNarratorOff } from "../../lib/api";
 import { AnalyticalTimeSettingsForm } from "../AnalyticalTimeSettings";
+import { LanguageSwitcher } from "../LanguageSwitcher";
 import { PinButton } from "../PinButton";
 import { StandaloneDensityToggle } from "../DensityToggle";
+import { getDictionary } from "../../lib/i18n";
+import { getLocale } from "../../lib/i18n.server";
 import { safeIntelligence, safeMetrics, safePrivacy, safeSources } from "../../lib/load";
 import { getDensity, getPinnedMetrics } from "../../lib/prefs";
 
@@ -43,11 +46,13 @@ export async function AnalyticalTimeSection() {
 }
 
 export async function PreferencesSection() {
-  const [density, pinned, catalog] = await Promise.all([
+  const [density, pinned, catalog, locale] = await Promise.all([
     getDensity(),
     getPinnedMetrics(),
     safeMetrics(),
+    getLocale(),
   ]);
+  const dict = getDictionary(locale);
   const pinnedRows = pinned.map((id) => ({
     id,
     name: catalog?.find((m) => m.id === id)?.display_name ?? id,
@@ -56,11 +61,12 @@ export async function PreferencesSection() {
     <>
       <section className="lead">
         <div className="card">
-          <h2>View</h2>
+          <h2>{dict.settings.viewTitle}</h2>
           <p className="set-hint">
-            <strong>Essentials</strong> keeps the navigation to the daily surfaces;{" "}
-            <strong>Observatory</strong> opens every power view. All pages stay reachable by URL in
-            both modes.
+            <strong>{dict.settings.viewHintEssentials}</strong>{" "}
+            {dict.settings.viewHint.split("{observatory}")[0]}
+            <strong>{dict.settings.viewHintObservatory}</strong>
+            {dict.settings.viewHint.split("{observatory}")[1]}
           </p>
           <div className="set-toggle-row">
             <StandaloneDensityToggle density={density} />
@@ -70,11 +76,20 @@ export async function PreferencesSection() {
 
       <section className="lead">
         <div className="card">
-          <h2>Pinned signals</h2>
+          <h2>{dict.settings.languageTitle}</h2>
+          <p className="set-hint">{dict.settings.languageHint}</p>
+          <div className="set-toggle-row">
+            <LanguageSwitcher />
+          </div>
+        </div>
+      </section>
+
+      <section className="lead">
+        <div className="card">
+          <h2>{dict.settings.pinnedSignals}</h2>
           {pinnedRows.length === 0 ? (
             <p className="empty">
-              Nothing pinned - the Today grid shows the curated defaults. Star any signal in the{" "}
-              <Link href="/library">Library</Link> to build your own grid.
+              {dict.settings.noPinned}
             </p>
           ) : (
             <ul className="set-pins">
