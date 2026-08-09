@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import type { Density } from "../lib/prefs";
 import { useOptimisticDensity } from "./DensityToggle";
+import { useI18n } from "./I18nProvider";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
@@ -25,6 +26,7 @@ export function Shell({
 }) {
   const [open, setOpen] = useState(false);
   const [shownDensity, pickDensity] = useOptimisticDensity(density);
+  const { dict } = useI18n();
 
   return (
     <div className={`app density-${shownDensity} ${open ? "nav-open" : ""}`}>
@@ -37,7 +39,7 @@ export function Shell({
       <button
         type="button"
         className="nav-scrim"
-        aria-label="Close navigation"
+        aria-label={dict.chrome.closeNavigation}
         hidden={!open}
         tabIndex={open ? 0 : -1}
         onClick={() => setOpen(false)}

@@ -5444,6 +5444,44 @@ body {
   border-left: 1px solid var(--line);
 }
 
+.language-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.language-switcher span {
+  white-space: nowrap;
+}
+
+.language-switcher select {
+  min-height: 36px;
+  max-width: 170px;
+  padding: 0 30px 0 11px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  cursor: pointer;
+}
+
+.language-switcher.compact span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.settings-language select {
+  max-width: 220px;
+}
+
 .theme-toggle {
   min-width: 36px;
 }
@@ -5989,7 +6027,8 @@ body {
 
 @media (max-width: 620px) {
   .topbar-search,
-  .topbar-health {
+  .topbar-health,
+  .language-switcher.compact {
     display: none;
   }
 

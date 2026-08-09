@@ -11,6 +11,8 @@ VaultSection,
 import { DashboardCustomizer } from "./components/DashboardCustomizer";
 import { ExplorePanelCard } from "./components/ExplorePanelCard";
 import { CardSkeleton, GridSkeleton, HeroSkeleton, LeadSkeleton, RowSkeleton } from "./components/Skeletons";
+import { getDictionary } from "./lib/i18n";
+import { getLocale } from "./lib/i18n.server";
 import { getDashboardSections, getSavedPanels } from "./lib/prefs";
 
 export const revalidate = 30;
@@ -22,6 +24,7 @@ export const revalidate = 30;
 export default async function Home() {
   const sections = await getDashboardSections();
   const savedPanels = await getSavedPanels();
+  const dict = getDictionary(await getLocale());
 
   return (
     <div className="today-page">
@@ -80,7 +83,7 @@ export default async function Home() {
 
       <DashboardCustomizer sections={sections} />
 
-      <footer className="foot">HealthSave Observatory · canonical observations · local-first</footer>
+      <footer className="foot">{dict.chrome.footer}</footer>
     </div>
   );
 }
