@@ -11,6 +11,7 @@
 import { dateDomainMs, dateTicks, declutterLabels, valueTicks } from "./chart/axis";
 import { niceTicks } from "./chart/scale";
 import { timedDomain, timedSegments, type TimedPoint } from "./chart/timedSeries";
+import { formatTick } from "../lib/format";
 
 const PALETTE = [
   "var(--series-1)",
@@ -32,13 +33,6 @@ const PLOT_H = RH - M.t - M.b;
 // Minimum vertical separation between end-labels, in viewBox user units. ~14px
 // once the 720x240 viewBox is scaled down to a typical Explore panel width.
 const END_LABEL_MIN_GAP = 22;
-
-function fmtTick(v: number): string {
-  const a = Math.abs(v);
-  if (a >= 1000) return Math.round(v).toLocaleString();
-  if (Number.isInteger(v)) return String(v);
-  return v.toFixed(a < 1 ? 2 : 1);
-}
 
 function path(points: TimedPoint[], lo: number, hi: number, startMs: number, endMs: number): string {
   if (points.length < 2) return "";
@@ -171,7 +165,7 @@ export function MultiSeriesChart({
               className="chart-tick-label chart-y-label"
               style={{ left: `${((M.l - 7) / RW) * 100}%`, top: `${(yUser(t.value) / RH) * 100}%` }}
             >
-              {fmtTick(t.value)}
+              {formatTick(t.value)}
             </span>
           ))}
           {xTicks.map((t, i) => (

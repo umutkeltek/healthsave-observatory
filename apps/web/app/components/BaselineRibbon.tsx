@@ -7,13 +7,7 @@
 import { valueTicks } from "./chart/axis";
 import { HoverOverlay } from "./chart/HoverOverlay";
 import { quantile, robustDomain } from "./chart/scale";
-
-function fmtTick(v: number): string {
-  const a = Math.abs(v);
-  if (a >= 1000) return Math.round(v).toLocaleString();
-  if (Number.isInteger(v)) return String(v);
-  return v.toFixed(a < 1 ? 2 : 1);
-}
+import { formatTick } from "../lib/format";
 
 type Props = {
   values: number[];
@@ -77,7 +71,7 @@ export function BaselineRibbon({
               className="chart-tick-label ribbon-y-label"
               style={{ top: `${(y(t.value) / H) * 100}%` }}
             >
-              {fmtTick(t.value)}
+              {formatTick(t.value)}
             </span>
           ))}
         </div>

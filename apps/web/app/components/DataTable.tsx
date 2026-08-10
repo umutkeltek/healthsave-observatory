@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import type { SeriesPoint } from "../lib/api";
+import { formatValue } from "../lib/format";
 
 // A sortable recent-readings table (the Grafana log-table capability). Local
 // client sort by column - holds no data beyond the props. Capped to keep the
@@ -10,6 +11,16 @@ import type { SeriesPoint } from "../lib/api";
 // exist yet - this is the generic per-metric reading log.)
 type Col = "t" | "value" | "source_id";
 const CAP = 60;
+
+// Render an ISO timestamp in the viewer's local timezone. `t` arrives as UTC
+// ISO; slicing it raw (the old behaviour) printed UTC as if it were local and
+// mislabelled every reading by the offset. This is a client component, so
+// toLocaleString resolves in the browser tz.
+function formatReadingTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
 
 export function DataTable({ points, unit }: { points: SeriesPoint[]; unit?: string }) {
   const [col, setCol] = useState<Col>("t");
@@ -60,10 +71,9 @@ export function DataTable({ points, unit }: { points: SeriesPoint[]; unit?: stri
         <tbody>
           {rows.map((p, i) => (
             <tr key={`${p.t}-${p.source_id}-${i}`}>
-              <td className="prov-sync">{p.t.slice(0, 16).replace("T", " ")}</td>
+              <td className="prov-sync">{formatReadingTime(p.t)}</td>
               <td className="dt-val">
-                {p.value ?? "-"}
-                {p.value !== null && unit ? ` ${unit}` : ""}
+                {formatValue(p.value, unit, { nullLabel: "-" })}
               </td>
               <td className="prov-hw">{p.source_id}</td>
             </tr>

@@ -98,70 +98,70 @@ function topLevelSelectors(cssText: string): SelectorBlock[] {
   // Extract every top-level selector block (not inside @media, [data-theme],
   // @keyframes, @import, @charset, @layer, @supports). Handles multi-line
   // selector lists (``html,\nbody {``) by stitching trailing-comma fragments.
+  //
+  // Depth is updated exactly once per line so a multi-line block can't desync
+  // the scan (the previous version advanced `i` past a block during body
+  // capture and then subtracted the closing brace again, driving depth
+  // negative and silently dropping every selector after the first).
   const blocks: SelectorBlock[] = [];
-  let depth = 0;
-  let bodyStart = -1;
   const lines = cssText.split("\n");
+  const braces = (s: string) => (s.match(/\{/g) || []).length - (s.match(/\}/g) || []).length;
 
-  const isSelectorStart = (s: string): boolean =>
-    !s.startsWith("@media") && !s.startsWith("[data-theme") &&
-    !s.startsWith("@keyframes") && !s.startsWith("@font-") &&
-    !s.startsWith("@import") && !s.startsWith("@charset") &&
-    !s.startsWith("@layer") && !s.startsWith("@supports") &&
-    s.includes("{");
+  const isIgnoredStart = (s: string): boolean =>
+    s.startsWith("@media") || s.startsWith("[data-theme") ||
+    s.startsWith("@keyframes") || s.startsWith("@font-") ||
+    s.startsWith("@import") || s.startsWith("@charset") ||
+    s.startsWith("@layer") || s.startsWith("@supports");
 
+  let depth = 0;
   let pendingPrefix = "";
   let pendingLine = -1;
 
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
-    if (!trimmed || trimmed.startsWith("/*") || trimmed.startsWith("//")) {
-      depth += (lines[i].match(/\{/g) || []).length - (lines[i].match(/\}/g) || []).length;
+    const atTop = depth === 0;
+
+    if (atTop && trimmed && !trimmed.startsWith("/*") && !trimmed.startsWith("//") &&
+        trimmed.includes("{") && !isIgnoredStart(trimmed)) {
+      // Stitch a multi-line selector list together.
+      let selectorLines = [trimmed];
+      while (!selectorLines[selectorLines.length - 1].includes("{") && i + 1 < lines.length) {
+        i += 1;
+        selectorLines.push(lines[i].trim());
+      }
+      let selector = selectorLines.join(" ").split("{")[0].trim();
+      const selectorStartLine = pendingPrefix ? pendingLine : i + 1;
+      if (pendingPrefix) selector = `${pendingPrefix} ${selector}`.replace(/\s*,\s*/g, ", ");
+      // Capture body lines until the brace depth opened on the selector line closes.
+      const body: string[] = [];
+      let d = braces(lines[i]); // the selector line itself opens the block
+      let j = i;
+      while (j + 1 < lines.length && d > 0) {
+        j += 1;
+        const ln = lines[j];
+        if (!ln.trim().startsWith("/*")) body.push(ln);
+        d += braces(ln);
+      }
+      // d is now 0; consume through the closing brace line.
+      i = j;
+      if (selector) {
+        blocks.push({ selector, line: selectorStartLine, body: body.join("\n") });
+      }
+      pendingPrefix = "";
+      pendingLine = -1;
+      // The block (open…close) nets to zero braces, so depth is unchanged.
       continue;
     }
 
-    if (depth === 0) {
-      if (isSelectorStart(trimmed)) {
-        let selectorLines = [trimmed];
-        while (!selectorLines[selectorLines.length - 1].includes("{") && i + 1 < lines.length) {
-          i += 1;
-          selectorLines.push(lines[i].trim());
-        }
-        let selector = selectorLines.join(" ").split("{")[0].trim();
-        const selectorStartLine = pendingPrefix ? pendingLine : i + 1;
-        if (pendingPrefix) selector = `${pendingPrefix} ${selector}`;
-        // Capture body lines until depth returns to 0.
-        bodyStart = i + 1;
-        let body: string[] = [];
-        let j = i;
-        let d = (lines[j].match(/\{/g) || []).length - (lines[j].match(/\}/g) || []).length;
-        while (j + 1 < lines.length && d > 0) {
-          j += 1;
-          const ln = lines[j];
-          if (!ln.trim().startsWith("/*")) body.push(ln);
-          d += (ln.match(/\{/g) || []).length - (ln.match(/\}/g) || []).length;
-        }
-        i = j;
-        if (selector) {
-          blocks.push({ selector, line: selectorStartLine, body: body.join("\n") });
-        }
-        pendingPrefix = "";
-        pendingLine = -1;
-      } else if (trimmed.endsWith(",")) {
-        pendingPrefix = pendingPrefix
-          ? `${pendingPrefix} ${trimmed}`
-          : trimmed;
-        if (pendingLine === -1) pendingLine = i + 1;
-      } else {
-        pendingPrefix = "";
-        pendingLine = -1;
-      }
-    } else {
+    if (atTop && trimmed.endsWith(",")) {
+      pendingPrefix = pendingPrefix ? `${pendingPrefix} ${trimmed}` : trimmed;
+      if (pendingLine === -1) pendingLine = i + 1;
+    } else if (atTop) {
       pendingPrefix = "";
       pendingLine = -1;
     }
 
-    depth += (lines[i].match(/\{/g) || []).length - (lines[i].match(/\}/g) || []).length;
+    depth += braces(lines[i]);
   }
 
   return blocks;
@@ -248,31 +248,52 @@ describe("CSS design-token enforcement (DESIGN.md)", () => {
   });
 
   test("no duplicate top-level selectors with conflicting property values", () => {
-    // Most duplicate selector blocks are intentional override blocks
-    // (e.g. "Final taste alignment" sections that re-declare styles with
-    // newer values). Those are fine — the last definition wins.
+    // DESIGN.md: "A duplicate top-level selector is a bug, not a layer." The
+    // dangerous case is one selector defined twice with DISAGREEING values for
+    // a property — the earlier silently loses to source order.
     //
-    // What IS a bug is two declarations that disagree on a *property*
-    // (e.g. .sidebar { width: 256px } in one place, width: 258px in
-    // another). Those silently lose to whichever comes last in source
-    // order and indicate a missed consolidation. This test fails on
-    // those conflicts and reports the exact properties that disagree.
+    // History: this gate existed before but was a no-op because the
+    // topLevelSelectors parser desynced on multi-line blocks and dropped every
+    // selector after the first. The parser is now correct, which surfaced a
+    // backlog of override-layer conflicts that accumulated while it was broken.
+    //
+    // Rather than blind-merge 68 conflicting declarations across a 7k-line
+    // stylesheet (repositioning properties in the cascade can change how a
+    // selector resolves against its neighbours — needs visual verification),
+    // we RATCHET: the gate fails if the conflict count GROWS, and the baseline
+    // is lowered as each override block is consolidated. The full list is
+    // printed every run so the debt stays visible and actionable.
     const blocks = topLevelSelectors(css);
     const dups = duplicateBlocks(blocks);
     const conflicts = conflictingDuplicates(dups);
+
+    // Lower these baselines as override layers are consolidated away.
+    // Conflicts are at 0 now (Tier A removed the 68 losing declarations);
+    // any NEW conflict is a hard failure. Duplicates remain until the
+    // visually-verified Tier B collapse.
+    const CONFLICT_BASELINE = 0;
+    const DUPLICATE_BASELINE = 41;
+
     if (conflicts.length > 0) {
       const summary = conflicts
-        .slice(0, 10)
         .map((c) => {
           const vals = c.values.map((v) => `L${v.line}=${v.value}`).join(" vs ");
           return `${c.selector} { ${c.property}: ${vals} }`;
         })
         .join("\n  ");
       console.warn(
-        `CSS duplicate-conflict debt: ${conflicts.length} selector blocks have conflicting values:\n  ${summary}`,
+        `[cssRules] ${conflicts.length} conflicting duplicate declarations (baseline ${CONFLICT_BASELINE}, lower as you consolidate):\n  ${summary}`,
       );
     }
-    expect(conflicts).toEqual([]);
+    if (dups.size > 0) {
+      console.warn(
+        `[cssRules] ${dups.size} top-level selectors defined >1× (baseline ${DUPLICATE_BASELINE}): ${[...dups.keys()].join(", ")}`,
+      );
+    }
+
+    // Ratchet: never let the debt grow. Lower the baselines when you fix some.
+    expect(conflicts.length).toBeLessThanOrEqual(CONFLICT_BASELINE);
+    expect(dups.size).toBeLessThanOrEqual(DUPLICATE_BASELINE);
   });
 
   test("no banned font families — Apple system stack only", () => {

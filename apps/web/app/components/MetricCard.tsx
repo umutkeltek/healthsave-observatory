@@ -1,13 +1,9 @@
 import type { MetricSeries } from "../lib/api";
+import { positiveIsGoodFor } from "../lib/direction";
+import { formatValue } from "../lib/format";
+import { rangeLabel } from "../lib/ranges";
 import { quantile } from "./chart/scale";
 import { CountUp } from "./CountUp";
-
-function numberLabel(value: number): string {
-  const abs = Math.abs(value);
-  if (abs >= 1000) return Math.round(value).toLocaleString();
-  if (abs < 10 && !Number.isInteger(value)) return value.toFixed(1);
-  return Math.round(value).toLocaleString();
-}
 
 function Sparkline({ values, unit, label }: { values: number[]; unit?: string; label: string }) {
   if (values.length < 2) return null;
@@ -42,7 +38,7 @@ function Sparkline({ values, unit, label }: { values: number[]; unit?: string; l
         r="3.5"
         vectorEffect="non-scaling-stroke"
       >
-        <title>{`${numberLabel(last)}${unit ? ` ${unit}` : ""} · ${label}`}</title>
+        <title>{`${formatValue(last, unit)} · ${label}`}</title>
       </circle>
     </svg>
   );
@@ -85,16 +81,21 @@ export function MetricCard({
   const avg = values.reduce((a, b) => a + b, 0) / values.length;
   const delta = last - avg;
   const deltaAbs = Math.abs(delta);
-  const deltaLabel = `${delta >= 0 ? "Higher" : "Lower"} by ${numberLabel(deltaAbs)}`;
+  const deltaLabel = `${delta >= 0 ? "Higher" : "Lower"} by ${formatValue(deltaAbs)}`;
+  // Tone reflects whether the move is good or bad, not just up or down: a rise
+  // in resting HR should not read as positive. When the metric's direction is
+  // unknown we stay neutral instead of guessing.
+  const direction = positiveIsGoodFor(series.metric.id);
+  const tone = direction === null ? "" : direction === (delta >= 0) ? "good" : "bad";
 
   return (
     <article className="card metric-card">
       <div className="metric-card-head">
         <div>
           <h2>{series.metric.display_name}</h2>
-          <span className="metric-kind">{series.range} window</span>
+          <span className="metric-kind">{rangeLabel(series.range)} window</span>
         </div>
-        <span className={`metric-state ${delta >= 0 ? "up" : "down"}`}>{deltaLabel}</span>
+        <span className={`metric-state${tone ? ` ${tone}` : ""}`}>{deltaLabel}</span>
       </div>
 
       <div className="metric-value-row">
@@ -104,7 +105,7 @@ export function MetricCard({
         </div>
         <div className="metric-mean">
           <span>range mean</span>
-          <strong>{numberLabel(avg)}</strong>
+          <strong>{formatValue(avg)}</strong>
         </div>
       </div>
 
@@ -114,7 +115,7 @@ export function MetricCard({
 
       <div className="metric-foot">
         <span>{values.length.toLocaleString()} readings</span>
-        <span>last {series.range}</span>
+        <span>last {rangeLabel(series.range)}</span>
       </div>
     </article>
   );

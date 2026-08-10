@@ -48,6 +48,7 @@ import {
   type SourceView,
   type StreamView,
 } from "./api";
+import { formatAgo } from "./format";
 import { hasUsablePoints } from "./ranges";
 import { swrCache } from "./ttlCache";
 
@@ -374,12 +375,7 @@ export function postureChip(privacy: Privacy | null): PostureChip {
 }
 
 // "2h ago" style relative label for the shell's sync status. Server-side only.
+// Delegates to the shared formatter so there's one definition of relative time.
 export function agoLabel(iso: string | null | undefined): string {
-  if (!iso) return "never";
-  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+  return formatAgo(iso);
 }

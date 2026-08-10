@@ -4,6 +4,7 @@ import Link from "next/link";
 import { detectDivergence, groupBySource } from "../../lib/analytics";
 import { anomalyPinIndices } from "../../lib/annotations";
 import { quantile } from "../../components/chart/scale";
+import { formatValue } from "../../lib/format";
 import { comparability } from "../../lib/healthOpinion";
 import { agoLabel, safeFindings, safeMetrics, safeReadiness, safeSeriesWithFallback, safeStreams } from "../../lib/load";
 import { METRIC_NOTES } from "../../lib/metricNotes";
@@ -30,11 +31,7 @@ const RANGE_CHIPS: Record<Range, string> = {
 };
 
 function numberLabel(value: number | null | undefined): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) return "-";
-  const abs = Math.abs(value);
-  if (abs >= 1000) return Math.round(value).toLocaleString();
-  if (abs < 10 && !Number.isInteger(value)) return value.toFixed(1);
-  return Math.round(value).toLocaleString();
+  return formatValue(value, undefined, { nullLabel: "-" });
 }
 
 function latestLabel(points: { t: string; value: number | null }[]): string {

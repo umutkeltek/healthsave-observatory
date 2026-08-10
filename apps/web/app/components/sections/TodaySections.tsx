@@ -49,7 +49,7 @@ const CONTRIBUTOR_DEFS = [
   { key: "hrv_vs_baseline_pct", label: "HRV", unit: "%", positiveIsGood: true },
   { key: "rhr_vs_baseline_pct", label: "Resting HR", unit: "%", positiveIsGood: false },
   { key: "respiratory_rate_vs_baseline_pct", label: "Resp. rate", unit: "%", positiveIsGood: false },
-  { key: "temperature_deviation_c", label: "Wrist temp", unit: "degC", positiveIsGood: false },
+  { key: "temperature_deviation_c", label: "Wrist temp", unit: "°C", positiveIsGood: false },
 ];
 
 function recoveryContributors(findings: Finding[] | null) {

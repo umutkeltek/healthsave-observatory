@@ -1,4 +1,5 @@
 import type { MetricSeries, SeriesPoint } from "../lib/api";
+import { formatValue } from "../lib/format";
 
 // Card summarising walking load: highest-fidelity signals the device exposes.
 // Each stat is a real series point with a meaningful aggregation, never an
@@ -11,23 +12,20 @@ function latest(points: SeriesPoint[]): SeriesPoint | null {
 }
 
 function fmt(value: number | null, unit: string | null): string {
-  if (value === null || !Number.isFinite(value)) return "—";
-  // Whole-integer values print without decimals so a reading of "81 bpm"
-  // doesn't read as "81.0 bpm". Sub-integer values keep one decimal for
-  // precision (1.4 m/s is meaningful, 1.40 isn't).
-  const isInteger = Number.isInteger(value);
-  const rounded = isInteger || Math.abs(value) >= 100 ? value.toFixed(0) : value.toFixed(1);
-  return unit ? `${rounded}${unit === "%" ? "" : " "}${unit}` : rounded;
+  return formatValue(value, unit);
 }
 
 function Stat({ name, unit, series }: NamedSeries) {
   const last = latest(series?.points ?? []);
   const value = last && last.value !== null ? last.value : null;
   const ago = last ? last.t : null;
+  // Prefer the backend's canonical unit; the prop is the fallback so the card
+  // can't silently lie if a unit string ever changes upstream.
+  const unitFromSeries = series?.metric.canonical_unit ?? unit;
   return (
     <div className="mobility-stat">
       <span className="mobility-stat-label">{name}</span>
-      <span className="mobility-stat-value big mono">{fmt(value, unit)}</span>
+      <span className="mobility-stat-value big mono">{fmt(value, unitFromSeries)}</span>
       <span className="mobility-stat-meta meta">
         {ago ? new Date(ago).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "no data yet"}
       </span>

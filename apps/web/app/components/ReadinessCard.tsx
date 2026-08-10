@@ -1,4 +1,5 @@
 import type { MetricReadiness, Readiness } from "../lib/api";
+import { formatAgo } from "../lib/format";
 
 // Human-meaningful labels for the per-metric gates the backend grades.
 const GATE_LABELS: Record<string, string> = {
@@ -9,17 +10,6 @@ const GATE_LABELS: Record<string, string> = {
 // Data older than this is likely behind because HealthKit can't sync while the
 // iPhone is locked - we say so rather than pretending freshness.
 const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
-
-function formatAgo(iso: string | null): string {
-  if (!iso) return "never";
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
 
 function isStale(iso: string | null): boolean {
   if (!iso) return true;

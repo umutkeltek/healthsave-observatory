@@ -1,20 +1,18 @@
 import type { MetricSeries } from "../lib/api";
+import { STAGE_COLOR, STAGE_LABEL } from "../lib/sleep";
 
 // Sleep-stage colours come from the design tokens (theme-aware) rather than
 // hardcoded hex, so they stay coherent with the palette in light and dark.
-const STAGE_COLOR: Record<string, string> = {
-  awake: "var(--sleep-awake)",
-  rem: "var(--sleep-rem)",
-  core: "var(--sleep-core)",
-  deep: "var(--sleep-deep)",
-};
+const STAGE_NEUTRAL = "var(--neutral)";
 
-const STAGE_LABEL: Record<string, string> = {
-  awake: "Awake",
-  rem: "REM",
-  core: "Core",
-  deep: "Deep",
-};
+// Unknown stage codes (e.g. a new "outOfBed" code the backend starts sending)
+// collapse to a neutral chip + "Other" label instead of leaking the raw code.
+function stageLabel(code: string | null): string {
+  return (code && STAGE_LABEL[code]) || "Other";
+}
+function stageColor(code: string | null): string {
+  return (code && STAGE_COLOR[code]) || STAGE_NEUTRAL;
+}
 
 export function SleepCard({ series }: { series: MetricSeries | null }) {
   if (!series) {
@@ -48,16 +46,16 @@ export function SleepCard({ series }: { series: MetricSeries | null }) {
           <span
             key={i}
             className="seg"
-            style={{ background: STAGE_COLOR[s.code ?? ""] ?? "var(--neutral)" }}
-            title={`${STAGE_LABEL[s.code ?? ""] ?? s.code} · ${new Date(s.t).toLocaleString()}`}
+            style={{ background: stageColor(s.code) }}
+            title={`${stageLabel(s.code)} · ${new Date(s.t).toLocaleString()}`}
           />
         ))}
       </div>
       <div className="legend">
         {present.map((code) => (
           <span key={code} className="legend-item">
-            <span className="dot" style={{ background: STAGE_COLOR[code] ?? "var(--neutral)" }} />
-            {STAGE_LABEL[code] ?? code}
+            <span className="dot" style={{ background: stageColor(code) }} />
+            {stageLabel(code)}
           </span>
         ))}
       </div>

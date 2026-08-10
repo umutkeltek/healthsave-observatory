@@ -212,6 +212,10 @@ export default function ActivityPage() {
         <ActivityIntroNote />
       </Suspense>
 
+      <Suspense fallback={<StrainSectionFallback />}>
+        <StrainCards />
+      </Suspense>
+
       <Suspense fallback={<CardSkeleton />}>
         <WeeklyStrain />
       </Suspense>

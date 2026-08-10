@@ -57,7 +57,9 @@ describe("TimelineView", () => {
   test("renders a moment with its kind icon and grade suffix", () => {
     const html = renderToStaticMarkup(<TimelineView moments={[MOMENT]} findings={[]} />);
     expect(html).toContain("Mild cold");
-    expect(html).toContain("🤒");
+    // Kind icon is now a thin-stroke SVG, not a colour emoji.
+    expect(html).toContain("timeline-kind-icon");
+    expect(html).not.toContain("🤒");
     expect(html).toContain(" · moderate");
     expect(html).toContain("Started Monday evening");
   });
@@ -68,7 +70,8 @@ describe("TimelineView", () => {
     });
     const html = renderToStaticMarkup(<TimelineView moments={[]} findings={[finding]} />);
     expect(html).toContain("Your HRV is 12% below your baseline.");
-    expect(html).toContain("🔍");
+    expect(html).toContain("timeline-kind-icon");
+    expect(html).not.toContain("🔍");
   });
 
   test("renders a finding with a legacy structured_data.claim", () => {
