@@ -29,6 +29,7 @@ type ParsedSleepSegment = SleepSegment & {
 };
 
 const MAX_SEGMENT_MINUTES = 24 * 60;
+const SESSION_GAP_MS = 4 * 60 * 60 * 1_000;
 const DETAILED_ASLEEP_STAGES = ["core", "deep", "rem", "light"] as const;
 const CONTEXT_STAGES = ["in_bed", "unknown"] as const;
 
@@ -115,11 +116,6 @@ function reconcileTimeline(parsed: ParsedSleepSegment[]): TimelineReconciliation
     let displayStage: string | null = null;
 
     if (hasAsleep) {
-      // Total sleep follows the legacy sleep_sessions contract: any asleep
-      // classification makes this clock slice asleep. Generic asleep is
-      // compatible with one detailed classification; only incompatible detail
-      // or an awake/asleep disagreement is exposed as a conflict.
-      durationMin += sliceMin;
       trackedMin += sliceMin;
       if (hasAwake || detailedStages.length > 1) {
         displayStage = "conflict";
@@ -128,6 +124,11 @@ function reconcileTimeline(parsed: ParsedSleepSegment[]): TimelineReconciliation
       } else {
         displayStage = "asleep";
       }
+      // An awake/asleep disagreement is still tracked and rendered, but it is
+      // not trustworthy evidence of sleep. Conflicting detailed asleep stages
+      // remain asleep clock time because every active source agrees on that
+      // broader classification.
+      if (!hasAwake) durationMin += sliceMin;
       addMinutes(displayStage, sliceMin);
     } else if (hasAwake) {
       trackedMin += sliceMin;
@@ -172,9 +173,9 @@ function reconcileTimeline(parsed: ParsedSleepSegment[]): TimelineReconciliation
   };
 }
 
-// Group raw sleep stage points into nights. A night boundary is noon UTC
-// (the analytical-time default): any stage before noon belongs to the
-// previous calendar date's night. Stages are bucketed by their date key.
+// Group raw sleep stage points into sessions before assigning a display day.
+// A gap of four hours starts a new session. This preserves a continuous night
+// that crosses the noon fallback boundary while keeping a later nap separate.
 //
 // ── Noon-split heuristic ──────────────────────────────────────────────
 // This heuristic is necessary because Apple Watch sleep data from HealthSave
@@ -189,17 +190,45 @@ function reconcileTimeline(parsed: ParsedSleepSegment[]): TimelineReconciliation
 // point the noon split becomes a fallback for sources that don't emit
 // per-night metadata, and the derivation is exact rather than heuristic.
 export function groupSleepNights(points: SeriesPoint[]): Map<string, SeriesPoint[]> {
+  const ordered = points
+    .map((point) => ({ point, segment: parsedSegment(point) }))
+    .filter(
+      (entry): entry is { point: SeriesPoint; segment: ParsedSleepSegment } =>
+        entry.segment !== null,
+    )
+    .sort(
+      (a, b) =>
+        a.segment.startMs - b.segment.startMs || a.segment.endMs - b.segment.endMs,
+    );
+
+  const sessions: Array<{
+    startMs: number;
+    endMs: number;
+    points: SeriesPoint[];
+  }> = [];
+  for (const { point, segment } of ordered) {
+    const current = sessions.at(-1);
+    if (!current || segment.startMs - current.endMs >= SESSION_GAP_MS) {
+      sessions.push({ startMs: segment.startMs, endMs: segment.endMs, points: [point] });
+      continue;
+    }
+    current.endMs = Math.max(current.endMs, segment.endMs);
+    current.points.push(point);
+  }
+
   const nights = new Map<string, SeriesPoint[]>();
-  for (const p of points) {
-    const instant = Date.parse(p.t);
-    if (!Number.isFinite(instant)) continue;
-    const t = new Date(instant);
-    // Noon split: if before 12:00, it's still "last night"
+  for (const session of sessions) {
+    const t = new Date(session.startMs);
+    // Display the session on its bedtime date under the noon fallback.
     if (t.getUTCHours() < 12) t.setUTCDate(t.getUTCDate() - 1);
-    const key = t.toISOString().slice(0, 10); // YYYY-MM-DD
-    const arr = nights.get(key) || [];
-    arr.push(p);
-    nights.set(key, arr);
+    const date = t.toISOString().slice(0, 10);
+    let key = date;
+    let occurrence = 2;
+    while (nights.has(key)) {
+      key = `${date}#${occurrence}`;
+      occurrence += 1;
+    }
+    nights.set(key, session.points);
   }
   return nights;
 }
@@ -226,7 +255,7 @@ export function deriveNight(key: string, points: SeriesPoint[]): SleepNight | nu
   const streamCount = new Set(parsed.map((segment) => segment.streamKey)).size;
 
   return {
-    date: key,
+    date: key.slice(0, 10),
     bedtime,
     wakeTime,
     durationMin,

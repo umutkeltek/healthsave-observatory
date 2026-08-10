@@ -79,6 +79,36 @@ describe("groupSleepNights", () => {
     const nights = groupSleepNights(points);
     expect(nights.size).toBe(2);
   });
+
+  it("keeps a contiguous Pacific overnight session together across noon UTC", () => {
+    const points = [
+      interval("2026-06-02T06:00:00Z", "2026-06-02T10:00:00Z", "core"),
+      interval("2026-06-02T10:00:00Z", "2026-06-02T12:00:00Z", "deep"),
+      interval("2026-06-02T12:00:00Z", "2026-06-02T14:00:00Z", "rem"),
+    ];
+
+    const nights = groupSleepNights(points);
+
+    expect(nights.size).toBe(1);
+    expect(nights.get("2026-06-01")).toHaveLength(3);
+    expect(deriveNight("2026-06-01", nights.get("2026-06-01")!)?.durationMin).toBe(480);
+  });
+
+  it("keeps a nap separated by exactly four hours in a different session", () => {
+    const points = [
+      interval("2026-06-02T00:00:00Z", "2026-06-02T02:00:00Z", "core"),
+      interval("2026-06-02T02:00:00Z", "2026-06-02T04:00:00Z", "deep"),
+      interval("2026-06-02T08:00:00Z", "2026-06-02T09:00:00Z", "core"),
+    ];
+
+    const nights = groupSleepNights(points);
+    const derived = [...nights].map(([key, sessionPoints]) => deriveNight(key, sessionPoints));
+
+    expect(nights.size).toBe(2);
+    expect([...nights.values()].map((sessionPoints) => sessionPoints.length)).toEqual([2, 1]);
+    expect(derived.map((night) => night?.date)).toEqual(["2026-06-01", "2026-06-01"]);
+    expect(derived.map((night) => night?.durationMin)).toEqual([240, 60]);
+  });
 });
 
 describe("deriveNight", () => {
@@ -199,14 +229,14 @@ describe("deriveNight", () => {
       interval("2026-06-01T23:15:00Z", "2026-06-01T23:45:00Z", "awake", "phone"),
     ]);
 
-    expect(night?.durationMin).toBe(90);
+    expect(night?.durationMin).toBe(75);
     expect(night?.trackedMin).toBe(105);
     expect(night?.timeInBedMin).toBe(105);
     expect(night?.stageMinutes).toEqual({ core: 30, conflict: 45, deep: 15, awake: 15 });
     expect(Object.values(night!.stageMinutes).reduce((sum, mins) => sum + mins, 0)).toBe(
       night?.trackedMin,
     );
-    expect(sleepTrends([night!]).efficiencies[0]).toBeCloseTo((90 / 105) * 100, 8);
+    expect(sleepTrends([night!]).efficiencies[0]).toBeCloseTo((75 / 105) * 100, 8);
   });
 
   it("rejects nights with less than 60 minutes of asleep intervals", () => {
