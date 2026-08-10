@@ -2784,8 +2784,9 @@ input.filter-select {
   }
 }
 
-/* Traces draw themselves in left-to-right (paths set pathLength={1}). */
-.ribbon-trace,
+/* Compact traces draw themselves in left-to-right (paths set pathLength={1}).
+   Baseline ribbons are excluded: their non-uniform SVG scaling can make a
+   normalized dash shorter than the visible jagged path and hide its tail. */
 .spark path,
 .multi-svg path {
   stroke-dasharray: 1;

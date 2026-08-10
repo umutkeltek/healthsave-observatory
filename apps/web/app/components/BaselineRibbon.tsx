@@ -99,7 +99,7 @@ export function BaselineRibbon({
           <line className="ribbon-band-edge" x1="0" y1={bandTop} x2={W} y2={bandTop} vectorEffect="non-scaling-stroke" />
           <line className="ribbon-band-edge" x1="0" y1={bandBot} x2={W} y2={bandBot} vectorEffect="non-scaling-stroke" />
           <line className="ribbon-median" x1="0" y1={mid} x2={W} y2={mid} vectorEffect="non-scaling-stroke" />
-          <path className="ribbon-trace" d={trace} pathLength={1} vectorEffect="non-scaling-stroke" />
+          <path className="ribbon-trace" d={trace} vectorEffect="non-scaling-stroke" />
         </svg>
         {anomalies.map((i) => (
           <span

@@ -279,4 +279,18 @@ describe("CSS design-token enforcement (DESIGN.md)", () => {
     const violations = usesSystemFonts(css);
     expect(violations).toEqual([]);
   });
+
+  test("baseline ribbons never use dash-length draw animation", () => {
+    const ribbonBlocks = Array.from(
+      css.matchAll(/([^{}]*\.ribbon-trace[^{}]*)\{([^{}]*)\}/g),
+      (match) => ({ selector: match[1], body: match[2] }),
+    );
+    const animatedSelectors = ribbonBlocks
+      .filter((block) =>
+        block.body.includes("stroke-dasharray") || block.body.includes("animation: draw"),
+      )
+      .map((block) => block.selector.trim());
+
+    expect(animatedSelectors).toEqual([]);
+  });
 });
