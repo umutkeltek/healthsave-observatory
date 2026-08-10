@@ -182,6 +182,7 @@ CREATE INDEX idx_raw_ingestion_log_ingested_at ON raw_ingestion_log (ingested_at
 -- Additive v2 operator trail fed by headers the released iOS app already sends.
 CREATE TABLE healthsave_sync_receipts (
     id                  BIGSERIAL PRIMARY KEY,
+    owner_id            UUID,
     sync_run_id         TEXT,
     batch_id            TEXT,
     idempotency_key     TEXT,
@@ -195,7 +196,8 @@ CREATE TABLE healthsave_sync_receipts (
     full_export         BOOLEAN,
     query_lower_bound_at TIMESTAMPTZ,
     status              TEXT NOT NULL
-        CHECK (status IN ('processed', 'empty', 'failed')),
+        CONSTRAINT healthsave_sync_receipts_status_check
+        CHECK (status IN ('processed', 'empty', 'failed', 'processing')),
     records_received    INTEGER NOT NULL DEFAULT 0,
     records_accepted    INTEGER NOT NULL DEFAULT 0,
     -- DOMAIN-002: records_skipped == genuine validation REJECTIONS only. It is
@@ -212,6 +214,7 @@ CREATE TABLE healthsave_sync_receipts (
     error_message       TEXT,
     raw_log_id          BIGINT REFERENCES raw_ingestion_log(id),
     source_endpoint     TEXT NOT NULL DEFAULT '/api/apple/batch',
+    response_payload    JSONB,
     received_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     completed_at        TIMESTAMPTZ
 );
@@ -219,12 +222,12 @@ CREATE INDEX idx_healthsave_sync_receipts_received_at
     ON healthsave_sync_receipts (received_at DESC);
 CREATE INDEX idx_healthsave_sync_receipts_run
     ON healthsave_sync_receipts (sync_run_id, batch_index);
-CREATE UNIQUE INDEX uq_healthsave_sync_receipts_batch_id
-    ON healthsave_sync_receipts (batch_id)
-    WHERE batch_id IS NOT NULL;
-CREATE UNIQUE INDEX uq_healthsave_sync_receipts_idempotency_key
-    ON healthsave_sync_receipts (idempotency_key)
-    WHERE idempotency_key IS NOT NULL;
+CREATE UNIQUE INDEX uq_healthsave_sync_receipts_owner_batch_id
+    ON healthsave_sync_receipts (owner_id, batch_id)
+    WHERE owner_id IS NOT NULL AND batch_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_healthsave_sync_receipts_owner_idempotency_key
+    ON healthsave_sync_receipts (owner_id, idempotency_key)
+    WHERE owner_id IS NOT NULL AND idempotency_key IS NOT NULL;
 
 -- ─── Catch-all for any HealthKit metric ──────────────────────────────
 CREATE TABLE quantity_samples (

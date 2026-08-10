@@ -11,6 +11,8 @@ branch, the ``RAW_LOG_ORPHANED`` error boundary, the response shape,
 and the post-ingest anomaly trigger.
 """
 
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -33,7 +35,8 @@ from storage.timescale import registry
 from storage.timescale.sync_receipts import (
     ReceiptIdempotencyConflict,
     _parse_time_value,
-    assert_receipt_idempotency,
+    claim_receipt_idempotency,
+    complete_receipt_idempotency,
     record_sync_receipt,
 )
 
@@ -196,6 +199,7 @@ async def apple_batch(
         raw_payload = await request.json()
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=400, detail="invalid JSON body") from exc
+    payload_hash = await _trusted_payload_hash(request)
     try:
         payload = BatchPayload.model_validate(raw_payload)
     except ValidationError as exc:
@@ -228,35 +232,35 @@ async def apple_batch(
     total = payload.total_batches
     samples = payload.samples
     sample_min_at, sample_max_at = _sample_window_from_request(request, samples)
-    await _reject_conflicting_receipt_idempotency(
+    sync_run_id = _header(request.headers, "X-HealthSave-Sync-Run-ID")
+    batch_id = _header(request.headers, "X-HealthSave-Batch-ID")
+    idempotency_key = _idempotency_key(
+        request.headers,
+        sync_run_id,
+        batch_id,
+        metric,
+        batch_idx,
+    )
+    replayed_response = await _claim_or_replay_receipt_idempotency(
         session,
-        request=request,
+        owner_id=owner_id,
+        idempotency_key=idempotency_key,
+        payload_hash=payload_hash,
         metric=metric,
         batch_index=batch_idx,
+        total_batches=total,
     )
+    if replayed_response is not None:
+        # ``ON CONFLICT DO UPDATE ... WHERE false`` still row-locks the winning
+        # receipt. Release that read-only claim transaction before returning the
+        # replay so a retry storm cannot queue behind response teardown.
+        await session.rollback()
+        return replayed_response
+    receipt_claimed = bool(idempotency_key and payload_hash)
 
     if not samples:
         raw_log_id = await audit.log_raw(session, None, raw_payload) if audit else None
-        await _record_sync_receipt(
-            session,
-            request=request,
-            metric=metric,
-            batch_index=batch_idx,
-            total_batches=total,
-            status="empty",
-            records_received=0,
-            records_accepted=0,
-            records_skipped=0,
-            sample_min_at=sample_min_at,
-            sample_max_at=sample_max_at,
-            raw_log_id=raw_log_id,
-        )
-        await session.commit()
-        if audit and raw_log_id is not None:
-            await audit.mark_processed(session, raw_log_id)
-            await session.commit()
-        _observe_ingest_metrics(metric=metric, rows=0, started_at=started_at)
-        return _delivery_receipt_response(
+        response = _delivery_receipt_response(
             request=request,
             status="empty",
             metric=metric,
@@ -271,29 +275,48 @@ async def apple_batch(
             sample_min_at=sample_min_at,
             sample_max_at=sample_max_at,
         )
+        if receipt_claimed:
+            assert idempotency_key is not None and payload_hash is not None
+            await complete_receipt_idempotency(
+                session,
+                owner_id=owner_id,
+                idempotency_key=idempotency_key,
+                payload_hash=payload_hash,
+                status="empty",
+                response_payload=response,
+                raw_log_id=raw_log_id,
+                records_received=0,
+                records_accepted=0,
+                records_skipped=0,
+                sample_min_at=sample_min_at,
+                sample_max_at=sample_max_at,
+            )
+        if audit and raw_log_id is not None:
+            await audit.mark_processed(session, raw_log_id)
+        await session.commit()
+        await _enrich_successful_sync_receipt(
+            session,
+            request=request,
+            owner_id=owner_id,
+            payload_hash=payload_hash,
+            metric=metric,
+            batch_index=batch_idx,
+            total_batches=total,
+            status="empty",
+            records_received=0,
+            records_accepted=0,
+            records_skipped=0,
+            sample_min_at=sample_min_at,
+            sample_max_at=sample_max_at,
+            raw_log_id=raw_log_id,
+            response_payload=response,
+        )
+        _observe_ingest_metrics(metric=metric, rows=0, started_at=started_at)
+        return response
 
     sample_groups = group_samples_by_device(samples)
     first_device_name, _ = sample_groups[0]
-    first_device_id = await storage.get_or_create_device(session, first_device_name)
-    raw_log_id = await audit.log_raw(session, first_device_id, raw_payload) if audit else None
-    await session.commit()
-
-    # R2 Track A: populate the Source/Device/Stream registry from this batch's
-    # origins. Post-commit + fail-soft — the batch is already durable, so a
-    # registry hiccup can never break ingest (the frozen v1 contract is untouched).
-    try:
-        await registry.record_origins(
-            session,
-            owner_id=owner_id,
-            plugin_id=identity.APPLE_HEALTHKIT_PLUGIN,
-            origins=[name for name, _ in sample_groups],
-        )
-        await session.commit()
-    except Exception:  # noqa: BLE001 - registry is best-effort, never fatal to ingest
-        log.warning("registry origin upsert failed (non-fatal)", exc_info=True)
-        await session.rollback()
-
-    plugin = _resolve_apple_health_plugin(request)
+    raw_log_id = None
 
     # Phase 5G error boundary preserved: pre-5G the per-device loop ran
     # without exception handling; a mid-loop raise left
@@ -302,6 +325,9 @@ async def apple_batch(
     # try/except so the loader inherits the same observability
     # guarantee — operators alert on RAW_LOG_ORPHANED{metric}.
     try:
+        first_device_id = await storage.get_or_create_device(session, first_device_name)
+        raw_log_id = await audit.log_raw(session, first_device_id, raw_payload) if audit else None
+        plugin = _resolve_apple_health_plugin(request)
         # Canonical observations are the success gate; per-metric tables are a
         # downstream projection in the same transaction.
         canonical_result = await _write_canonical_observations(
@@ -331,11 +357,46 @@ async def apple_batch(
         records_rejected = _optional_int(result.get("rejected")) or 0
         records_deduped_in_batch = _optional_int(result.get("deduped_in_batch"))
         storage_result_level = str(result.get("storage_result_level") or "accepted_only")
+        response = _delivery_receipt_response(
+            request=request,
+            status="processed",
+            metric=metric,
+            batch_index=batch_idx,
+            total_batches=total,
+            records_received=len(samples),
+            records_accepted=count,
+            records_rejected=records_rejected,
+            records_inserted_new=records_inserted_new,
+            records_deduped_existing=records_deduped_existing,
+            storage_result_level=storage_result_level,
+            sample_min_at=sample_min_at,
+            sample_max_at=sample_max_at,
+            records_deduped_in_batch=records_deduped_in_batch,
+        )
+        if receipt_claimed:
+            assert idempotency_key is not None and payload_hash is not None
+            await complete_receipt_idempotency(
+                session,
+                owner_id=owner_id,
+                idempotency_key=idempotency_key,
+                payload_hash=payload_hash,
+                status="processed",
+                response_payload=response,
+                raw_log_id=raw_log_id,
+                records_received=len(samples),
+                records_accepted=count,
+                records_skipped=records_rejected,
+                records_inserted_new=records_inserted_new,
+                records_deduped_existing=records_deduped_existing,
+                storage_result_level=storage_result_level,
+                sample_min_at=sample_min_at,
+                sample_max_at=sample_max_at,
+            )
         if audit and raw_log_id is not None:
             await audit.mark_processed(session, raw_log_id)
-        # CONTRACT-002: commit the DATA (canonical + projection + mark_processed)
-        # here. The delivery receipt is written separately, best-effort, below —
-        # a receipt-write failure must never roll back a landed ingest.
+        # The claim, frozen response, canonical observations, projection, and
+        # raw-audit completion become visible together. A concurrent retry is
+        # blocked on the owner/key unique index until this commit resolves.
         await session.commit()
         # The v2 readiness aggregates are cached at boot AND every TTL; an
         # ingest can land 100 rows but the next /api/v2/readiness returns
@@ -350,19 +411,32 @@ async def apple_batch(
         except Exception:  # pragma: no cover - metrics import optional
             log.debug("failed to record RAW_LOG_ORPHANED{metric=%s}", metric)
         await session.rollback()
+        orphaned_raw_log_id = await _persist_orphaned_raw_payload(
+            session,
+            audit=audit,
+            storage=storage,
+            first_device_name=first_device_name,
+            raw_payload=raw_payload,
+        )
         await _record_failed_sync_receipt(
             session,
             request=request,
+            owner_id=owner_id,
+            payload_hash=payload_hash,
             metric=metric,
             batch_index=batch_idx,
             total_batches=total,
             records_received=len(samples),
             sample_min_at=sample_min_at,
             sample_max_at=sample_max_at,
-            raw_log_id=raw_log_id,
+            raw_log_id=orphaned_raw_log_id,
             error_message=str(exc),
         )
-        log.exception("ingest loop failed for %s; raw_log_id=%s left orphaned", metric, raw_log_id)
+        log.exception(
+            "ingest loop failed for %s; raw_log_id=%s left orphaned",
+            metric,
+            orphaned_raw_log_id,
+        )
         # Already-classified HTTP errors pass through unchanged.
         if isinstance(exc, HTTPException):
             raise
@@ -380,40 +454,44 @@ async def apple_batch(
             },
         ) from exc
 
-    # CONTRACT-002: the ingest above is durably committed. The delivery receipt is
-    # bookkeeping for the /api/v2/sync surface — a receipt-write failure must NOT
-    # roll back a good ingest or turn a landed batch into a 5xx/422 the client
-    # would retry/Backfill. Best-effort, mirroring _record_failed_sync_receipt.
+    # R2 Track A: registry enrichment runs only after the atomic ingest commit.
+    # Its rollback therefore cannot release a claim or mutate frozen response
+    # state, and a registry hiccup remains non-fatal to the T0 endpoint.
     try:
-        await _record_sync_receipt(
+        await registry.record_origins(
             session,
-            request=request,
-            metric=metric,
-            batch_index=batch_idx,
-            total_batches=total,
-            status="processed",
-            records_received=len(samples),
-            records_accepted=count,
-            records_skipped=records_rejected,
-            records_inserted_new=records_inserted_new,
-            records_deduped_existing=records_deduped_existing,
-            storage_result_level=storage_result_level,
-            sample_min_at=sample_min_at,
-            sample_max_at=sample_max_at,
-            raw_log_id=raw_log_id,
+            owner_id=owner_id,
+            plugin_id=identity.APPLE_HEALTHKIT_PLUGIN,
+            origins=[name for name, _ in sample_groups],
         )
         await session.commit()
-    except Exception:
+    except Exception:  # noqa: BLE001 - registry is best-effort, never fatal to ingest
+        log.warning("registry origin upsert failed (non-fatal)", exc_info=True)
         await session.rollback()
-        log.exception(
-            "sync receipt write failed AFTER a successful ingest for %s "
-            "(data persisted; receipt row missing)",
-            metric,
-        )
-        try:
-            SYNC_RECEIPT_WRITE_FAILURES.labels(metric=metric).inc()
-        except Exception:  # pragma: no cover - metrics import optional
-            log.debug("failed to record SYNC_RECEIPT_WRITE_FAILURES{metric=%s}", metric)
+
+    # The core frozen response is already durable for claimed requests. This
+    # best-effort upsert only enriches operator-facing receipt metadata; its
+    # failure must never change a successful ingest response.
+    await _enrich_successful_sync_receipt(
+        session,
+        request=request,
+        owner_id=owner_id,
+        payload_hash=payload_hash,
+        metric=metric,
+        batch_index=batch_idx,
+        total_batches=total,
+        status="processed",
+        records_received=len(samples),
+        records_accepted=count,
+        records_skipped=records_rejected,
+        records_inserted_new=records_inserted_new,
+        records_deduped_existing=records_deduped_existing,
+        storage_result_level=storage_result_level,
+        sample_min_at=sample_min_at,
+        sample_max_at=sample_max_at,
+        raw_log_id=raw_log_id,
+        response_payload=response,
+    )
 
     # RELIABILITY-001: detect a silent dual-write divergence — the batch reported
     # success but one of the two writers landed NOTHING. Aggregation (sleep stages
@@ -438,22 +516,7 @@ async def apple_batch(
     log.info("Ingested %d records for %s (batch %d/%d)", count, metric, batch_idx + 1, total)
     _schedule_anomaly_check_if_enabled(request, background_tasks, count)
 
-    return _delivery_receipt_response(
-        request=request,
-        status="processed",
-        metric=metric,
-        batch_index=batch_idx,
-        total_batches=total,
-        records_received=len(samples),
-        records_accepted=count,
-        records_rejected=records_rejected,
-        records_inserted_new=records_inserted_new,
-        records_deduped_existing=records_deduped_existing,
-        storage_result_level=storage_result_level,
-        sample_min_at=sample_min_at,
-        sample_max_at=sample_max_at,
-        records_deduped_in_batch=records_deduped_in_batch,
-    )
+    return response
 
 
 async def _write_canonical_observations(
@@ -636,10 +699,108 @@ def _delivery_receipt_response(
     }
 
 
+async def _enrich_successful_sync_receipt(
+    session: AsyncSession,
+    *,
+    request: Request,
+    owner_id: UUID,
+    payload_hash: str | None,
+    metric: str,
+    batch_index: int,
+    total_batches: int,
+    status: str,
+    records_received: int,
+    records_accepted: int,
+    records_skipped: int,
+    sample_min_at: str | None,
+    sample_max_at: str | None,
+    raw_log_id: int | None,
+    response_payload: dict[str, Any],
+    records_inserted_new: int | None = None,
+    records_deduped_existing: int | None = None,
+    storage_result_level: str = "accepted_only",
+) -> None:
+    """Best-effort operator metadata after the atomic ingest commit."""
+
+    try:
+        await _record_sync_receipt(
+            session,
+            request=request,
+            owner_id=owner_id,
+            payload_hash=payload_hash,
+            metric=metric,
+            batch_index=batch_index,
+            total_batches=total_batches,
+            status=status,
+            records_received=records_received,
+            records_accepted=records_accepted,
+            records_skipped=records_skipped,
+            records_inserted_new=records_inserted_new,
+            records_deduped_existing=records_deduped_existing,
+            storage_result_level=storage_result_level,
+            sample_min_at=sample_min_at,
+            sample_max_at=sample_max_at,
+            raw_log_id=raw_log_id,
+            response_payload=response_payload,
+        )
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        log.exception(
+            "sync receipt write failed AFTER a successful ingest for %s "
+            "(data and any core frozen receipt remain persisted)",
+            metric,
+        )
+        try:
+            SYNC_RECEIPT_WRITE_FAILURES.labels(metric=metric).inc()
+        except Exception:  # pragma: no cover - metrics import optional
+            log.debug("failed to record SYNC_RECEIPT_WRITE_FAILURES{metric=%s}", metric)
+
+
+async def _persist_orphaned_raw_payload(
+    session: AsyncSession,
+    *,
+    audit: AuditLog | None,
+    storage: IngestStorage,
+    first_device_name: str,
+    raw_payload: dict[str, Any],
+) -> int | None:
+    """Restore failed-ingest evidence after the atomic transaction rolls back.
+
+    The original raw row and a newly-created device may both have rolled back,
+    so resolve the device again and persist a fresh ``processed=false`` row.
+    If device resolution itself is broken, fall back to the nullable device FK
+    rather than losing the payload evidence entirely.
+    """
+
+    if audit is None:
+        return None
+
+    try:
+        device_id = await storage.get_or_create_device(session, first_device_name)
+        raw_log_id = await audit.log_raw(session, device_id, raw_payload)
+        await session.commit()
+        return raw_log_id
+    except Exception:  # noqa: BLE001 - preserve evidence through a nullable FK fallback
+        await session.rollback()
+        log.warning("failed to restore orphaned raw payload with device lineage", exc_info=True)
+
+    try:
+        raw_log_id = await audit.log_raw(session, None, raw_payload)
+        await session.commit()
+        return raw_log_id
+    except Exception:  # pragma: no cover - last-resort observability path
+        await session.rollback()
+        log.exception("failed to restore orphaned raw payload without device lineage")
+        return None
+
+
 async def _record_failed_sync_receipt(
     session: AsyncSession,
     *,
     request: Request,
+    owner_id: UUID,
+    payload_hash: str | None,
     metric: str,
     batch_index: int,
     total_batches: int,
@@ -655,6 +816,8 @@ async def _record_failed_sync_receipt(
         await _record_sync_receipt(
             session,
             request=request,
+            owner_id=owner_id,
+            payload_hash=payload_hash,
             metric=metric,
             batch_index=batch_index,
             total_batches=total_batches,
@@ -677,6 +840,8 @@ async def _record_sync_receipt(
     session: AsyncSession,
     *,
     request: Request,
+    owner_id: UUID,
+    payload_hash: str | None,
     metric: str,
     batch_index: int,
     total_batches: int,
@@ -691,6 +856,7 @@ async def _record_sync_receipt(
     records_deduped_existing: int | None = None,
     storage_result_level: str = "accepted_only",
     error_message: str | None = None,
+    response_payload: dict[str, Any] | None = None,
 ) -> None:
     """Persist the HealthSave sync headers that released iOS already sends."""
 
@@ -698,11 +864,11 @@ async def _record_sync_receipt(
     sync_run_id = _header(headers, "X-HealthSave-Sync-Run-ID")
     batch_id = _header(headers, "X-HealthSave-Batch-ID")
     idempotency_key = _idempotency_key(headers, sync_run_id, batch_id, metric, batch_index)
-    payload_hash = _header(headers, "X-HealthSave-Payload-Hash")
     header_metric = _header(headers, "X-HealthSave-Metric")
 
     await record_sync_receipt(
         session,
+        owner_id=owner_id,
         sync_run_id=sync_run_id,
         batch_id=batch_id,
         idempotency_key=idempotency_key,
@@ -726,6 +892,7 @@ async def _record_sync_receipt(
         sample_max_at=sample_max_at,
         raw_log_id=raw_log_id,
         error_message=error_message,
+        response_payload=response_payload,
     )
 
 
@@ -767,25 +934,64 @@ def _idempotency_key(
     return None
 
 
-async def _reject_conflicting_receipt_idempotency(
+async def _trusted_payload_hash(request: Request) -> str | None:
+    """Return the server-computed exact-body digest when bytes are available.
+
+    Released clients send ``X-HealthSave-Payload-Hash`` over the exact encoded
+    body. Verify that declaration instead of trusting it, then use the computed
+    digest as receipt identity. Test doubles without a body reader retain the
+    declared value; real Starlette requests always expose cached body bytes.
+    """
+
+    declared_hash = _header(request.headers, "X-HealthSave-Payload-Hash")
+    body_reader = getattr(request, "body", None)
+    if not callable(body_reader):
+        return declared_hash
+
+    body = await body_reader()
+    computed_hash = f"sha256:{hashlib.sha256(body).hexdigest()}"
+    # ``compare_digest`` rejects non-ASCII ``str`` values with ``TypeError``.
+    # Compare encoded bytes so malformed/untrusted header text follows the
+    # deterministic mismatch response instead of escaping as a T0 500.
+    if declared_hash is not None and not hmac.compare_digest(
+        declared_hash.encode("utf-8", errors="surrogatepass"),
+        computed_hash.encode("ascii"),
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "status": "rejected",
+                "error_code": "payload_hash_body_mismatch",
+                "message": (
+                    "X-HealthSave-Payload-Hash does not match the exact request body bytes."
+                ),
+            },
+        )
+    return computed_hash
+
+
+async def _claim_or_replay_receipt_idempotency(
     session: AsyncSession,
     *,
-    request: Request,
+    owner_id: UUID,
+    idempotency_key: str | None,
+    payload_hash: str | None,
     metric: str,
     batch_index: int,
-) -> None:
-    headers = request.headers
-    sync_run_id = _header(headers, "X-HealthSave-Sync-Run-ID")
-    batch_id = _header(headers, "X-HealthSave-Batch-ID")
-    idempotency_key = _idempotency_key(headers, sync_run_id, batch_id, metric, batch_index)
-    payload_hash = _header(headers, "X-HealthSave-Payload-Hash")
+    total_batches: int,
+) -> dict[str, Any] | None:
     try:
-        await assert_receipt_idempotency(
+        return await claim_receipt_idempotency(
             session,
+            owner_id=owner_id,
             idempotency_key=idempotency_key,
             payload_hash=payload_hash,
+            metric=metric,
+            batch_index=batch_index,
+            total_batches=total_batches,
         )
     except ReceiptIdempotencyConflict as exc:
+        await session.rollback()
         raise HTTPException(
             status_code=409,
             detail={

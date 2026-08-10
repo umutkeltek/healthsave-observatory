@@ -131,9 +131,22 @@ async def test_reused_key_with_different_payload_is_rejected_409() -> None:
     class ConflictSession(FakeSession):
         async def execute(self, statement, params=None):
             sql = " ".join(str(statement).split())
-            if sql.startswith("SELECT payload_hash FROM healthsave_sync_receipts"):
+            if (
+                "INSERT INTO healthsave_sync_receipts" in sql
+                and "'processing'" in sql
+                and "RETURNING payload_hash" in sql
+            ):
                 self.calls.append((sql, params or {}))
-                return FakeResult(row={"payload_hash": "sha256:a-different-payload"})
+                return FakeResult()
+            if sql.startswith("SELECT payload_hash, status, response_payload"):
+                self.calls.append((sql, params or {}))
+                return FakeResult(
+                    row={
+                        "payload_hash": "sha256:a-different-payload",
+                        "status": "processed",
+                        "response_payload": {"status": "processed"},
+                    }
+                )
             return await super().execute(statement, params)
 
     request = FakeRequest(_golden_batch(), headers=_manifest_request_headers())

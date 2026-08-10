@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
@@ -83,6 +85,20 @@ class FakeSession:
     async def execute(self, statement, params=None):
         sql = " ".join(str(statement).split())
         self.calls.append((sql, params or {}))
+        if (
+            "INSERT INTO healthsave_sync_receipts" in sql
+            and "'processing'" in sql
+            and "RETURNING payload_hash" in sql
+        ):
+            return FakeResult(
+                row={
+                    "payload_hash": (params or {}).get("payload_hash"),
+                    "status": "processing",
+                    "response_payload": None,
+                }
+            )
+        if sql.startswith("UPDATE healthsave_sync_receipts") and "status = 'processing'" in sql:
+            return FakeResult(row=(1,))
         if sql.startswith("SELECT id FROM devices"):
             return FakeResult(row=(1,))
         if sql.startswith("SELECT count(*)"):
@@ -99,6 +115,8 @@ class FakeSession:
         needle = f"INSERT INTO {table_name}"
         for sql, params in self.calls:
             if needle in sql:
+                if table_name == "healthsave_sync_receipts" and "'processing'" in sql:
+                    continue
                 rows = _explode_batched_params(params)
                 return rows[0] if rows else None
         return None
@@ -108,6 +126,8 @@ class FakeSession:
         rows: list[dict] = []
         for sql, params in self.calls:
             if needle in sql:
+                if table_name == "healthsave_sync_receipts" and "'processing'" in sql:
+                    continue
                 rows.extend(_explode_batched_params(params))
         return rows
 
@@ -120,6 +140,8 @@ class StorageBreakdownSession(FakeSession):
     async def execute(self, statement, params=None):
         sql = " ".join(str(statement).split())
         self.calls.append((sql, params or {}))
+        if "healthsave_sync_receipts" in sql:
+            return await FakeSession.execute(self, statement, params)
         if "INSERT INTO heart_rate" in sql:
             # PERFORMANCE-001: one execute call carries the whole batch.
             # Count distinct positional indices across the bound params to
@@ -159,6 +181,17 @@ class FakeRequest:
 
     async def json(self):
         return self.payload
+
+
+class BodyAwareFakeRequest(FakeRequest):
+    """Request double that exposes the exact bytes sent on the wire."""
+
+    def __init__(self, payload: dict, body: bytes, headers: dict | None = None):
+        super().__init__(payload, headers)
+        self._body = body
+
+    async def body(self) -> bytes:
+        return self._body
 
 
 class InvalidJsonRequest(FakeRequest):
@@ -497,7 +530,12 @@ def test_schema_declares_sync_receipts_for_end_to_end_healthsave_proof():
         assert "sample_min_at" in text_blob
         assert "sample_max_at" in text_blob
         assert "idx_healthsave_sync_receipts_run" in text_blob
-        assert "uq_healthsave_sync_receipts_idempotency_key" in text_blob
+
+    assert "owner_id" in schema
+    assert "response_payload" in schema
+    assert "uq_healthsave_sync_receipts_owner_batch_id" in schema
+    assert "uq_healthsave_sync_receipts_owner_idempotency_key" in schema
+    assert "uq_healthsave_sync_receipts_idempotency_key" in migration
 
     assert "ADD COLUMN IF NOT EXISTS idempotency_key" in additive_migration
     assert "SET idempotency_key = batch_id" in additive_migration
@@ -575,6 +613,7 @@ async def test_batch_records_healthsave_sync_receipt_headers():
     assert receipt["sync_run_id"] == "run-abc"
     assert receipt["batch_id"] == "batch-002"
     assert receipt["idempotency_key"] == "batch-002"
+    assert receipt["owner_id"] == "00000000-0000-0000-0000-000000000001"
     assert receipt["payload_hash"] == "sha256:payload"
     assert receipt["metric"] == "heart_rate"
     assert receipt["batch_index"] == 2
@@ -597,8 +636,13 @@ async def test_batch_records_healthsave_sync_receipt_headers():
     assert receipt["storage_result_level"] == "accepted_only"
     assert receipt["sample_min_at"] == datetime(2026, 4, 10, 12, 0, 0, tzinfo=UTC)
     assert receipt["sample_max_at"] == datetime(2026, 4, 10, 12, 5, 0, tzinfo=UTC)
+    assert json.loads(receipt["response_payload"]) == result
     receipt_sql = [sql for sql, _ in session.calls if "INSERT INTO healthsave_sync_receipts" in sql]
-    assert any("ON CONFLICT (idempotency_key)" in sql for sql in receipt_sql)
+    assert any(
+        "ON CONFLICT (owner_id, idempotency_key)" in sql
+        and "WHERE owner_id IS NOT NULL AND idempotency_key IS NOT NULL" in sql
+        for sql in receipt_sql
+    )
 
 
 @pytest.mark.asyncio
@@ -1331,10 +1375,478 @@ class ReceiptIdempotencyConflictSession(FakeSession):
     async def execute(self, statement, params=None):
         sql = " ".join(str(statement).split())
         self.calls.append((sql, params or {}))
-        if "SELECT payload_hash FROM healthsave_sync_receipts" in sql:
-            assert params == {"idempotency_key": "batch-conflict"}
-            return FakeResult(row={"payload_hash": "sha256:first-payload"})
+        if (
+            "INSERT INTO healthsave_sync_receipts" in sql
+            and "'processing'" in sql
+            and "RETURNING payload_hash" in sql
+        ):
+            return FakeResult()
+        if "FROM healthsave_sync_receipts" in sql:
+            assert params == {
+                "owner_id": "00000000-0000-0000-0000-000000000001",
+                "idempotency_key": "batch-conflict",
+            }
+            return FakeResult(
+                row={
+                    "payload_hash": "sha256:first-payload",
+                    "status": "processed",
+                    "response_payload": {"status": "processed"},
+                }
+            )
         return await super().execute(statement, params)
+
+
+class StatefulIdempotencySession(FakeSession):
+    """Small stateful DB double for route-level retry ordering.
+
+    It preserves the receipt lookup/write side effect that the behavior under
+    test depends on while recording every ingest write. PostgreSQL mechanics are
+    covered separately by the storage and E2E suites.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.receipts: dict[tuple[str, str], dict] = {}
+        self.raw_log_id = 0
+        self.commit_count = 0
+
+    async def execute(self, statement, params=None):
+        sql = " ".join(str(statement).split())
+        bound = params or {}
+        self.calls.append((sql, bound))
+
+        if (
+            "INSERT INTO healthsave_sync_receipts" in sql
+            and "'processing'" in sql
+            and "RETURNING payload_hash" in sql
+        ):
+            key = (bound["owner_id"], bound["idempotency_key"])
+            existing = self.receipts.get(key)
+            reclaimable = existing is None or not existing.get("payload_hash")
+            if existing is not None and existing.get("payload_hash") == bound["payload_hash"]:
+                reclaimable = existing.get("status") == "failed" or (
+                    existing.get("status") in {"processed", "empty"}
+                    and not isinstance(existing.get("response_payload"), dict)
+                )
+            if not reclaimable:
+                return FakeResult()
+            receipt = {
+                **bound,
+                "status": "processing",
+                "response_payload": None,
+            }
+            self.receipts[key] = receipt
+            return FakeResult(row=dict(receipt))
+        if sql.startswith("SELECT") and "FROM healthsave_sync_receipts" in sql:
+            key = (bound["owner_id"], bound["idempotency_key"])
+            receipt = self.receipts.get(key)
+            return FakeResult(row=dict(receipt) if receipt is not None else None)
+        if sql.startswith("UPDATE healthsave_sync_receipts") and "status = 'processing'" in sql:
+            key = (bound["owner_id"], bound["idempotency_key"])
+            receipt = self.receipts.get(key)
+            if (
+                receipt is None
+                or receipt.get("status") != "processing"
+                or receipt.get("payload_hash") != bound["payload_hash"]
+            ):
+                return FakeResult()
+            completed = {**receipt, **bound}
+            if isinstance(completed.get("response_payload"), str):
+                completed["response_payload"] = json.loads(completed["response_payload"])
+            self.receipts[key] = completed
+            return FakeResult(row=(1,))
+        if sql.startswith("SELECT id FROM devices"):
+            return FakeResult(row=(1,))
+        if sql.startswith("SELECT count(*)"):
+            return FakeResult(row=(0, None, None))
+        if "INSERT INTO raw_ingestion_log" in sql:
+            self.raw_log_id += 1
+            return FakeResult(scalar_value=self.raw_log_id)
+        if "INSERT INTO healthsave_sync_receipts" in sql:
+            key = (bound["owner_id"], bound["idempotency_key"])
+            receipt = dict(bound)
+            if isinstance(receipt.get("response_payload"), str):
+                receipt["response_payload"] = json.loads(receipt["response_payload"])
+            existing = self.receipts.get(key)
+            same_hash = (
+                existing is None
+                or not existing.get("payload_hash")
+                or (existing.get("payload_hash") == receipt.get("payload_hash"))
+            )
+            failed_can_update = receipt.get("status") != "failed" or (
+                existing is not None and existing.get("status") == "failed"
+            )
+            if same_hash and failed_can_update:
+                self.receipts[key] = receipt
+            return FakeResult()
+        if sql.startswith(("INSERT INTO quantity_samples", "INSERT INTO daily_activity")):
+            return FakeResult(row={"inserted_new": True})
+        return FakeResult()
+
+    async def commit(self):
+        self.committed = True
+        self.commit_count += 1
+
+    def write_calls(self) -> list[tuple[str, dict]]:
+        return [
+            call
+            for call in self.calls
+            if call[0].startswith(("INSERT ", "UPDATE ", "DELETE "))
+            and not (
+                "INSERT INTO healthsave_sync_receipts" in call[0] and "'processing'" in call[0]
+            )
+        ]
+
+
+class ConcurrentLookupSession(StatefulIdempotencySession):
+    """Model PostgreSQL's unique-index wait across two concurrent requests."""
+
+    def __init__(self):
+        super().__init__()
+        self.claim_lock = asyncio.Lock()
+        self.claim_owner = None
+
+    async def execute(self, statement, params=None):
+        sql = " ".join(str(statement).split())
+        if (
+            "INSERT INTO healthsave_sync_receipts" in sql
+            and "'processing'" in sql
+            and "RETURNING payload_hash" in sql
+        ):
+            await self.claim_lock.acquire()
+            self.claim_owner = asyncio.current_task()
+            result = await super().execute(statement, params)
+            if result.first() is None:
+                self.claim_owner = None
+                self.claim_lock.release()
+            return result
+        return await super().execute(statement, params)
+
+    async def commit(self):
+        await super().commit()
+        if self.claim_owner is asyncio.current_task() and self.claim_lock.locked():
+            self.claim_owner = None
+            self.claim_lock.release()
+
+    async def rollback(self):
+        await super().rollback()
+        if self.claim_owner is asyncio.current_task() and self.claim_lock.locked():
+            self.claim_owner = None
+            self.claim_lock.release()
+
+
+def _daily_total_request(value: float, *, key: str, payload_hash: str) -> FakeRequest:
+    return FakeRequest(
+        {
+            "metric": "distance_walking_running",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [
+                {
+                    "date": "2026-08-09T04:00:00+00:00",
+                    "qty": value,
+                    "source": "HealthKit Statistics",
+                }
+            ],
+        },
+        headers={
+            "Idempotency-Key": key,
+            "X-HealthSave-Sync-Run-ID": f"run-{key}",
+            "X-HealthSave-Batch-ID": key,
+            "X-HealthSave-Payload-Hash": payload_hash,
+            "X-HealthSave-Metric": "distance_walking_running",
+            "X-HealthSave-Batch-Index": "0",
+            "X-HealthSave-Total-Batches": "1",
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_declared_payload_hash_must_match_exact_request_bytes_before_ingest():
+    payload = {
+        "metric": "distance_walking_running",
+        "batch_index": 0,
+        "total_batches": 1,
+        "samples": [
+            {
+                "date": "2026-08-09T04:00:00+00:00",
+                "qty": 7_100.0,
+                "source": "HealthKit Statistics",
+            }
+        ],
+    }
+    body = json.dumps(payload, separators=(",", ":")).encode()
+    request = BodyAwareFakeRequest(
+        payload,
+        body,
+        headers={
+            "Idempotency-Key": "daily-A",
+            "X-HealthSave-Payload-Hash": "sha256:" + ("0" * 64),
+        },
+    )
+    session = FakeSession()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await server.apple_batch(request, session)
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail["error_code"] == "payload_hash_body_mismatch"
+    assert session.insert_params_for("raw_ingestion_log") is None
+    assert session.insert_params_for("healthsave_sync_receipts") is None
+
+
+@pytest.mark.asyncio
+async def test_non_ascii_payload_hash_is_rejected_before_ingest_without_a_500():
+    payload = {
+        "metric": "distance_walking_running",
+        "batch_index": 0,
+        "total_batches": 1,
+        "samples": [],
+    }
+    body = json.dumps(payload, separators=(",", ":")).encode()
+    request = BodyAwareFakeRequest(
+        payload,
+        body,
+        headers={
+            "Idempotency-Key": "malformed-hash",
+            "X-HealthSave-Payload-Hash": "sha256:\u00e9",
+        },
+    )
+    session = FakeSession()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await server.apple_batch(request, session)
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail["error_code"] == "payload_hash_body_mismatch"
+    assert session.insert_params_for("raw_ingestion_log") is None
+    assert session.insert_params_for("healthsave_sync_receipts") is None
+
+
+@pytest.mark.asyncio
+async def test_idempotency_key_without_optional_hash_replays_using_exact_body_digest():
+    payload = {
+        "metric": "distance_walking_running",
+        "batch_index": 0,
+        "total_batches": 1,
+        "samples": [
+            {
+                "date": "2026-08-09T04:00:00+00:00",
+                "qty": 7_100.0,
+                "source": "HealthKit Statistics",
+            }
+        ],
+    }
+    body = json.dumps(payload, separators=(",", ":")).encode()
+    request = BodyAwareFakeRequest(
+        payload,
+        body,
+        headers={
+            "Idempotency-Key": "daily-key-only",
+            "X-HealthSave-Batch-ID": "daily-key-only",
+        },
+    )
+    session = StatefulIdempotencySession()
+
+    first_response = await server.apple_batch(request, session)
+    writes_after_first = list(session.write_calls())
+    second_response = await server.apple_batch(request, session)
+
+    assert second_response == first_response
+    assert session.write_calls() == writes_after_first
+    assert session.raw_log_id == 1
+
+
+@pytest.mark.asyncio
+async def test_processed_exact_retry_returns_frozen_response_without_replaying_older_total():
+    session = StatefulIdempotencySession()
+    first_request = _daily_total_request(7_100.0, key="daily-A", payload_hash="sha256:A")
+    corrected_request = _daily_total_request(7_698.1, key="daily-B", payload_hash="sha256:B")
+
+    first_response = await server.apple_batch(first_request, session)
+    await server.apple_batch(corrected_request, session)
+    writes_after_correction = list(session.write_calls())
+    commits_after_correction = session.commit_count
+
+    retry_response = await server.apple_batch(first_request, session)
+
+    assert retry_response == first_response
+    assert session.write_calls() == writes_after_correction
+    assert session.commit_count == commits_after_correction
+    assert session.raw_log_id == 2
+
+    canonical_values = [
+        row["numeric_value"]
+        for sql, params in session.calls
+        if "INSERT INTO canonical_observations" in sql
+        for row in (params if isinstance(params, list) else [params])
+    ]
+    legacy_values = [
+        params["distance_m"]
+        for sql, params in session.calls
+        if sql.startswith("INSERT INTO daily_activity")
+    ]
+    assert canonical_values == [7_100.0, 7_698.1]
+    assert legacy_values == [7_100.0, 7_698.1]
+
+
+@pytest.mark.asyncio
+async def test_exact_retry_does_not_regress_correction_when_original_receipt_write_failed(
+    monkeypatch,
+):
+    import server.api.ingest as ingest_module
+
+    session = StatefulIdempotencySession()
+    first_request = _daily_total_request(7_100.0, key="daily-A", payload_hash="sha256:A")
+    corrected_request = _daily_total_request(7_698.1, key="daily-B", payload_hash="sha256:B")
+    real_record = ingest_module._record_sync_receipt
+    failed_once = False
+
+    async def _fail_first_a(*args, **kwargs):
+        nonlocal failed_once
+        request = kwargs["request"]
+        if request.headers["Idempotency-Key"] == "daily-A" and not failed_once:
+            failed_once = True
+            raise RuntimeError("simulated post-commit receipt failure")
+        return await real_record(*args, **kwargs)
+
+    monkeypatch.setattr(ingest_module, "_record_sync_receipt", _fail_first_a)
+
+    first_response = await server.apple_batch(first_request, session)
+    await server.apple_batch(corrected_request, session)
+    writes_after_correction = list(session.write_calls())
+    commits_after_correction = session.commit_count
+
+    retry_response = await server.apple_batch(first_request, session)
+
+    assert retry_response == first_response
+    assert session.write_calls() == writes_after_correction
+    assert session.commit_count == commits_after_correction
+    assert session.raw_log_id == 2
+
+
+@pytest.mark.asyncio
+async def test_concurrent_exact_retries_share_one_ingest_and_one_frozen_response():
+    session = ConcurrentLookupSession()
+    request = _daily_total_request(7_100.0, key="daily-A", payload_hash="sha256:A")
+
+    first_response, second_response = await asyncio.gather(
+        server.apple_batch(request, session),
+        server.apple_batch(request, session),
+    )
+
+    assert second_response == first_response
+    assert session.raw_log_id == 1
+    canonical_writes = [
+        sql for sql, _ in session.calls if "INSERT INTO canonical_observations" in sql
+    ]
+    assert len(canonical_writes) == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_same_key_with_different_hash_rejects_loser_before_ingest():
+    session = ConcurrentLookupSession()
+    first_request = _daily_total_request(7_100.0, key="shared", payload_hash="sha256:A")
+    second_request = _daily_total_request(7_698.1, key="shared", payload_hash="sha256:B")
+
+    results = await asyncio.gather(
+        server.apple_batch(first_request, session),
+        server.apple_batch(second_request, session),
+        return_exceptions=True,
+    )
+
+    successes = [result for result in results if isinstance(result, dict)]
+    conflicts = [result for result in results if isinstance(result, HTTPException)]
+    assert len(successes) == 1
+    assert len(conflicts) == 1
+    assert conflicts[0].status_code == 409
+    assert conflicts[0].detail["error_code"] == "idempotency_key_payload_mismatch"
+    assert session.raw_log_id == 1
+
+
+@pytest.mark.asyncio
+async def test_failed_exact_receipt_remains_retryable():
+    session = StatefulIdempotencySession()
+    request = _daily_total_request(7_100.0, key="daily-failed", payload_hash="sha256:failed")
+    session.receipts[("00000000-0000-0000-0000-000000000001", "daily-failed")] = {
+        "idempotency_key": "daily-failed",
+        "payload_hash": "sha256:failed",
+        "status": "failed",
+        "response_payload": None,
+    }
+
+    response = await server.apple_batch(request, session)
+
+    assert response["status"] == "processed"
+    assert session.raw_log_id == 1
+    assert any("INSERT INTO canonical_observations" in sql for sql, _ in session.calls)
+    assert any(sql.startswith("INSERT INTO daily_activity") for sql, _ in session.calls)
+
+
+@pytest.mark.asyncio
+async def test_legacy_receipt_without_owner_remains_non_replayable():
+    session = StatefulIdempotencySession()
+    request = _daily_total_request(7_100.0, key="legacy-key", payload_hash="sha256:legacy")
+    session.receipts[(None, "legacy-key")] = {
+        "idempotency_key": "legacy-key",
+        "payload_hash": "sha256:legacy",
+        "status": "processed",
+        "response_payload": {"status": "processed", "records": 999},
+    }
+
+    response = await server.apple_batch(request, session)
+
+    assert response["records"] == 1
+    assert session.raw_log_id == 1
+    assert any("INSERT INTO canonical_observations" in sql for sql, _ in session.calls)
+
+
+@pytest.mark.asyncio
+async def test_processed_receipt_without_stored_hash_remains_non_replayable():
+    owner = "00000000-0000-0000-0000-000000000001"
+    session = StatefulIdempotencySession()
+    request = _daily_total_request(7_100.0, key="hashless-key", payload_hash="sha256:current")
+    session.receipts[(owner, "hashless-key")] = {
+        "idempotency_key": "hashless-key",
+        "payload_hash": None,
+        "status": "processed",
+        "response_payload": {"status": "processed", "records": 999},
+    }
+
+    response = await server.apple_batch(request, session)
+
+    assert response["records"] == 1
+    assert session.raw_log_id == 1
+    assert any("INSERT INTO canonical_observations" in sql for sql, _ in session.calls)
+
+
+@pytest.mark.asyncio
+async def test_processed_receipt_from_another_owner_cannot_suppress_ingest(monkeypatch):
+    import server.api.ingest as ingest_module
+
+    first_owner = "00000000-0000-0000-0000-000000000001"
+    second_owner = "00000000-0000-0000-0000-000000000002"
+    session = StatefulIdempotencySession()
+    session.receipts[(first_owner, "shared-key")] = {
+        "idempotency_key": "shared-key",
+        "payload_hash": "sha256:same-bytes",
+        "status": "processed",
+        "response_payload": {"status": "processed", "records": 999},
+    }
+    monkeypatch.setattr(
+        ingest_module,
+        "resolve_owner_id",
+        lambda raw: UUID(raw) if raw else UUID(first_owner),
+    )
+    request = _daily_total_request(7_100.0, key="shared-key", payload_hash="sha256:same-bytes")
+    request.headers["x-user-id"] = second_owner
+
+    response = await server.apple_batch(request, session)
+
+    assert response["records"] == 1
+    assert response["records"] != 999
+    assert session.raw_log_id == 1
+    assert any("INSERT INTO canonical_observations" in sql for sql, _ in session.calls)
 
 
 @pytest.mark.asyncio

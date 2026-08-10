@@ -137,7 +137,85 @@ _INSERT_SQL = text(
         :quality_flags, CAST(:provenance AS JSONB), :normalizer_id,
         :normalizer_version, :normalization_run_id, :dedup_key
     )
-    ON CONFLICT (owner_id, workspace_id, dedup_key, interval_start) DO NOTHING
+    ON CONFLICT (owner_id, workspace_id, dedup_key, interval_start) DO UPDATE SET
+        ontology_version = EXCLUDED.ontology_version,
+        value_type = EXCLUDED.value_type,
+        numeric_value = EXCLUDED.numeric_value,
+        canonical_unit = EXCLUDED.canonical_unit,
+        code = EXCLUDED.code,
+        components = EXCLUDED.components,
+        value_json = EXCLUDED.value_json,
+        interval_end = EXCLUDED.interval_end,
+        recorded_at = EXCLUDED.recorded_at,
+        device_id = EXCLUDED.device_id,
+        stream_id = EXCLUDED.stream_id,
+        exact_ingest_key = EXCLUDED.exact_ingest_key,
+        semantic_key = EXCLUDED.semantic_key,
+        semantic_key_version = EXCLUDED.semantic_key_version,
+        aggregation_scope = EXCLUDED.aggregation_scope,
+        is_primary = EXCLUDED.is_primary,
+        raw_payload_id = EXCLUDED.raw_payload_id,
+        source_record_uid = EXCLUDED.source_record_uid,
+        confidence = EXCLUDED.confidence,
+        quality_flags = EXCLUDED.quality_flags,
+        provenance = EXCLUDED.provenance,
+        normalizer_id = EXCLUDED.normalizer_id,
+        normalizer_version = EXCLUDED.normalizer_version,
+        normalization_run_id = EXCLUDED.normalization_run_id,
+        status = 'active'
+    WHERE canonical_observations.aggregation_scope = 'owner_all_source_day_total'
+      AND EXCLUDED.aggregation_scope = 'owner_all_source_day_total'
+      AND canonical_observations.normalizer_id = 'apple_health'
+      AND EXCLUDED.normalizer_id = 'apple_health'
+      AND CASE
+            WHEN pg_input_is_valid(
+                    COALESCE(EXCLUDED.provenance->>'raw_payload_ref', ''),
+                    'bigint'
+                 )
+             AND pg_input_is_valid(
+                    COALESCE(
+                        canonical_observations.provenance->>'raw_payload_ref',
+                        ''
+                    ),
+                    'bigint'
+                 )
+              THEN (EXCLUDED.provenance->>'raw_payload_ref')::bigint
+                   > (canonical_observations.provenance->>'raw_payload_ref')::bigint
+            WHEN pg_input_is_valid(
+                    COALESCE(EXCLUDED.provenance->>'raw_payload_ref', ''),
+                    'bigint'
+                 )
+              THEN TRUE
+            WHEN pg_input_is_valid(
+                    COALESCE(
+                        canonical_observations.provenance->>'raw_payload_ref',
+                        ''
+                    ),
+                    'bigint'
+                 )
+              THEN FALSE
+            WHEN pg_input_is_valid(
+                    COALESCE(EXCLUDED.provenance->>'captured_at', ''),
+                    'timestamp with time zone'
+                 )
+             AND pg_input_is_valid(
+                    COALESCE(canonical_observations.provenance->>'captured_at', ''),
+                    'timestamp with time zone'
+                 )
+              THEN (EXCLUDED.provenance->>'captured_at')::timestamptz
+                   >= (canonical_observations.provenance->>'captured_at')::timestamptz
+            WHEN pg_input_is_valid(
+                    COALESCE(EXCLUDED.provenance->>'captured_at', ''),
+                    'timestamp with time zone'
+                 )
+              THEN TRUE
+            WHEN pg_input_is_valid(
+                    COALESCE(canonical_observations.provenance->>'captured_at', ''),
+                    'timestamp with time zone'
+                 )
+              THEN FALSE
+            ELSE EXCLUDED.created_at >= canonical_observations.created_at
+          END
     """
 )
 
@@ -237,6 +315,27 @@ _FUSED_SERIES_MANY_SQL = text(
 ).bindparams(bindparam("metric_ids", expanding=True))
 
 
+def _coalesce_conflict_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep the last variant for each canonical unique-index key.
+
+    PostgreSQL rejects one ``INSERT ... ON CONFLICT DO UPDATE`` command that
+    would affect the same target row twice. HealthKit normally emits one daily
+    total per day, but a deterministic duplicate payload must not become a 500.
+    Coalescing all exact conflict keys also preserves the old ``DO NOTHING``
+    tolerance for repeated discrete observations.
+    """
+    by_key: dict[tuple[object, ...], dict[str, Any]] = {}
+    for row in rows:
+        key = (
+            row["owner_id"],
+            row["workspace_id"],
+            row["dedup_key"],
+            row["interval_start"],
+        )
+        by_key[key] = row
+    return list(by_key.values())
+
+
 class CanonicalObservationRepository:
     """Write + read side of the canonical Observation store."""
 
@@ -244,9 +343,9 @@ class CanonicalObservationRepository:
         """Idempotently persist observations. Returns the count submitted."""
         if not observations:
             return 0
-        rows = [observation_columns(obs) for obs in observations]
+        rows = _coalesce_conflict_rows([observation_columns(obs) for obs in observations])
         await session.execute(_INSERT_SQL, rows)
-        return len(rows)
+        return len(observations)
 
     async def query_series(
         self,

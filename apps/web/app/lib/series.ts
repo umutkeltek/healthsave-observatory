@@ -5,6 +5,12 @@ export type NumericSeriesSummary = {
   average: number | null;
 };
 
+const OWNER_DAILY_TOTAL_SCOPE = "owner_all_source_day_total";
+
+export function hasOwnerDailyTotalSemantics(points: SeriesPoint[]): boolean {
+  return points.some((point) => point.aggregation_scope === OWNER_DAILY_TOTAL_SCOPE);
+}
+
 // Series endpoints currently return ascending timestamps, but UI correctness
 // should not depend on transport order. Resolve the latest valued observation
 // explicitly and compute the average over every finite numeric reading.

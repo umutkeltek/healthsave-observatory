@@ -102,7 +102,9 @@ e2e:
 		$(E2E_COMPOSE_ENV) docker compose -p hdh-e2e down -v >/dev/null 2>&1; \
 		exit 1; \
 	fi
-	@E2E_BASE_URL=http://localhost:$(E2E_API_PORT) $(PYTHON) -m pytest -m e2e -q tests/e2e; rc=$$?; \
+	@E2E_BASE_URL=http://localhost:$(E2E_API_PORT) \
+		E2E_DATABASE_URL=postgresql://healthsave:$(E2E_DB_PASSWORD)@localhost:$(E2E_DB_HOST_PORT)/healthsave \
+		$(PYTHON) -m pytest -m e2e -q tests/e2e; rc=$$?; \
 		$(E2E_COMPOSE_ENV) docker compose -p hdh-e2e down -v >/dev/null 2>&1; exit $$rc
 
 lint:

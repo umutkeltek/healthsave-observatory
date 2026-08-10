@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from normalization.mappers import DAILY_ACTIVITY_QUANTITY_FIELDS
 from sqlalchemy import text
@@ -178,42 +180,231 @@ class ReceiptIdempotencyConflict(ValueError):
     """Raised when a retry key is reused with different payload bytes."""
 
 
-async def assert_receipt_idempotency(
+def _receipt_value(row: Any, key: str) -> Any:
+    return row.get(key) if hasattr(row, "get") else row[key]
+
+
+def _frozen_receipt_response(
+    row: Any,
+    *,
+    payload_hash: str,
+) -> dict[str, Any] | None:
+    """Validate a stored receipt and decode its frozen successful response."""
+
+    existing_hash = _receipt_value(row, "payload_hash")
+    if existing_hash != payload_hash:
+        raise ReceiptIdempotencyConflict(
+            "This idempotency key was already received with a different payload hash."
+        )
+
+    status = _receipt_value(row, "status")
+    response_payload = _receipt_value(row, "response_payload")
+    if status not in {"processed", "empty"} or response_payload is None:
+        return None
+    if isinstance(response_payload, str):
+        try:
+            response_payload = json.loads(response_payload)
+        except (TypeError, ValueError):
+            return None
+    return dict(response_payload) if isinstance(response_payload, dict) else None
+
+
+async def claim_receipt_idempotency(
     session: AsyncSession,
     *,
+    owner_id: UUID,
     idempotency_key: str | None,
     payload_hash: str | None,
-) -> None:
-    """Fail before ingest when a POST retry key points at a new payload."""
+    metric: str,
+    batch_index: int,
+    total_batches: int,
+) -> dict[str, Any] | None:
+    """Atomically reserve an idempotency key or return its frozen response.
+
+    The owner/key unique index is the serialization primitive. A concurrent
+    insert blocks on the winner's transaction; after that transaction commits,
+    the loser observes either the completed response or a payload conflict.
+    Failed, hashless, and incomplete legacy rows may be reclaimed. A returned
+    ``None`` means this transaction owns the ``processing`` claim (or that the
+    request supplied no usable key/hash); callers must finalize an owned claim
+    before committing their ingest writes.
+    """
 
     if not idempotency_key or not payload_hash:
-        return
+        return None
+
+    claim_result = await session.execute(
+        text(
+            """
+            INSERT INTO healthsave_sync_receipts (
+                owner_id,
+                idempotency_key,
+                payload_hash,
+                metric,
+                batch_index,
+                total_batches,
+                status,
+                records_received,
+                records_accepted,
+                records_skipped,
+                source_endpoint
+            ) VALUES (
+                CAST(:owner_id AS UUID),
+                :idempotency_key,
+                :payload_hash,
+                :metric,
+                :batch_index,
+                :total_batches,
+                'processing',
+                0,
+                0,
+                0,
+                '/api/apple/batch'
+            )
+            ON CONFLICT (owner_id, idempotency_key)
+                WHERE owner_id IS NOT NULL AND idempotency_key IS NOT NULL
+            DO UPDATE SET
+                payload_hash = EXCLUDED.payload_hash,
+                metric = EXCLUDED.metric,
+                batch_index = EXCLUDED.batch_index,
+                total_batches = EXCLUDED.total_batches,
+                status = 'processing',
+                records_received = 0,
+                records_accepted = 0,
+                records_skipped = 0,
+                records_inserted_new = NULL,
+                records_deduped_existing = NULL,
+                storage_result_level = 'accepted_only',
+                sample_min_at = NULL,
+                sample_max_at = NULL,
+                error_message = NULL,
+                raw_log_id = NULL,
+                response_payload = NULL,
+                completed_at = NULL
+            WHERE
+                healthsave_sync_receipts.payload_hash IS NULL
+                OR (
+                    healthsave_sync_receipts.status = 'failed'
+                    AND healthsave_sync_receipts.payload_hash = EXCLUDED.payload_hash
+                )
+                OR (
+                    healthsave_sync_receipts.status IN ('processed', 'empty')
+                    AND healthsave_sync_receipts.payload_hash = EXCLUDED.payload_hash
+                    AND (
+                        healthsave_sync_receipts.response_payload IS NULL
+                        OR jsonb_typeof(healthsave_sync_receipts.response_payload) <> 'object'
+                    )
+                )
+            RETURNING payload_hash, status, response_payload
+            """
+        ),
+        {
+            "owner_id": str(owner_id),
+            "idempotency_key": idempotency_key,
+            "payload_hash": payload_hash,
+            "metric": metric,
+            "batch_index": batch_index,
+            "total_batches": total_batches,
+        },
+    )
+    if claim_result.mappings().first() is not None:
+        return None
+
+    existing_result = await session.execute(
+        text(
+            """
+            SELECT payload_hash, status, response_payload
+            FROM healthsave_sync_receipts
+            WHERE owner_id = CAST(:owner_id AS UUID)
+              AND idempotency_key = :idempotency_key
+            LIMIT 1
+            """
+        ),
+        {"owner_id": str(owner_id), "idempotency_key": idempotency_key},
+    )
+    row = existing_result.mappings().first()
+    if row is None:
+        raise RuntimeError("idempotency claim conflict resolved without a visible receipt row")
+
+    frozen_response = _frozen_receipt_response(row, payload_hash=payload_hash)
+    if frozen_response is not None:
+        return frozen_response
+    raise RuntimeError("idempotency key is already held by an incomplete receipt")
+
+
+async def complete_receipt_idempotency(
+    session: AsyncSession,
+    *,
+    owner_id: UUID,
+    idempotency_key: str,
+    payload_hash: str,
+    status: str,
+    response_payload: dict[str, Any],
+    raw_log_id: int | None,
+    records_received: int,
+    records_accepted: int,
+    records_skipped: int,
+    records_inserted_new: int | None = None,
+    records_deduped_existing: int | None = None,
+    storage_result_level: str = "accepted_only",
+    sample_min_at: str | None = None,
+    sample_max_at: str | None = None,
+) -> None:
+    """Freeze a claimed response inside the ingest transaction."""
+
+    if status not in {"processed", "empty"}:
+        raise ValueError("a successful idempotency claim must complete as processed or empty")
 
     result = await session.execute(
         text(
             """
-            SELECT payload_hash
-            FROM healthsave_sync_receipts
-            WHERE idempotency_key = :idempotency_key
-            LIMIT 1
+            UPDATE healthsave_sync_receipts
+            SET
+                status = :status,
+                records_received = :records_received,
+                records_accepted = :records_accepted,
+                records_skipped = :records_skipped,
+                records_inserted_new = :records_inserted_new,
+                records_deduped_existing = :records_deduped_existing,
+                storage_result_level = :storage_result_level,
+                sample_min_at = :sample_min_at,
+                sample_max_at = :sample_max_at,
+                error_message = NULL,
+                raw_log_id = :raw_log_id,
+                response_payload = CAST(:response_payload AS JSONB),
+                completed_at = now()
+            WHERE owner_id = CAST(:owner_id AS UUID)
+              AND idempotency_key = :idempotency_key
+              AND payload_hash = :payload_hash
+              AND status = 'processing'
+            RETURNING id
             """
         ),
-        {"idempotency_key": idempotency_key},
+        {
+            "owner_id": str(owner_id),
+            "idempotency_key": idempotency_key,
+            "payload_hash": payload_hash,
+            "status": status,
+            "records_received": records_received,
+            "records_accepted": records_accepted,
+            "records_skipped": records_skipped,
+            "records_inserted_new": records_inserted_new,
+            "records_deduped_existing": records_deduped_existing,
+            "storage_result_level": storage_result_level,
+            "sample_min_at": _parse_time_value(sample_min_at),
+            "sample_max_at": _parse_time_value(sample_max_at),
+            "raw_log_id": raw_log_id,
+            "response_payload": json.dumps(response_payload, separators=(",", ":")),
+        },
     )
-    row = result.mappings().first()
-    if row is None:
-        return
-
-    existing_hash = row.get("payload_hash") if hasattr(row, "get") else row["payload_hash"]
-    if existing_hash and existing_hash != payload_hash:
-        raise ReceiptIdempotencyConflict(
-            "This idempotency key was already received with a different payload hash."
-        )
+    if result.first() is None:
+        raise RuntimeError("owned idempotency receipt could not be completed")
 
 
 async def record_sync_receipt(
     session: AsyncSession,
     *,
+    owner_id: UUID,
     sync_run_id: str | None,
     batch_id: str | None,
     idempotency_key: str | None,
@@ -237,11 +428,13 @@ async def record_sync_receipt(
     records_deduped_existing: int | None = None,
     storage_result_level: str = "accepted_only",
     error_message: str | None = None,
+    response_payload: dict[str, Any] | None = None,
 ) -> None:
     """Insert or update one HealthSave batch receipt.
 
-    ``batch_id`` is unique when present so app retries update the receipt instead
-    of making the support/operator view look like duplicate batches arrived.
+    ``batch_id`` is unique per owner when present so app retries update the
+    receipt instead of making the support/operator view look like duplicate
+    batches arrived.
 
     Timestamp inputs (``query_lower_bound_at``, ``sample_min_at``,
     ``sample_max_at``) arrive from iOS as ISO8601 strings via request headers.
@@ -262,6 +455,7 @@ async def record_sync_receipt(
             """
             INSERT INTO healthsave_sync_receipts
                 (
+                    owner_id,
                     sync_run_id,
                     batch_id,
                     idempotency_key,
@@ -286,10 +480,12 @@ async def record_sync_receipt(
                     error_message,
                     raw_log_id,
                     source_endpoint,
+                    response_payload,
                     completed_at
                 )
             VALUES
                 (
+                    CAST(:owner_id AS UUID),
                     :sync_run_id,
                     :batch_id,
                     :idempotency_key,
@@ -314,9 +510,12 @@ async def record_sync_receipt(
                     :error_message,
                     :raw_log_id,
                     :source_endpoint,
+                    CAST(:response_payload AS JSONB),
                     now()
                 )
-            ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO UPDATE SET
+            ON CONFLICT (owner_id, idempotency_key)
+                WHERE owner_id IS NOT NULL AND idempotency_key IS NOT NULL
+            DO UPDATE SET
                 sync_run_id = EXCLUDED.sync_run_id,
                 batch_id = EXCLUDED.batch_id,
                 payload_hash = EXCLUDED.payload_hash,
@@ -339,10 +538,22 @@ async def record_sync_receipt(
                 sample_max_at = EXCLUDED.sample_max_at,
                 error_message = EXCLUDED.error_message,
                 raw_log_id = EXCLUDED.raw_log_id,
+                response_payload = EXCLUDED.response_payload,
                 completed_at = EXCLUDED.completed_at
+            WHERE
+                (
+                    healthsave_sync_receipts.payload_hash IS NULL
+                    OR healthsave_sync_receipts.payload_hash
+                        IS NOT DISTINCT FROM EXCLUDED.payload_hash
+                )
+                AND (
+                    EXCLUDED.status <> 'failed'
+                    OR healthsave_sync_receipts.status = 'failed'
+                )
             """
         ),
         {
+            "owner_id": str(owner_id),
             "sync_run_id": sync_run_id,
             "batch_id": batch_id,
             "idempotency_key": idempotency_key,
@@ -367,6 +578,11 @@ async def record_sync_receipt(
             "error_message": error_message,
             "raw_log_id": raw_log_id,
             "source_endpoint": "/api/apple/batch",
+            "response_payload": (
+                json.dumps(response_payload, separators=(",", ":"))
+                if response_payload is not None
+                else None
+            ),
         },
     )
 

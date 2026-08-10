@@ -10,7 +10,7 @@ import { METRIC_NOTES } from "../../lib/metricNotes";
 import { getPinnedMetrics } from "../../lib/prefs";
 import { friendlyName, shortId } from "../../lib/provenance";
 import { rangeLabel, seriesCoverage, shortDate } from "../../lib/ranges";
-import { summarizeNumericSeries } from "../../lib/series";
+import { hasOwnerDailyTotalSemantics, summarizeNumericSeries } from "../../lib/series";
 import { BaselineRibbon } from "../../components/BaselineRibbon";
 import { MultiSeriesChart } from "../../components/MultiSeriesChart";
 import { PinButton } from "../../components/PinButton";
@@ -86,6 +86,7 @@ export default async function MetricDetailPage({
   const points = effective?.points ?? [];
   const numericPoints = points.filter((p): p is typeof p & { value: number } => p.value !== null);
   const values = numericPoints.map((p) => p.value);
+  const isOwnerDailyTotal = hasOwnerDailyTotalSemantics(points);
   const sorted = [...values].sort((a, b) => a - b);
   const { latest: latestObs } = summarizeNumericSeries(points);
   const last = latestObs?.value ?? null;
@@ -205,8 +206,14 @@ export default async function MetricDetailPage({
 
           <div className="lib-chart-panel">
             <div className="lib-chart-head">
-              <h2>{multiSource ? "Source traces" : "Baseline trace"}</h2>
-              <p>{multiSource ? "Each source remains independent." : "The band shows your own P25-P75 range."}</p>
+              <h2>{isOwnerDailyTotal ? "Daily total trace" : multiSource ? "Source traces" : "Baseline trace"}</h2>
+              <p>
+                {isOwnerDailyTotal
+                  ? "One all-source total per local calendar day. Its API timestamp is that day's local midnight expressed in UTC."
+                  : multiSource
+                    ? "Each source remains independent."
+                    : "The band shows your own P25-P75 range."}
+              </p>
             </div>
             {values.length >= 2 && !multiSource && (
               <BaselineRibbon

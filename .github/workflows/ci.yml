@@ -96,7 +96,10 @@ jobs:
           exit 1
 
       - name: Run e2e
-        run: E2E_BASE_URL=http://localhost:8000 pytest -m e2e -q tests/e2e
+        run: |
+          E2E_BASE_URL=http://localhost:8000 \
+          E2E_DATABASE_URL=postgresql://healthsave:${DB_PASSWORD}@localhost:5432/healthsave \
+          pytest -m e2e -q tests/e2e
 
       - name: Teardown
         if: always()

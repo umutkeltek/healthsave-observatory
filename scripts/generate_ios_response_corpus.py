@@ -99,8 +99,24 @@ class CorpusSession:
 
     async def execute(self, statement, params=None):
         sql = " ".join(str(statement).split())
-        if sql.startswith("SELECT payload_hash FROM healthsave_sync_receipts"):
+        if (
+            "INSERT INTO healthsave_sync_receipts" in sql
+            and "'processing'" in sql
+            and "RETURNING payload_hash" in sql
+        ):
+            if self.receipt_hash_row is not None:
+                return _FakeResult()
+            return _FakeResult(
+                row={
+                    "payload_hash": (params or {}).get("payload_hash"),
+                    "status": "processing",
+                    "response_payload": None,
+                }
+            )
+        if sql.startswith("SELECT payload_hash") and "FROM healthsave_sync_receipts" in sql:
             return _FakeResult(row=self.receipt_hash_row)
+        if sql.startswith("UPDATE healthsave_sync_receipts") and "status = 'processing'" in sql:
+            return _FakeResult(row=(1,))
         if sql.startswith("SELECT sync_run_id FROM healthsave_sync_receipts"):
             row = {"sync_run_id": CORPUS_SYNC_RUN_ID} if self.latest_run_rows else None
             return _FakeResult(row=row)
@@ -273,7 +289,13 @@ async def _generate() -> dict[str, dict[str, Any]]:
 
     # Idempotent replay: same key, same payload hash → normal 200 receipt.
     heart_rate = json.loads((REQUEST_FIXTURES_DIR / "heart_rate_batch.json").read_text())
-    replay_session = CorpusSession(receipt_hash_row={"payload_hash": "sha256:corpus-heart_rate"})
+    replay_session = CorpusSession(
+        receipt_hash_row={
+            "payload_hash": "sha256:corpus-heart_rate",
+            "status": "processed",
+            "response_payload": fixtures["batch_receipt_heart_rate.json"]["body"],
+        }
+    )
     fixtures["batch_receipt_duplicate.json"] = await _call(
         "/api/apple/batch",
         "POST",
@@ -283,7 +305,13 @@ async def _generate() -> dict[str, dict[str, Any]]:
     )
 
     # Retry key reused with a different payload → 409 (iOS: terminal).
-    conflict_session = CorpusSession(receipt_hash_row={"payload_hash": "sha256:other-payload"})
+    conflict_session = CorpusSession(
+        receipt_hash_row={
+            "payload_hash": "sha256:other-payload",
+            "status": "processed",
+            "response_payload": fixtures["batch_receipt_heart_rate.json"]["body"],
+        }
+    )
     fixtures["batch_conflict_409.json"] = await _call(
         "/api/apple/batch",
         "POST",

@@ -161,6 +161,69 @@ async def test_insert_many_submits_one_row_per_observation() -> None:
 
 
 @pytest.mark.asyncio
+async def test_insert_many_only_updates_newer_apple_daily_total_corrections() -> None:
+    repo = CanonicalObservationRepository()
+    session = _FakeSession()
+    daily_total = _quantity_obs().model_copy(
+        update={
+            "metric_id": "activity.steps",
+            "exact_ingest_key": "xik:v1:apple-day",
+            "aggregation_scope": "owner_all_source_day_total",
+            "dedup_key": "stable-day-key",
+        }
+    )
+
+    await repo.insert_many(session, [daily_total])
+
+    statement, _params = session.calls[0]
+    sql = str(statement)
+    assert "ON CONFLICT (owner_id, workspace_id, dedup_key, interval_start) DO UPDATE" in sql
+    assert "canonical_observations.aggregation_scope = 'owner_all_source_day_total'" in sql
+    assert "EXCLUDED.aggregation_scope = 'owner_all_source_day_total'" in sql
+    assert "canonical_observations.normalizer_id = 'apple_health'" in sql
+    assert "EXCLUDED.normalizer_id = 'apple_health'" in sql
+    assert "raw_payload_ref" in sql
+    assert "captured_at" in sql
+    assert "pg_input_is_valid" in sql
+    assert "'bigint'" in sql
+    assert "'timestamp with time zone'" in sql
+    assert "EXCLUDED.created_at >= canonical_observations.created_at" in sql
+    assert "status = 'active'" in sql
+
+
+@pytest.mark.asyncio
+async def test_insert_many_coalesces_same_batch_daily_corrections_before_upsert() -> None:
+    repo = CanonicalObservationRepository()
+    session = _FakeSession()
+    first = _quantity_obs().model_copy(
+        update={
+            "metric_id": "activity.steps",
+            "exact_ingest_key": "xik:v1:apple-day",
+            "aggregation_scope": "owner_all_source_day_total",
+            "dedup_key": "stable-day-key",
+        }
+    )
+    corrected = first.model_copy(
+        update={
+            "value": QuantityValue(
+                type="quantity",
+                value=7_698.1,
+                unit="count",
+                canonical_value=7_698.1,
+                canonical_unit="count",
+            )
+        }
+    )
+
+    submitted = await repo.insert_many(session, [first, corrected])
+
+    _statement, params = session.calls[0]
+    assert submitted == 2
+    assert len(params) == 1
+    assert params[0]["numeric_value"] == 7_698.1
+
+
+@pytest.mark.asyncio
 async def test_insert_many_empty_is_a_noop() -> None:
     repo = CanonicalObservationRepository()
     session = _FakeSession()

@@ -19,10 +19,16 @@ from contracts.ontology import REGISTRY, MetricDefinition
 from contracts.values import CodedValue, EventValue, ObservationValue, QuantityValue
 
 from . import identity
+from .fusion import AggregationScope
+from .fusion import exact_ingest_key as build_exact_ingest_key
 from .parsers import sample_device_name
 
 NORMALIZER_ID = "apple_health"
-NORMALIZER_VERSION = "0.1.0"
+NORMALIZER_VERSION = "0.2.0"
+
+_HEALTHKIT_STATISTICS_ORIGIN = "HealthKit Statistics"
+_HEALTHKIT_STATISTICS_ORIGIN_KEY = identity.normalize_origin(_HEALTHKIT_STATISTICS_ORIGIN)
+_DAILY_TOTAL_OBJECT_TYPE = "apple_healthkit_daily_total"
 
 _TIME_KEYS = ("date", "startDate", "start", "start_date")
 _END_KEYS = ("endDate", "end", "end_date")
@@ -118,6 +124,13 @@ def _first(sample: dict[str, Any], *keys: str) -> Any:
         if sample.get(key) is not None:
             return sample[key]
     return None
+
+
+def _epoch_microseconds(value: datetime) -> int:
+    """Absolute timestamp identity without depending on its serialized UTC offset."""
+    epoch = datetime(1970, 1, 1, tzinfo=UTC)
+    delta = value.astimezone(UTC) - epoch
+    return ((delta.days * 86_400 + delta.seconds) * 1_000_000) + delta.microseconds
 
 
 def _map_code(metric: MetricDefinition, raw: Any) -> str | None:
@@ -225,22 +238,60 @@ def _normalize_sample(
     if value is None:
         return Rejection(reason, sample)
 
-    source_record_uid = _first(sample, "uuid", "id", "source_record_uid")
-    dedup_key = build_dedup_key(
-        owner_id=owner_id,
-        workspace_id=workspace_id,
-        source_id=source_id,
-        metric_id=metric.id,
-        interval_start=start,
-        interval_end=end,
-        device_id=device_id,
-        source_record_uid=source_record_uid,
-        value_repr=value.model_dump_json(),
-    )
     # Resolve the per-sample stream identity from its origin. Use sample_device_name
     # so the stream_id stored on the observation is byte-identical to the registry's
     # source_device_streams.id for the same emitter (record_origins uses the same key).
-    stream = identity.resolve_apple_origin(owner_id, sample_device_name(sample))
+    sample_origin = sample_device_name(sample)
+    stream = identity.resolve_apple_origin(owner_id, sample_origin)
+    source_record_uid = _first(sample, "uuid", "id", "source_record_uid")
+    exact_ingest_key: str | None = None
+    aggregation_scope = AggregationScope.INTERVAL_COMPONENT.value
+
+    # HealthSave's cumulative extractor sends one HealthKit-deduplicated, all-source
+    # total per local calendar day. A later sync may revise that same total, so its
+    # source-local identity must exclude the value while preserving the exact local-
+    # midnight instant (04:00Z/05:00Z across New York DST, for example).
+    if (
+        metric.aggregation.kind == "daily_total"
+        and value.type == "quantity"
+        and stream.origin_key == _HEALTHKIT_STATISTICS_ORIGIN_KEY
+    ):
+        aggregation_scope = AggregationScope.OWNER_ALL_SOURCE_DAY_TOTAL.value
+        exact_ingest_key = build_exact_ingest_key(
+            owner_id,
+            source_id,
+            _DAILY_TOTAL_OBJECT_TYPE,
+            fallback_fields=(
+                workspace_id,
+                metric.id,
+                _epoch_microseconds(start),
+                device_id or "",
+                stream.stream_id,
+            ),
+        )
+        dedup_key = build_dedup_key(
+            owner_id=owner_id,
+            workspace_id=workspace_id,
+            source_id=source_id,
+            metric_id=metric.id,
+            interval_start=start,
+            interval_end=end,
+            device_id=device_id,
+            source_record_uid=exact_ingest_key,
+        )
+    else:
+        dedup_key = build_dedup_key(
+            owner_id=owner_id,
+            workspace_id=workspace_id,
+            source_id=source_id,
+            metric_id=metric.id,
+            interval_start=start,
+            interval_end=end,
+            device_id=device_id,
+            source_record_uid=source_record_uid,
+            value_repr=value.model_dump_json(),
+        )
+
     return Observation(
         owner_id=owner_id,
         workspace_id=workspace_id,
@@ -251,6 +302,8 @@ def _normalize_sample(
         source_id=source_id,
         device_id=device_id,
         stream_id=stream.stream_id,
+        exact_ingest_key=exact_ingest_key,
+        aggregation_scope=aggregation_scope,
         raw_payload_id=raw_payload_id,
         source_record_uid=str(source_record_uid) if source_record_uid else None,
         provenance=provenance,

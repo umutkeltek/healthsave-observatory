@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { SeriesPoint } from "./api";
-import { summarizeNumericSeries } from "./series";
+import { hasOwnerDailyTotalSemantics, summarizeNumericSeries } from "./series";
 
 function point(t: string, value: number | null): SeriesPoint {
   return {
@@ -33,5 +33,16 @@ describe("summarizeNumericSeries", () => {
       point("2026-07-27T09:00:00Z", Number.NaN),
     ]);
     expect(result).toEqual({ latest: null, average: null });
+  });
+});
+
+describe("hasOwnerDailyTotalSemantics", () => {
+  test("recognizes HealthKit all-source day totals without treating raw samples as daily", () => {
+    const daily = point("2026-08-09T04:00:00Z", 7_698.1);
+    daily.aggregation_scope = "owner_all_source_day_total";
+
+    expect(hasOwnerDailyTotalSemantics([daily])).toBe(true);
+    expect(hasOwnerDailyTotalSemantics([point("2026-08-09T04:00:00Z", 72)])).toBe(false);
+    expect(hasOwnerDailyTotalSemantics([])).toBe(false);
   });
 });

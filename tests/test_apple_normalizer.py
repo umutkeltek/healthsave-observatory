@@ -34,6 +34,8 @@ def test_heart_rate_batch_normalizes_to_quantity_observations() -> None:
     assert first.value.value == 72.0
     assert first.value.canonical_unit == "bpm"
     assert first.interval_start == first.interval_end  # instant sample
+    assert first.aggregation_scope == "interval_component"
+    assert first.exact_ingest_key is None
     assert first.normalizer_id == "apple_health"
     assert len({o.dedup_key for o in res.observations}) == 1  # distinct samples
 
@@ -53,6 +55,103 @@ def test_step_count_batch_maps_to_activity_steps() -> None:
     assert res.accepted == 1
     assert all(o.metric_id == "activity.steps" for o in res.observations)
     assert all(o.value.type == "quantity" for o in res.observations)
+
+
+def test_healthkit_statistics_correction_keeps_one_stable_daily_identity() -> None:
+    def normalize(qty: float):
+        result = normalize_apple_batch(
+            {
+                "metric": "distance_walking_running",
+                "samples": [
+                    {
+                        "date": "2026-08-09T04:00:00+00:00",
+                        "qty": qty,
+                        "source": "HealthKit Statistics",
+                    }
+                ],
+            },
+            source_id=_SOURCE,
+            provenance=_PROV,
+        )
+        assert result.accepted == 1
+        return result.observations[0]
+
+    first = normalize(7_100.0)
+    corrected = normalize(7_698.1)
+
+    assert first.aggregation_scope == "owner_all_source_day_total"
+    assert first.exact_ingest_key is not None
+    assert corrected.exact_ingest_key == first.exact_ingest_key
+    assert corrected.dedup_key == first.dedup_key
+    assert corrected.interval_start == datetime(2026, 8, 9, 4, tzinfo=UTC)
+    assert corrected.interval_end == corrected.interval_start
+
+
+def test_healthkit_daily_identity_preserves_dst_midnights_and_separates_days() -> None:
+    result = normalize_apple_batch(
+        {
+            "metric": "step_count",
+            "samples": [
+                {
+                    "date": "2026-01-09T05:00:00+00:00",
+                    "qty": 5_000,
+                    "source": "HealthKit Statistics",
+                },
+                {
+                    "date": "2026-08-09T04:00:00+00:00",
+                    "qty": 6_000,
+                    "source": "HealthKit Statistics",
+                },
+            ],
+        },
+        source_id=_SOURCE,
+        provenance=_PROV,
+    )
+
+    assert [observation.interval_start.hour for observation in result.observations] == [5, 4]
+    assert len({observation.dedup_key for observation in result.observations}) == 2
+
+
+def test_healthkit_statistics_origin_uses_normalized_stream_identity() -> None:
+    result = normalize_apple_batch(
+        {
+            "metric": "step_count",
+            "samples": [
+                {
+                    "date": "2026-08-09T04:00:00+00:00",
+                    "qty": 6_000,
+                    "source": "  healthkit   STATISTICS  ",
+                }
+            ],
+        },
+        source_id=_SOURCE,
+        provenance=_PROV,
+    )
+
+    observation = result.observations[0]
+    assert observation.aggregation_scope == "owner_all_source_day_total"
+    assert observation.exact_ingest_key is not None
+
+
+def test_daily_metric_without_healthkit_statistics_origin_remains_component() -> None:
+    result = normalize_apple_batch(
+        {
+            "metric": "step_count",
+            "samples": [
+                {
+                    "date": "2026-08-09T04:00:00+00:00",
+                    "qty": 10,
+                    "source": "Apple Watch",
+                }
+            ],
+        },
+        source_id=_SOURCE,
+        provenance=_PROV,
+    )
+
+    observation = result.observations[0]
+    assert observation.aggregation_scope == "interval_component"
+    assert observation.exact_ingest_key is None
 
 
 def test_workout_batch_maps_to_event() -> None:
