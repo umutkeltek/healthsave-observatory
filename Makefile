@@ -1,9 +1,9 @@
 PYTHON ?= uv run --extra dev python
-E2E_DB_PASSWORD ?= healthsave-e2e
+TEST_DATABASE_PASSWORD ?= healthsave-e2e
 E2E_GRAFANA_PASSWORD ?= healthsave-e2e
 E2E_API_PORT ?= 18000
 E2E_DB_HOST_PORT ?= 25434
-E2E_COMPOSE_ENV = COMPOSE_FILE=docker-compose.yml DB_PASSWORD=$(E2E_DB_PASSWORD) GRAFANA_PASSWORD=$(E2E_GRAFANA_PASSWORD) API_HOST_PORT=$(E2E_API_PORT) DB_HOST_PORT=$(E2E_DB_HOST_PORT)
+E2E_COMPOSE_ENV = COMPOSE_FILE=docker-compose.yml DB_PASSWORD=$(TEST_DATABASE_PASSWORD) GRAFANA_PASSWORD=$(E2E_GRAFANA_PASSWORD) API_HOST_PORT=$(E2E_API_PORT) DB_HOST_PORT=$(E2E_DB_HOST_PORT)
 
 .PHONY: help setup install-cli regen-lock check-lock regen-v2-schemas check-v2-schemas regen-ts-client check-ts-client typecheck-ts web-test web-typecheck regen-response-corpus check-response-corpus test e2e lint format verify-local doctor compose-up compose-down
 
@@ -103,7 +103,7 @@ e2e:
 		exit 1; \
 	fi
 	@E2E_BASE_URL=http://localhost:$(E2E_API_PORT) \
-		E2E_DATABASE_URL=postgresql://healthsave:$(E2E_DB_PASSWORD)@localhost:$(E2E_DB_HOST_PORT)/healthsave \
+		E2E_DATABASE_URL=postgresql://healthsave:${TEST_DATABASE_PASSWORD}@localhost:$(E2E_DB_HOST_PORT)/healthsave \
 		$(PYTHON) -m pytest -m e2e -q tests/e2e; rc=$$?; \
 		$(E2E_COMPOSE_ENV) docker compose -p hdh-e2e down -v >/dev/null 2>&1; exit $$rc
 
