@@ -11,6 +11,9 @@ export type MetricSummary = {
 
 export type SeriesPoint = {
   t: string;
+  // Ranged observations (sleep stages, workouts, ECG) carry their true end.
+  // Optional so a newer web image degrades safely against an older v2 server.
+  interval_end?: string | null;
   value: number | null;
   code: string | null;
   unit: string | null;

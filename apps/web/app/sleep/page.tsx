@@ -189,11 +189,11 @@ export default async function SleepPage() {
           <h2>How to read this</h2>
           <div className="sleep-notes">
             <div className="sleep-note">
-              <strong>Hypnogram.</strong> Each thin bar represents ~30 seconds of sleep. Colours match standard sleep stages:{" "}
+              <strong>Hypnogram.</strong> Each bar is a recorded interval; its width reflects elapsed time. Colours match common detailed sleep stages:{" "}
               <span style={{ color: "var(--sleep-deep)" }}>deep</span>,{" "}
               <span style={{ color: "var(--sleep-core)" }}>core</span>,{" "}
               <span style={{ color: "var(--sleep-rem)" }}>REM</span>, and{" "}
-              <span style={{ color: "var(--sleep-awake)" }}>awake</span>. A typical night cycles through these ~4–6 times.
+              <span style={{ color: "var(--sleep-awake)" }}>awake</span>. Light or unspecified sleep from other sources is labeled explicitly. A typical night cycles through detailed stages ~4–6 times.
             </div>
             <div className="sleep-note">
               <strong>Consistency.</strong> A score from 0–100 that measures how regular your bedtime and wake time are.{" "}

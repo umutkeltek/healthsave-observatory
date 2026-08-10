@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
@@ -15,6 +15,7 @@ from server.api.v2_metrics import (
 )
 
 _T = datetime(2026, 5, 28, 8, 0, tzinfo=UTC)
+_SLEEP_END = _T + timedelta(minutes=30)
 _SOURCE = UUID("11111111-1111-1111-1111-111111111111")
 
 
@@ -68,6 +69,7 @@ async def test_metric_series_returns_mapped_points() -> None:
     assert body["metric"]["id"] == "vital.heart_rate"
     assert body["range"] == "7d"
     assert len(body["points"]) == 1
+    assert body["points"][0]["interval_end"] == _T.isoformat()
     assert body["points"][0]["value"] == 61.0
     assert body["points"][0]["unit"] == "bpm"
 
@@ -179,7 +181,7 @@ async def test_batch_series_stream_id_none_issues_one_fused_query() -> None:
         {
             "metric_id": "sleep.stage",
             "interval_start": _T,
-            "interval_end": _T,
+            "interval_end": _SLEEP_END,
             "numeric_value": None,
             "code": "deep",
             "canonical_unit": None,
@@ -215,6 +217,7 @@ async def test_batch_series_stream_id_none_issues_one_fused_query() -> None:
     assert ids_in_order == ["vital.heart_rate", "not.a.metric", "sleep.stage"]
     assert body["series"][1] == {"metric_id": "not.a.metric", "error": "unknown metric"}
     assert body["series"][0]["points"][0]["value"] == 61.0
+    assert body["series"][2]["points"][0]["interval_end"] == _SLEEP_END.isoformat()
     assert body["series"][2]["points"][0]["code"] == "deep"
 
 

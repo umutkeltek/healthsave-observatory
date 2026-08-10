@@ -20,7 +20,7 @@ Check `GET /api/v2/meta` first — it reports the running backend's version axes
 | `GET /api/v2/metrics/{metric_id}/series` | key | Time series for one metric (`range`, e.g. `7d`, or `start`/`end`) |
 | `GET /api/v2/series` | key | Batch time series for many metrics (`ids=` comma list, max 24; unknown ids return per-item errors) |
 
-The series endpoints return points tagged with `source_id`, `unit`, and optional `confidence` — the same contract the local LLM narrator consumes.
+The series endpoints return points tagged with `source_id`, `unit`, optional `confidence`, and `interval_end`. `t` is the interval start. For categorical observations such as `sleep.stage`, `value: null` is intentional: `code` carries the category and `interval_end - t` is the recorded duration. The same contract feeds the web dashboard and local LLM narrator.
 
 ## Insights and readiness
 

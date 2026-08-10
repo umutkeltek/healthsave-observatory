@@ -13,7 +13,35 @@ import {
 import type { SeriesPoint } from "./api";
 
 function sp(t: string, code: string): SeriesPoint {
-  return { t, code, value: 1, unit: null, source_id: "apple", stream_id: null, confidence: null };
+  const end = new Date(new Date(t).getTime() + 60_000).toISOString();
+  return {
+    t,
+    interval_end: end,
+    code,
+    value: 1,
+    unit: null,
+    source_id: "apple",
+    stream_id: null,
+    confidence: null,
+  };
+}
+
+function interval(
+  t: string,
+  intervalEnd: string,
+  code: string,
+  streamId = "apple-watch",
+): SeriesPoint {
+  return {
+    t,
+    interval_end: intervalEnd,
+    code,
+    value: null,
+    unit: null,
+    source_id: "apple",
+    stream_id: streamId,
+    confidence: null,
+  };
 }
 
 // Build a week of perfectly regular sleep: bed at 23:00, wake at 07:00.
@@ -54,7 +82,134 @@ describe("groupSleepNights", () => {
 });
 
 describe("deriveNight", () => {
-  it("rejects nights with fewer than 5 segments", () => {
+  it("uses the full intervals for the reporter's 8h19m night instead of returning 3h1m", () => {
+    const points = [
+      interval("2026-08-09T14:20:26.000Z", "2026-08-09T15:20:26.000Z", "core"),
+      interval("2026-08-09T15:20:26.000Z", "2026-08-09T16:43:15.339Z", "awake"),
+      interval("2026-08-09T16:43:15.339Z", "2026-08-09T17:03:15.339Z", "deep"),
+      interval("2026-08-09T17:03:15.339Z", "2026-08-09T17:21:26.000Z", "rem"),
+      interval("2026-08-09T17:21:26.000Z", "2026-08-10T00:02:39.000Z", "core"),
+    ];
+
+    const nights = groupSleepNights(points);
+    expect(nights.size).toBe(1);
+    const night = deriveNight("2026-08-09", nights.get("2026-08-09")!);
+
+    expect(night).not.toBeNull();
+    expect(night!.durationMin).toBeCloseTo(29_963_661 / 60_000, 8);
+    expect(night!.durationMin).not.toBe(181);
+    expect(night!.wakeTime).toBe("2026-08-10T00:02:39.000Z");
+  });
+
+  it("matches the 495-minute crossing-midnight golden payload", () => {
+    const points = [
+      interval("2026-04-09T22:30:00.000Z", "2026-04-10T01:00:00.000Z", "core"),
+      interval("2026-04-10T01:00:00.000Z", "2026-04-10T02:15:00.000Z", "deep"),
+      interval("2026-04-10T02:15:00.000Z", "2026-04-10T06:45:00.000Z", "rem"),
+    ];
+
+    const nights = groupSleepNights(points);
+    expect(nights.size).toBe(1);
+    const night = deriveNight("2026-04-09", nights.get("2026-04-09")!);
+
+    expect(night?.durationMin).toBe(495);
+    expect(night?.wakeTime).toBe("2026-04-10T06:45:00.000Z");
+    expect(night?.stageMinutes).toEqual({ core: 150, deep: 75, rem: 270 });
+  });
+
+  it("uses interval unions and excludes awake and in-bed time from sleep duration", () => {
+    const night = deriveNight("2026-06-01", [
+      interval("2026-06-01T22:00:00Z", "2026-06-01T23:00:00Z", "core"),
+      interval("2026-06-01T22:30:00Z", "2026-06-01T23:30:00Z", "core"),
+      interval("2026-06-01T23:30:00Z", "2026-06-02T00:00:00Z", "awake"),
+      interval("2026-06-01T22:00:00Z", "2026-06-02T00:30:00Z", "In Bed"),
+    ]);
+
+    expect(night?.durationMin).toBe(90);
+    expect(night?.trackedMin).toBe(120);
+    expect(night?.timeInBedMin).toBe(150);
+    expect(night?.stageMinutes.core).toBe(90);
+    expect(night?.stageMinutes.awake).toBe(30);
+    expect(night?.stageMinutes.in_bed).toBe(150);
+    expect(night?.wakeTime).toBe("2026-06-02T00:30:00Z");
+    expect(sleepTrends([night!]).efficiencies[0]).toBe(60);
+  });
+
+  it("uses the in-bed envelope rather than tracked sleep stages for efficiency", () => {
+    const night = deriveNight("2026-06-01", [
+      interval("2026-06-01T22:00:00Z", "2026-06-02T01:00:00Z", "in_bed"),
+      interval("2026-06-01T22:30:00Z", "2026-06-02T00:30:00Z", "core"),
+    ]);
+
+    expect(night?.durationMin).toBe(120);
+    expect(night?.trackedMin).toBe(120);
+    expect(sleepTrends([night!]).efficiencies[0]).toBeCloseTo((120 / 180) * 100, 8);
+    expect(night?.timeInBedMin).toBe(180);
+  });
+
+  it("ignores malformed, reversed, and implausibly long intervals", () => {
+    const night = deriveNight("2026-06-01", [
+      interval("2026-06-01T22:00:00Z", "2026-06-01T23:00:00Z", "core"),
+      interval("not-a-date", "2026-06-01T23:30:00Z", "deep"),
+      interval("2026-06-02T00:00:00Z", "2026-06-01T23:00:00Z", "rem"),
+      interval("2026-06-01T00:00:00Z", "2026-06-03T00:00:01Z", "core"),
+    ]);
+
+    expect(night?.durationMin).toBe(60);
+    expect(night?.segments).toHaveLength(1);
+    expect(groupSleepNights([interval("not-a-date", "also-bad", "core")]).size).toBe(0);
+  });
+
+  it("counts identical intervals from multiple streams once", () => {
+    const night = deriveNight("2026-06-01", [
+      interval("2026-06-01T22:00:00Z", "2026-06-01T23:00:00Z", "core", "watch"),
+      interval("2026-06-01T22:00:00Z", "2026-06-01T23:00:00Z", "core", "phone"),
+    ]);
+
+    expect(night?.durationMin).toBe(60);
+    expect(night?.stageMinutes.core).toBe(60);
+    expect(night?.segments).toHaveLength(1);
+    expect(night?.streamCount).toBe(2);
+  });
+
+  it("keeps a detailed stage when generic asleep overlaps it", () => {
+    const night = deriveNight("2026-06-01", [
+      interval("2026-06-01T22:00:00Z", "2026-06-01T23:00:00Z", "asleep", "phone"),
+      interval("2026-06-01T22:00:00Z", "2026-06-01T23:00:00Z", "core", "watch"),
+    ]);
+
+    expect(night?.durationMin).toBe(60);
+    expect(night?.trackedMin).toBe(60);
+    expect(night?.stageMinutes).toEqual({ core: 60 });
+    expect(night?.timeInBedMin).toBe(60);
+    expect(night?.segments).toEqual([
+      {
+        t: "2026-06-01T22:00:00.000Z",
+        end: "2026-06-01T23:00:00.000Z",
+        durationMin: 60,
+        stage: "core",
+      },
+    ]);
+  });
+
+  it("reconciles conflicting stage overlaps into one atomic timeline", () => {
+    const night = deriveNight("2026-06-01", [
+      interval("2026-06-01T22:00:00Z", "2026-06-01T23:00:00Z", "core", "watch"),
+      interval("2026-06-01T22:30:00Z", "2026-06-01T23:30:00Z", "deep", "phone"),
+      interval("2026-06-01T23:15:00Z", "2026-06-01T23:45:00Z", "awake", "phone"),
+    ]);
+
+    expect(night?.durationMin).toBe(90);
+    expect(night?.trackedMin).toBe(105);
+    expect(night?.timeInBedMin).toBe(105);
+    expect(night?.stageMinutes).toEqual({ core: 30, conflict: 45, deep: 15, awake: 15 });
+    expect(Object.values(night!.stageMinutes).reduce((sum, mins) => sum + mins, 0)).toBe(
+      night?.trackedMin,
+    );
+    expect(sleepTrends([night!]).efficiencies[0]).toBeCloseTo((90 / 105) * 100, 8);
+  });
+
+  it("rejects nights with less than 60 minutes of asleep intervals", () => {
     const points = [
       sp("2026-06-01T23:00:00Z", "core"),
       sp("2026-06-01T23:30:00Z", "core"),
@@ -141,6 +296,23 @@ describe("consistencyScore", () => {
   });
 });
 
+describe("sleepTrends", () => {
+  it("preserves efficiency semantics for static nights without tracked union data", () => {
+    const [efficiency] = sleepTrends([
+      {
+        date: "2026-06-01",
+        bedtime: "2026-06-01T23:00:00Z",
+        wakeTime: "2026-06-02T07:00:00Z",
+        durationMin: 480,
+        stageMinutes: { core: 420, awake: 60 },
+        segments: [],
+      },
+    ]).efficiencies;
+
+    expect(efficiency).toBe(87.5);
+  });
+});
+
 describe("sleepDebt", () => {
   it("computes cumulative shortfall vs 8h target", () => {
     const nights = [
@@ -220,5 +392,9 @@ describe("durationLabel", () => {
     expect(durationLabel(485)).toBe("8h 5m");
     expect(durationLabel(60)).toBe("1h 0m");
     expect(durationLabel(90)).toBe("1h 30m");
+  });
+
+  it("carries rounded minutes into the hour", () => {
+    expect(durationLabel(479.6)).toBe("8h 0m");
   });
 });

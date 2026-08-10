@@ -33,7 +33,7 @@ def _obs() -> Observation:
 def test_observation_defaults_owner_and_ontology() -> None:
     obs = _obs()
     assert obs.owner_id == UUID("00000000-0000-0000-0000-000000000001")
-    assert obs.ontology_version == "2026.05.0"
+    assert obs.ontology_version == "2026.08.0"
     assert obs.value.type == "quantity"
     assert obs.value.value == 61.0
 

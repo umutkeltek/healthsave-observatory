@@ -35,5 +35,14 @@ async def test_meta_normalizer_version_reflects_the_live_normalizer() -> None:
     body = await v2_meta()
     # PRODUCT-002: the canonical normalizer runs on every batch, so this axis
     # must reflect the real version, not "0"/"no normalizer yet".
+    assert NORMALIZER_VERSION == "0.3.0"
     assert body["versions"]["normalizer"] == NORMALIZER_VERSION
     assert body["versions"]["normalizer"] != "0"
+
+
+@pytest.mark.asyncio
+async def test_meta_ontology_version_reflects_the_live_registry() -> None:
+    from contracts.ontology import ONTOLOGY_VERSION
+
+    body = await v2_meta()
+    assert body["versions"]["ontology"] == ONTOLOGY_VERSION

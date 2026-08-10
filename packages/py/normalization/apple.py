@@ -24,7 +24,7 @@ from .fusion import exact_ingest_key as build_exact_ingest_key
 from .parsers import sample_device_name
 
 NORMALIZER_ID = "apple_health"
-NORMALIZER_VERSION = "0.2.0"
+NORMALIZER_VERSION = "0.3.0"
 
 _HEALTHKIT_STATISTICS_ORIGIN = "HealthKit Statistics"
 _HEALTHKIT_STATISTICS_ORIGIN_KEY = identity.normalize_origin(_HEALTHKIT_STATISTICS_ORIGIN)

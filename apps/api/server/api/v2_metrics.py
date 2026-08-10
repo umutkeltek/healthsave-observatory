@@ -127,6 +127,7 @@ def _point_dicts(points) -> list[dict]:
     return [
         {
             "t": point.t.isoformat(),
+            "interval_end": point.interval_end.isoformat(),
             "value": point.value,
             "code": point.code,
             "unit": point.unit,

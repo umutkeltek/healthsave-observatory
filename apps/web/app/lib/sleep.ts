@@ -6,14 +6,171 @@ export type SleepNight = {
   bedtime: string; // ISO datetime of first stage
   wakeTime: string; // ISO datetime of last stage
   durationMin: number; // total sleep duration in minutes
+  trackedMin?: number; // union of asleep + awake clock time; omitted by static demo data
+  timeInBedMin?: number; // union of in-bed + asleep + awake clock time; omitted by static demo data
   stageMinutes: Record<string, number>; // minutes in each stage
   segments: SleepSegment[]; // ordered stage blocks
+  streamCount?: number; // distinct source streams represented in this night
 };
 
 export type SleepSegment = {
   t: string; // ISO datetime
-  stage: string; // awake, rem, core, deep
+  end?: string; // ISO datetime; omitted only by static demo data
+  durationMin?: number; // true interval duration; omitted only by static demo data
+  stage: string; // awake, rem, core, deep, or a preserved source state
 };
+
+type ParsedSleepSegment = SleepSegment & {
+  end: string;
+  durationMin: number;
+  startMs: number;
+  endMs: number;
+  streamKey: string;
+};
+
+const MAX_SEGMENT_MINUTES = 24 * 60;
+const DETAILED_ASLEEP_STAGES = ["core", "deep", "rem", "light"] as const;
+const CONTEXT_STAGES = ["in_bed", "unknown"] as const;
+
+function normalizeStage(code: string): string {
+  const normalized = code.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return normalized === "asleep_unspecified" ? "asleep" : normalized;
+}
+
+function parsedSegment(point: SeriesPoint): ParsedSleepSegment | null {
+  if (typeof point.code !== "string" || typeof point.interval_end !== "string") return null;
+  const startMs = Date.parse(point.t);
+  const endMs = Date.parse(point.interval_end);
+  const durationMin = (endMs - startMs) / 60_000;
+  if (
+    !Number.isFinite(startMs) ||
+    !Number.isFinite(endMs) ||
+    durationMin <= 0 ||
+    durationMin > MAX_SEGMENT_MINUTES
+  ) {
+    return null;
+  }
+  const sourceId = typeof point.source_id === "string" ? point.source_id : "unknown-source";
+  const streamId = typeof point.stream_id === "string" ? point.stream_id : null;
+  return {
+    t: point.t,
+    end: point.interval_end,
+    stage: normalizeStage(point.code),
+    durationMin,
+    startMs,
+    endMs,
+    streamKey: streamId || sourceId,
+  };
+}
+
+type TimelineReconciliation = {
+  durationMin: number;
+  trackedMin: number;
+  timeInBedMin: number;
+  stageMinutes: Record<string, number>;
+  segments: SleepSegment[];
+};
+
+function reconcileTimeline(parsed: ParsedSleepSegment[]): TimelineReconciliation {
+  const events = new Map<number, Map<string, number>>();
+  const addEvent = (at: number, stage: string, delta: number) => {
+    const changes = events.get(at) ?? new Map<string, number>();
+    changes.set(stage, (changes.get(stage) ?? 0) + delta);
+    events.set(at, changes);
+  };
+  for (const segment of parsed) {
+    addEvent(segment.startMs, segment.stage, 1);
+    addEvent(segment.endMs, segment.stage, -1);
+  }
+
+  const boundaries = [...events.keys()].sort((a, b) => a - b);
+  const active = new Map<string, number>();
+  const minutesByStage = new Map<string, number>();
+  const visual: Array<{ startMs: number; endMs: number; stage: string }> = [];
+  let durationMin = 0;
+  let trackedMin = 0;
+  let timeInBedMin = 0;
+
+  const addMinutes = (stage: string, minutes: number) => {
+    minutesByStage.set(stage, (minutesByStage.get(stage) ?? 0) + minutes);
+  };
+
+  for (let index = 0; index < boundaries.length - 1; index += 1) {
+    const startMs = boundaries[index];
+    for (const [stage, delta] of events.get(startMs) ?? []) {
+      const nextCount = (active.get(stage) ?? 0) + delta;
+      if (nextCount > 0) active.set(stage, nextCount);
+      else active.delete(stage);
+    }
+
+    const endMs = boundaries[index + 1];
+    const sliceMin = (endMs - startMs) / 60_000;
+    if (sliceMin <= 0) continue;
+
+    const detailedStages = DETAILED_ASLEEP_STAGES.filter((stage) => active.has(stage));
+    const hasGenericAsleep = active.has("asleep");
+    const hasAsleep = detailedStages.length > 0 || hasGenericAsleep;
+    const hasAwake = active.has("awake");
+    const hasInBed = active.has("in_bed");
+    let displayStage: string | null = null;
+
+    if (hasAsleep) {
+      // Total sleep follows the legacy sleep_sessions contract: any asleep
+      // classification makes this clock slice asleep. Generic asleep is
+      // compatible with one detailed classification; only incompatible detail
+      // or an awake/asleep disagreement is exposed as a conflict.
+      durationMin += sliceMin;
+      trackedMin += sliceMin;
+      if (hasAwake || detailedStages.length > 1) {
+        displayStage = "conflict";
+      } else if (detailedStages.length === 1) {
+        displayStage = detailedStages[0];
+      } else {
+        displayStage = "asleep";
+      }
+      addMinutes(displayStage, sliceMin);
+    } else if (hasAwake) {
+      trackedMin += sliceMin;
+      displayStage = "awake";
+      addMinutes("awake", sliceMin);
+    } else if (hasInBed) {
+      displayStage = "in_bed";
+    } else if (active.has("unknown")) {
+      displayStage = "unknown";
+    }
+
+    if (hasInBed || hasAsleep || hasAwake) timeInBedMin += sliceMin;
+
+    // These are contextual source states, not evidence of sleep. Preserve
+    // their union for disclosure while excluding them from sleep duration and
+    // stage-percentage denominators.
+    for (const stage of CONTEXT_STAGES) {
+      if (active.has(stage)) addMinutes(stage, sliceMin);
+    }
+
+    if (displayStage) {
+      const previous = visual.at(-1);
+      if (previous?.stage === displayStage && previous.endMs === startMs) {
+        previous.endMs = endMs;
+      } else {
+        visual.push({ startMs, endMs, stage: displayStage });
+      }
+    }
+  }
+
+  return {
+    durationMin,
+    trackedMin,
+    timeInBedMin,
+    stageMinutes: Object.fromEntries(minutesByStage),
+    segments: visual.map(({ startMs, endMs, stage }) => ({
+      t: new Date(startMs).toISOString(),
+      end: new Date(endMs).toISOString(),
+      durationMin: (endMs - startMs) / 60_000,
+      stage,
+    })),
+  };
+}
 
 // Group raw sleep stage points into nights. A night boundary is noon UTC
 // (the analytical-time default): any stage before noon belongs to the
@@ -21,7 +178,7 @@ export type SleepSegment = {
 //
 // ── Noon-split heuristic ──────────────────────────────────────────────
 // This heuristic is necessary because Apple Watch sleep data from HealthSave
-// arrives as independent ~30 s sleep.stage samples — there is no per-night
+// arrives as independent sleep.stage intervals — there is no per-night
 // "bedtime" / "waketime" envelope. The noon split is a robust default:
 // virtually all sleep ends well before noon and begins well after noon, so
 // the boundary is unambiguous for 99% of nights.
@@ -34,7 +191,9 @@ export type SleepSegment = {
 export function groupSleepNights(points: SeriesPoint[]): Map<string, SeriesPoint[]> {
   const nights = new Map<string, SeriesPoint[]>();
   for (const p of points) {
-    const t = new Date(p.t);
+    const instant = Date.parse(p.t);
+    if (!Number.isFinite(instant)) continue;
+    const t = new Date(instant);
     // Noon split: if before 12:00, it's still "last night"
     if (t.getUTCHours() < 12) t.setUTCDate(t.getUTCDate() - 1);
     const key = t.toISOString().slice(0, 10); // YYYY-MM-DD
@@ -47,34 +206,36 @@ export function groupSleepNights(points: SeriesPoint[]): Map<string, SeriesPoint
 
 // Minimum minutes of stage data to count as a valid night.
 const MIN_NIGHT_MINUTES = 60;
-const MIN_SEGMENTS = 5;
 
 export function deriveNight(key: string, points: SeriesPoint[]): SleepNight | null {
-  const sorted = [...points].sort(
-    (a, b) => new Date(a.t).getTime() - new Date(b.t).getTime(),
-  );
+  const parsed = points
+    .map(parsedSegment)
+    .filter((segment): segment is ParsedSleepSegment => segment !== null)
+    .sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs);
+  if (parsed.length === 0) return null;
 
-  if (sorted.length < MIN_SEGMENTS) return null;
-
-  const segments: SleepSegment[] = sorted
-    .filter((p) => p.code !== null)
-    .map((p) => ({ t: p.t, stage: p.code! }));
-
-  if (segments.length < MIN_SEGMENTS) return null;
-
-  const bedtime = segments[0].t;
-  const wakeTime = segments[segments.length - 1].t;
-  const durationMin =
-    (new Date(wakeTime).getTime() - new Date(bedtime).getTime()) / 60000;
+  const { durationMin, trackedMin, timeInBedMin, stageMinutes, segments } =
+    reconcileTimeline(parsed);
 
   if (durationMin < MIN_NIGHT_MINUTES) return null;
 
-  const stageMinutes: Record<string, number> = {};
-  for (const seg of segments) {
-    stageMinutes[seg.stage] = (stageMinutes[seg.stage] || 0) + 0.5; // ~30s samples
-  }
+  const bedtime = parsed[0].t;
+  const wake = parsed.reduce((latest, segment) => segment.endMs > latest.endMs ? segment : latest);
+  const wakeTime = wake.end;
 
-  return { date: key, bedtime, wakeTime, durationMin, stageMinutes, segments };
+  const streamCount = new Set(parsed.map((segment) => segment.streamKey)).size;
+
+  return {
+    date: key,
+    bedtime,
+    wakeTime,
+    durationMin,
+    trackedMin,
+    timeInBedMin,
+    stageMinutes,
+    segments,
+    streamCount,
+  };
 }
 
 export type SleepTrend = {
@@ -82,7 +243,7 @@ export type SleepTrend = {
   durations: number[];
   bedtimes: string[];
   waketimes: string[];
-  efficiencies: number[]; // (total - awake) / total as %
+  efficiencies: number[]; // asleep / time in bed, as a percentage
 };
 
 export function sleepTrends(nights: SleepNight[]): SleepTrend {
@@ -93,6 +254,12 @@ export function sleepTrends(nights: SleepNight[]): SleepTrend {
     bedtimes: sorted.map((n) => n.bedtime),
     waketimes: sorted.map((n) => n.wakeTime),
     efficiencies: sorted.map((n) => {
+      const intervalDenominator = n.timeInBedMin ?? n.trackedMin;
+      if (intervalDenominator !== undefined) {
+        return intervalDenominator > 0 ? (n.durationMin / intervalDenominator) * 100 : 0;
+      }
+      // Static demo fixtures predate interval unions: their duration is the
+      // session span and therefore already includes awake time.
       const awake = n.stageMinutes.awake || 0;
       return n.durationMin > 0 ? ((n.durationMin - awake) / n.durationMin) * 100 : 0;
     }),
@@ -108,8 +275,9 @@ export function bedtimeLabel(iso: string): string {
 }
 
 export function durationLabel(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = Math.round(minutes % 60);
+  const rounded = Math.max(0, Math.round(minutes));
+  const h = Math.floor(rounded / 60);
+  const m = rounded % 60;
   return `${h}h ${m}m`;
 }
 
@@ -118,6 +286,11 @@ export const STAGE_COLOR: Record<string, string> = {
   rem: "var(--sleep-rem)",
   core: "var(--sleep-core)",
   deep: "var(--sleep-deep)",
+  light: "var(--sleep-core)",
+  asleep: "var(--sleep-core)",
+  in_bed: "var(--neutral)",
+  unknown: "var(--neutral)",
+  conflict: "var(--warn)",
 };
 
 export const STAGE_LABEL: Record<string, string> = {
@@ -125,6 +298,11 @@ export const STAGE_LABEL: Record<string, string> = {
   rem: "REM",
   core: "Core",
   deep: "Deep",
+  light: "Light",
+  asleep: "Asleep (stage unspecified)",
+  in_bed: "In Bed",
+  unknown: "Unknown",
+  conflict: "Conflicting stages",
 };
 
 // Score sleep consistency — lower variance = higher score. Returns 0-100 where

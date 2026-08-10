@@ -160,7 +160,7 @@ class MetricDefinition(V2Model):
         return self
 
 
-ONTOLOGY_VERSION: OntologyVersion = "2026.05.0"
+ONTOLOGY_VERSION: OntologyVersion = "2026.08.0"
 
 DEFAULT_FUSION = FusionPolicy(
     strategy="ranked_source",
@@ -178,6 +178,10 @@ SLEEP_STAGE_CODES = [
     CodeDefinition(code="rem", label="REM"),
     CodeDefinition(code="core", label="Core"),
     CodeDefinition(code="deep", label="Deep"),
+    CodeDefinition(code="light", label="Light"),
+    CodeDefinition(code="asleep", label="Asleep (stage unspecified)"),
+    CodeDefinition(code="in_bed", label="In Bed"),
+    CodeDefinition(code="unknown", label="Unknown"),
 ]
 
 
@@ -1519,6 +1523,16 @@ _SPECIAL: list[MetricDefinition] = [
                     "HKCategoryValueSleepAnalysisAsleepREM": "rem",
                     "HKCategoryValueSleepAnalysisAsleepCore": "core",
                     "HKCategoryValueSleepAnalysisAsleepDeep": "deep",
+                    "HKCategoryValueSleepAnalysisAsleepUnspecified": "asleep",
+                    "HKCategoryValueSleepAnalysisInBed": "in_bed",
+                    # HealthSave's frozen wire carries display names rather than
+                    # HealthKit enum constants. Android and importers share this
+                    # vocabulary, including sessions without detailed staging.
+                    "Asleep": "asleep",
+                    "Asleep Unspecified": "asleep",
+                    "In Bed": "in_bed",
+                    "Light": "light",
+                    "Unknown": "unknown",
                 },
             )
         ],

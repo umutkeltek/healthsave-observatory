@@ -25,7 +25,16 @@ def test_get_metric_returns_expected_entries_and_none_on_miss() -> None:
 
     assert sleep_stage is not None
     assert sleep_stage.value_type == "categorical"
-    assert [code.code for code in sleep_stage.allowed_codes] == ["awake", "rem", "core", "deep"]
+    assert [code.code for code in sleep_stage.allowed_codes] == [
+        "awake",
+        "rem",
+        "core",
+        "deep",
+        "light",
+        "asleep",
+        "in_bed",
+        "unknown",
+    ]
 
     assert blood_pressure is not None
     assert blood_pressure.value_type == "components"
@@ -43,7 +52,7 @@ def test_all_metrics_returns_registry_contents() -> None:
     metrics = all_metrics()
     metric_ids = {metric.id for metric in metrics}
 
-    assert ONTOLOGY_VERSION == "2026.05.0"
+    assert ONTOLOGY_VERSION == "2026.08.0"
     assert len(metrics) >= 18
     assert "vital.heart_rate" in metric_ids
     assert "sleep.stage" in metric_ids
