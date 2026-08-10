@@ -336,6 +336,7 @@ services:
     environment:
       API_BASE: ${WEB_API_BASE:-http://api:8000}
       API_KEY: ${API_KEY:-}
+      HEALTHSAVE_EXPERIMENTAL_LOCALES: ${HEALTHSAVE_EXPERIMENTAL_LOCALES:-0}
     ports:
       - "${WEB_BIND:-127.0.0.1}:4173:4173"
 

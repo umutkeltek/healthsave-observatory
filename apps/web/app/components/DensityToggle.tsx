@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 
 import { setDensityAction } from "../lib/actions";
 import type { Density } from "../lib/prefs";
+import { useI18n } from "./I18nProvider";
 
 // Optimistic: the UI flips the instant you click; the cookie write settles in
 // the background. Never disabled - switching modes must feel like a light
@@ -26,21 +27,22 @@ export function DensityToggle({
   density: Density;
   onPick: (mode: Density) => void;
 }) {
+  const { dict } = useI18n();
   return (
-    <div className="density-toggle" role="group" aria-label="View mode">
+    <div className="density-toggle" role="group" aria-label={dict.density.label}>
       <button
         type="button"
         className={density === "essentials" ? "active" : ""}
         onClick={() => onPick("essentials")}
       >
-        Essentials
+        {dict.density.essentials}
       </button>
       <button
         type="button"
         className={density === "observatory" ? "active" : ""}
         onClick={() => onPick("observatory")}
       >
-        Observatory
+        {dict.density.observatory}
       </button>
     </div>
   );

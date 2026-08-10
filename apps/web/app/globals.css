@@ -5445,6 +5445,68 @@ body {
   border-left: 1px solid var(--line);
 }
 
+.language-switcher {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.language-label {
+  white-space: nowrap;
+}
+
+.language-switcher select {
+  min-height: 36px;
+  max-width: 170px;
+  padding: 0 30px 0 11px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  cursor: pointer;
+}
+
+.language-switcher select:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.language-error {
+  max-width: 32ch;
+  color: var(--down);
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.language-switcher.compact .language-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.language-switcher.compact .language-error {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 6px);
+  right: 0;
+  width: max-content;
+  max-width: min(32ch, calc(100vw - 32px));
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--down) 35%, var(--line));
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
 .theme-toggle {
   min-width: 36px;
 }
@@ -5990,7 +6052,8 @@ body {
 
 @media (max-width: 620px) {
   .topbar-search,
-  .topbar-health {
+  .topbar-health,
+  .language-switcher.compact {
     display: none;
   }
 

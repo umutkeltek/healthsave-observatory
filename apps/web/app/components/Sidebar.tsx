@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 
 import type { Density } from "../lib/prefs";
 import { DensityToggle } from "./DensityToggle";
+import { useI18n } from "./I18nProvider";
 
 const ICONS: Record<string, ReactNode> = {
   explore: (
@@ -117,31 +118,48 @@ const ICONS: Record<string, ReactNode> = {
 //   Sleep = Sleep quality, stages, consistency, debt
 //   Activity = Strain (cardio load, steps, exercise)
 type NavGroup = "essentials" | "explore" | "manage";
-type NavItem = { href: string; label: string; icon: string; group: NavGroup };
+type NavKey =
+  | "today"
+  | "sleep"
+  | "activity"
+  | "findings"
+  | "data"
+  | "sources"
+  | "privacy"
+  | "explore"
+  | "library"
+  | "compare"
+  | "relationships"
+  | "experiments"
+  | "timeline"
+  | "integrations"
+  | "intelligence"
+  | "settings";
+type NavItem = { href: string; labelKey: NavKey; icon: string; group: NavGroup };
 
 const NAV: readonly NavItem[] = [
-  { href: "/", label: "Today", icon: "overview", group: "essentials" },
-  { href: "/sleep", label: "Sleep", icon: "sleep", group: "essentials" },
-  { href: "/activity", label: "Activity", icon: "activity", group: "essentials" },
-  { href: "/findings", label: "Findings", icon: "findings", group: "essentials" },
-  { href: "/data", label: "Data", icon: "data", group: "essentials" },
-  { href: "/sources", label: "Sources", icon: "sources", group: "essentials" },
-  { href: "/privacy", label: "Privacy", icon: "privacy", group: "essentials" },
-  { href: "/explore", label: "Explore", icon: "explore", group: "explore" },
-  { href: "/library", label: "Library", icon: "library", group: "explore" },
-  { href: "/compare", label: "Compare", icon: "compare", group: "explore" },
-  { href: "/relationships", label: "Relationships", icon: "relationships", group: "explore" },
-  { href: "/experiments", label: "Experiments", icon: "experiments", group: "explore" },
-  { href: "/timeline", label: "Timeline", icon: "findings", group: "explore" },
-  { href: "/integrations", label: "Integrations", icon: "integrations", group: "manage" },
-  { href: "/intelligence", label: "Intelligence", icon: "intelligence", group: "manage" },
-  { href: "/settings", label: "Settings", icon: "settings", group: "manage" },
+  { href: "/", labelKey: "today", icon: "overview", group: "essentials" },
+  { href: "/sleep", labelKey: "sleep", icon: "sleep", group: "essentials" },
+  { href: "/activity", labelKey: "activity", icon: "activity", group: "essentials" },
+  { href: "/findings", labelKey: "findings", icon: "findings", group: "essentials" },
+  { href: "/data", labelKey: "data", icon: "data", group: "essentials" },
+  { href: "/sources", labelKey: "sources", icon: "sources", group: "essentials" },
+  { href: "/privacy", labelKey: "privacy", icon: "privacy", group: "essentials" },
+  { href: "/explore", labelKey: "explore", icon: "explore", group: "explore" },
+  { href: "/library", labelKey: "library", icon: "library", group: "explore" },
+  { href: "/compare", labelKey: "compare", icon: "compare", group: "explore" },
+  { href: "/relationships", labelKey: "relationships", icon: "relationships", group: "explore" },
+  { href: "/experiments", labelKey: "experiments", icon: "experiments", group: "explore" },
+  { href: "/timeline", labelKey: "timeline", icon: "findings", group: "explore" },
+  { href: "/integrations", labelKey: "integrations", icon: "integrations", group: "manage" },
+  { href: "/intelligence", labelKey: "intelligence", icon: "intelligence", group: "manage" },
+  { href: "/settings", labelKey: "settings", icon: "settings", group: "manage" },
 ];
 
-const GROUP_ORDER: readonly { id: NavGroup; label: string }[] = [
-  { id: "essentials", label: "Essentials" },
-  { id: "explore", label: "Analyze" },
-  { id: "manage", label: "Manage" },
+const GROUP_ORDER: readonly { id: NavGroup }[] = [
+  { id: "essentials" },
+  { id: "explore" },
+  { id: "manage" },
 ];
 
 
@@ -176,6 +194,7 @@ export function Sidebar({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const { dict } = useI18n();
   const essentialsOnly = density === "essentials";
   const groups = essentialsOnly ? GROUP_ORDER.filter((g) => g.id === "essentials") : GROUP_ORDER;
   const renderItem = (item: NavItem) => {
@@ -188,7 +207,7 @@ export function Sidebar({
         onClick={onNavigate}
       >
         <NavIcon name={item.icon} />
-        {item.label}
+        {dict.nav[item.labelKey]}
       </Link>
     );
   };
@@ -205,7 +224,7 @@ export function Sidebar({
       <nav className="nav">
         {groups.map((g) => (
           <div className="nav-group" key={g.id}>
-            {!essentialsOnly && <div className="nav-group-label">{g.label}</div>}
+            {!essentialsOnly && <div className="nav-group-label">{dict.navGroups[g.id]}</div>}
             {NAV.filter((item) => item.group === g.id).map(renderItem)}
           </div>
         ))}

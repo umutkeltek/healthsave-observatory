@@ -36,3 +36,11 @@ def test_required_compose_vars_are_documented_in_env_example():
     env_example = (_ROOT / ".env.example").read_text()
     missing = [v for v in required if f"{v}=" not in env_example]
     assert missing == [], f".env.example is missing required compose vars: {missing}"
+
+
+def test_web_experimental_locale_flag_is_wired_and_safe_by_default():
+    compose = (_ROOT / "docker-compose.yml").read_text()
+    env_example = (_ROOT / ".env.example").read_text()
+
+    assert "HEALTHSAVE_EXPERIMENTAL_LOCALES: ${HEALTHSAVE_EXPERIMENTAL_LOCALES:-0}" in compose
+    assert "HEALTHSAVE_EXPERIMENTAL_LOCALES=0" in env_example

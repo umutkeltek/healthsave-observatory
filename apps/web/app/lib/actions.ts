@@ -27,6 +27,11 @@ import {
   updateAnalyticalTime,
 } from "./api";
 import {
+  LOCALE_COOKIE,
+  resolveAvailableLocale,
+  type Locale,
+} from "./i18n";
+import {
   type Density,
   DENSITY_COOKIE,
   DASHBOARD_COOKIE,
@@ -206,6 +211,28 @@ export async function setDensityAction(mode: Density): Promise<ActionResult> {
     return { ok: true };
   } catch (error) {
     return failure(error, "Could not switch the view mode.");
+  }
+}
+
+export async function setLocaleAction(locale: Locale): Promise<ActionResult> {
+  try {
+    const selected = resolveAvailableLocale(
+      locale,
+      process.env.HEALTHSAVE_EXPERIMENTAL_LOCALES === "1",
+    );
+    if (selected !== locale) {
+      return { ok: false, error: "That language is not available in this build." };
+    }
+    const jar = await cookies();
+    jar.set(LOCALE_COOKIE, selected, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax",
+      httpOnly: true,
+    });
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Could not switch the language." };
   }
 }
 

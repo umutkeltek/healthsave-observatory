@@ -1,12 +1,14 @@
 # syntax=docker/dockerfile:1
-# HealthSave Observatory web — Next.js 15 standalone build, served by Node.
+# HealthSave Observatory web — Next.js 16 standalone build, served by Node.
 # Build context is apps/web (see docker-compose.yml `web` service).
 
 FROM oven/bun:1 AS build
 WORKDIR /app
-# Install deps first for layer caching, then build the standalone server.
-COPY package.json ./
-RUN bun install
+# Install the audited dependency graph first for layer caching, then build the
+# standalone server. A frozen lock keeps the reviewed dependency graph pinned
+# instead of resolving fresh caret ranges inside the image.
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN bun run build
