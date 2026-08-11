@@ -109,6 +109,70 @@ describe("groupSleepNights", () => {
     expect(derived.map((night) => night?.date)).toEqual(["2026-06-01", "2026-06-01"]);
     expect(derived.map((night) => night?.durationMin)).toEqual([240, 60]);
   });
+
+  it("merges a nap separated by three hours fifty-nine minutes into the night", () => {
+    // One second under the four-hour separation rule is intentionally merged.
+    // Document the boundary so future drift in SESSION_GAP_MS is caught.
+    const points = [
+      interval("2026-06-02T00:00:00Z", "2026-06-02T02:00:00Z", "core"),
+      interval("2026-06-02T02:00:00Z", "2026-06-02T04:00:00Z", "deep"),
+      interval("2026-06-02T07:59:01Z", "2026-06-02T08:59:01Z", "core"),
+    ];
+
+    const nights = groupSleepNights(points);
+
+    expect(nights.size).toBe(1);
+    expect([...nights.values()][0]).toHaveLength(3);
+    expect(deriveNight("2026-06-01", [...nights.values()][0])?.durationMin).toBe(300);
+  });
+
+  it("splits a nap separated by four hours and one second into a second session", () => {
+    const points = [
+      interval("2026-06-02T00:00:00Z", "2026-06-02T02:00:00Z", "core"),
+      interval("2026-06-02T02:00:00Z", "2026-06-02T04:00:00Z", "deep"),
+      interval("2026-06-02T08:00:01Z", "2026-06-02T09:00:01Z", "core"),
+    ];
+
+    const nights = groupSleepNights(points);
+
+    expect(nights.size).toBe(2);
+  });
+
+  it("keys a second same-day session with the occurrence suffix", () => {
+    // Overnight session plus an afternoon nap on the same calendar date:
+    // both sessions fall before noon UTC, both keyed to the previous calendar
+    // date, but they must not collide on the same map key.
+    const points = [
+      interval("2026-06-02T00:00:00Z", "2026-06-02T04:00:00Z", "core"),
+      interval("2026-06-02T09:00:00Z", "2026-06-02T10:00:00Z", "core"),
+    ];
+
+    const nights = groupSleepNights(points);
+
+    expect(nights.size).toBe(2);
+    expect(nights.has("2026-06-01")).toBe(true);
+    expect(nights.has("2026-06-01#2")).toBe(true);
+    expect([...nights.entries()].map(([key, pts]) => deriveNight(key, pts)?.date)).toEqual([
+      "2026-06-01",
+      "2026-06-01",
+    ]);
+  });
+
+  it("keeps a session that crosses a DST spring-forward boundary intact", () => {
+    // 2026-03-08 02:00 PT jumps to 03:00 PT (US DST). A session that runs
+    // through that wall-clock hour is still one continuous night in UTC and
+    // must not be split. Noon-UTC heuristic still pins the bedtime date.
+    const points = [
+      interval("2026-03-08T05:00:00Z", "2026-03-08T09:00:00Z", "core"),
+      interval("2026-03-08T09:00:00Z", "2026-03-08T13:30:00Z", "rem"),
+    ];
+
+    const nights = groupSleepNights(points);
+
+    expect(nights.size).toBe(1);
+    expect(nights.get("2026-03-07")).toHaveLength(2);
+    expect(deriveNight("2026-03-07", nights.get("2026-03-07")!)?.durationMin).toBe(510);
+  });
 });
 
 describe("deriveNight", () => {
