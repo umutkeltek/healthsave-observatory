@@ -24,7 +24,34 @@ from .fusion import exact_ingest_key as build_exact_ingest_key
 from .parsers import sample_device_name
 
 NORMALIZER_ID = "apple_health"
-NORMALIZER_VERSION = "0.3.0"
+NORMALIZER_VERSION = "0.4.0"
+
+# HealthSave's iOS client sends the daily activity-ring totals bundled into a
+# single wire metric ("activity_summaries") rather than as per-metric quantity
+# batches (the shape every other wire metric — including the *same* totals
+# sent individually, e.g. `active_energy_burned` — uses). Because
+# `_apple_wire_index()` only indexes source_metric names declared on
+# individual MetricDefinitions, "activity_summaries" itself never resolves to
+# a canonical metric, so `normalize_apple_batch` silently produced zero
+# observations for it (BUG-2026-08: dual-write divergence, canonical_accepted
+# always 0 while the daily_activity projection kept writing correctly).
+#
+# Fix: unpack each activity_summaries sample into its constituent wire-metric
+# fields and re-run them through the normal per-metric path below, so they
+# land in canonical_observations exactly like a standalone quantity batch for
+# the same wire name would.
+_ACTIVITY_SUMMARY_WIRE = "activity_summaries"
+# Only fields whose HealthKit semantics match the canonical metric's unit
+# 1:1 are auto-expanded here. `appleStandHours` is a 0-24 COUNT of hours with
+# any standing activity (matches the iOS Activity ring's "Stand" number), not
+# a minutes total — mapping it straight into `activity.stand_minutes` (unit
+# "min") would silently corrupt the value (e.g. reporting 9 hours as "9 min
+# stood"). That needs its own canonical metric/ontology fix, not a blind
+# field rename, so it is intentionally left unmapped here.
+_ACTIVITY_SUMMARY_FIELD_TO_WIRE_METRIC: dict[str, str] = {
+    "activeEnergyBurned": "active_energy_burned",
+    "appleExerciseTime": "apple_exercise_time",
+}
 
 _HEALTHKIT_STATISTICS_ORIGIN = "HealthKit Statistics"
 _HEALTHKIT_STATISTICS_ORIGIN_KEY = identity.normalize_origin(_HEALTHKIT_STATISTICS_ORIGIN)
@@ -313,6 +340,34 @@ def _normalize_sample(
     )
 
 
+def _expand_activity_summary_sample(sample: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    """Split one activity_summaries sample into (wire_metric, single-field sample) pairs.
+
+    Each HealthKit "*Goal" companion field and unrecognized keys are dropped —
+    they carry no canonical metric of their own. The date/source keys are
+    preserved on every derived sample so ``_normalize_sample`` sees the same
+    timestamp/origin it would for a standalone quantity batch.
+
+    The bundled activity summary is HealthKit's own deduplicated, all-source
+    daily rollup (identical in kind to the `step_count`/`active_energy_burned`
+    batches the client sends tagged ``source: "HealthKit Statistics"``), but
+    the summary payload omits that source tag. We stamp it on so the derived
+    samples take the stable daily-total identity path in ``_normalize_sample``
+    — otherwise a later sync that revises the day's total would append a second
+    observation instead of replacing the first (value_repr-based dedup_key).
+    """
+    shared_keys = {*_TIME_KEYS, *_END_KEYS, "source", "sourceName", "device", "deviceName"}
+    shared = {key: value for key, value in sample.items() if key in shared_keys}
+    if not any(shared.get(k) for k in ("source", "sourceName", "device", "deviceName")):
+        shared["source"] = _HEALTHKIT_STATISTICS_ORIGIN
+    expanded: list[tuple[str, dict[str, Any]]] = []
+    for field_name, wire_metric in _ACTIVITY_SUMMARY_FIELD_TO_WIRE_METRIC.items():
+        if sample.get(field_name) is None:
+            continue
+        expanded.append((wire_metric, {**shared, "qty": sample[field_name]}))
+    return expanded
+
+
 def normalize_apple_batch(
     payload: dict[str, Any],
     *,
@@ -328,6 +383,43 @@ def normalize_apple_batch(
     payload = payload or {}
     wire = payload.get("metric")
     samples = payload.get("samples") or []
+
+    # activity_summaries bundles several daily totals into one sample per day
+    # instead of one wire metric per field; unpack before the normal single-
+    # metric routing below so each total still resolves to its own canonical
+    # metric (see _ACTIVITY_SUMMARY_FIELD_TO_WIRE_METRIC for why this exists).
+    if wire == _ACTIVITY_SUMMARY_WIRE:
+        for sample in samples:
+            if not isinstance(sample, dict):
+                result.rejections.append(Rejection("sample_not_object", {"raw": sample}))
+                continue
+            derived = _expand_activity_summary_sample(sample)
+            if not derived:
+                result.rejections.append(Rejection("activity_summary_no_known_fields", sample))
+                continue
+            for wire_metric, derived_sample in derived:
+                metric = _WIRE_INDEX.get(wire_metric)
+                if metric is None:
+                    result.rejections.append(
+                        Rejection(f"unmapped_metric:{wire_metric}", derived_sample)
+                    )
+                    continue
+                outcome = _normalize_sample(
+                    derived_sample,
+                    metric,
+                    source_id=source_id,
+                    provenance=provenance,
+                    owner_id=owner_id,
+                    workspace_id=workspace_id,
+                    device_id=device_id,
+                    raw_payload_id=raw_payload_id,
+                )
+                if isinstance(outcome, Rejection):
+                    result.rejections.append(outcome)
+                else:
+                    result.observations.append(outcome)
+        return result
+
     metric = _WIRE_INDEX.get(wire) if isinstance(wire, str) else None
 
     if metric is None:

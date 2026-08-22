@@ -44,8 +44,8 @@ def test_shared_sleep_stage_values_normalize_as_ranged_categorical_observations(
     )
 
     assert result.rejected == 0
-    assert NORMALIZER_VERSION == "0.3.0"
-    assert {observation.normalizer_version for observation in result.observations} == {"0.3.0"}
+    assert NORMALIZER_VERSION == "0.4.0"
+    assert {observation.normalizer_version for observation in result.observations} == {"0.4.0"}
     assert [observation.value.code for observation in result.observations] == [
         code for _, code in expected
     ]
