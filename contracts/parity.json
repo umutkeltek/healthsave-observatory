@@ -962,6 +962,12 @@
       "ios": "available",
       "android": "planned",
       "planned_since": "2026-06-10"
+    },
+    "activity_summaries": {
+      "ios": "available",
+      "android": "planned",
+      "planned_since": "2026-06-10",
+      "note": "Bundled iOS activity-ring summary (active_energy_burned + apple_exercise_time fields); expanded into per-metric canonical observations by the normalizer, not stored under this wire name."
     }
   },
   "features": {

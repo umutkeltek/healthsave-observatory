@@ -213,3 +213,53 @@ def test_unmapped_metric_rejects_every_sample() -> None:
     assert res.accepted == 0
     assert res.rejected == 1
     assert res.rejections[0].reason.startswith("unmapped_metric")
+
+
+def test_activity_summaries_batch_expands_into_per_metric_observations() -> None:
+    # Regression: the iOS client bundles daily activity-ring totals into a
+    # single "activity_summaries" wire metric. That name has no source mapping,
+    # so the normalizer used to emit zero canonical observations for it (the
+    # dual-write divergence: canonical_accepted=0 while daily_activity wrote
+    # fine), leaving Active Energy / Exercise Minutes stuck on "waiting".
+    res = _run("activity_summaries_batch.json")
+    by_metric = {o.metric_id: o for o in res.observations}
+    # Active Energy (kcal) and Exercise Minutes (min) expand 1:1; Stand Hours
+    # is deliberately NOT mapped (it's a 0-24 hour count, not minutes).
+    assert "activity.active_energy" in by_metric
+    assert "activity.exercise_minutes" in by_metric
+    assert "activity.stand_minutes" not in by_metric
+    assert by_metric["activity.active_energy"].value.value == 956.3371289361303
+    assert by_metric["activity.active_energy"].value.canonical_unit == "kcal"
+    assert by_metric["activity.exercise_minutes"].value.value == 94.0
+    assert by_metric["activity.exercise_minutes"].value.canonical_unit == "min"
+    # HealthKit daily-total identity: stamped source routes both through the
+    # stable owner-all-source-day-total dedup path so a later same-day revision
+    # replaces rather than appends.
+    for obs in res.observations:
+        assert obs.aggregation_scope == "owner_all_source_day_total"
+        assert obs.exact_ingest_key is not None
+
+
+def test_activity_summaries_same_day_revision_keeps_stable_identity() -> None:
+    def normalize(active_energy: float):
+        result = normalize_apple_batch(
+            {
+                "metric": "activity_summaries",
+                "samples": [
+                    {
+                        "date": "2026-08-21T22:00:00.000Z",
+                        "activeEnergyBurned": active_energy,
+                        "appleExerciseTime": 94,
+                    }
+                ],
+            },
+            source_id=_SOURCE,
+            provenance=_PROV,
+        )
+        return {o.metric_id: o for o in result.observations}
+
+    first = normalize(956.3)["activity.active_energy"]
+    revised = normalize(1012.7)["activity.active_energy"]
+    # Same calendar day → same upsert identity even though the value changed.
+    assert first.dedup_key == revised.dedup_key
+    assert first.interval_start == revised.interval_start

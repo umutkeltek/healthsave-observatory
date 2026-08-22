@@ -1,0 +1,16 @@
+{
+  "metric": "activity_summaries",
+  "batch_index": 0,
+  "total_batches": 1,
+  "samples": [
+    {
+      "date": "2026-08-21T22:00:00.000Z",
+      "appleStandHours": 9,
+      "appleExerciseTime": 94,
+      "activeEnergyBurned": 956.3371289361303,
+      "appleStandHoursGoal": 12,
+      "appleExerciseTimeGoal": 30,
+      "activeEnergyBurnedGoal": 700
+    }
+  ]
+}
