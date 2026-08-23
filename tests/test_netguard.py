@@ -46,9 +46,7 @@ def test_ollama_http_refusal_carries_lan_hint():
 def test_cloud_http_refusal_has_no_lan_hint():
     # A non-Ollama provider doesn't get the LAN hint.
     with pytest.raises(SsrfError, match="https") as excinfo:
-        assert_safe_probe_target(
-            EgressRoute("custom", "http://api.example.com"), Destination.CLOUD
-        )
+        assert_safe_probe_target(EgressRoute("custom", "http://api.example.com"), Destination.CLOUD)
     assert "trusted_local_hosts" not in str(excinfo.value)
 
 

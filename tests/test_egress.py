@@ -88,9 +88,7 @@ def test_remote_ollama_denial_carries_lan_hint() -> None:
     )
     assert "llm.trusted_local_hosts" in envelope.reason
     # A named cloud provider gets the plain reason — no LAN hint.
-    cloud_envelope = policy.evaluate(
-        route=EgressRoute("openai"), payload_class=PayloadClass.PROMPT
-    )
+    cloud_envelope = policy.evaluate(route=EgressRoute("openai"), payload_class=PayloadClass.PROMPT)
     assert "trusted_local_hosts" not in cloud_envelope.reason
 
 
