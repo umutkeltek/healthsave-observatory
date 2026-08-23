@@ -59,6 +59,17 @@ llm:
   api_key: ""                   # Left empty for ollama; set for cloud providers
   temperature: 0.3
   max_tokens: 1000
+  # Ollama running on ANOTHER machine in your LAN is fully supported: point
+  # base_url at it (plain http is fine inside your network) and add its host
+  # (hostname or IP) here so it is treated as local, e.g.:
+  #   base_url: "http://192.168.1.50:11434"
+  #   trusted_local_hosts: ["192.168.1.50"]
+  # HTTPS is only ever required for *cloud* endpoints, never for trusted
+  # local/LAN hosts.
+  trusted_local_hosts: []
+  # Cloud LLM providers are default-deny: set true to allow derived findings
+  # (never raw health rows) to leave your network to the configured provider.
+  allow_cloud_egress: false
   # When a cloud provider is used (with allow_cloud_egress: true), the assembled
   # narration prompt is scrubbed of identifiers — emails, phone numbers, opaque
   # IDs, names — before it leaves the host. The local Ollama path is never

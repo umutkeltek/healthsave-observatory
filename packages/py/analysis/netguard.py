@@ -32,7 +32,7 @@ import socket
 from collections.abc import Callable
 from urllib.parse import urlparse
 
-from .egress import Destination, EgressRoute
+from .egress import Destination, EgressRoute, _untrusted_lan_hint
 
 # A resolver maps a hostname to its list of IP strings. Injectable so tests
 # don't depend on real DNS; defaults to the stdlib resolver.
@@ -87,7 +87,10 @@ def assert_safe_probe_target(
 
     parsed = urlparse(base_url if "://" in base_url else f"//{base_url}")
     if parsed.scheme and parsed.scheme != "https":
-        raise SsrfError(f"cloud base_url must be https, got scheme {parsed.scheme!r}")
+        raise SsrfError(
+            f"cloud base_url must be https, got scheme {parsed.scheme!r}"
+            + _untrusted_lan_hint(route)
+        )
     if not parsed.scheme:
         raise SsrfError("cloud base_url must be an absolute https URL")
     if parsed.username or parsed.password:
@@ -107,5 +110,5 @@ def assert_safe_probe_target(
     if unsafe:
         raise SsrfError(
             f"cloud base_url host {host!r} resolves to non-public address(es) {unsafe} "
-            "— refusing to probe internal infrastructure"
+            "— refusing to probe internal infrastructure" + _untrusted_lan_hint(route)
         )

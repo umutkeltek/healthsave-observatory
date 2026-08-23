@@ -78,6 +78,41 @@ def test_remote_ollama_is_treated_as_cloud() -> None:
     assert envelope.destination is Destination.CLOUD
 
 
+def test_remote_ollama_denial_carries_lan_hint() -> None:
+    # The denial must be self-documenting: a LAN Ollama is supported via
+    # trusted_local_hosts, and the refusal reason says exactly that.
+    policy = EgressPolicy(allow_cloud=False)
+    envelope = policy.evaluate(
+        route=EgressRoute("ollama", "http://192.168.1.50:11434"),
+        payload_class=PayloadClass.PROMPT,
+    )
+    assert "llm.trusted_local_hosts" in envelope.reason
+    # A named cloud provider gets the plain reason — no LAN hint.
+    cloud_envelope = policy.evaluate(
+        route=EgressRoute("openai"), payload_class=PayloadClass.PROMPT
+    )
+    assert "trusted_local_hosts" not in cloud_envelope.reason
+
+
+def test_lan_ollama_flows_as_local_through_policy() -> None:
+    # The full first-class LAN path: base_url + trusted host → LOCAL, allowed
+    # over plain HTTP, no cloud opt-in, no redaction required.
+    policy = EgressPolicy.from_config(
+        LLMConfig(
+            provider="ollama",
+            base_url="http://192.168.1.50:11434",
+            trusted_local_hosts=["192.168.1.50"],
+        )
+    )
+    envelope = policy.evaluate(
+        route=EgressRoute("ollama", "http://192.168.1.50:11434"),
+        payload_class=PayloadClass.PROMPT,
+    )
+    assert envelope.allowed
+    assert envelope.destination is Destination.LOCAL
+    assert "local destination" in envelope.reason
+
+
 def test_cloud_allowed_for_derived_payload_when_opted_in() -> None:
     policy = EgressPolicy(allow_cloud=True)
     for payload in (

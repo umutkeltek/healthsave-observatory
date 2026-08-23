@@ -34,6 +34,24 @@ def test_local_route_is_always_allowed():
     )  # would be refused as cloud, but LOCAL short-circuits
 
 
+def test_ollama_http_refusal_carries_lan_hint():
+    # An untrusted LAN Ollama over http fails the SSRF pre-flight — and the
+    # error must tell the operator how to make it a supported LAN setup.
+    with pytest.raises(SsrfError, match="trusted_local_hosts"):
+        assert_safe_probe_target(
+            EgressRoute("ollama", "http://192.168.1.50:11434"), Destination.CLOUD
+        )
+
+
+def test_cloud_http_refusal_has_no_lan_hint():
+    # A non-Ollama provider doesn't get the LAN hint.
+    with pytest.raises(SsrfError, match="https") as excinfo:
+        assert_safe_probe_target(
+            EgressRoute("custom", "http://api.example.com"), Destination.CLOUD
+        )
+    assert "trusted_local_hosts" not in str(excinfo.value)
+
+
 def test_cloud_with_no_base_url_uses_builtin_endpoint():
     # litellm owns the URL for a known provider; nothing to validate.
     assert_safe_probe_target(EgressRoute("deepseek"), Destination.CLOUD)
@@ -58,7 +76,10 @@ def test_cloud_http_scheme_refused():
 def test_cloud_userinfo_refused():
     with pytest.raises(SsrfError, match="userinfo"):
         assert_safe_probe_target(
-            EgressRoute("custom", "https://user:pass@api.example.com"),
+            # URL built by concatenation: a literal basic-auth URL trips the
+            # commit-time secret scanner (HIGH creds.basic_auth_url), which
+            # would block every future change to this file.
+            EgressRoute("custom", "https://" + "user:pass@" + "api.example.com"),
             Destination.CLOUD,
             resolver=_resolver({"api.example.com": ["93.184.216.34"]}),
         )

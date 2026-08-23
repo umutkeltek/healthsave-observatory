@@ -36,5 +36,8 @@ model, **Test connection**, and **Save** — or set `LLM_PROVIDER=ollama` in you
 - **Already running Ollama?** On the Intelligence → Local screen, click *Detect
   a local model* — the server probes the sidecar and `host.docker.internal` and
   fills in the URL + installed models for you.
+- **Ollama on another machine in your LAN?** That is fully supported — set
+  `llm.base_url` to the LAN host and add it to `llm.trusted_local_hosts`
+  (plain HTTP). See [Ollama over LAN](../docs/operations/local-llm.md#ollama-over-lan).
 - **CPU is slow** for large models. Start with a small one (`llama3.2:3b`) and
   size up if your host can handle it.

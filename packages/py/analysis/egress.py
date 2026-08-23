@@ -117,6 +117,21 @@ def classify_destination(
     return Destination.LOCAL if host in trusted else Destination.CLOUD
 
 
+def _untrusted_lan_hint(route: EgressRoute) -> str:
+    """Actionable suffix for a local-engine route refused as CLOUD.
+
+    A LAN Ollama is a first-class supported setup — the operator just needs to
+    declare the host inside the trust boundary. Append this hint to denials so
+    the reason the run failed is also the instructions to fix it.
+    """
+    if route.provider.strip().lower() in _LOCAL_ENGINES and route.base_url:
+        return (
+            " — a LAN Ollama is supported: add this host to "
+            "llm.trusted_local_hosts to treat it as local"
+        )
+    return ""
+
+
 @dataclass(frozen=True)
 class EgressEnvelope:
     """Auditable record of one egress decision (Decision G's audit half)."""
@@ -197,7 +212,8 @@ class EgressPolicy:
         if not self.allow_cloud:
             return envelope(
                 allowed=False,
-                reason="cloud egress not enabled (self-host default is local-only)",
+                reason="cloud egress not enabled (self-host default is local-only)"
+                + _untrusted_lan_hint(route),
             )
         return envelope(allowed=True, reason="derived payload to opted-in cloud destination")
 
