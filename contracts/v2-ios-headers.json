@@ -1,0 +1,20 @@
+{
+  "_comment": "Canonical iOS->server wire header manifest for POST /api/v2/apple/batch (Plan 2026-09-03). Additive over contracts/ios-headers.json — the v1 contract is frozen and this file adds one advisory header. Source of truth: datahub/contracts/v2-ios-headers.json. iOS mirrors this file at ios_app/Tests/HealthSyncTests/Fixtures/v2-ios-headers.json. Enforced by tests/contract/api_v2/test_v2_ios_headers.py (server consumes every header), the iOS V2HeaderContractTests (app emits exactly these), and tests/contract/test_ios_v2_headers_in_sync.py (byte-equal mirror). The body's schema_version=2 is the source of truth for the wire version; this header is advisory only — clients that don't send it still get v2 if their body declares schema_version=2.",
+  "headers": {
+    "Idempotency-Key": "idempotency",
+    "X-HealthSave-Anchor-Present": "evidence",
+    "X-HealthSave-Batch-ID": "identity",
+    "X-HealthSave-Batch-Index": "identity",
+    "X-HealthSave-Full-Export": "evidence",
+    "X-HealthSave-Lower-Bound-Reason": "evidence",
+    "X-HealthSave-Metric": "identity",
+    "X-HealthSave-Payload-Hash": "idempotency",
+    "X-HealthSave-Query-Lower-Bound": "window",
+    "X-HealthSave-Sample-Max-Time": "window",
+    "X-HealthSave-Sample-Min-Time": "window",
+    "X-HealthSave-Schema-Version": "evidence",
+    "X-HealthSave-Sync-Mode": "evidence",
+    "X-HealthSave-Sync-Run-ID": "identity",
+    "X-HealthSave-Total-Batches": "identity"
+  }
+}
