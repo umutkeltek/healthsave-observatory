@@ -341,6 +341,15 @@ async def _ingest_dedicated(
             row[dst_col] = val
         if "defaults" in spec:
             row.update(spec["defaults"])
+        # Identity-aware revision key: HKSample.uuid survives delete-and-reinsert
+        # revisions, so a stable source_uuid lets the v1 path detect revisions
+        # instead of silently landing two values for the day (Plan 2026-09-03).
+        # Optional and additive: legacy rows without uuid keep the existing
+        # (time, device_id, owner_id) conflict path; uuid-bearing rows take
+        # the new (owner_id, source_uuid) partial unique index.
+        sample_uuid = s.get("uuid")
+        if sample_uuid is not None:
+            row["source_uuid"] = str(sample_uuid)
         if row.get("time") and row.get(value_col) is not None:
             rows.append(row)
         else:
@@ -350,30 +359,61 @@ async def _ingest_dedicated(
     if not rows:
         return IngestWriteResult(rejected=rejected_count)
 
-    # Dedup within batch (conflict_cols already include owner_id via the schema).
-    conflict_cols = list(spec["conflict"]) + ["owner_id"]
-    rows, dedup_count = _dedupe_rows_for_upsert(rows, conflict_cols, metric)
-
-    conflict_sql = ", ".join(conflict_cols)
-    columns = list(rows[0].keys())
-    update_set = ", ".join(f"{c} = EXCLUDED.{c}" for c in rows[0] if c not in conflict_cols)
-
-    # PERFORMANCE-001: single multi-row VALUES for the whole batch — N rows in
-    # one round-trip instead of N. RETURNING preserves order with parameter-
-    # stable binding, so per-row inserted_new flags stay accurate.
-    flags = await _execute_batch_insert_with_flags(
-        session,
-        spec["table"],
-        columns,  # sql_columns
-        columns,  # bind_keys == sql_columns for dedicated-table writers
-        rows,
-        conflict_clause=f"({conflict_sql})",
-        update_set=update_set,
-    )
+    # Identity-aware conflict routing: rows carrying a source_uuid upsert on
+    # the partial unique index uq_<table>_source_uuid (covers revision/duplicate
+    # detection for Apple HealthKit delete-and-reinsert patterns); rows without
+    # uuid keep the original (time, device_id, owner_id) conflict path so
+    # legacy shipped clients continue to behave exactly as before.
+    identity_rows = [r for r in rows if r.get("source_uuid")]
+    legacy_rows = [r for r in rows if not r.get("source_uuid")]
 
     result = IngestWriteResult()
-    for inserted_new in flags:
-        result = result.with_insert_flag(inserted_new)
+    dedup_count = 0
+
+    if identity_rows:
+        rows_id, dedup_id = _dedupe_rows_for_upsert(
+            identity_rows, ["owner_id", "source_uuid"], metric
+        )
+        dedup_count += dedup_id
+        columns = list(rows_id[0].keys())
+        update_set = ", ".join(
+            f"{c} = EXCLUDED.{c}" for c in rows_id[0] if c not in ("owner_id", "source_uuid")
+        )
+        flags_id = await _execute_batch_insert_with_flags(
+            session,
+            spec["table"],
+            columns,
+            columns,
+            rows_id,
+            conflict_clause="(owner_id, source_uuid)",
+            update_set=update_set,
+        )
+        for inserted_new in flags_id:
+            result = result.with_insert_flag(inserted_new)
+
+    if legacy_rows:
+        # Dedup within batch on the legacy (time, device_id, owner_id) tuple.
+        legacy_conflict_cols = list(spec["conflict"]) + ["owner_id"]
+        rows_leg, dedup_leg = _dedupe_rows_for_upsert(
+            legacy_rows, legacy_conflict_cols, metric
+        )
+        dedup_count += dedup_leg
+        conflict_sql = ", ".join(legacy_conflict_cols)
+        columns = list(rows_leg[0].keys())
+        update_set = ", ".join(
+            f"{c} = EXCLUDED.{c}" for c in rows_leg[0] if c not in legacy_conflict_cols
+        )
+        flags_leg = await _execute_batch_insert_with_flags(
+            session,
+            spec["table"],
+            columns,
+            columns,
+            rows_leg,
+            conflict_clause=f"({conflict_sql})",
+            update_set=update_set,
+        )
+        for inserted_new in flags_leg:
+            result = result.with_insert_flag(inserted_new)
 
     return result.with_counts(rejected=rejected_count, deduped_in_batch=dedup_count)
 
@@ -897,6 +937,16 @@ def sleep_session_rows(device_id: int, samples: list[dict]) -> list[dict]:
             (seg.get("source") for seg in session["segments"] if seg.get("source")),
             None,
         )
+        # Identity-aware pass-through: Apple HealthKit sleep stages each
+        # carry a HKSample.uuid. We propagate the first non-null stage uuid
+        # to the session row so the new partial unique index on
+        # sleep_sessions.source_uuid catches delete-and-reinsert revisions
+        # for the whole session. Legacy / v1 clients leave this empty
+        # and continue to use (device_id, start_time, owner_id) upserts.
+        session_source_uuid = next(
+            (seg.get("uuid") for seg in session["segments"] if seg.get("uuid")),
+            None,
+        )
         rows.append(
             {
                 "device_id": device_id,
@@ -909,15 +959,42 @@ def sleep_session_rows(device_id: int, samples: list[dict]) -> list[dict]:
                 "awake": session["awake_ms"],
                 "rr": None,
                 "source_id": source_id,
+                "source_uuid": session_source_uuid,
                 "segments": session["segments"],
             }
         )
     return rows
-
-
 async def _upsert_sleep_session(session: AsyncSession, row: dict) -> int:
     row.setdefault("owner_id", str(DEFAULT_OWNER_ID))
     row.setdefault("source_id", None)
+    # Identity-aware two-arm upsert: when a session_source_uuid was lifted
+    # from the underlying stages we conflict on (owner_id, source_uuid) so
+    # delete-and-reinsert revisions hit the partial unique index instead of
+    # landing two session rows for one night; when no uuid is present we
+    # keep the legacy (device_id, start_time, owner_id) conflict path so
+    # shipped clients behave exactly as before (Plan 2026-09-03).
+    if row.get("source_uuid"):
+        result = await session.execute(
+            text("""
+                INSERT INTO sleep_sessions (device_id, start_time, end_time, total_duration_ms,
+                    deep_ms, rem_ms, light_ms, awake_ms, respiratory_rate, owner_id, source_id,
+                    source_uuid)
+                VALUES (:device_id, :start, :end, :total, :deep, :rem, :light, :awake, :rr,
+                    :owner_id, :source_id, :source_uuid)
+                ON CONFLICT (owner_id, source_uuid) DO UPDATE SET
+                    end_time = EXCLUDED.end_time,
+                    total_duration_ms = EXCLUDED.total_duration_ms,
+                    deep_ms = EXCLUDED.deep_ms,
+                    rem_ms = EXCLUDED.rem_ms,
+                    light_ms = EXCLUDED.light_ms,
+                    awake_ms = EXCLUDED.awake_ms,
+                    respiratory_rate = EXCLUDED.respiratory_rate,
+                    source_id = COALESCE(EXCLUDED.source_id, sleep_sessions.source_id)
+                RETURNING id
+            """),
+            row,
+        )
+        return result.scalar()
     result = await session.execute(
         text("""
             INSERT INTO sleep_sessions (device_id, start_time, end_time, total_duration_ms,
