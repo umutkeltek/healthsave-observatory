@@ -44,6 +44,7 @@ from .api import (
     status,
     sync,
     v2_agents,
+    v2_apple_batch,
     v2_changes,
     v2_experiments,
     v2_export,
@@ -60,7 +61,6 @@ from .api import (
     v2_sources,
 )
 from .api.deps import warn_if_auth_disabled
-from .api.ingest import _load_apple_health_plugin
 from .api.swr import v2_read_cache
 from .db.session import async_session, engine
 from .ingestion.registry import resolve_from_env
@@ -205,6 +205,7 @@ app.include_router(coverage.router)
 app.include_router(sync.router)
 app.include_router(insights.router)
 app.include_router(v2_agents.router)
+app.include_router(v2_apple_batch.router)
 app.include_router(v2_changes.router)
 app.include_router(v2_experiments.router)
 app.include_router(v2_export.router)

@@ -1111,6 +1111,100 @@ async def ingest_sleep(
     return IngestWriteResult(accepted=count, rejected=rejected_count)
 
 
+# ──────────────────────────────────────────────────────────────────
+#  Identity-aware deletions (Slice 2 of 2026-09-03 plan)
+# ──────────────────────────────────────────────────────────────────
+#
+# Apple HealthKit revises RHR and reshuffles sleep via
+# delete-and-reinsert. The v1 ingest path's (time, device_id, owner_id)
+# conflict clause silently landed two values for the day when that
+# happened; migration 025 added a partial unique index on
+# source_uuid plus a status='active'|'superseded' column to catch the
+# revision properly. These helpers are the storage-zone surface for
+# "mark rows superseded by HKSample.uuid". They are intentionally narrow
+# (UUIDs only, no fuzzy matching) so the v2 route can call them safely
+# with operator-vetted uuid lists.
+
+
+# Tables that carry source_uuid after migration 025. Kept narrow: each
+# entry must (a) have a source_uuid column and (b) accept status
+# 'active'|'superseded'. Adding a table here requires a matching
+# migration; do not append without one.
+SOURCE_UUID_TABLES: tuple[str, ...] = (
+    "heart_rate",
+    "hrv",
+    "blood_oxygen",
+    "body_temperature",
+    "sleep_sessions",
+)
+
+
+async def mark_canonical_observations_superseded(
+    session: AsyncSession,
+    *,
+    owner_id: UUID,
+    uuids: list[str],
+) -> int:
+    """Mark canonical rows ``superseded`` for the given HKSample UUIDs.
+
+    Uses ``source_record_uid`` — the canonical layer's per-sample identity
+    populated from ``sample['uuid']`` by the v2 normalizer (see
+    ``packages/py/normalization/apple.py`` line 273). Idempotent: re-applying
+    a deletion once ``status='superseded'`` is a no-op.
+    """
+    if not uuids:
+        return 0
+    result = await session.execute(
+        text(
+            """
+            UPDATE canonical_observations
+               SET status = 'superseded',
+                   updated_at = NOW()
+             WHERE owner_id = :owner_id
+               AND status = 'active'
+               AND source_record_uid = ANY(:uuids)
+            """
+        ),
+        {"owner_id": str(owner_id), "uuids": uuids},
+    )
+    return result.rowcount or 0
+
+
+async def mark_v1_dedicated_superseded(
+    session: AsyncSession,
+    *,
+    owner_id: UUID,
+    uuids: list[str],
+    tables: tuple[str, ...] = SOURCE_UUID_TABLES,
+) -> dict[str, int]:
+    """Mark v1 dedicated table rows ``superseded`` for the given UUIDs.
+
+    Returns a per-table count of rows updated. Each table has the
+    partial unique index ``uq_<table>_source_uuid`` from migration 025, so
+    the UPDATE shape is identical across the five tables. Idempotent.
+    The caller passes a ``tables`` tuple to keep this function testable
+    against a subset of tables; production callers use ``SOURCE_UUID_TABLES``.
+    """
+    counts: dict[str, int] = {}
+    if not uuids:
+        return counts
+    for table in tables:
+        result = await session.execute(
+            text(
+                f"""
+                UPDATE {table}
+                   SET status = 'superseded'
+                 WHERE owner_id = :owner_id
+                   AND status = 'active'
+                   AND source_uuid = ANY(:uuids)
+                """
+            ),
+            {"owner_id": str(owner_id), "uuids": uuids},
+        )
+        counts[table] = result.rowcount or 0
+    return counts
+
+
 # Historical private alias preserved for the dispatch table in this
 # module + any external callers that reach in via attribute access.
 _ingest_sleep = ingest_sleep

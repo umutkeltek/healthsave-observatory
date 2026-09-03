@@ -121,6 +121,14 @@ ALLOWLIST: dict[str, str] = {
         "Depends(); the route passes the session to the storage-backed observatory "
         "settings repository — no raw SQL in the route module."
     ),
+    "apps/api/server/api/v2_apple_batch.py": (
+        "stays — Apple HealthKit v2 ingest route (Plan 2026-09-03 Slice 2). "
+        "AsyncSession typing for Depends(); the identity-aware deletion SQL "
+        "lives in storage.timescale.measurements (mark_canonical_observations_superseded, "
+        "mark_v1_dedicated_superseded — added in this slice), not the route. "
+        "Canonical + projection SQL lives in storage.timescale.observations and "
+        "the apple-health plugin, not the route."
+    ),
     "apps/api/server/api/v2_moments.py": (
         "stays — Personal-context moments CRUD. AsyncSession typing for Depends(); "
         "the route passes the session to the storage-backed moments repository — "
