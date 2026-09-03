@@ -276,3 +276,129 @@ page for the iOS app. It does not host an alternative API surface.
 The iOS app's *backend* is whatever URL the user configures in-app
 (typically a self-hosted `health-data-hub` instance). There is no
 HealthSave-hosted server endpoint in the v1 contract.
+
+---
+
+# v2 Apple Batch Wire — `POST /api/v2/apple/batch` (Plan 2026-09-03)
+
+> **Scope.** The v1 wire above is **FROZEN — do not edit** (CLAUDE.md Law 5;
+> the shipped App Store binary parses it byte-exact). This section describes
+> the additive v2 wire; the v1 route stays alive for shipped clients until
+> the next App Store release stabilizes v2.
+
+The v2 wire was introduced in response to Eric Lorenzo Benjamin Jr.'s feedback
+thread (a downstream operator running our wire into a longitudinal engine).
+It addresses four blockers and two soft asks against v1:
+
+| # | Blocker | v2 fix |
+|---|---|---|
+| 1 | No `startDate`+`endDate` per sample (RHR interval identity lost) | Both fields required on every sample |
+| 2 | `HKAnchoredObjectQuery` delivers `[HKDeletedObject]`; iOS threw them away | Top-level `deletions: [{uuid, deletedAt}]` array |
+| 3 | No `unit` field (server guessed, silently corrupted) | Per-sample `unit` (UCUM/`HKUnit.unitString`) |
+| 4 | No local UTC offset (sleep day-bucketing + DST travelers broke) | Per-sample `tzOffsetMinutes` |
+| + | Strongly wanted: HR motion context, sample UUID for idempotent identity | `motionContext` on HR; `uuid` on every quantity/category/workout/ECG |
+
+Out of scope (separate work): HRV beat-to-beat (`HKHeartbeatSeries`) — different
+HealthKit query and canonical value type; tracked as a follow-up.
+
+## v2 endpoint
+
+| iOS endpoint | iOS file:line | Server route |
+|--------------|---------------|--------------|
+| `/api/v2/apple/batch` | `Config.swift` (Slice 4: `v2BatchEndpoint`) | `POST /api/v2/apple/batch` |
+
+The v2 route is **additive at the URL layer** — no existing client is
+redirected; the iOS app picks v1 vs v2 based on a build flag and falls back to
+v1 if the server returns 404/405 on the v2 route (`SyncEngine` slice-4 logic).
+
+## v2 request body
+
+```json
+{
+  "schema_version": 2,
+  "metric": "heart_rate",
+  "batch_index": 0,
+  "total_batches": 1,
+  "source_bundle_id": "com.healthsave.ios",
+  "device": { "name": "Apple Watch", "model": "Watch7,2" },
+  "samples": [
+    {
+      "uuid": "D2C7…-0000-4000-8000-000000000001",
+      "startDate": "2026-08-30T07:14:00-04:00",
+      "endDate":   "2026-08-30T07:14:00-04:00",
+      "qty": 52,
+      "unit": "count/min",
+      "tzOffsetMinutes": -240,
+      "motionContext": "sedentary",
+      "source": "Apple Watch"
+    }
+  ],
+  "deletions": [
+    { "uuid": "D2C7…-0000-4000-8000-00000000007A", "deletedAt": "2026-08-31T03:14:00Z" }
+  ]
+}
+```
+
+### v2 sample-key set (pinned by `tests/contract/api_v2/test_v2_apple_batch_contract.py`)
+
+| Key | Type | Required | Notes |
+|---|---|---|---|
+| `uuid` | UUID string | required (quantity/category/workout/ECG); optional for medication | Stable identity for the sample's lifetime |
+| `startDate` | ISO-8601 with offset | required | Replaces v1's `date`/`start`; server accepts `start`/`startDate`/legacy `date` for migration window |
+| `endDate` | ISO-8601 with offset | required for intervals; same as `startDate` for instantaneous | Server falls back to `startDate` if missing on a quantity sample |
+| `qty` | number | required (quantity) | Same as v1 |
+| `unit` | UCUM/`HKUnit.unitString` | required | Per-sample; server validates against the metric's allowed-units list; unknown unit → **422** (deterministic, frozen-client-safe) |
+| `tzOffsetMinutes` | int (-1440…+1440) | optional | Server stamps the offset on the raw payload + the canonical row's provenance |
+| `motionContext` | enum string | optional, HR only | `sedentary` / `active` / `notSet`; omitted means "not present on the sample" |
+| `source` | string | required | Same as v1 |
+
+### v2 top-level keys
+
+| Key | Required | Notes |
+|---|---|---|
+| `schema_version` | optional (default `1`) | v2 route rejects anything ≠ 2 |
+| `deletions` | optional | `[{uuid, deletedAt}]`; marked `superseded` on `canonical_observations` + (if present) on v1 dedicated tables |
+| `device` | optional | Free-form `{name, model}` |
+| `source_bundle_id` | optional | iOS sends `com.healthsave.ios` |
+
+## v2 request headers
+
+> **Source of truth: `contracts/v2-ios-headers.json`** (machine-pinned; the
+> table below is commentary). The v2 manifest is **additive over the v1
+> manifest** — every v1 header is preserved, and one advisory header is
+> added: `X-HealthSave-Schema-Version: 2`. The body's `schema_version=2` is
+> the source of truth for the wire version; the header is advisory only.
+
+The v2 manifest is enforced three ways:
+
+1. `tests/contract/api_v2/test_v2_ios_headers.py` — server consumes every header + completeness.
+2. `V2HeaderContractTests.swift` (iOS) — the app emits exactly these.
+3. `tests/contract/test_ios_v2_headers_in_sync.py` — byte-equal mirror invariant.
+
+## v2 response shape
+
+Identical to v1 (`_delivery_receipt_response` in `server/api/ingest.py`).
+No client-visible shape change. The v2 route reuses the same builder.
+
+## Cross-check is enforced by
+
+1. `tests/contract/api_v2/test_v2_apple_batch_contract.py` — happy path, missing uuid, unknown unit, malformed tz, schema_version=1 (rejected), idempotency replay, deletion supersedes canonical, deletion supersedes v1 dedicated rows.
+2. `tests/contract/test_ios_v2_corpus_in_sync.py` — iOS v2 batch payloads are byte-mirrored at `tests/fixtures/apple_healthsave_v2/`.
+3. `tests/contract/test_ios_v2_headers_in_sync.py` — byte-equal mirror invariant on the header manifest.
+4. `V2HeaderContractTests.swift` (iOS) — the app's real upload request emits exactly the v2 manifest.
+
+## Migration ownership (Slice 1)
+
+Migration `db/migrations/025_apple_source_uuid_and_superseded.sql` adds
+nullable `source_uuid UUID` + `status TEXT NOT NULL DEFAULT 'active'`
+(check `status IN ('active','superseded')`) to `heart_rate`, `hrv`,
+`blood_oxygen`, `body_temperature`, `sleep_sessions` — additive only
+(CLAUDE.md Law 5). Partial unique index `WHERE source_uuid IS NOT NULL`
+plus partial active-index. The conflict clause becomes a two-arm
+`(owner_id, source_uuid) WHERE source_uuid IS NOT NULL` /
+`(owner_id, device_id, time) WHERE source_uuid IS NULL`.
+
+## Android adoption
+
+Tracked in `Plans/2026-09-03-v2-apple-ingest-wire.md` Slice 8 — deferred
+until iOS ships v2 stable from the App Store. Single-platform risk first.
