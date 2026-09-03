@@ -43,6 +43,15 @@ This repo enforces its boundaries with tests — respect them or CI goes red:
 - Adding a `/api/v2/*` route changes the OpenAPI snapshot — regenerate the lock and confirm the
   diff is v2-only.
 
+- **The v2 ingest wire (`POST /api/v2/apple/batch`) is stable as of Slice 7 of Plan 2026-09-03.**
+  Schema-version=2 endpoints (sample identity, interval bounds, per-sample unit, motion context,
+  deletions) are additive over the v1 frozen surface. v2 may evolve **within reason** for the next
+  two minor server releases (an additive field here, a new top-level deletion reason there), then
+  it freezes. New sample-key additions require (a) updating `contracts/json-schema/v2_apple_batch_request.json`
+  via `make -C datahub regen-v2-schemas`, (b) updating `contracts/v2-ios-headers.json` if a new
+  header is added, and (c) updating both client mirror fixtures — the byte-equal mirror gate
+  (`tests/contract/test_ios_v2_headers_in_sync.py`) makes drift loud at commit time.
+
 See `AGENTS.md` and `CLAUDE.md` for the full boundary rationale and the guard tests that enforce
 each rule.
 

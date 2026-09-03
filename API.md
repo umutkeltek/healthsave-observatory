@@ -680,3 +680,155 @@ Example response:
   samples with `date` and `qty` can be stored before they receive first-class
   dashboards.
 - Invalid quantity samples are skipped instead of failing the whole batch.
+
+---
+
+## v2 Batch Ingest — `POST /api/v2/apple/batch` (Plan 2026-09-03)
+
+> **Status: additive over v1.** The v1 contract above is **frozen and unchanged**
+> (the shipped App Store HealthSave binary parses it byte-exact). The v2 route
+> is the destination for `HealthSave 1.7.0+` builds that ship the new wire
+> shape. Self-hosters do **not** need to migrate — the v2 route is added at
+> the URL layer with no v1 changes and no DB schema renames.
+
+Receives one HealthKit metric batch in the v2 wire format. The v2 wire carries
+per-sample identity (`uuid`), interval bounds (`startDate`/`endDate`),
+per-sample `unit`, local UTC offset (`tzOffsetMinutes`), and an HR motion
+context (`motionContext`); it also carries a top-level `deletions` array
+sourced from `HKAnchoredObjectQuery`'s `HKDeletedObject` stream.
+
+### Request
+
+```json
+{
+  "schema_version": 2,
+  "metric": "heart_rate",
+  "batch_index": 0,
+  "total_batches": 1,
+  "source_bundle_id": "com.healthsave.ios",
+  "device": { "name": "Apple Watch", "model": "Watch7,2" },
+  "samples": [
+    {
+      "uuid": "D2C7…-0000-4000-8000-000000000001",
+      "startDate": "2026-08-30T07:14:00-04:00",
+      "endDate":   "2026-08-30T07:14:00-04:00",
+      "qty": 52,
+      "unit": "count/min",
+      "tzOffsetMinutes": -240,
+      "motionContext": "sedentary",
+      "source": "Apple Watch"
+    }
+  ],
+  "deletions": [
+    { "uuid": "D2C7…-0000-4000-8000-00000000007A", "deletedAt": "2026-08-31T03:14:00Z" }
+  ]
+}
+```
+
+### Sample-key set (pinned by `tests/contract/api_v2/test_v2_apple_batch_contract.py`)
+
+| Key | Type | Required | Notes |
+|---|---|---|---|
+| `uuid` | UUID string | required (quantity / category / workout / ECG); optional for medication | Stable identity for the sample's lifetime; supersedes by deletion |
+| `startDate` | ISO-8601 with offset | required | Parser also accepts `start` / legacy `date` for migration window |
+| `endDate` | ISO-8601 with offset | required for intervals; falls back to `startDate` for instantaneous | |
+| `qty` | number | required (quantity) | |
+| `unit` | UCUM (`HKUnit.unitString`) | required | Validated against the metric's allowed-units list; unknown unit → `422` (deterministic, frozen-client-safe) |
+| `tzOffsetMinutes` | int (-1440…+1440) | optional | Server stamps the offset on the raw payload + the canonical row's provenance |
+| `motionContext` | enum | optional (HR only) | `sedentary` / `active` / `notSet`; omitted means "not present on the sample" |
+| `source` | string | required | |
+
+### Top-level keys
+
+| Key | Required | Notes |
+|---|---|---|
+| `schema_version` | optional (default `1`) | v2 route **rejects anything ≠ 2** |
+| `metric` | required | Same enum as v1 |
+| `batch_index` / `total_batches` | required | Same semantics as v1 |
+| `source_bundle_id` | optional | iOS sends `com.healthsave.ios` |
+| `device` | optional | Free-form `{name, model}` |
+| `samples` | required | The per-sample array |
+| `deletions` | optional | `[{uuid, deletedAt}]` — see Deletion semantics below |
+
+### Response
+
+Identical to v1 (`_delivery_receipt_response` in `apps/api/server/api/ingest.py`).
+No client-visible shape change:
+
+```json
+{ "status": "processed", "metric": "heart_rate", "batch": 0,
+  "total_batches": 1, "records": 1 }
+```
+
+### Deletion semantics
+
+`deletions` is a top-level array of `{uuid, deletedAt}` entries sourced from
+the iOS extractor capturing `[HKDeletedObject]` on every `HKAnchoredObjectQuery`
+callback. For every entry, the server runs **two** SQL updates inside the
+route transaction:
+
+1. `UPDATE canonical_observations SET status='superseded', updated_at=NOW()
+   WHERE owner_id = :o AND source_record_uid = ANY(:uuids) AND status = 'active'`
+2. `UPDATE <v1 dedicated table> SET status='superseded', updated_at=NOW()
+   WHERE owner_id = :o AND source_uuid = ANY(:uuids) AND status = 'active'`
+   for each of `heart_rate`, `hrv`, `blood_oxygen`, `body_temperature`,
+   `sleep_sessions` (only where the column exists).
+
+RHR (and other Apple HealthKit metrics that revise via delete+reinsert) is the
+motivating case. The schema-version=1 route silently ignores deletions; the v2
+route is the only path that propagates them.
+
+### Idempotency
+
+Idempotency claim uses the same `_claim_or_replay_receipt_idempotency` helper
+as v1 — the `Idempotency-Key` header still drives receipt-level replay
+protection. Sample-level identity is governed by `uuid` via the
+`(owner_id, source_uuid) WHERE source_uuid IS NOT NULL` partial unique index
+on the v1 dedicated tables and `source_record_uid` on `canonical_observations`.
+
+### Error cases
+
+| Condition | Status | Body shape |
+|---|---|---|
+| `schema_version` is present and ≠ 2 | `422` | `{detail: "...bad_schema_version..."}` |
+| Sample missing `uuid` (quantity / category / workout / ECG) | `422` | `{detail: "...missing_uuid..."}` |
+| Sample `unit` not in metric's allowed-units list | `422` | `{detail: "...unknown_unit..."}` |
+| Sample `motionContext` not in `{sedentary, active, notSet}` | `422` | `{detail: "...bad_motion_context..."}` |
+| `tzOffsetMinutes` outside -1440…+1440 | `422` | `{detail: "...bad_tz..."}` |
+| `startDate` malformed or missing | `422` | `{detail: "...bad_start_date..."}` |
+
+Deterministic bad-payload writes return `422`, never `5xx` — clients treat
+5xx as retryable forever (workspace CLAUDE.md Error semantics), so a
+deterministic 500 would wedge a metric permanently.
+
+### Headers (additive over v1)
+
+The v2 manifest is **additive over** `contracts/ios-headers.json`: every v1
+header is preserved, plus one advisory header `X-HealthSave-Schema-Version: 2`.
+The body's `schema_version=2` is the source of truth for the wire version;
+the header is advisory only. See `contracts/v2-ios-headers.json` (canonical)
+and `ios_app/Tests/HealthSyncTests/Fixtures/v2-ios-headers.json` (byte-equal
+mirror; enforced by `tests/contract/test_ios_v2_headers_in_sync.py`).
+
+### iOS route selection
+
+`HealthSave 1.7.0+` defaults to the v2 endpoint via
+`Config.v2BatchEndpoint = "/api/v2/apple/batch"`. If the server returns `404`
+or `405` on the v2 route, iOS falls back to v1 for the rest of the run
+(`SyncEngine.didFallBackToV1ThisRun` latch; no infinite retry). A `422` on
+v2 is treated as a permanent reject — the batch is dropped, the failure is
+surfaced in the sync receipt, and iOS does **not** fall back. This matches
+workspace CLAUDE.md Error semantics.
+
+### Migration notes for self-hosters
+
+- **No `API_KEY` change required.** The v2 route enforces the same
+  `X-API-Key` header as v1.
+- **No DB migration is required for this route to function** — the
+  `source_uuid` + `status='superseded'` columns are additive
+  (`db/migrations/025_apple_source_uuid_and_superseded.sql`) and the compose
+  `migrate` service applies them automatically before the API comes up.
+- **v1 clients keep working** unchanged. The v2 route is added at the URL
+  layer; no v1 routes are touched.
+- **Android adoption is a follow-up** (Slice 8 of Plan 2026-09-03) — Android
+  does not emit the v2 wire yet.

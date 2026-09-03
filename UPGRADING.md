@@ -51,9 +51,72 @@ and TLS, and closes the direct API port. See its README.
 
 Shared parsing/mapping helpers moved below the storage layer
 (`normalization.*`, `contracts._base`); `server.ingestion.*` keep working via
-re-export shims. No wire, schema, or config change.
 
----
+
+### R2 (2026-09) — additive v2 ingest wire (Plan 2026-09-03)
+
+Adds the `POST /api/v2/apple/batch` route and the additive `source_uuid` +
+`status='superseded'` columns on the v1 dedicated tables (`heart_rate`, `hrv`,
+`blood_oxygen`, `body_temperature`, `sleep_sessions`). **No operator action
+required for the v1 surface to keep working** — the v2 route is additive at
+the URL layer.
+
+#### 1. Migration `025_apple_source_uuid_and_superseded.sql` — auto-applied
+
+Adds nullable `source_uuid UUID` + `status TEXT NOT NULL DEFAULT 'active'`
+to the v1 dedicated tables. Partial unique index `WHERE source_uuid IS NOT NULL`
+enables `(owner_id, source_uuid) WHERE source_uuid IS NOT NULL` upserts;
+legacy rows keep the existing `(owner_id, device_id, time)` conflict path.
+The compose `migrate` service applies it before the API comes up — same
+additive-only contract as every prior migration. Existing rows are untouched.
+
+#### 2. New v2 ingest endpoint — no client action required
+
+`POST /api/v2/apple/batch` accepts `schema_version=2` payloads with
+`uuid` / `startDate` / `endDate` / `unit` / `tzOffsetMinutes` / `motionContext`
+per sample plus a top-level `deletions: [{uuid, deletedAt}]` array. The
+response shape is identical to v1. Shipped iOS binaries keep posting to
+`/api/apple/batch` unchanged; HealthSave 1.7.0+ defaults to v2 and falls
+back to v1 on `404`/`405` (no infinite retry).
+
+#### 3. RHR and other revision-via-delete metrics
+
+HealthKit metrics that revise by delete+reinsert (resting heart rate,
+workout summaries) now propagate deletions: the server marks
+`canonical_observations` and the v1 dedicated table rows `status='superseded'`
+by `source_uuid`. This only applies to v2 batches; v1 batches behave exactly
+as before.
+
+#### 4. Self-host dry-run (recommended before flipping 1.7.0 clients to v2)
+
+A developer device running a `HealthSave 1.7.0+` build that has been promoted
+to v2 should send a v2 batch against the migrated instance. The minimal
+post-deploy check is:
+
+```sql
+-- canonical row carries the sample UUID as source_record_uid
+SELECT source_record_uid, metric_id, status
+FROM canonical_observations
+WHERE source_record_uid IS NOT NULL
+ORDER BY updated_at DESC
+LIMIT 5;
+
+-- v1 dedicated tables have the source_uuid stamped + the active/superseded
+-- status split working
+SELECT status, COUNT(*) FROM heart_rate GROUP BY status;
+```
+
+A green dry-run returns rows with `source_record_uid` populated and the
+`status` column populated on the v1 dedicated tables. If you ran the
+self-host dry-run with a sample batch that includes `deletions`, also confirm
+the targeted UUIDs flipped from `active` to `superseded` (and only those — the
+route applies `WHERE status='active'`).
+
+#### 5. Android adoption — follow-up
+
+Android is **not** on the v2 wire yet (Slice 8 of Plan 2026-09-03). Android
+clients continue to use `/api/apple/batch` (v1) unchanged.
+
 
 ## iOS app compatibility
 

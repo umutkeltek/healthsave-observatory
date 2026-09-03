@@ -68,6 +68,72 @@ One HealthKit metric batch (the app chunks each metric into batches). Full metri
 ```
 - Dedicated tables: `heart_rate, hrv, blood_oxygen, body_temperature, sleep_sessions, workouts, daily_activity`; everything else → `quantity_samples`. Every raw batch is logged to `raw_ingestion_log` before processing (replay trail).
 
+### `POST /api/v2/apple/batch` — keyed (additive over v1, iOS 1.7.0+)
+The versioned ingest route that addresses Eric Lorenzo Benjamin Jr.'s longitudinal-engine feedback (Plan 2026-09-03). Same metric catalog and dedicated-table mapping as v1, but samples carry `uuid`, `startDate`, `endDate`, `unit`, `tzOffsetMinutes`, `motionContext`; a top-level `deletions` array propagates `HKDeletedObject`; the server's response shape is unchanged from v1. The v1 route stays live for shipped clients.
+
+**Request**
+```json
+{
+  "schema_version": 2,
+  "metric": "heart_rate",
+  "batch_index": 0,
+  "total_batches": 1,
+  "source_bundle_id": "com.healthsave.ios",
+  "device": { "name": "Apple Watch", "model": "Watch7,2" },
+  "samples": [
+    {
+      "uuid": "D2C7…-0000-4000-8000-000000000001",
+      "startDate": "2026-08-30T07:14:00-04:00",
+      "endDate":   "2026-08-30T07:14:00-04:00",
+      "qty": 52,
+      "unit": "count/min",
+      "tzOffsetMinutes": -240,
+      "motionContext": "sedentary",
+      "source": "Apple Watch"
+    }
+  ],
+  "deletions": [
+    { "uuid": "D2C7…-0000-4000-8000-00000000007A", "deletedAt": "2026-08-31T03:14:00Z" }
+  ]
+}
+```
+**Response** (`processed` | `empty`) — identical to v1:
+```json
+{ "status": "processed", "metric": "heart_rate", "batch": 0, "total_batches": 1, "records": 1 }
+```
+
+**Sample-key set** (pinned by `tests/contract/api_v2/test_v2_apple_batch_contract.py`):
+| Key | Type | Required | Notes |
+|---|---|---|---|
+| `uuid` | UUID string | required (quantity / category / workout / ECG); optional for medication | Stable identity; supersedes via `deletions` |
+| `startDate` | ISO-8601 with offset | required | Parser also accepts `start` / legacy `date` for migration window |
+| `endDate` | ISO-8601 with offset | required for intervals; falls back to `startDate` for instantaneous | |
+| `qty` | number | required (quantity) | |
+| `unit` | UCUM (`HKUnit.unitString`) | required | Validated against the metric's allowed-units list; unknown unit → `422` |
+| `tzOffsetMinutes` | int (-1440…+1440) | optional | Server stamps the offset on the raw payload + canonical provenance |
+| `motionContext` | enum | optional (HR only) | `sedentary` / `active` / `notSet`; omitted means "not present on the sample" |
+| `source` | string | required | |
+
+**Top-level keys:** `schema_version` (optional, default `1`; v2 route rejects anything ≠ 2), `metric`, `batch_index` / `total_batches`, optional `source_bundle_id`, `device`, `deletions`.
+
+**Deletion semantics.** Each entry runs **two** SQL updates inside the route transaction: (1) `canonical_observations.status='superseded'` for `source_record_uid = ANY(:uuids) AND status='active'`; (2) `heart_rate` / `hrv` / `blood_oxygen` / `body_temperature` / `sleep_sessions` `.status='superseded'` for `source_uuid = ANY(:uuids) AND status='active'`. The RHR delete+reinsert path is the motivating case.
+
+**Idempotency.** Same `_claim_or_replay_receipt_idempotency` helper as v1; the `Idempotency-Key` header still drives receipt-level replay. Sample identity is governed by `uuid` via `(owner_id, source_uuid) WHERE source_uuid IS NOT NULL` on the v1 dedicated tables and `source_record_uid` on `canonical_observations`.
+
+**Headers** (additive over v1): one advisory `X-HealthSave-Schema-Version: 2`. Canonical manifest `contracts/v2-ios-headers.json` (mirrored byte-equal at `ios_app/Tests/HealthSyncTests/Fixtures/v2-ios-headers.json`; enforced by `tests/contract/test_ios_v2_headers_in_sync.py`).
+
+**Error cases (deterministic 422, never 5xx):**
+| Condition | Status |
+|---|---|
+| `schema_version` present and ≠ 2 | `422` (`bad_schema_version`) |
+| Sample missing `uuid` (quantity / category / workout / ECG) | `422` (`missing_uuid`) |
+| Sample `unit` not in metric's allowed-units list | `422` (`unknown_unit`) |
+| `motionContext` not in `{sedentary, active, notSet}` | `422` (`bad_motion_context`) |
+| `tzOffsetMinutes` outside -1440…+1440 | `422` (`bad_tz`) |
+| `startDate` malformed / missing | `422` (`bad_start_date`) |
+
+**iOS route selection.** `HealthSave 1.7.0+` defaults to the v2 endpoint. `404` / `405` on v2 → fall back to v1 for the rest of the run (latch `SyncEngine.didFallBackToV1ThisRun`). `422` is treated as permanent reject — iOS does **not** fall back; the batch is dropped, surfaced in the sync receipt.
+
 ### `GET /api/apple/status` — keyed
 Per-table record counts + date ranges. The app + operators use it to confirm sync. **Flat shape** (top-level table keys — the iOS app parses this directly; do not wrap it).
 ```json
@@ -229,7 +295,7 @@ Self-describing setup helper (endpoint map + whether auth is required). Used by 
 ```json
 { "service": "health-data-hub", "kind": "datahub", "status": "ok", "auth_required": true,
   "health_endpoint": "/api/health", "status_endpoint": "/api/apple/status",
-  "ingest_endpoint": "/api/apple/batch", "latest_sync_endpoint": "/api/v2/sync/runs/latest",
+  "ingest_endpoint": "/api/apple/batch", "v2_ingest_endpoint": "/api/v2/apple/batch",
   "coverage_endpoint": "/api/v2/sync/coverage", "anomalies_endpoint": "/api/v2/sync/anomalies",
   "grafana_required": false, "wrong_port_hint": "..." }
 ```
@@ -364,7 +430,7 @@ The identity model, **typed** (R2). Populated as batches arrive (the ingest path
 
 - `GET /api/v2/sources` — integrations data entered through.
 - `GET /api/v2/devices` — distinct emitters (derived from streams).
-- `GET /api/v2/streams` — the join "device via integration" (the same band via HealthKit vs a direct poll = two streams).
+| **HealthSave iOS app** | `POST /api/apple/batch`, `POST /api/v2/apple/batch` (1.7.0+, default), `GET /api/apple/status`, `GET /api/health`, `GET /api/v2/setup/diagnostics`, `GET /api/v2/sync/*`, `GET /api/insights/*`; iOS 1.7.0+ picks v1 vs v2 per build (`Config.v2BatchEndpoint`) and falls back to v1 on 404/405 |
 - `GET /api/v2/streams/{stream_id}` — one stream (`404` if unknown).
 - `POST /api/v2/device-identity-links` — operator-confirmed direct-vendor → relayed-stream link for session fusion. Accepts only `confirmed` links with `medium` or `strong` confidence.
 - `POST /api/v2/device-identity-links/session-reconciliations` — operator-triggered session fusion over confirmed device identity links. Accepts `limit` (1–1000, default 100) and returns counts only.
