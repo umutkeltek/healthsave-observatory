@@ -548,7 +548,7 @@ async def v2_apple_batch(
             raw_log_id=raw_log_id,
             response_payload=response,
         )
-        INGEST_BATCHES.labels(metric=metric, status="empty").inc()
+        INGEST_BATCHES.labels(metric=metric).inc()
         return response
 
     sample_groups = (
@@ -756,7 +756,7 @@ async def v2_apple_batch(
         (datetime.now(UTC) - started_at).total_seconds()
     )
     INGEST_ROWS.labels(metric=metric).inc(count)
-    INGEST_BATCHES.labels(metric=metric, status="processed").inc()
+    INGEST_BATCHES.labels(metric=metric).inc()
     _log.info(
         "v2 ingested %d records for %s (batch %d/%d); %d canonical deletions, %s",
         count,

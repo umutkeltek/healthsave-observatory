@@ -773,12 +773,12 @@ the iOS extractor capturing `[HKDeletedObject]` on every `HKAnchoredObjectQuery`
 callback. For every entry, the server runs **two** SQL updates inside the
 route transaction:
 
-1. `UPDATE canonical_observations SET status='superseded', updated_at=NOW()
+1. `UPDATE canonical_observations SET status='superseded'
    WHERE owner_id = :o AND source_record_uid = ANY(:uuids) AND status = 'active'`
-2. `UPDATE <v1 dedicated table> SET status='superseded', updated_at=NOW()
+2. `UPDATE <v1 dedicated table> SET status='superseded'
    WHERE owner_id = :o AND source_uuid = ANY(:uuids) AND status = 'active'`
    for each of `heart_rate`, `hrv`, `blood_oxygen`, `body_temperature`,
-   `sleep_sessions` (only where the column exists).
+   `sleep_sessions`.
 
 RHR (and other Apple HealthKit metrics that revise via delete+reinsert) is the
 motivating case. The schema-version=1 route silently ignores deletions; the v2
