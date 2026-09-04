@@ -13,10 +13,13 @@ Skipped unless ``E2E_BASE_URL`` (HTTP surface) and ``E2E_DATABASE_URL``
 (direct Postgres assertions) are set. Drive with ``make e2e``.
 """
 
+
+
 from __future__ import annotations
 
 import json
 import os
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import asyncpg
@@ -65,6 +68,35 @@ def _v2_heart_rate_batch(uuid: str, *, deletions: list[dict] | None = None) -> d
         "deletions": deletions or [],
     }
 
+
+def _v2_heart_rate_batch_with_offset(uuid: str, start: datetime, *, deletions: list[dict] | None = None) -> dict:
+    """Test fixture with a caller-provided start time so e2e convergence
+    tests don't collide on the legacy partial unique index ``uq_heart_rate``
+    (which sits on (time, device_id, owner_id) for v1 backward-compat).
+    Slice 7 (oracle follow-up): test isolation is a fixture choice —
+    legacy partial index is correct (must remain so v1 ships bit-for-bit).
+    """
+    return {
+        "schema_version": 2,
+        "metric": "heart_rate",
+        "batch_index": 0,
+        "total_batches": 1,
+        "source_bundle_id": "com.healthsave.ios",
+        "device": {"name": "e2e", "model": "e2e-host"},
+        "samples": [
+            {
+                "uuid": uuid,
+                "startDate": start.isoformat(),
+                "endDate": start.isoformat(),
+                "qty": 52,
+                "unit": "count/min",
+                "source": "e2e Apple Watch",
+                "tzOffsetMinutes": 0,
+                "motionContext": "sedentary",
+            }
+        ],
+        "deletions": deletions or [],
+    }
 
 def test_v2_success_path_canonical_projection_supersede_and_capture_context() -> None:
     """One v2 batch + one v2 deletion exercise the whole pipeline:
@@ -254,8 +286,14 @@ async def test_v2_add_then_delete_then_delete_again_converges() -> None:
     is added then deleted twice. Storage must end up at exactly one
     ``superseded`` row, never two; receipt counts both deliveries."""
     sample_uuid = str(uuid4())
-    add_body = _v2_heart_rate_batch(sample_uuid)
-    delete_body = _v2_heart_rate_batch(sample_uuid)
+    # Unique start per test run (ns offset) so the legacy partial
+    # index on (time, device_id, owner_id) doesn't collide with rows
+    # left by sibling e2e tests.
+    unique_start = datetime(2025, 1, 1, tzinfo=UTC) + timedelta(
+        microseconds=datetime.now().microsecond
+    )
+    add_body = _v2_heart_rate_batch_with_offset(sample_uuid, unique_start)
+    delete_body = _v2_heart_rate_batch_with_offset(sample_uuid, unique_start)
     delete_body["samples"] = []
     delete_body["deletions"] = [{"uuid": sample_uuid}]
     headers = _headers()
