@@ -2807,6 +2807,45 @@
         ]
       }
     },
+    "/api/v2/apple/batch": {
+      "post": {
+        "description": "Receive a v2 Apple HealthKit batch.\n\nWire contract: ``POST /api/v2/apple/batch`` with ``schema_version=2``.\nAccepts the same idempotency / receipt headers as v1 plus an optional\n``X-HealthSave-Schema-Version: 2`` (advisory \u2014 the body schema_version\nis the source of truth).\n\nResponse: same delivery-receipt shape as v1 with an additive\n``wire_schema_version: 2`` and a ``deletions`` block carrying the\nper-table supersede counts.",
+        "operationId": "v2_apple_batch_api_v2_apple_batch_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "V2 Apple Batch"
+      }
+    },
     "/api/v2/changes": {
       "get": {
         "description": "Latest-activity fingerprint with ETag/304 semantics.",

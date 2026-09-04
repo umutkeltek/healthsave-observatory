@@ -1,0 +1,293 @@
+{
+  "$defs": {
+    "V2Deletion": {
+      "additionalProperties": true,
+      "properties": {
+        "deletedAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Deletedat"
+        },
+        "uuid": {
+          "maxLength": 36,
+          "minLength": 36,
+          "title": "Uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "title": "V2Deletion",
+      "type": "object"
+    },
+    "V2Sample": {
+      "additionalProperties": true,
+      "description": "Per-sample dict for the v2 wire \u2014 the transport envelope.\n\nField-level validation here covers FORMAT only (UUID shape, ISO\nstrings, tz/motion ranges) for whatever keys the sample carries.\nWhich keys a sample MUST carry is a function of the batch's metric \u2014\nHealthKit's seven emission families legitimately differ (anchored\nquantity samples carry uuid/startDate/endDate/unit; HKStatistics\naggregates carry date+qty only; workouts, sleep, ECG and medication\ncarry no qty/unit). Enforcing one family's shape on all of them\n422'd six of seven families deterministically \u2014 a Law-6 wedge for\nevery frozen client. The metric-keyed semantic gate lives in\n``V2AppleBatchPayload._sample_contract`` where the ontology answers\nwhich contract applies.\n\nLoose ``extra='allow'`` so future additive fields don't break\nshipped v2 clients (same forward-compat posture the v1 route has).",
+      "properties": {
+        "date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Date"
+        },
+        "duration": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        },
+        "endDate": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Enddate"
+        },
+        "endDate_iso": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Enddate Iso"
+        },
+        "motionContext": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Motioncontext"
+        },
+        "qty": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Qty"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start"
+        },
+        "startDate": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Startdate"
+        },
+        "tzOffsetMinutes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tzoffsetminutes"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "uuid": {
+          "anyOf": [
+            {
+              "maxLength": 36,
+              "minLength": 36,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Uuid"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "title": "V2Sample",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "description": "Wire model for ``POST /api/v2/apple/batch``.\n\nThe schema is additive over v1: ``schema_version=2``, samples carry\nthe identity-aware keys Eric's longitudinal engine needs\n(``uuid``/``startDate``/``endDate``/``unit``/``tzOffsetMinutes``/\n``motionContext``), and a top-level ``deletions`` array propagates\nHealthKit's delete-and-reinsert revisions.\n\n``model_config = ConfigDict(extra='allow')`` keeps the route\nforward-compatible for v2.x additive keys; unknown fields are ignored\nthe same way v1 ignores unknown sample keys.\n\nTwo-layer validation, deliberately split:\n\n* ``V2Sample`` field validators \u2014 FORMAT of whatever keys are\n  present (UUID shape, non-empty strings, tz/motion domains).\n* ``_sample_contract`` below \u2014 WHICH keys must be present, decided\n  per sample by its emission family and per metric by the ontology.\n  HealthKit emits seven shapes (anchored quantity, statistics\n  aggregates, workouts, sleep, ECG, medication, category events);\n  pinning one family's key set on all of them 422'd six of seven\n  families deterministically \u2014 a Law-6 wedge for frozen clients.",
+  "properties": {
+    "batch_index": {
+      "minimum": 0,
+      "title": "Batch Index",
+      "type": "integer"
+    },
+    "deletions": {
+      "items": {
+        "$ref": "#/$defs/V2Deletion"
+      },
+      "title": "Deletions",
+      "type": "array"
+    },
+    "device": {
+      "anyOf": [
+        {
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Device"
+    },
+    "metric": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Metric",
+      "type": "string"
+    },
+    "samples": {
+      "items": {
+        "$ref": "#/$defs/V2Sample"
+      },
+      "title": "Samples",
+      "type": "array"
+    },
+    "schema_version": {
+      "default": 2,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source_bundle_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Bundle Id"
+    },
+    "total_batches": {
+      "minimum": 1,
+      "title": "Total Batches",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "metric",
+    "batch_index",
+    "total_batches"
+  ],
+  "title": "V2AppleBatchPayload",
+  "type": "object"
+}

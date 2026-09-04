@@ -1,0 +1,28 @@
+{
+  "additionalProperties": true,
+  "properties": {
+    "deletedAt": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Deletedat"
+    },
+    "uuid": {
+      "maxLength": 36,
+      "minLength": 36,
+      "title": "Uuid",
+      "type": "string"
+    }
+  },
+  "required": [
+    "uuid"
+  ],
+  "title": "V2Deletion",
+  "type": "object"
+}

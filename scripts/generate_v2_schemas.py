@@ -72,6 +72,21 @@ def main() -> int:
     sys.path.insert(0, str(REPO_ROOT / "packages" / "py"))
     from contracts import ALL_MODELS
 
+    # The ingest wire models live in the route module (not contracts/ —
+    # contracts never imports server code), but they are load-bearing
+    # shapes Eric's engine builds against. Emit them as standalone schema
+    # files so CI's drift gate covers the v2 REQUEST contract too. They
+    # are deliberately NOT in the _bundle.json: the bundle feeds the TS
+    # codegen for the web read surface, and ingest request types would
+    # widen that surface for no consumer.
+    from server.api.v2_apple_batch import (
+        V2AppleBatchPayload,
+        V2Deletion,
+        V2Sample,
+    )
+
+    WIRE_MODELS = (V2AppleBatchPayload, V2Sample, V2Deletion)
+
     SCHEMAS_DIR.mkdir(parents=True, exist_ok=True)
 
     if args.check:
@@ -85,7 +100,7 @@ def main() -> int:
             return 0
 
         drifted: list[str] = []
-        for model_cls in ALL_MODELS:
+        for model_cls in (*ALL_MODELS, *WIRE_MODELS):
             target = SCHEMAS_DIR / f"{model_cls.__name__}.json"
             if not target.exists():
                 drifted.append(f"missing: {target.relative_to(REPO_ROOT)}")
@@ -119,11 +134,11 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
-        print(f"v2 JSON Schemas match: {len(ALL_MODELS)} files in {SCHEMAS_DIR}")
+        print(f"v2 JSON Schemas match: {len(ALL_MODELS) + len(WIRE_MODELS)} files in {SCHEMAS_DIR}")
         return 0
 
     written = 0
-    for model_cls in ALL_MODELS:
+    for model_cls in (*ALL_MODELS, *WIRE_MODELS):
         target = SCHEMAS_DIR / f"{model_cls.__name__}.json"
         target.write_text(_serialize(model_cls))
         written += 1
