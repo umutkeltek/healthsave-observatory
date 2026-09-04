@@ -317,6 +317,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/apple/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * V2 Apple Batch
+         * @description Receive a v2 Apple HealthKit batch.
+         *
+         *     Wire contract: ``POST /api/v2/apple/batch`` with ``schema_version=2``.
+         *     Accepts the same idempotency / receipt headers as v1 plus an optional
+         *     ``X-HealthSave-Schema-Version: 2`` (advisory — the body schema_version
+         *     is the source of truth).
+         *
+         *     Response: same delivery-receipt shape as v1 with an additive
+         *     ``wire_schema_version: 2`` and a ``deletions`` block carrying the
+         *     per-table supersede counts.
+         */
+        post: operations["v2_apple_batch_api_v2_apple_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/changes": {
         parameters: {
             query?: never;
@@ -2308,6 +2337,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DecideResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    v2_apple_batch_api_v2_apple_batch_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

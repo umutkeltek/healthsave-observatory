@@ -158,9 +158,11 @@ export type Metric4 = string;
 export type NormalizationVersion = string;
 export type OwnerId9 = string;
 export type CapturedAt = string;
+export type MotionContext = string | null;
 export type RawPayloadRef = string | null;
 export type SdkVersion = string;
 export type SourcePluginId1 = string;
+export type TzOffsetMinutes = number | null;
 export type SourceId2 = string;
 export type Unit1 = string;
 export type Value1 = number;
@@ -599,12 +601,22 @@ export interface Measurement {
  * ``raw_ingestion_log`` so a future replay can reach the exact
  * bytes. Storage detail intentionally lives on the other side of
  * the storage port.
+ *
+ * ``tz_offset_minutes`` / ``motion_context`` are per-sample capture
+ * context (Plan 2026-09-03, Eric's asks #4 + #5): the local UTC offset
+ * at the sample's startDate (``HKMetadataKeyTimeZone`` or the device
+ * offset) and the heart-rate motion context. The batch-level provenance
+ * the ingest route builds carries neither; the normalizer copies it per
+ * observation and fills what the wire sent. They persist inside the
+ * ``canonical_observations.provenance`` JSONB — additive keys, no DDL.
  */
 export interface Provenance {
   captured_at: CapturedAt;
+  motion_context?: MotionContext;
   raw_payload_ref?: RawPayloadRef;
   sdk_version: SdkVersion;
   source_plugin_id: SourcePluginId1;
+  tz_offset_minutes?: TzOffsetMinutes;
 }
 /**
  * A streamable narrative — daily briefing, weekly summary, etc.
