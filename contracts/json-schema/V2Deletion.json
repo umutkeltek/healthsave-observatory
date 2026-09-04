@@ -1,18 +1,7 @@
 {
   "additionalProperties": true,
+  "description": "Wire model for one deletion entry.\n\nThe wire carries only ``uuid`` \u2014 the HKSample UUID HealthKit reports as\ndeleted via HKAnchoredObjectQuery's [HKDeletedObject] stream. The\nsupersede semantics (``canonical_observations.status='superseded'`` +\nv1 dedicated table ``source_uuid``) need only uuid.\n\n``extra='allow'`` stays on so a future client may send a client-stamped\nobservation timestamp under any key (e.g. ``deletionObservedAt``) without\nbreaking the route \u2014 the server just ignores it. Server-stamped timing\nfor deletions lives in the sync receipt, not the wire.",
   "properties": {
-    "deletedAt": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Deletedat"
-    },
     "uuid": {
       "maxLength": 36,
       "minLength": 36,

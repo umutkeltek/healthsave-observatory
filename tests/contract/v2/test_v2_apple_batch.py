@@ -872,3 +872,90 @@ def test_envelope_accepts_all_ios_emission_families() -> None:
         )
         assert len(payload.samples) == 1, f"{metric} lost a sample at the envelope"
     assert len(families) == 8, "guard every family iOS emits — add new ones here"
+
+
+# ─── iOS serializer → server round-trip (Slice 7 oracle follow-up) ───
+#
+# The oracle review (2026-09-04) flagged: "a handwritten Swift fixture
+# that happens to resemble a handwritten JSON Schema proves little.
+# The useful test is serializer output → v2 schema/server parser →
+# storage." This test takes the exact JSON shape the committed iOS
+# ``AppleSyncBatchPayload.jsonData()`` serializer emits in
+# ``ios_app/Tests/HealthSyncTests/V2PayloadShapeTests/testV2PayloadSerializesToValidJSON``
+# and asserts every field Eric's engine relies on survives the
+# server's wire-model parse. A model-field rename on either side
+# that doesn't match will fail here, even if both sides agree on a
+# wrong key.
+
+
+IOS_PAYLOAD_SERIALIZER_FIXTURE = {
+    "schema_version": 2,
+    "metric": "heart_rate",
+    "batch_index": 2,
+    "total_batches": 5,
+    "samples": [
+        {
+            "uuid": "D2C70000-0000-4000-8000-000000000001",
+            "startDate": "2026-08-30T07:14:00-04:00",
+            "endDate": "2026-08-30T07:14:00-04:00",
+            "qty": 52,
+            "unit": "count/min",
+            "tzOffsetMinutes": -240,
+            "motionContext": "sedentary",
+            "source": "Apple Watch",
+        }
+    ],
+    "deletions": [
+        {"uuid": "D2C70000-0000-4000-8000-00000000007A"},
+    ],
+    "source_bundle_id": "com.healthsave.ios",
+    "device": {"name": "Test iPhone", "model": "iPhone17,2"},
+}
+
+
+def test_ios_serializer_output_round_trips_through_v2_model() -> None:
+    """The exact JSON shape iOS's ``AppleSyncBatchPayload.jsonData()``
+    emits (verified by ``testV2PayloadSerializesToValidJSON``) must
+    parse cleanly through the server's ``V2AppleBatchPayload``. Any
+    field rename / type drift on either side that the other doesn't
+    catch will fail here.
+    """
+    from server.api.v2_apple_batch import V2AppleBatchPayload
+    payload = V2AppleBatchPayload.model_validate(IOS_PAYLOAD_SERIALIZER_FIXTURE)
+    assert payload.schema_version == 2
+    assert payload.metric == "heart_rate"
+    assert payload.batch_index == 2
+    assert payload.total_batches == 5
+    assert payload.source_bundle_id == "com.healthsave.ios"
+    assert payload.device is not None
+    assert payload.device["model"] == "iPhone17,2"
+    assert len(payload.samples) == 1
+    assert len(payload.deletions) == 1
+    sample = payload.samples[0]
+    assert sample.uuid == "D2C70000-0000-4000-8000-000000000001"
+    assert sample.startDate == "2026-08-30T07:14:00-04:00"
+    assert sample.endDate == "2026-08-30T07:14:00-04:00"
+    assert sample.qty == 52
+    assert sample.unit == "count/min"
+    assert sample.tzOffsetMinutes == -240
+    assert sample.motionContext == "sedentary"
+    assert sample.source == "Apple Watch"
+    assert payload.deletions[0].uuid == "D2C70000-0000-4000-8000-00000000007A"
+
+
+def test_ios_serializer_output_satisfies_generated_json_schema() -> None:
+    """Cross-check the iOS-emitted JSON against the generated
+    ``contracts/json-schema/V2AppleBatchPayload.json``. ``jsonschema``
+    is optional (the lock-file gate does not require it); if absent,
+    skip with a clear message — the model-validation test above is the
+    load-bearing gate."""
+    import importlib.util as _ilu
+    jsonschema_spec = _ilu.find_spec("jsonschema")
+    if jsonschema_spec is None:
+        pytest.skip("jsonschema not installed; model-validation test covers the contract")
+    import json
+    import jsonschema as _js  # type: ignore[import-not-found]
+    from pathlib import Path
+    schema_path = Path(__file__).resolve().parents[3] / "contracts" / "json-schema" / "V2AppleBatchPayload.json"
+    schema = json.loads(schema_path.read_text())
+    _js.validate(IOS_PAYLOAD_SERIALIZER_FIXTURE, schema)
