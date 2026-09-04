@@ -93,7 +93,7 @@ The versioned ingest route that addresses Eric Lorenzo Benjamin Jr.'s longitudin
     }
   ],
   "deletions": [
-    { "uuid": "D2C7…-0000-4000-8000-00000000007A", "deletedAt": "2026-08-31T03:14:00Z" }
+    { "uuid": "D2C7…-0000-4000-8000-00000000007A" }
   ]
 }
 ```
@@ -102,7 +102,7 @@ The versioned ingest route that addresses Eric Lorenzo Benjamin Jr.'s longitudin
 { "status": "processed", "metric": "heart_rate", "batch": 0, "total_batches": 1, "records": 1 }
 ```
 
-**Sample-key set** (pinned by `tests/contract/api_v2/test_v2_apple_batch_contract.py`):
+**Sample-key set** (pinned by `tests/contract/v2/test_v2_apple_batch.py`):
 | Key | Type | Required | Notes |
 |---|---|---|---|
 | `uuid` | UUID string | required (quantity / category / workout / ECG); optional for medication | Stable identity; supersedes via `deletions` |

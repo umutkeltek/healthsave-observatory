@@ -28,12 +28,13 @@ engine needs:
     row's provenance so downstream "local day" derivation is engine-side.
   * ``samples[].motionContext`` — heart-rate motion context
     (``HKMetadataKeyHeartRateMotionContext``: sedentary/active/notSet).
-    Only meaningful on heart_rate today; ignored on other metrics.
-  * Top-level ``deletions: [{uuid, deletedAt?}]`` — HKSample UUIDs that
-    HealthKit reports as deleted. Applied atomically with the canonical
-    write: ``canonical_observations.status='superseded'`` for matching
-    ``source_record_uid`` AND v1 dedicated tables' ``status='superseded'``
-    where ``source_uuid`` matches.
+  * Top-level ``deletions: [{uuid}]`` — HKSample UUIDs that HealthKit
+    reports as deleted via the anchored query's HKDeletedObject stream.
+    Applied atomically with the canonical write: ``canonical_observations.status='superseded'``
+    for matching ``source_record_uid`` AND v1 dedicated tables' ``status='superseded'``
+    for matching ``source_uuid``. The wire carries uuid only — server-stamped
+    timing lives in the sync receipt, not on the wire (clients are welcome
+    to send extra keys; ``extra='allow'`` swallows them silently).
 
 Wire rules:
 
@@ -234,25 +235,28 @@ class V2Sample(BaseModel):
 
 
 class V2Deletion(BaseModel):
+    """Wire model for one deletion entry.
+
+    The wire carries only ``uuid`` — the HKSample UUID HealthKit reports as
+    deleted via HKAnchoredObjectQuery's [HKDeletedObject] stream. The
+    supersede semantics (``canonical_observations.status='superseded'`` +
+    v1 dedicated table ``source_uuid``) need only uuid.
+
+    ``extra='allow'`` stays on so a future client may send a client-stamped
+    observation timestamp under any key (e.g. ``deletionObservedAt``) without
+    breaking the route — the server just ignores it. Server-stamped timing
+    for deletions lives in the sync receipt, not the wire.
+    """
+
     model_config = ConfigDict(extra="allow")
 
     uuid: str = Field(min_length=36, max_length=36)
-    deletedAt: str | None = Field(default=None)
 
     @field_validator("uuid")
     @classmethod
     def _validate_uuid(cls, v: str) -> str:
         if not _UUID_RE.match(v):
             raise ValueError("uuid must be a valid RFC4122 UUID string")
-        return v
-
-    @field_validator("deletedAt", mode="before")
-    @classmethod
-    def _validate_deleted_at(cls, v: Any) -> Any:
-        if v is None:
-            return v
-        if not isinstance(v, str) or not v.strip():
-            raise ValueError("deletedAt must be a non-empty ISO-8601 string")
         return v
 
 

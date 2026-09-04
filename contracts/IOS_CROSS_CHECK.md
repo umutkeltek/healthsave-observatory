@@ -293,7 +293,7 @@ It addresses four blockers and two soft asks against v1:
 | # | Blocker | v2 fix |
 |---|---|---|
 | 1 | No `startDate`+`endDate` per sample (RHR interval identity lost) | Both fields required on every sample |
-| 2 | `HKAnchoredObjectQuery` delivers `[HKDeletedObject]`; iOS threw them away | Top-level `deletions: [{uuid, deletedAt}]` array |
+| 2 | `HKAnchoredObjectQuery` delivers `[HKDeletedObject]`; iOS threw them away | Top-level `deletions: [{uuid}]` array |
 | 3 | No `unit` field (server guessed, silently corrupted) | Per-sample `unit` (UCUM/`HKUnit.unitString`) |
 | 4 | No local UTC offset (sleep day-bucketing + DST travelers broke) | Per-sample `tzOffsetMinutes` |
 | + | Strongly wanted: HR motion context, sample UUID for idempotent identity | `motionContext` on HR; `uuid` on every quantity/category/workout/ECG |
@@ -334,7 +334,7 @@ v1 if the server returns 404/405 on the v2 route (`SyncEngine` slice-4 logic).
     }
   ],
   "deletions": [
-    { "uuid": "D2C7…-0000-4000-8000-00000000007A", "deletedAt": "2026-08-31T03:14:00Z" }
+    { "uuid": "D2C7…-0000-4000-8000-00000000007A" }
   ]
 }
 ```
@@ -357,7 +357,7 @@ v1 if the server returns 404/405 on the v2 route (`SyncEngine` slice-4 logic).
 | Key | Required | Notes |
 |---|---|---|
 | `schema_version` | optional (default `1`) | v2 route rejects anything ≠ 2 |
-| `deletions` | optional | `[{uuid, deletedAt}]`; marked `superseded` on `canonical_observations` + (if present) on v1 dedicated tables |
+| `deletions` | optional | `[{uuid}]`; marked `superseded` on `canonical_observations` + (if present) on v1 dedicated tables |
 | `device` | optional | Free-form `{name, model}` |
 | `source_bundle_id` | optional | iOS sends `com.healthsave.ios` |
 

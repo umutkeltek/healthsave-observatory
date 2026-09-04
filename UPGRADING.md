@@ -76,7 +76,7 @@ additive-only contract as every prior migration. Existing rows are untouched.
 
 `POST /api/v2/apple/batch` accepts `schema_version=2` payloads with
 `uuid` / `startDate` / `endDate` / `unit` / `tzOffsetMinutes` / `motionContext`
-per sample plus a top-level `deletions: [{uuid, deletedAt}]` array. The
+per sample plus a top-level `deletions: [{uuid}]` array. The
 response shape is identical to v1. Shipped iOS binaries keep posting to
 `/api/apple/batch` unchanged; HealthSave 1.7.0+ defaults to v2 and falls
 back to v1 on `404`/`405` (no infinite retry).

@@ -188,3 +188,100 @@ def test_v2_batch_rejects_unknown_unit_end_to_end() -> None:
         resp = client.post("/api/v2/apple/batch", json=body, headers=_headers())
         assert resp.status_code == 422, resp.text[:400]
         assert "unit" in resp.text.lower()
+
+
+@pytest.mark.asyncio
+async def test_v2_deletion_convergence_against_real_storage() -> None:
+    """Slice 7 (oracle follow-up, 2026-09-04): the same deletion uuid sent
+    in two v2 batches must converge — no double-counting, no duplicate
+    ``superseded`` rows, no errors. ``mark_*_superseded`` is idempotent
+    (rowcount=0 on the second call); the receipt counts each delivery
+    so the operator sees the intent while the storage stays at one row.
+    Lives in e2e because the validation-layer pin (``tests/contract/v2/``)
+    can't reach the supersede SQL. The oracle review named this exact
+    gap: the unit suite structurally cannot see this state machine.
+    """
+    sample_uuid = str(uuid4())
+    body_a = _v2_heart_rate_batch(sample_uuid)
+    body_b = _v2_heart_rate_batch(sample_uuid)
+    deletion_uuid = str(uuid4())
+    body_a["samples"] = []
+    body_a["deletions"] = [{"uuid": deletion_uuid}]
+    body_b["samples"] = []
+    body_b["deletions"] = [{"uuid": deletion_uuid}]
+    headers = _headers()
+
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=30) as client:
+        first = await client.post("/api/v2/apple/batch", json=body_a, headers=headers)
+        second = await client.post("/api/v2/apple/batch", json=body_b, headers=headers)
+        assert first.status_code in (200, 201, 202), first.text[:400]
+        assert second.status_code in (200, 201, 202), second.text[:400]
+        # Receipt shape: deletions.received must be 1 for both, but the
+        # per-table counts must stay at the same magnitude (the second
+        # delivery's mark_*_superseded returns 0 rowcount for already-
+        # superseded rows; the receipt reports it under canonical /
+        # v1_dedicated).
+        first_body = first.json()
+        second_body = second.json()
+        assert first_body["deletions"]["received"] == 1
+        assert second_body["deletions"]["received"] == 1
+
+    # Direct Postgres assertion: still exactly one ``superseded`` row for
+    # that uuid, regardless of how many batches delivered it.
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        canon_count = await conn.fetchval(
+            "SELECT COUNT(*) FROM canonical_observations "
+            "WHERE source_record_uid = $1 AND status = 'superseded'",
+            deletion_uuid,
+        )
+        # Note: the deletion in this test did not insert any new
+        # canonical rows (samples=[]), so canonical_count is exactly the
+        # number of times we issued the deletion — which should still be
+        # 0 (the deletion operates on previously-written rows; with
+        # samples=[], the row was never inserted, so the supersede is a
+        # no-op against an empty set). The test below exercises a
+        # sample-then-delete-then-re-delete flow to cover the
+        # convergence claim end-to-end.
+        assert canon_count == 0
+    finally:
+        await conn.close()
+
+
+@pytest.mark.asyncio
+async def test_v2_add_then_delete_then_delete_again_converges() -> None:
+    """Slice 7 (oracle follow-up): the convergence claim when a uuid
+    is added then deleted twice. Storage must end up at exactly one
+    ``superseded`` row, never two; receipt counts both deliveries."""
+    sample_uuid = str(uuid4())
+    add_body = _v2_heart_rate_batch(sample_uuid)
+    delete_body = _v2_heart_rate_batch(sample_uuid)
+    delete_body["samples"] = []
+    delete_body["deletions"] = [{"uuid": sample_uuid}]
+    headers = _headers()
+
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=30) as client:
+        add_resp = await client.post("/api/v2/apple/batch", json=add_body, headers=headers)
+        assert add_resp.status_code in (200, 201, 202), add_resp.text[:400]
+
+        del_resp_1 = await client.post("/api/v2/apple/batch", json=delete_body, headers=headers)
+        del_resp_2 = await client.post("/api/v2/apple/batch", json=delete_body, headers=headers)
+        assert del_resp_1.status_code in (200, 201, 202), del_resp_1.text[:400]
+        assert del_resp_2.status_code in (200, 201, 202), del_resp_2.text[:400]
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        canon_count = await conn.fetchval(
+            "SELECT COUNT(*) FROM canonical_observations "
+            "WHERE source_record_uid = $1 AND status = 'superseded'",
+            sample_uuid,
+        )
+        heart_rate_count = await conn.fetchval(
+            "SELECT COUNT(*) FROM heart_rate "
+            "WHERE source_uuid = $1 AND status = 'superseded'",
+            sample_uuid,
+        )
+        assert canon_count == 1, f"expected one superseded canonical row, got {canon_count}"
+        assert heart_rate_count == 1, f"expected one superseded heart_rate row, got {heart_rate_count}"
+    finally:
+        await conn.close()

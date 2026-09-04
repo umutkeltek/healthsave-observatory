@@ -357,24 +357,99 @@ def test_deletions_array_rejects_short_uuid(client: TestClient) -> None:
     resp = client.post("/api/v2/apple/batch", json=body)
     assert resp.status_code == 422, resp.text
 
+def test_deletions_array_extra_keys_accepted() -> None:
+    """V2Deletion uses ``extra='allow'`` so a future client-stamped
+    observation timestamp (or any other key) parses cleanly. The route
+    keeps only the typed ``uuid`` for supersede semantics; extras are
+    dropped silently (the JSON Schema will reflect that after the
+    follow-up ``make regen-v2-schemas`` in Slice 7). Replaces the
+    older ``deletedAt`` test that pinned a typed field we never
+    promised — the oracle review (2026-09-04) flagged it as a name
+    that implied a client-stamped timestamp we never asserted.
 
-def test_deletions_array_rejects_bad_deleted_at(client: TestClient) -> None:
-    """Deletions with a non-string ``deletedAt`` are 422."""
-    body = {
+    DB-free / validation-layer only: the route will not progress past
+    ``_write_canonical_observations`` without a real DB (the local env
+    has none), but the validation pass must succeed.
+    """
+    from server.api.v2_apple_batch import V2AppleBatchPayload
+    V2AppleBatchPayload.model_validate(
+        {
+            "schema_version": 2,
+            "metric": "heart_rate",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [],
+            "deletions": [
+                {
+                    "uuid": "d2c70000-0000-4000-8000-000000000060",
+                    "deletionObservedAt": "2026-09-01T07:14:00Z",
+                    "locale": "en_US",
+                }
+            ],
+        }
+    )
+
+
+def test_deletion_convergence_two_payloads_parse_identically() -> None:
+    """Plan 2026-09-03 Slice 7 (oracle follow-up): the same deletion
+    uuid sent in two consecutive v2 batches parses identically and
+    extracts the same uuid for the supersede pass. The DB-layer
+    idempotency guarantee (``mark_*_superseded`` rowcount=0 on the
+    second call) lives in the storage suite + the e2e test, not here.
+    Pinned here at the validation layer so the wire shape can't regress
+    in a way that breaks the storage contract."""
+    from server.api.v2_apple_batch import V2AppleBatchPayload
+    payload = {
         "schema_version": 2,
         "metric": "heart_rate",
         "batch_index": 0,
         "total_batches": 1,
         "samples": [],
-        "deletions": [
-            {
-                "uuid": "d2c70000-0000-4000-8000-000000000060",
-                "deletedAt": 12345,  # not a string
-            }
-        ],
+        "deletions": [{"uuid": "d2c70000-0000-4000-8000-0000000000a1"}],
     }
-    resp = client.post("/api/v2/apple/batch", json=body)
-    assert resp.status_code == 422, resp.text
+    first = V2AppleBatchPayload.model_validate(payload)
+    second = V2AppleBatchPayload.model_validate(payload)
+    assert len(first.deletions) == 1
+    assert len(second.deletions) == 1
+    assert first.deletions[0].uuid == second.deletions[0].uuid
+
+
+def test_no_deletions_field_is_accepted() -> None:
+    """A v2 batch with no ``deletions`` key parses cleanly — this is the
+    common case for anchored queries that reported no HKDeletedObject on
+    this delivery. Pinned because the prior ``deletedAt`` test masked
+    the no-deletions path; oracle review flagged deletion-only pages as
+    a data-loss risk that the test suite had not pinned either way.
+    """
+    from server.api.v2_apple_batch import V2AppleBatchPayload
+    payload = V2AppleBatchPayload.model_validate(
+        {
+            "schema_version": 2,
+            "metric": "heart_rate",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [],
+        }
+    )
+    assert payload.deletions == []
+
+
+def test_deletions_field_empty_list_is_accepted() -> None:
+    """An explicit ``deletions: []`` also parses cleanly — alternative
+    spelling the iOS test seam uses. Belt-and-braces with the no-field
+    test above."""
+    from server.api.v2_apple_batch import V2AppleBatchPayload
+    payload = V2AppleBatchPayload.model_validate(
+        {
+            "schema_version": 2,
+            "metric": "heart_rate",
+            "batch_index": 0,
+            "total_batches": 1,
+            "samples": [],
+            "deletions": [],
+        }
+    )
+    assert payload.deletions == []
 
 
 # ─── Top-level required fields ────────────────────────────────────────

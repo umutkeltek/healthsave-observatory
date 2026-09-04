@@ -720,7 +720,7 @@ sourced from `HKAnchoredObjectQuery`'s `HKDeletedObject` stream.
     }
   ],
   "deletions": [
-    { "uuid": "D2C7…-0000-4000-8000-00000000007A", "deletedAt": "2026-08-31T03:14:00Z" }
+    { "uuid": "D2C7…-0000-4000-8000-00000000007A" }
   ]
 }
 ```
@@ -754,7 +754,7 @@ legitimate shapes per batch type:
 | `source_bundle_id` | optional | iOS sends `com.healthsave.ios` |
 | `device` | optional | Free-form `{name, model}` |
 | `samples` | required | The per-sample array |
-| `deletions` | optional | `[{uuid, deletedAt}]` — see Deletion semantics below |
+| `deletions` | optional | `[{uuid}]` — see Deletion semantics below |
 
 ### Response
 
@@ -768,11 +768,11 @@ No client-visible shape change:
 
 ### Deletion semantics
 
-`deletions` is a top-level array of `{uuid, deletedAt}` entries sourced from
-the iOS extractor capturing `[HKDeletedObject]` on every `HKAnchoredObjectQuery`
-callback. For every entry, the server runs **two** SQL updates inside the
-route transaction:
-
+`deletions` is a top-level array of `{uuid}` entries sourced from the iOS
+extractor capturing `[HKDeletedObject]` on every `HKAnchoredObjectQuery`
+callback. Clients may also include a client-stamped observation timestamp
+under any key name — ``extra='allow'`` on the schema swallows unknown fields
+silently; server-stamped timing lives in the sync receipt. For every entry,
 1. `UPDATE canonical_observations SET status='superseded'
    WHERE owner_id = :o AND source_record_uid = ANY(:uuids) AND status = 'active'`
 2. `UPDATE <v1 dedicated table> SET status='superseded'
