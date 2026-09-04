@@ -1236,12 +1236,23 @@ def _quantity_sample_from_observation(obs: Observation) -> dict | None:
         source_id = getattr(obs, "source_id", None)
         source = str(source_id) if source_id else None
 
-    return {
+    # Plan 2026-09-03 (Slice 4): carry the canonical observation's
+    # source_record_uid onto the projected row as the v1 writer's ``uuid``
+    # key. _ingest_dedicated's identity arm reads it and stamps
+    # source_uuid, so canonical-derived rows are supersedeable by
+    # mark_v1_dedicated_superseded exactly like rows written straight
+    # from the wire. Without this the projection path silently dropped
+    # the identity and deletions could only supersede canonical rows.
+    row = {
         "date": obs.interval_start.isoformat(),
         "qty": qty,
         "unit": unit,
         "source": source,
     }
+    source_record_uid = getattr(obs, "source_record_uid", None)
+    if source_record_uid:
+        row["uuid"] = source_record_uid
+    return row
 
 
 class TimescaleMeasurementProjectionRepository:

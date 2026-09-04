@@ -537,6 +537,158 @@ async def test_timescale_measurement_projection_projects_quantity_observations()
     assert insert_params["owner_id"] == str(DEFAULT_OWNER_ID)
 
 
+@pytest.mark.asyncio
+async def test_projection_carries_source_record_uid_as_source_uuid() -> None:
+    """Plan 2026-09-03 (Slice 4): a canonical observation with a
+    source_record_uid must project into a v1 dedicated row that carries
+    source_uuid — otherwise mark_v1_dedicated_superseded can never find
+    canonical-derived rows and HealthKit delete-and-reinsert revisions
+    would only supersede the canonical half of the dual write."""
+    from contracts._base import DEFAULT_OWNER_ID, Provenance
+    from contracts.observation import Observation, build_dedup_key
+    from contracts.values import QuantityValue
+    from storage.timescale.measurements import TimescaleMeasurementProjectionRepository
+
+    class _ProjectionResult:
+        def __init__(self, row: dict[str, object]) -> None:
+            self.row = row
+
+        def mappings(self):
+            return self
+
+        def first(self):
+            return self.row
+
+    class _ProjectionSession:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict]] = []
+
+        async def execute(self, statement, params=None):
+            sql = " ".join(str(statement).split())
+            self.calls.append((sql, params or {}))
+            return _ProjectionResult({"inserted_new": True})
+
+    observed_at = datetime(2026, 8, 30, 11, 14, tzinfo=UTC)
+    uid = "d2c70000-0000-4000-8000-000000000001"
+    obs = Observation(
+        metric_id="vital.heart_rate",
+        value=QuantityValue(
+            type="quantity",
+            value=52,
+            unit="bpm",
+            canonical_value=52,
+            canonical_unit="bpm",
+        ),
+        interval_start=observed_at,
+        interval_end=observed_at,
+        source_id="a9b1e7e0-0000-4000-8000-000000000001",
+        source_record_uid=uid,
+        provenance=Provenance(
+            source_plugin_id="apple-health-healthsave",
+            sdk_version="test",
+            captured_at=observed_at,
+        ),
+        normalizer_id="apple_health",
+        normalizer_version="test",
+        dedup_key=build_dedup_key(
+            owner_id=DEFAULT_OWNER_ID,
+            workspace_id=DEFAULT_OWNER_ID,
+            source_id="a9b1e7e0-0000-4000-8000-000000000001",
+            metric_id="vital.heart_rate",
+            interval_start=observed_at,
+            interval_end=observed_at,
+            source_record_uid=uid,
+        ),
+    )
+
+    session = _ProjectionSession()
+    result = await TimescaleMeasurementProjectionRepository().project_observations(
+        session,
+        7,
+        "heart_rate",
+        [obs],
+        DEFAULT_OWNER_ID,
+    )
+
+    insert_params = next(params for sql, params in session.calls if "INSERT INTO heart_rate" in sql)
+    assert result.accepted == 1
+    assert insert_params["source_uuid"] == uid, (
+        "canonical-derived projected rows must carry source_uuid so "
+        "delete-and-reinsert revisions supersede both halves of the dual write"
+    )
+
+
+@pytest.mark.asyncio
+async def test_projection_without_source_record_uid_omits_source_uuid() -> None:
+    """v1-era observations (no uid) keep the legacy (time, device_id,
+    owner_id) conflict path — the projection must not fabricate one."""
+    from contracts._base import DEFAULT_OWNER_ID, Provenance
+    from contracts.observation import Observation, build_dedup_key
+    from contracts.values import QuantityValue
+    from storage.timescale.measurements import TimescaleMeasurementProjectionRepository
+
+    class _ProjectionResult:
+        def __init__(self, row: dict[str, object]) -> None:
+            self.row = row
+
+        def mappings(self):
+            return self
+
+        def first(self):
+            return self.row
+
+    class _ProjectionSession:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict]] = []
+
+        async def execute(self, statement, params=None):
+            sql = " ".join(str(statement).split())
+            self.calls.append((sql, params or {}))
+            return _ProjectionResult({"inserted_new": True})
+
+    observed_at = datetime(2026, 8, 30, 11, 14, tzinfo=UTC)
+    obs = Observation(
+        metric_id="vital.heart_rate",
+        value=QuantityValue(
+            type="quantity",
+            value=52,
+            unit="bpm",
+            canonical_value=52,
+            canonical_unit="bpm",
+        ),
+        interval_start=observed_at,
+        interval_end=observed_at,
+        source_id="a9b1e7e0-0000-4000-8000-000000000001",
+        provenance=Provenance(
+            source_plugin_id="apple-health-healthsave",
+            sdk_version="test",
+            captured_at=observed_at,
+        ),
+        normalizer_id="apple_health",
+        normalizer_version="test",
+        dedup_key=build_dedup_key(
+            owner_id=DEFAULT_OWNER_ID,
+            workspace_id=DEFAULT_OWNER_ID,
+            source_id="a9b1e7e0-0000-4000-8000-000000000001",
+            metric_id="vital.heart_rate",
+            interval_start=observed_at,
+            interval_end=observed_at,
+            value_repr="52",
+        ),
+    )
+
+    session = _ProjectionSession()
+    await TimescaleMeasurementProjectionRepository().project_observations(
+        session,
+        7,
+        "heart_rate",
+        [obs],
+        DEFAULT_OWNER_ID,
+    )
+    insert_params = next(params for sql, params in session.calls if "INSERT INTO heart_rate" in sql)
+    assert insert_params.get("source_uuid") is None
+
+
 # ──────────────────────────────────────────────────────────────
 #  Module-level convenience surface
 # ──────────────────────────────────────────────────────────────
