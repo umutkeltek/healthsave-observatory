@@ -298,6 +298,7 @@ async def hr_summary_from_raw(session, start: datetime, end: datetime) -> dict[s
                    count(*) AS count_v
             FROM heart_rate
             WHERE time >= :start AND time < :end
+              AND status = 'active'
             """
         ),
         {"start": start, "end": end},
@@ -329,6 +330,7 @@ async def hrv_summary(session, start: datetime, end: datetime) -> dict[str, Any]
                    count(*) AS count_v
             FROM hrv
             WHERE time >= :start AND time < :end
+              AND status = 'active'
             """
         ),
         {"start": start, "end": end},
@@ -381,6 +383,7 @@ async def fetch_hr_observations(
                    avg(bpm)::float AS value
             FROM heart_rate
             WHERE time >= :start AND time < :end
+              AND status = 'active'
             GROUP BY bucket
             ORDER BY bucket ASC
             """
@@ -401,6 +404,7 @@ async def fetch_hrv_observations(
             SELECT time, value_ms::float AS value
             FROM hrv
             WHERE time >= :start AND time < :end
+              AND status = 'active'
             ORDER BY time ASC
             """
         ),
@@ -464,6 +468,7 @@ async def fetch_heart_rate_daily_from_raw(session, start: datetime, end: datetim
                    count(*) AS sample_count
             FROM heart_rate
             WHERE time >= :start AND time < :end
+              AND status = 'active'
             GROUP BY day
             ORDER BY day ASC
             """
@@ -482,6 +487,7 @@ async def fetch_hrv_daily(session, start: datetime, end: datetime) -> list[Any]:
                    count(*) AS sample_count
             FROM hrv
             WHERE time >= :start AND time < :end
+              AND status = 'active'
             GROUP BY day
             ORDER BY day ASC
             """

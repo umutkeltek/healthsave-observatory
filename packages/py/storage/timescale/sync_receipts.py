@@ -50,20 +50,26 @@ def _destination_union_sql() -> str:
     fragments = [
         # Dedicated tables that store real per-sample timestamps.
         "SELECT 'heart_rate' AS metric, count(*) AS row_count, "
-        "max(time) AS latest_sample_at FROM heart_rate",
+        "max(time) AS latest_sample_at FROM heart_rate "
+        "WHERE status = 'active'",
         "SELECT 'heart_rate_variability' AS metric, count(*) AS row_count, "
-        "max(time) AS latest_sample_at FROM hrv",
+        "max(time) AS latest_sample_at FROM hrv "
+        "WHERE status = 'active'",
         "SELECT 'oxygen_saturation' AS metric, count(*) AS row_count, "
-        "max(time) AS latest_sample_at FROM blood_oxygen",
+        "max(time) AS latest_sample_at FROM blood_oxygen "
+        "WHERE status = 'active'",
         # body_temperature + wrist_temperature share one table with no in-row
         # type discriminator (the writer never sets measurement_type), so both
         # report its max(time).
         "SELECT 'body_temperature' AS metric, count(*) AS row_count, "
-        "max(time) AS latest_sample_at FROM body_temperature",
+        "max(time) AS latest_sample_at FROM body_temperature "
+        "WHERE status = 'active'",
         "SELECT 'wrist_temperature' AS metric, count(*) AS row_count, "
-        "max(time) AS latest_sample_at FROM body_temperature",
+        "max(time) AS latest_sample_at FROM body_temperature "
+        "WHERE status = 'active'",
         "SELECT 'sleep_analysis' AS metric, count(*) AS row_count, "
-        "max(start_time) AS latest_sample_at FROM sleep_sessions",
+        "max(start_time) AS latest_sample_at FROM sleep_sessions "
+        "WHERE status = 'active'",
         "SELECT 'workouts' AS metric, count(*) AS row_count, "
         "max(start_time) AS latest_sample_at FROM workouts",
         # ECG lands in quantity_samples under a derived metric_name, not 'ecg'.

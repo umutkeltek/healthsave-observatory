@@ -38,11 +38,11 @@ router = APIRouter()
 # max(<time column>) per metric table. Mirrors /api/apple/status so the iOS app's
 # metric-to-table mapping is reused unchanged. daily_activity is date-keyed.
 _LATEST_QUERIES = {
-    "heart_rate": "SELECT max(time) FROM heart_rate",
-    "hrv": "SELECT max(time) FROM hrv",
-    "blood_oxygen": "SELECT max(time) FROM blood_oxygen",
+    "heart_rate": "SELECT max(time) FROM heart_rate WHERE status = 'active'",
+    "hrv": "SELECT max(time) FROM hrv WHERE status = 'active'",
+    "blood_oxygen": "SELECT max(time) FROM blood_oxygen WHERE status = 'active'",
     "daily_activity": "SELECT max(date)::text FROM daily_activity",
-    "sleep_sessions": "SELECT max(start_time) FROM sleep_sessions",
+    "sleep_sessions": "SELECT max(start_time) FROM sleep_sessions WHERE status = 'active'",
     "workouts": "SELECT max(start_time) FROM workouts",
     "quantity_samples": "SELECT max(time) FROM quantity_samples",
 }
@@ -55,7 +55,8 @@ async def apple_coverage(request: Request, session: AsyncSession = Depends(get_s
     params = {"owner_id": str(owner_id)}
     coverage: dict[str, str | None] = {}
     for metric, base_sql in _LATEST_QUERIES.items():
-        sql = f"{base_sql} WHERE owner_id = :owner_id"
+        connector = "AND" if "WHERE" in base_sql else "WHERE"
+        sql = f"{base_sql} {connector} owner_id = :owner_id"
         try:
             row = (await session.execute(text(sql), params)).fetchone()
             value = row[0] if row else None

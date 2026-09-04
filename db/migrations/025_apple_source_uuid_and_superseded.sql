@@ -18,6 +18,13 @@
 --     partial predicate (storage/timescale/measurements.py identity arm).
 --   * sleep_sessions is a plain table (BIGSERIAL PK) — its index stays
 --     (owner_id, source_uuid).
+--   * The legacy unique indexes (migration 003) are rebuilt PARTIAL on
+--     status='active'. Delete-and-reinsert revisions supersede the old row
+--     and then insert the replacement at the same (time, device_id,
+--     owner_id) — with a total index the replacement violates the
+--     superseded row's slot. Partial indexes free superseded slots while
+--     covering every row that existed pre-status (default 'active'), so v1
+--     upsert semantics are bit-for-bit unchanged.
 --
 -- Additive-only — no column is dropped or renamed; no existing unique index
 -- is touched. Postgres >= 11 supports partial unique indexes with multiple
@@ -49,6 +56,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_heart_rate_source_uuid
 CREATE INDEX IF NOT EXISTS idx_heart_rate_status_active
     ON heart_rate (owner_id, time DESC)
     WHERE status = 'active';
+DROP INDEX IF EXISTS uq_heart_rate;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_heart_rate
+    ON heart_rate (time, device_id, owner_id)
+    WHERE status = 'active';
 
 -- ─── hrv ─────────────────────────────────────────────────────────────
 ALTER TABLE hrv
@@ -72,6 +83,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_hrv_source_uuid
     WHERE source_uuid IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_hrv_status_active
     ON hrv (owner_id, time DESC)
+    WHERE status = 'active';
+DROP INDEX IF EXISTS uq_hrv;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_hrv
+    ON hrv (time, device_id, owner_id)
     WHERE status = 'active';
 
 -- ─── blood_oxygen ────────────────────────────────────────────────────
@@ -97,6 +112,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_blood_oxygen_source_uuid
 CREATE INDEX IF NOT EXISTS idx_blood_oxygen_status_active
     ON blood_oxygen (owner_id, time DESC)
     WHERE status = 'active';
+DROP INDEX IF EXISTS uq_blood_oxygen;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_blood_oxygen
+    ON blood_oxygen (time, device_id, owner_id)
+    WHERE status = 'active';
 
 -- ─── body_temperature ────────────────────────────────────────────────
 ALTER TABLE body_temperature
@@ -120,6 +139,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_body_temperature_source_uuid
     WHERE source_uuid IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_body_temperature_status_active
     ON body_temperature (owner_id, time DESC)
+    WHERE status = 'active';
+DROP INDEX IF EXISTS uq_body_temperature;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_body_temperature
+    ON body_temperature (time, device_id, owner_id)
     WHERE status = 'active';
 
 -- ─── sleep_sessions ──────────────────────────────────────────────────
@@ -148,6 +171,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_sleep_sessions_source_uuid
     WHERE source_uuid IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_sleep_sessions_status_active
     ON sleep_sessions (owner_id, start_time DESC)
+    WHERE status = 'active';
+DROP INDEX IF EXISTS uq_sleep_sessions_device_start;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_sleep_sessions_device_start
+    ON sleep_sessions (device_id, start_time, owner_id)
     WHERE status = 'active';
 
 COMMIT;

@@ -97,6 +97,7 @@ class TimescaleHealthSnapshotRepository:
                         SELECT bpm
                         FROM heart_rate
                         WHERE time > now() - make_interval(hours => :hrs)
+                          AND status = 'active'
                         ORDER BY time DESC
                         LIMIT 1
                         """
@@ -111,6 +112,7 @@ class TimescaleHealthSnapshotRepository:
                     SELECT bpm
                     FROM heart_rate
                     WHERE context = 'resting'
+                      AND status = 'active'
                     ORDER BY time DESC
                     LIMIT 1
                     """
@@ -130,6 +132,7 @@ class TimescaleHealthSnapshotRepository:
                         SELECT AVG(value_ms)
                         FROM hrv
                         WHERE time >= now() - interval '7 days'
+                          AND status = 'active'
                         """
                     )
                 )
@@ -143,6 +146,7 @@ class TimescaleHealthSnapshotRepository:
                         """
                         SELECT value_ms
                         FROM hrv
+                        WHERE status = 'active'
                         ORDER BY time DESC
                         LIMIT 1
                         """
@@ -202,6 +206,7 @@ class TimescaleHealthSnapshotRepository:
                         """
                         SELECT total_duration_ms / 3600000.0
                         FROM sleep_sessions
+                        WHERE status = 'active'
                         ORDER BY start_time DESC
                         LIMIT 1
                         """
@@ -219,6 +224,7 @@ class TimescaleHealthSnapshotRepository:
                         / (total_duration_ms + COALESCE(awake_ms, 0)) * 100.0
                     END
                     FROM sleep_sessions
+                    WHERE status = 'active'
                     ORDER BY start_time DESC
                     LIMIT 1
                     """
@@ -237,6 +243,7 @@ class TimescaleHealthSnapshotRepository:
                         """
                         SELECT spo2_pct
                         FROM blood_oxygen
+                        WHERE status = 'active'
                         ORDER BY time DESC
                         LIMIT 1
                         """
@@ -268,16 +275,19 @@ class TimescaleHealthSnapshotRepository:
                         SELECT source_id, max(time) AS observed_at
                         FROM hrv
                         WHERE time >= now() - interval '7 days'
+                          AND status = 'active'
                         GROUP BY source_id
                         UNION ALL
                         SELECT source_id, max(time) AS observed_at
                         FROM blood_oxygen
                         WHERE time >= now() - interval '7 days'
+                          AND status = 'active'
                         GROUP BY source_id
                         UNION ALL
                         SELECT source_id, max(start_time) AS observed_at
                         FROM sleep_sessions
                         WHERE start_time >= now() - interval '7 days'
+                          AND status = 'active'
                         GROUP BY source_id
                         UNION ALL
                         SELECT source_id, max(date::timestamptz) AS observed_at
@@ -424,6 +434,7 @@ class TimescaleHealthSnapshotRepository:
                     SELECT DISTINCT ON (source_id) source_id, bpm
                     FROM heart_rate
                     WHERE time > now() - make_interval(hours => :hrs)
+                      AND status = 'active'
                     ORDER BY source_id, time DESC
                     """
                 ),
@@ -439,6 +450,7 @@ class TimescaleHealthSnapshotRepository:
                     SELECT DISTINCT ON (source_id) source_id, value_ms
                     FROM hrv
                     WHERE time > now() - interval '7 days'
+                      AND status = 'active'
                     ORDER BY source_id, time DESC
                     """
                 )
@@ -466,6 +478,7 @@ class TimescaleHealthSnapshotRepository:
                     SELECT DISTINCT ON (source_id) source_id, total_duration_ms
                     FROM sleep_sessions
                     WHERE total_duration_ms IS NOT NULL
+                      AND status = 'active'
                     ORDER BY source_id, start_time DESC
                     """
                 )

@@ -414,13 +414,18 @@ async def _ingest_dedicated(
         update_set = ", ".join(
             f"{c} = EXCLUDED.{c}" for c in rows_leg[0] if c not in legacy_conflict_cols
         )
+        # Migration 025 rebuilt the legacy unique indexes PARTIAL on
+        # status='active' (delete-and-reinsert replacements must not hit a
+        # superseded row's slot). Postgres needs the predicate repeated to
+        # infer the partial arbiter. Rows without a status pre-date the
+        # column and default to 'active', so v1 upserts behave unchanged.
         flags_leg = await _execute_batch_insert_with_flags(
             session,
             spec["table"],
             columns,
             columns,
             rows_leg,
-            conflict_clause=f"({conflict_sql})",
+            conflict_clause=f"({conflict_sql}) WHERE status = 'active'",
             update_set=update_set,
         )
         for inserted_new in flags_leg:
@@ -1012,7 +1017,7 @@ async def _upsert_sleep_session(session: AsyncSession, row: dict) -> int:
                 deep_ms, rem_ms, light_ms, awake_ms, respiratory_rate, owner_id, source_id)
             VALUES (:device_id, :start, :end, :total, :deep, :rem, :light, :awake, :rr,
                 :owner_id, :source_id)
-            ON CONFLICT (device_id, start_time, owner_id) DO UPDATE SET
+            ON CONFLICT (device_id, start_time, owner_id) WHERE status = 'active' DO UPDATE SET
                 end_time = EXCLUDED.end_time,
                 total_duration_ms = EXCLUDED.total_duration_ms,
                 deep_ms = EXCLUDED.deep_ms,
@@ -1169,8 +1174,7 @@ async def mark_canonical_observations_superseded(
         text(
             """
             UPDATE canonical_observations
-               SET status = 'superseded',
-                   updated_at = NOW()
+               SET status = 'superseded'
              WHERE owner_id = :owner_id
                AND status = 'active'
                AND source_record_uid = ANY(:uuids)

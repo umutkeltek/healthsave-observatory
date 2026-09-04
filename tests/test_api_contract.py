@@ -307,7 +307,10 @@ async def test_status_is_owner_scoped_to_default_owner():
     scoped = [(sql, p) for sql, p in session.calls if "FROM heart_rate" in sql]
     assert scoped, "expected a heart_rate status query"
     sql, params = scoped[0]
-    assert "WHERE owner_id = :owner_id" in sql
+    # The owner scoping clause must be present; migration 025 made the
+    # dedicated-table reads filter status='active' first, so it lands as
+    # "AND owner_id = ..." rather than opening the WHERE.
+    assert "owner_id = :owner_id" in sql
     assert params.get("owner_id") == str(DEFAULT_OWNER_ID)
 
 
