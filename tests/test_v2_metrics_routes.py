@@ -95,6 +95,42 @@ async def test_metric_series_carries_stream_id() -> None:
 
 
 @pytest.mark.asyncio
+async def test_metric_series_exposes_capture_context() -> None:
+    """Plan 2026-09-03: the series endpoint surfaces the per-sample
+    tz offset and HR motion context the v2 ingest stamped into
+    provenance (Eric's asks #4 + #5 — local-day bucketing and
+    resting-quality separation). Absent context stays null."""
+    rows = [
+        {
+            "interval_start": _T,
+            "interval_end": _T,
+            "numeric_value": 52.0,
+            "code": None,
+            "canonical_unit": "bpm",
+            "source_id": _SOURCE,
+            "confidence": None,
+            "tz_offset_minutes": -240,
+            "motion_context": "sedentary",
+        },
+        {
+            "interval_start": _T + timedelta(minutes=1),
+            "interval_end": _T + timedelta(minutes=1),
+            "numeric_value": 54.0,
+            "code": None,
+            "canonical_unit": "bpm",
+            "source_id": _SOURCE,
+            "confidence": None,
+            # v1-shaped row: no capture context keys at all
+        },
+    ]
+    body = await metric_series("vital.heart_rate", range="7d", session=_FakeSession(rows))
+    assert body["points"][0]["tz_offset_minutes"] == -240
+    assert body["points"][0]["motion_context"] == "sedentary"
+    assert body["points"][1]["tz_offset_minutes"] is None
+    assert body["points"][1]["motion_context"] is None
+
+
+@pytest.mark.asyncio
 async def test_metric_series_accepts_stream_id_param() -> None:
     """The optional stream_id filter param is accepted (absent = fused)."""
     body = await metric_series(

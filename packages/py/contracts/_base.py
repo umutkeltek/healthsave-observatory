@@ -76,9 +76,19 @@ class Provenance(V2Model):
     ``raw_ingestion_log`` so a future replay can reach the exact
     bytes. Storage detail intentionally lives on the other side of
     the storage port.
+
+    ``tz_offset_minutes`` / ``motion_context`` are per-sample capture
+    context (Plan 2026-09-03, Eric's asks #4 + #5): the local UTC offset
+    at the sample's startDate (``HKMetadataKeyTimeZone`` or the device
+    offset) and the heart-rate motion context. The batch-level provenance
+    the ingest route builds carries neither; the normalizer copies it per
+    observation and fills what the wire sent. They persist inside the
+    ``canonical_observations.provenance`` JSONB — additive keys, no DDL.
     """
 
     source_plugin_id: str
     sdk_version: str
     captured_at: datetime
     raw_payload_ref: str | None = None
+    tz_offset_minutes: int | None = None
+    motion_context: str | None = None

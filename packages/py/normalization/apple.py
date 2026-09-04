@@ -287,6 +287,23 @@ def _normalize_sample(
     exact_ingest_key: str | None = None
     aggregation_scope = AggregationScope.INTERVAL_COMPONENT.value
 
+    # v2 capture context (Eric's asks #4 + #5): the wire's per-sample local
+    # UTC offset and heart-rate motion context ride onto THIS observation's
+    # provenance, not the batch-level one. The ingest route builds one
+    # batch-scoped Provenance; we copy it and fill what this sample carried
+    # so the values survive into canonical_observations.provenance JSONB and
+    # become queryable. Samples that omitted the keys keep None (v1 and the
+    # non-HR families).
+    sample_tz = sample.get("tzOffsetMinutes")
+    sample_motion = sample.get("motionContext")
+    if sample_tz is not None or sample_motion is not None:
+        provenance = provenance.model_copy(
+            update={
+                "tz_offset_minutes": sample_tz if isinstance(sample_tz, int) else None,
+                "motion_context": sample_motion if isinstance(sample_motion, str) else None,
+            }
+        )
+
     # HealthSave's cumulative extractor sends one HealthKit-deduplicated, all-source
     # total per local calendar day. A later sync may revise that same total, so its
     # source-local identity must exclude the value while preserving the exact local-

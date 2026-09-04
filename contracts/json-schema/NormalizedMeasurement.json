@@ -98,12 +98,24 @@
     },
     "Provenance": {
       "additionalProperties": false,
-      "description": "Always-attached \"where did this come from\" capsule.\n\n``raw_payload_ref`` is opaque \u2014 typically a row id in\n``raw_ingestion_log`` so a future replay can reach the exact\nbytes. Storage detail intentionally lives on the other side of\nthe storage port.",
+      "description": "Always-attached \"where did this come from\" capsule.\n\n``raw_payload_ref`` is opaque \u2014 typically a row id in\n``raw_ingestion_log`` so a future replay can reach the exact\nbytes. Storage detail intentionally lives on the other side of\nthe storage port.\n\n``tz_offset_minutes`` / ``motion_context`` are per-sample capture\ncontext (Plan 2026-09-03, Eric's asks #4 + #5): the local UTC offset\nat the sample's startDate (``HKMetadataKeyTimeZone`` or the device\noffset) and the heart-rate motion context. The batch-level provenance\nthe ingest route builds carries neither; the normalizer copies it per\nobservation and fills what the wire sent. They persist inside the\n``canonical_observations.provenance`` JSONB \u2014 additive keys, no DDL.",
       "properties": {
         "captured_at": {
           "format": "date-time",
           "title": "Captured At",
           "type": "string"
+        },
+        "motion_context": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Motion Context"
         },
         "raw_payload_ref": {
           "anyOf": [
@@ -124,6 +136,18 @@
         "source_plugin_id": {
           "title": "Source Plugin Id",
           "type": "string"
+        },
+        "tz_offset_minutes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tz Offset Minutes"
         }
       },
       "required": [

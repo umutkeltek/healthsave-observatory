@@ -28,7 +28,13 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class SeriesPoint:
-    """One point on a metric series — scalar or coded, with provenance."""
+    """One point on a metric series — scalar or coded, with provenance.
+
+    ``tz_offset_minutes`` / ``motion_context`` are the per-sample capture
+    context the v2 ingest stamps into the observation's provenance (Plan
+    2026-09-03, Eric's asks #4 + #5). Extracted from the provenance JSONB
+    at read time; v1 rows and families without the keys carry None.
+    """
 
     t: datetime
     interval_end: datetime
@@ -41,6 +47,8 @@ class SeriesPoint:
     semantic_key: str | None = None
     aggregation_scope: str = "interval_component"
     is_primary: bool = True
+    tz_offset_minutes: int | None = None
+    motion_context: str | None = None
 
 
 def observation_columns(obs: Observation) -> dict[str, Any]:
@@ -115,6 +123,8 @@ def row_to_series_point(row: dict[str, Any]) -> SeriesPoint:
         semantic_key=str(semantic_key) if semantic_key else None,
         aggregation_scope=row.get("aggregation_scope") or "interval_component",
         is_primary=bool(row.get("is_primary", True)),
+        tz_offset_minutes=row.get("tz_offset_minutes"),
+        motion_context=row.get("motion_context"),
     )
 
 
@@ -222,10 +232,13 @@ _INSERT_SQL = text(
 _SERIES_SQL = text(
     """
     SELECT interval_start, interval_end, numeric_value, code, canonical_unit,
-           source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary
+           source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary,
+           (provenance->>'tz_offset_minutes')::int AS tz_offset_minutes,
+           provenance->>'motion_context' AS motion_context
     FROM (
       SELECT interval_start, interval_end, numeric_value, code, canonical_unit,
-             source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary
+             source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary,
+             provenance
       FROM canonical_observations
       WHERE owner_id = :owner_id
         AND workspace_id = :workspace_id
@@ -247,6 +260,7 @@ _FUSED_SERIES_SQL = text(
       SELECT
         interval_start, interval_end, numeric_value, code, canonical_unit,
         source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary,
+        provenance,
         ROW_NUMBER() OVER (
           PARTITION BY COALESCE(semantic_key, id::text)
           ORDER BY is_primary DESC, recorded_at DESC NULLS LAST, created_at DESC, id
@@ -262,14 +276,17 @@ _FUSED_SERIES_SQL = text(
     ),
     recent AS (
       SELECT interval_start, interval_end, numeric_value, code, canonical_unit,
-             source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary
+             source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary,
+             provenance
       FROM ranked
       WHERE fusion_rank = 1
       ORDER BY interval_start DESC
       LIMIT :limit
     )
     SELECT interval_start, interval_end, numeric_value, code, canonical_unit,
-           source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary
+           source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary,
+           (provenance->>'tz_offset_minutes')::int AS tz_offset_minutes,
+           provenance->>'motion_context' AS motion_context
     FROM recent
     ORDER BY interval_start ASC
     """
@@ -281,6 +298,7 @@ _FUSED_SERIES_MANY_SQL = text(
       SELECT
         metric_id, interval_start, interval_end, numeric_value, code, canonical_unit,
         source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary,
+        provenance,
         ROW_NUMBER() OVER (
           PARTITION BY metric_id, COALESCE(semantic_key, id::text)
           ORDER BY is_primary DESC, recorded_at DESC NULLS LAST, created_at DESC, id
@@ -296,18 +314,22 @@ _FUSED_SERIES_MANY_SQL = text(
     ),
     fused AS (
       SELECT metric_id, interval_start, interval_end, numeric_value, code, canonical_unit,
-             source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary
+             source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary,
+             provenance
       FROM ranked
       WHERE fusion_rank = 1
     ),
     capped AS (
       SELECT metric_id, interval_start, interval_end, numeric_value, code, canonical_unit,
              source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary,
+             provenance,
              ROW_NUMBER() OVER (PARTITION BY metric_id ORDER BY interval_start DESC) AS rn
       FROM fused
     )
     SELECT metric_id, interval_start, interval_end, numeric_value, code, canonical_unit,
-           source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary
+           source_id, stream_id, confidence, semantic_key, aggregation_scope, is_primary,
+           (provenance->>'tz_offset_minutes')::int AS tz_offset_minutes,
+           provenance->>'motion_context' AS motion_context
     FROM capped
     WHERE rn <= :limit
     ORDER BY metric_id, interval_start ASC

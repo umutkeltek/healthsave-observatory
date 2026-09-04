@@ -137,6 +137,11 @@ def _point_dicts(points) -> list[dict]:
             "semantic_key": point.semantic_key,
             "aggregation_scope": point.aggregation_scope,
             "is_primary": point.is_primary,
+            # Per-sample capture context (Plan 2026-09-03): the local UTC
+            # offset and HR motion context the v2 ingest stamped into
+            # provenance. Null for v1 rows and families without the keys.
+            "tz_offset_minutes": point.tz_offset_minutes,
+            "motion_context": point.motion_context,
         }
         for point in points
     ]

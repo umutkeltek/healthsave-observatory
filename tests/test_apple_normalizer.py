@@ -263,3 +263,47 @@ def test_activity_summaries_same_day_revision_keeps_stable_identity() -> None:
     # Same calendar day → same upsert identity even though the value changed.
     assert first.dedup_key == revised.dedup_key
     assert first.interval_start == revised.interval_start
+
+
+def test_capture_context_stamps_per_sample_provenance() -> None:
+    """Plan 2026-09-03 (Eric's asks #4 + #5): tzOffsetMinutes and
+    motionContext ride onto each observation's OWN provenance so they
+    land in canonical_observations.provenance JSONB and become
+    queryable. Samples without the keys keep None; the batch-level
+    provenance the caller passed is never mutated."""
+    res = normalize_apple_batch(
+        {
+            "metric": "heart_rate",
+            "samples": [
+                {
+                    "uuid": "d2c70000-0000-4000-8000-000000000001",
+                    "startDate": "2026-08-30T07:14:00-04:00",
+                    "endDate": "2026-08-30T07:14:00-04:00",
+                    "qty": 52,
+                    "unit": "count/min",
+                    "source": "Apple Watch",
+                    "tzOffsetMinutes": -240,
+                    "motionContext": "sedentary",
+                },
+                {
+                    "uuid": "d2c70000-0000-4000-8000-000000000002",
+                    "startDate": "2026-08-30T07:15:00-04:00",
+                    "endDate": "2026-08-30T07:15:00-04:00",
+                    "qty": 54,
+                    "unit": "count/min",
+                    "source": "Apple Watch",
+                },
+            ],
+        },
+        source_id=_SOURCE,
+        provenance=_PROV,
+    )
+    assert res.accepted == 2
+    with_ctx, without = res.observations
+    assert with_ctx.provenance.tz_offset_minutes == -240
+    assert with_ctx.provenance.motion_context == "sedentary"
+    assert without.provenance.tz_offset_minutes is None
+    assert without.provenance.motion_context is None
+    # The batch-level provenance is shared state; stamping must not leak.
+    assert _PROV.tz_offset_minutes is None
+    assert _PROV.motion_context is None

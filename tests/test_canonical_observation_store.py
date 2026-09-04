@@ -125,6 +125,80 @@ def test_row_to_series_point_maps_fields() -> None:
     assert point.is_primary is False
 
 
+def test_row_to_series_point_maps_capture_context() -> None:
+    """Plan 2026-09-03: the v2 ingest stamps tz_offset_minutes and
+    motion_context into the observation provenance; the series read
+    plane extracts them from the provenance JSONB so Eric's engine can
+    bucket local days and separate resting-quality heart rate."""
+    point = row_to_series_point(
+        {
+            "interval_start": _T,
+            "interval_end": _T,
+            "numeric_value": 61.0,
+            "code": None,
+            "canonical_unit": "bpm",
+            "source_id": _SOURCE,
+            "confidence": None,
+            "tz_offset_minutes": -240,
+            "motion_context": "sedentary",
+        }
+    )
+    assert point.tz_offset_minutes == -240
+    assert point.motion_context == "sedentary"
+
+
+def test_row_to_series_point_defaults_capture_context_to_none() -> None:
+    """v1 rows (and families without the keys) carry no capture
+    context — the SQL extraction yields NULL and the point defaults."""
+    point = row_to_series_point(
+        {
+            "interval_start": _T,
+            "interval_end": _T,
+            "numeric_value": 61.0,
+            "code": None,
+            "canonical_unit": "bpm",
+            "source_id": _SOURCE,
+            "confidence": None,
+        }
+    )
+    assert point.tz_offset_minutes is None
+    assert point.motion_context is None
+
+
+def test_observation_columns_round_trips_capture_context_in_provenance() -> None:
+    """The write path: an Observation whose provenance carries tz and
+    motion context flattens to the provenance JSONB column verbatim.
+    No new column — additive keys inside the existing JSONB."""
+    import json
+
+    from contracts._base import Provenance
+
+    prov = Provenance(
+        source_plugin_id="apple_health",
+        sdk_version="0.1.0",
+        captured_at=_T,
+        tz_offset_minutes=-240,
+        motion_context="sedentary",
+    )
+    obs = Observation(
+        metric_id="vital.heart_rate",
+        value=QuantityValue(
+            type="quantity", value=61.0, unit="bpm", canonical_value=61.0, canonical_unit="bpm"
+        ),
+        interval_start=_T,
+        interval_end=_T,
+        source_id=_SOURCE,
+        provenance=prov,
+        normalizer_id="apple_health",
+        normalizer_version="0.1.0",
+        dedup_key="dk-prov",
+    )
+    cols = observation_columns(obs)
+    payload = json.loads(cols["provenance"])
+    assert payload["tz_offset_minutes"] == -240
+    assert payload["motion_context"] == "sedentary"
+
+
 class _FakeResult:
     def __init__(self, rows: list[dict]):
         self._rows = rows
