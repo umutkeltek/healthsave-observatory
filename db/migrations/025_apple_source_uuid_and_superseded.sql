@@ -5,17 +5,19 @@
 -- HealthKit revises resting-heart-rate and reshuffles sleep via
 -- delete-and-reinsert, so the v1 path silently landed two values for the day.
 -- This migration adds:
---
 --   * `source_uuid UUID` on heart_rate, hrv, blood_oxygen, body_temperature,
 --     sleep_sessions. Nullable + partial unique index so it doesn't fight the
 --     existing (time, device_id, owner_id) uniqueness for legacy rows that
 --     arrived before the iOS client learned to send UUIDs.
---   * `status TEXT` with check constraint {active, superseded} and a default
---     of 'active' on the same five tables. Existing rows stay 'active'; an
---     explicit deletion from the v2 ingest path supersedes by source_uuid.
---   * Partial indexes `WHERE status='active'` so the projections and
---     count-only paths stay cheap (the existing (time, device_id, owner_id)
---     unique indexes remain covering for legacy reads).
+--   * The four dedicated tables are TimescaleDB hypertables partitioned on
+--     `time` — Postgres/Timescale requires EVERY unique index on a hypertable
+--     to include the partitioning column, so their identity indexes are
+--     (owner_id, source_uuid, time). Same uuid always implies same time
+--     (HKSample.startDate is immutable per uuid), so the extra column costs
+--     no idempotency. The matching ON CONFLICT clause must repeat the index's
+--     partial predicate (storage/timescale/measurements.py identity arm).
+--   * sleep_sessions is a plain table (BIGSERIAL PK) — its index stays
+--     (owner_id, source_uuid).
 --
 -- Additive-only — no column is dropped or renamed; no existing unique index
 -- is touched. Postgres >= 11 supports partial unique indexes with multiple
@@ -42,7 +44,7 @@ BEGIN
     END IF;
 END $$;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_heart_rate_source_uuid
-    ON heart_rate (owner_id, source_uuid)
+    ON heart_rate (owner_id, source_uuid, time)
     WHERE source_uuid IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_heart_rate_status_active
     ON heart_rate (owner_id, time DESC)
@@ -66,7 +68,7 @@ BEGIN
     END IF;
 END $$;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_hrv_source_uuid
-    ON hrv (owner_id, source_uuid)
+    ON hrv (owner_id, source_uuid, time)
     WHERE source_uuid IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_hrv_status_active
     ON hrv (owner_id, time DESC)
@@ -90,7 +92,7 @@ BEGIN
     END IF;
 END $$;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_blood_oxygen_source_uuid
-    ON blood_oxygen (owner_id, source_uuid)
+    ON blood_oxygen (owner_id, source_uuid, time)
     WHERE source_uuid IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_blood_oxygen_status_active
     ON blood_oxygen (owner_id, time DESC)
@@ -114,7 +116,7 @@ BEGIN
     END IF;
 END $$;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_body_temperature_source_uuid
-    ON body_temperature (owner_id, source_uuid)
+    ON body_temperature (owner_id, source_uuid, time)
     WHERE source_uuid IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_body_temperature_status_active
     ON body_temperature (owner_id, time DESC)
@@ -124,6 +126,7 @@ CREATE INDEX IF NOT EXISTS idx_body_temperature_status_active
 -- Sleep sessions are not a hypertable (BIGSERIAL PK); they identify via
 -- (device_id, start_time, owner_id). The identity-aware revision path uses
 -- source_uuid instead, which is what /api/v2/apple/batch will populate.
+-- No `time` column here — plain tables may index any column set.
 ALTER TABLE sleep_sessions
     ADD COLUMN IF NOT EXISTS source_uuid UUID;
 ALTER TABLE sleep_sessions

@@ -10,8 +10,12 @@ tables (``heart_rate`` etc.):
     bit-for-bit unaffected by Slice 1.
   * v1 wire samples that DO carry ``uuid`` (forward-compatible: legacy clients
     that pick up the v2 server before the v2 iOS client lands) stamp
-    ``source_uuid`` on the row and route through ``(owner_id, source_uuid)``
-    ON CONFLICT — the new partial unique index added by migration 025.
+    ``source_uuid`` on the row and route through
+    ``(owner_id, source_uuid, time) WHERE source_uuid IS NOT NULL`` ON
+    CONFLICT — the hypertable-compatible partial unique index from migration
+    025 (TimescaleDB requires the partitioning column ``time`` in every
+    unique index on a hypertable; the partial predicate must be repeated in
+    the ON CONFLICT clause for Postgres to infer it).
 
 Both paths land in a single batched INSERT per row set (PERFORMANCE-001
 invariant from ``measurements.py::_execute_batch_insert_with_flags``).
@@ -126,7 +130,8 @@ async def test_legacy_samples_use_time_device_owner_conflict():
 
 @pytest.mark.asyncio
 async def test_uuid_bearing_samples_use_identity_conflict():
-    """Samples with uuid: route through (owner_id, source_uuid) ON CONFLICT."""
+    """Samples with uuid: route through the hypertable-compatible
+    identity arbiter (owner_id, source_uuid, time) + partial predicate."""
     session = _RecordingSession(insert_flags=[True])
 
     result = await _ingest_metric(
@@ -148,8 +153,9 @@ async def test_uuid_bearing_samples_use_identity_conflict():
         f"expected single batched INSERT for identity arm, got {len(insert_calls)}"
     )
     sql = insert_calls[0][0]
-    assert "ON CONFLICT (owner_id, source_uuid)" in sql, (
-        f"identity arm must conflict on (owner_id, source_uuid); got: {sql}"
+    assert "ON CONFLICT (owner_id, source_uuid, time) WHERE source_uuid IS NOT NULL" in sql, (
+        f"identity arm must conflict on the hypertable arbiter with the "
+        f"partial predicate; got: {sql}"
     )
     params = insert_calls[0][1]
     assert any(
@@ -195,7 +201,10 @@ async def test_mixed_batch_splits_into_two_inserts():
         f"{[c[0][:80] for c in insert_calls]}"
     )
     sqls = [c[0] for c in insert_calls]
-    assert any("ON CONFLICT (owner_id, source_uuid)" in s for s in sqls), (
+    assert any(
+        "ON CONFLICT (owner_id, source_uuid, time) WHERE source_uuid IS NOT NULL" in s
+        for s in sqls
+    ), (
         "identity arm must appear in mixed batch"
     )
     assert any("ON CONFLICT (time, device_id, owner_id)" in s for s in sqls), (

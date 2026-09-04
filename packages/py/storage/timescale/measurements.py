@@ -371,13 +371,24 @@ async def _ingest_dedicated(
     dedup_count = 0
 
     if identity_rows:
+        # TimescaleDB hypertables require the partitioning column (``time``)
+        # in every unique index, so the identity arbiter is
+        # (owner_id, source_uuid, time); the partial predicate must be
+        # repeated for Postgres to infer the partial unique index. Same
+        # uuid always implies same time (HKSample.startDate is immutable),
+        # so including time costs no idempotency. sleep_sessions is a
+        # plain table and keeps (owner_id, source_uuid) — see
+        # _upsert_sleep_session. Migration 025 carries the matching
+        # indexes.
         rows_id, dedup_id = _dedupe_rows_for_upsert(
-            identity_rows, ["owner_id", "source_uuid"], metric
+            identity_rows, ["owner_id", "source_uuid", "time"], metric
         )
         dedup_count += dedup_id
         columns = list(rows_id[0].keys())
         update_set = ", ".join(
-            f"{c} = EXCLUDED.{c}" for c in rows_id[0] if c not in ("owner_id", "source_uuid")
+            f"{c} = EXCLUDED.{c}"
+            for c in rows_id[0]
+            if c not in ("owner_id", "source_uuid", "time")
         )
         flags_id = await _execute_batch_insert_with_flags(
             session,
@@ -385,7 +396,7 @@ async def _ingest_dedicated(
             columns,
             columns,
             rows_id,
-            conflict_clause="(owner_id, source_uuid)",
+            conflict_clause="(owner_id, source_uuid, time) WHERE source_uuid IS NOT NULL",
             update_set=update_set,
         )
         for inserted_new in flags_id:
@@ -981,7 +992,7 @@ async def _upsert_sleep_session(session: AsyncSession, row: dict) -> int:
                     source_uuid)
                 VALUES (:device_id, :start, :end, :total, :deep, :rem, :light, :awake, :rr,
                     :owner_id, :source_id, :source_uuid)
-                ON CONFLICT (owner_id, source_uuid) DO UPDATE SET
+                ON CONFLICT (owner_id, source_uuid) WHERE source_uuid IS NOT NULL DO UPDATE SET
                     end_time = EXCLUDED.end_time,
                     total_duration_ms = EXCLUDED.total_duration_ms,
                     deep_ms = EXCLUDED.deep_ms,

@@ -65,7 +65,9 @@ the URL layer.
 
 Adds nullable `source_uuid UUID` + `status TEXT NOT NULL DEFAULT 'active'`
 to the v1 dedicated tables. Partial unique index `WHERE source_uuid IS NOT NULL`
-enables `(owner_id, source_uuid) WHERE source_uuid IS NOT NULL` upserts;
+enables `(owner_id, source_uuid, time) WHERE source_uuid IS NOT NULL` upserts
+(the dedicated tables are TimescaleDB hypertables, so the partition column
+`time` must be in every unique index);
 legacy rows keep the existing `(owner_id, device_id, time)` conflict path.
 The compose `migrate` service applies it before the API comes up — same
 additive-only contract as every prior migration. Existing rows are untouched.

@@ -118,7 +118,7 @@ The versioned ingest route that addresses Eric Lorenzo Benjamin Jr.'s longitudin
 
 **Deletion semantics.** Each entry runs **two** SQL updates inside the route transaction: (1) `canonical_observations.status='superseded'` for `source_record_uid = ANY(:uuids) AND status='active'`; (2) `heart_rate` / `hrv` / `blood_oxygen` / `body_temperature` / `sleep_sessions` `.status='superseded'` for `source_uuid = ANY(:uuids) AND status='active'`. The RHR delete+reinsert path is the motivating case.
 
-**Idempotency.** Same `_claim_or_replay_receipt_idempotency` helper as v1; the `Idempotency-Key` header still drives receipt-level replay. Sample identity is governed by `uuid` via `(owner_id, source_uuid) WHERE source_uuid IS NOT NULL` on the v1 dedicated tables and `source_record_uid` on `canonical_observations`.
+**Idempotency.** Same `_claim_or_replay_receipt_idempotency` helper as v1; the `Idempotency-Key` header still drives receipt-level replay. Sample identity is governed by `uuid` via `(owner_id, source_uuid, time) WHERE source_uuid IS NOT NULL` on the v1 dedicated tables (hypertables require the partition column) and `source_record_uid` on `canonical_observations`.
 
 **Headers** (additive over v1): one advisory `X-HealthSave-Schema-Version: 2`. Canonical manifest `contracts/v2-ios-headers.json` (mirrored byte-equal at `ios_app/Tests/HealthSyncTests/Fixtures/v2-ios-headers.json`; enforced by `tests/contract/test_ios_v2_headers_in_sync.py`).
 

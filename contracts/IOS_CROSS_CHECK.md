@@ -395,8 +395,10 @@ nullable `source_uuid UUID` + `status TEXT NOT NULL DEFAULT 'active'`
 `blood_oxygen`, `body_temperature`, `sleep_sessions` — additive only
 (CLAUDE.md Law 5). Partial unique index `WHERE source_uuid IS NOT NULL`
 plus partial active-index. The conflict clause becomes a two-arm
-`(owner_id, source_uuid) WHERE source_uuid IS NOT NULL` /
-`(owner_id, device_id, time) WHERE source_uuid IS NULL`.
+`(owner_id, source_uuid, time) WHERE source_uuid IS NOT NULL` /
+`(time, device_id, owner_id)`. (The dedicated
+tables are hypertables, so the partition column `time` is part of the
+identity arbiter.)
 
 ## Android adoption
 

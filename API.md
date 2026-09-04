@@ -789,8 +789,10 @@ route is the only path that propagates them.
 Idempotency claim uses the same `_claim_or_replay_receipt_idempotency` helper
 as v1 — the `Idempotency-Key` header still drives receipt-level replay
 protection. Sample-level identity is governed by `uuid` via the
-`(owner_id, source_uuid) WHERE source_uuid IS NOT NULL` partial unique index
-on the v1 dedicated tables and `source_record_uid` on `canonical_observations`.
+`(owner_id, source_uuid, time) WHERE source_uuid IS NOT NULL` partial
+unique index on the v1 dedicated tables (TimescaleDB hypertables require
+the partition column `time` in every unique index) and `source_record_uid`
+on `canonical_observations`.
 
 ### Error cases
 
