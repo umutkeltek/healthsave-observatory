@@ -151,7 +151,7 @@ async def lifespan(a: FastAPI):
     # reads off app.state first; an explicit attribute beats falling
     # through to the lazy module-level cache, and the assertion below
     # catches any future regression that drops this line.
-    a.state.apple_health_plugin = _load_apple_health_plugin()
+    a.state.apple_health_plugin = ingest._load_apple_health_plugin()
     log.info(
         "Apple Health plugin primed at lifespan: %s",
         type(a.state.apple_health_plugin).__name__,
