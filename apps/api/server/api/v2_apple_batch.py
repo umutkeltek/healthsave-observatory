@@ -74,11 +74,11 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from compat_v1.models import BatchPayload  # noqa: F401  (used by sibling v1 tests)
-from normalization import normalize_apple_batch
+from normalization import apple_wire_metric, normalize_apple_batch
 from plugin_sdk import SDK_VERSION
 from storage.defaults import observation_repository
 from storage.timescale.measurements import (
@@ -149,18 +149,32 @@ _UUID_RE = re.compile(
 
 
 class V2Sample(BaseModel):
-    """Per-sample dict for the v2 wire. Loose ``extra='allow'`` so future
-    additive fields don't break shipped v2 clients (same forward-compat
-    posture the v1 route has)."""
+    """Per-sample dict for the v2 wire — the transport envelope.
+
+    Field-level validation here covers FORMAT only (UUID shape, ISO
+    strings, tz/motion ranges) for whatever keys the sample carries.
+    Which keys a sample MUST carry is a function of the batch's metric —
+    HealthKit's seven emission families legitimately differ (anchored
+    quantity samples carry uuid/startDate/endDate/unit; HKStatistics
+    aggregates carry date+qty only; workouts, sleep, ECG and medication
+    carry no qty/unit). Enforcing one family's shape on all of them
+    422'd six of seven families deterministically — a Law-6 wedge for
+    every frozen client. The metric-keyed semantic gate lives in
+    ``V2AppleBatchPayload._sample_contract`` where the ontology answers
+    which contract applies.
+
+    Loose ``extra='allow'`` so future additive fields don't break
+    shipped v2 clients (same forward-compat posture the v1 route has).
+    """
 
     model_config = ConfigDict(extra="allow")
 
-    uuid: str = Field(min_length=36, max_length=36)
-    startDate: str
-    endDate: str
-    qty: float | int
-    unit: str = Field(min_length=1, max_length=64)
-    source: str = Field(min_length=1)
+    uuid: str | None = Field(default=None, min_length=36, max_length=36)
+    startDate: str | None = Field(default=None)
+    endDate: str | None = Field(default=None)
+    qty: float | int | None = Field(default=None)
+    unit: str | None = Field(default=None, max_length=64)
+    source: str | None = Field(default=None)
     tzOffsetMinutes: int | None = Field(default=None)
     motionContext: str | None = Field(default=None)
     # Optional passthroughs used by sleep/workout/ECG — we don't enforce
@@ -174,18 +188,32 @@ class V2Sample(BaseModel):
 
     @field_validator("uuid")
     @classmethod
-    def _validate_uuid(cls, v: str) -> str:
-        if not _UUID_RE.match(v):
+    def _validate_uuid(cls, v: str | None) -> str | None:
+        if v is not None and not _UUID_RE.match(v):
             raise ValueError("uuid must be a valid RFC4122 UUID string")
         return v
 
-    @field_validator("startDate", "endDate", mode="before")
+    @field_validator("startDate", "endDate", "start", "end", "date", mode="before")
     @classmethod
     def _require_iso(cls, v: Any) -> Any:
         # Lenient parser: accept any string the underlying normalize path can
         # handle; reject non-strings outright.
-        if not isinstance(v, str) or not v.strip():
+        if v is not None and (not isinstance(v, str) or not v.strip()):
             raise ValueError("must be a non-empty ISO-8601 string")
+        return v
+
+    @field_validator("unit")
+    @classmethod
+    def _validate_unit_shape(cls, v: str | None) -> str | None:
+        if v is not None and not v.strip():
+            raise ValueError("unit must be a non-empty string")
+        return v
+
+    @field_validator("source")
+    @classmethod
+    def _validate_source_shape(cls, v: str | None) -> str | None:
+        if v is not None and not v.strip():
+            raise ValueError("source must be a non-empty string")
         return v
 
     @field_validator("tzOffsetMinutes")
@@ -231,14 +259,26 @@ class V2Deletion(BaseModel):
 class V2AppleBatchPayload(BaseModel):
     """Wire model for ``POST /api/v2/apple/batch``.
 
-    The schema is additive over v1: ``schema_version=2``, every sample
-    carries ``uuid``/``startDate``/``endDate``/``qty``/``unit``/``source``,
-    optional ``tzOffsetMinutes`` + ``motionContext``, and a top-level
-    ``deletions`` array.
+    The schema is additive over v1: ``schema_version=2``, samples carry
+    the identity-aware keys Eric's longitudinal engine needs
+    (``uuid``/``startDate``/``endDate``/``unit``/``tzOffsetMinutes``/
+    ``motionContext``), and a top-level ``deletions`` array propagates
+    HealthKit's delete-and-reinsert revisions.
 
     ``model_config = ConfigDict(extra='allow')`` keeps the route
     forward-compatible for v2.x additive keys; unknown fields are ignored
     the same way v1 ignores unknown sample keys.
+
+    Two-layer validation, deliberately split:
+
+    * ``V2Sample`` field validators — FORMAT of whatever keys are
+      present (UUID shape, non-empty strings, tz/motion domains).
+    * ``_sample_contract`` below — WHICH keys must be present, decided
+      per sample by its emission family and per metric by the ontology.
+      HealthKit emits seven shapes (anchored quantity, statistics
+      aggregates, workouts, sleep, ECG, medication, category events);
+      pinning one family's key set on all of them 422'd six of seven
+      families deterministically — a Law-6 wedge for frozen clients.
     """
 
     model_config = ConfigDict(extra="allow")
@@ -263,6 +303,94 @@ class V2AppleBatchPayload(BaseModel):
                 "Use POST /api/apple/batch for schema_version=1."
             )
         return v
+
+    @model_validator(mode="after")
+    def _sample_contract(self) -> "V2AppleBatchPayload":
+        """Metric-keyed semantic gates the field layer cannot see.
+
+        Identity gate (Eric's ask #6 — "sample uuid ... stable identity
+        makes resync idempotent by construction"): any sample that
+        declares an anchored shape (``startDate`` or ``start`` present)
+        MUST carry its HKSample ``uuid`` — the supersede machinery
+        (``mark_canonical_observations_superseded`` /
+        ``mark_v1_dedicated_superseded``) and the
+        ``(owner_id, source_uuid)`` partial unique index both key on it.
+        Statistics aggregates carry ``date`` only and legitimately have
+        no UUID, so the gate keys on the anchored-shape markers, not on
+        the metric name — robust to new metrics and to aggregate
+        deliveries of cumulative types.
+
+        Interval gate (Eric's ask #1 — RHR window identity): an anchored
+        sample must carry BOTH bounds; the end distinguishes a revision
+        from a duplicate.
+
+        Unit gate (Eric's ask #3 — "ours refuses unknown units"): when a
+        sample declares ``unit`` and the metric resolves to an ontology
+        quantity definition, the unit must be in that metric's
+        ``allowed_units`` (HealthKit ``unitString`` spellings included).
+        Unknown unit is deterministic → 422, never a silent guess.
+        Samples without ``unit`` (HKStatistics aggregates) fall through
+        to the normalizer's canonical-unit fallback — the statistics
+        query unit equals the metric's canonical unit by construction
+        (HealthTypes.swift reads every cumulative type in its canonical
+        unit).
+        """
+        metric_def = apple_wire_metric(self.metric.strip())
+        for idx, sample in enumerate(self.samples):
+            anchored = sample.startDate is not None or sample.start is not None
+            if anchored and sample.uuid is None:
+                raise ValueError(
+                    f"samples[{idx}].uuid missing: anchored samples "
+                    "(startDate/start present) must carry the HKSample UUID "
+                    "so delete-and-reinsert revisions stay supersedeable"
+                )
+            if sample.uuid is not None and not anchored:
+                raise ValueError(
+                    f"samples[{idx}].startDate missing: uuid-bearing samples "
+                    "must carry startDate (or legacy start) — an identity "
+                    "without an interval is unmatchable"
+                )
+            if anchored:
+                has_bounds = (
+                    sample.endDate is not None if sample.startDate is not None else sample.end is not None
+                )
+                if not has_bounds:
+                    bound = "endDate" if sample.startDate is not None else "end"
+                    raise ValueError(
+                        f"samples[{idx}].{bound} missing: anchored samples "
+                        "must carry both interval bounds (the end bound is "
+                        "what distinguishes a revision from a duplicate)"
+                    )
+            if metric_def is not None and metric_def.allowed_units:
+                # Eric's ask #3 — "a server that guesses a unit corrupts data
+                # silently, so ours refuses instead". Anchored quantity
+                # samples (startDate/start present, so qty is a measured
+                # value in some unit) MUST declare their unit, and it must be
+                # in the metric's ontology allowed_units (HealthKit
+                # unitString spellings included via the 2026.09.0 ontology
+                # revision). Unknown unit is deterministic → 422.
+                #
+                # Date-only HKStatistics aggregates are exempt: the
+                # statistics query reads every cumulative type in the
+                # metric's canonical unit by construction
+                # (HealthTypes.swift), so the normalizer's canonical-unit
+                # fallback is exact, and demanding the key would wedge the
+                # committed wire which never sends it on aggregates.
+                if anchored and sample.qty is not None and sample.unit is None:
+                    raise ValueError(
+                        f"samples[{idx}].unit missing: anchored quantity samples "
+                        f"(qty present) for metric {self.metric!r} must declare "
+                        f"their unit; allowed: {sorted(metric_def.allowed_units)}"
+                    )
+                if (
+                    sample.unit is not None
+                    and sample.unit not in metric_def.allowed_units
+                ):
+                    raise ValueError(
+                        f"samples[{idx}].unit {sample.unit!r} is not allowed for "
+                        f"metric {self.metric!r}; allowed: {sorted(metric_def.allowed_units)}"
+                    )
+        return self
 
 
 
@@ -335,8 +463,11 @@ async def v2_apple_batch(
     # Convert Pydantic samples to plain dicts so downstream code (which is
     # already written for v1's free-form dict[]) doesn't need to learn
     # V2Sample. Extra keys on each sample pass through verbatim because we
-    # use model_dump.
-    samples = [s.model_dump(exclude_none=False) for s in parsed.samples]
+    # use model_dump. ``exclude_none`` preserves the wire's absence
+    # semantics: keys a family doesn't carry stay absent instead of
+    # materializing as explicit ``null`` in the audit JSONB and in every
+    # downstream ``sample.get(...)`` read.
+    samples = [s.model_dump(exclude_none=True) for s in parsed.samples]
     deletion_uuids = [d.uuid for d in parsed.deletions]
 
     sample_min_at, sample_max_at = _sample_window_from_request(request, samples)

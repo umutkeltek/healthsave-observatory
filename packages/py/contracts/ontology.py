@@ -160,7 +160,7 @@ class MetricDefinition(V2Model):
         return self
 
 
-ONTOLOGY_VERSION: OntologyVersion = "2026.08.0"
+ONTOLOGY_VERSION: OntologyVersion = "2026.09.0"
 
 DEFAULT_FUSION = FusionPolicy(
     strategy="ranked_source",
@@ -245,6 +245,7 @@ _QUANTITY: list[MetricDefinition] = [
         "Heart Rate",
         "vital",
         "bpm",
+        allowed=["bpm", "count/min"],
         lo=20,
         hi=240,
         loinc="8867-4",
@@ -255,6 +256,7 @@ _QUANTITY: list[MetricDefinition] = [
         "Resting Heart Rate",
         "vital",
         "bpm",
+        allowed=["bpm", "count/min"],
         lo=20,
         hi=140,
         kind="summary",
@@ -266,6 +268,7 @@ _QUANTITY: list[MetricDefinition] = [
         "Walking Heart Rate",
         "vital",
         "bpm",
+        allowed=["bpm", "count/min"],
         lo=40,
         hi=200,
         kind="summary",
@@ -286,6 +289,7 @@ _QUANTITY: list[MetricDefinition] = [
         "Heart Rate Recovery (1 min)",
         "vital",
         "bpm",
+        allowed=["bpm", "count/min"],
         lo=0,
         hi=100,
         kind="summary",
@@ -308,6 +312,7 @@ _QUANTITY: list[MetricDefinition] = [
         "VO2 Max",
         "cardio",
         "ml/kg/min",
+        allowed=["ml/kg/min", "ml/kg*min"],
         lo=10,
         hi=90,
         kind="summary",
@@ -330,6 +335,7 @@ _QUANTITY: list[MetricDefinition] = [
         "Respiratory Rate",
         "vital",
         "breaths/min",
+        allowed=["breaths/min", "count/min"],
         lo=4,
         hi=60,
     ),
@@ -588,7 +594,14 @@ _QUANTITY: list[MetricDefinition] = [
         kind="daily_total",
         rollup="sum",
     ),
-    _q("activity.physical_effort", "physical_effort", "Physical Effort", "activity", "kcal/kg/hr"),
+    _q(
+        "activity.physical_effort",
+        "physical_effort",
+        "Physical Effort",
+        "activity",
+        "kcal/kg/hr",
+        allowed=["kcal/kg/hr", "kcal/(kg*hr)"],
+    ),
     _q(
         "activity.workout_effort_score",
         "workout_effort_score",
@@ -686,6 +699,7 @@ _QUANTITY: list[MetricDefinition] = [
         "mobility",
         "cm",
         kind="summary",
+        allowed=["cm", "m"],
     ),
     _q(
         "mobility.running_ground_contact_time",
@@ -733,7 +747,15 @@ _QUANTITY: list[MetricDefinition] = [
     ),
     # Cycling & sport speeds
     _q("cycling.speed", "cycling_speed", "Cycling Speed", "activity", "m/s", kind="summary"),
-    _q("cycling.cadence", "cycling_cadence", "Cycling Cadence", "activity", "rpm", kind="summary"),
+    _q(
+        "cycling.cadence",
+        "cycling_cadence",
+        "Cycling Cadence",
+        "activity",
+        "rpm",
+        kind="summary",
+        allowed=["rpm", "count/min"],
+    ),
     _q("cycling.power", "cycling_power", "Cycling Power", "activity", "W", kind="summary"),
     _q(
         "cycling.functional_threshold_power",
@@ -781,6 +803,7 @@ _QUANTITY: list[MetricDefinition] = [
         "Body Mass Index",
         "body",
         "kg/m^2",
+        allowed=["kg/m^2", "count"],
         lo=5,
         hi=100,
         kind="summary",
@@ -967,6 +990,7 @@ _QUANTITY: list[MetricDefinition] = [
         "UV Exposure",
         "environment",
         "index",
+        allowed=["index", "count"],
         lo=0,
         hi=20,
         rollup="max",
@@ -977,6 +1001,7 @@ _QUANTITY: list[MetricDefinition] = [
         "Electrodermal Activity",
         "environment",
         "uS",
+        allowed=["uS", "S"],
     ),
     _q(
         "environment.underwater_depth",

@@ -11,6 +11,7 @@ from .apple import (
     NORMALIZER_VERSION,
     NormalizeResult,
     Rejection,
+    apple_wire_metric,
     mapped_apple_wire_metrics,
     normalize_apple_batch,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "NORMALIZER_VERSION",
     "NormalizeResult",
     "Rejection",
+    "apple_wire_metric",
     "mapped_apple_wire_metrics",
     "normalize_apple_batch",
 ]

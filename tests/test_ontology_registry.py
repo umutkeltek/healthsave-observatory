@@ -52,7 +52,7 @@ def test_all_metrics_returns_registry_contents() -> None:
     metrics = all_metrics()
     metric_ids = {metric.id for metric in metrics}
 
-    assert ONTOLOGY_VERSION == "2026.08.0"
+    assert ONTOLOGY_VERSION == "2026.09.0"
     assert len(metrics) >= 18
     assert "vital.heart_rate" in metric_ids
     assert "sleep.stage" in metric_ids

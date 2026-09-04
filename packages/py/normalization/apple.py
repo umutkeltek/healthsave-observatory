@@ -103,6 +103,19 @@ def mapped_apple_wire_metrics() -> set[str]:
     return set(_WIRE_INDEX)
 
 
+def apple_wire_metric(wire: str) -> MetricDefinition | None:
+    """Resolve an Apple wire metric name to its canonical definition.
+
+    Public seam for wire-level gates that need the ontology's per-metric
+    contract (the v2 ingest route's unit gate reads ``allowed_units``,
+    Plan 2026-09-03 Slice 2). Returns None for wire names the ontology
+    does not know — callers stay lenient on unmapped metrics, exactly
+    like ``normalize_apple_batch`` (unmapped batches become per-sample
+    rejections, never a route-level 422).
+    """
+    return _WIRE_INDEX.get(wire)
+
+
 @dataclass
 class Rejection:
     """One sample the normalizer could not turn into an observation."""

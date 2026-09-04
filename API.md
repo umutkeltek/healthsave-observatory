@@ -725,15 +725,21 @@ sourced from `HKAnchoredObjectQuery`'s `HKDeletedObject` stream.
 }
 ```
 
-### Sample-key set (pinned by `tests/contract/api_v2/test_v2_apple_batch_contract.py`)
+### Sample-key set (pinned by `tests/contract/v2/test_v2_apple_batch.py`)
+
+Validation is split in two layers: a **transport envelope** (field formats —
+UUID shape, non-empty strings, tz/motion domains) and a **metric-keyed
+semantic gate** driven by the ontology. The gates key on the sample's
+*emission family*, not on the metric name, because HealthKit emits several
+legitimate shapes per batch type:
 
 | Key | Type | Required | Notes |
 |---|---|---|---|
-| `uuid` | UUID string | required (quantity / category / workout / ECG); optional for medication | Stable identity for the sample's lifetime; supersedes by deletion |
-| `startDate` | ISO-8601 with offset | required | Parser also accepts `start` / legacy `date` for migration window |
-| `endDate` | ISO-8601 with offset | required for intervals; falls back to `startDate` for instantaneous | |
+| `uuid` | UUID string | required on anchored samples (`startDate`/`start` present) | Stable HKSample identity; supersedes by deletion. HKStatistics aggregates (`date`-only) legitimately have none |
+| `startDate` | ISO-8601 with offset | required on anchored samples | Legacy `start` accepted for the migration window |
+| `endDate` | ISO-8601 with offset | required on anchored samples | The end bound is what distinguishes a RHR revision from a duplicate |
 | `qty` | number | required (quantity) | |
-| `unit` | UCUM (`HKUnit.unitString`) | required | Validated against the metric's allowed-units list; unknown unit → `422` (deterministic, frozen-client-safe) |
+| `unit` | UCUM (`HKUnit.unitString`) | required when `qty` + anchored | Validated against the metric's `allowed_units` (HealthKit spellings included); unknown unit → `422` (deterministic, frozen-client-safe). Date-only aggregates fall back to the exact canonical unit |
 | `tzOffsetMinutes` | int (-1440…+1440) | optional | Server stamps the offset on the raw payload + the canonical row's provenance |
 | `motionContext` | enum | optional (HR only) | `sedentary` / `active` / `notSet`; omitted means "not present on the sample" |
 | `source` | string | required | |
@@ -790,12 +796,14 @@ on the v1 dedicated tables and `source_record_uid` on `canonical_observations`.
 
 | Condition | Status | Body shape |
 |---|---|---|
-| `schema_version` is present and ≠ 2 | `422` | `{detail: "...bad_schema_version..."}` |
-| Sample missing `uuid` (quantity / category / workout / ECG) | `422` | `{detail: "...missing_uuid..."}` |
-| Sample `unit` not in metric's allowed-units list | `422` | `{detail: "...unknown_unit..."}` |
-| Sample `motionContext` not in `{sedentary, active, notSet}` | `422` | `{detail: "...bad_motion_context..."}` |
-| `tzOffsetMinutes` outside -1440…+1440 | `422` | `{detail: "...bad_tz..."}` |
-| `startDate` malformed or missing | `422` | `{detail: "...bad_start_date..."}` |
+| `schema_version` is present and ≠ 2 | `422` | `{detail: "...requires schema_version=2..."}` |
+| Anchored sample missing `uuid` | `422` | `{detail: "...uuid missing: anchored samples..."}` |
+| Anchored sample missing an interval bound | `422` | `{detail: "...endDate missing..."}` / `{detail: "...end missing..."}` |
+| Anchored quantity sample missing `unit` | `422` | `{detail: "...unit missing: anchored quantity samples..."}` |
+| Sample `unit` not in metric's allowed-units list | `422` | `{detail: "...unit ... is not allowed for metric ..."}` |
+| Sample `motionContext` not in `{sedentary, active, notSet}` | `422` | `{detail: "...motionContext must be one of..."}` |
+| `tzOffsetMinutes` outside -1440…+1440 | `422` | `{detail: "...tzOffsetMinutes must be between..."}` |
+| Any time field non-string / empty | `422` | `{detail: "...non-empty ISO-8601 string..."}` |
 
 Deterministic bad-payload writes return `422`, never `5xx` — clients treat
 5xx as retryable forever (workspace CLAUDE.md Error semantics), so a
