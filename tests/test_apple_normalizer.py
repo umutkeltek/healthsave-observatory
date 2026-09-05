@@ -307,3 +307,66 @@ def test_capture_context_stamps_per_sample_provenance() -> None:
     # The batch-level provenance is shared state; stamping must not leak.
     assert _PROV.tz_offset_minutes is None
     assert _PROV.motion_context is None
+
+
+def _percent_batch(metric: str, sample: dict) -> dict:
+    return {
+        "schema_version": 2,
+        "metric": metric,
+        "batch_index": 0,
+        "total_batches": 1,
+        "samples": [sample],
+    }
+
+
+def test_percent_family_v1_fraction_without_unit_becomes_per_hundred() -> None:
+    """v1 wire: no ``unit`` key, HealthKit fraction (0.94) → canonical 94 %."""
+    res = normalize_apple_batch(
+        _percent_batch(
+            "oxygen_saturation",
+            {"date": "2026-08-31T02:12:30.000Z", "qty": 0.94, "source": "Apple Watch"},
+        ),
+        source_id=_SOURCE,
+        provenance=_PROV,
+    )
+    assert res.accepted == 1
+    obs = res.observations[0]
+    assert obs.metric_id == "vital.blood_oxygen"
+    assert obs.value.value == 94.0
+    assert obs.value.unit == "%"
+
+
+def test_percent_family_declared_percent_is_never_rescaled() -> None:
+    """v2 wire: ``unit: "%"`` declared means UCUM per-hundred — the server
+    never second-guesses a declared unit (Eric: refuse to guess)."""
+    for qty in (94, 0.94):
+        res = normalize_apple_batch(
+            _percent_batch(
+                "oxygen_saturation",
+                {
+                    "uuid": "D2C70000-0000-4000-8000-000000000004",
+                    "startDate": "2026-08-31T02:12:30.000Z",
+                    "endDate": "2026-08-31T02:12:30.000Z",
+                    "qty": qty,
+                    "unit": "%",
+                    "source": "Apple Watch",
+                },
+            ),
+            source_id=_SOURCE,
+            provenance=_PROV,
+        )
+        assert res.accepted == 1
+        assert res.observations[0].value.value == float(qty)
+
+
+def test_percent_rule_leaves_non_percent_metrics_alone() -> None:
+    res = normalize_apple_batch(
+        _percent_batch(
+            "heart_rate",
+            {"date": "2026-08-31T02:12:30.000Z", "qty": 0.5, "source": "Apple Watch"},
+        ),
+        source_id=_SOURCE,
+        provenance=_PROV,
+    )
+    assert res.accepted == 1
+    assert res.observations[0].value.value == 0.5

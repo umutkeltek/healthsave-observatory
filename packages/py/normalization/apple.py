@@ -214,7 +214,17 @@ def _build_value(
         qty = _to_float(_first(sample, *_VALUE_KEYS))
         if qty is None:
             return None, "missing_value"
-        unit = str(_first(sample, "unit") or metric.canonical_unit)
+        declared_unit = _first(sample, "unit")
+        unit = str(declared_unit or metric.canonical_unit)
+        if declared_unit is None and metric.canonical_unit == "%" and 0 <= qty <= 1:
+            # Percent family, v1 wire: the sample carries NO unit key and
+            # HealthKit's ``percent`` unit is a fraction (0.94 for 94 %). The
+            # v2 wire declares ``unit: "%"`` and sends per-hundred (UCUM), so
+            # this rule keys on the ABSENCE of a declared unit — it never
+            # second-guesses a declared "%". Same rule the v1 blood_oxygen
+            # mapper has always applied (``normalize_blood_oxygen``), now
+            # uniform across the percent family (audit 2026-09-04).
+            qty = qty * 100
         return (
             QuantityValue(
                 type="quantity",
