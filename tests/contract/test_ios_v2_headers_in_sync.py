@@ -27,7 +27,9 @@ from __future__ import annotations
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-IOS_FIXTURE = REPO_ROOT.parent / "ios_app" / "Tests" / "HealthSyncTests" / "Fixtures" / "v2-ios-headers.json"
+IOS_FIXTURE = (
+    REPO_ROOT.parent / "ios_app" / "Tests" / "HealthSyncTests" / "Fixtures" / "v2-ios-headers.json"
+)
 DATAHUB_CANONICAL = REPO_ROOT / "contracts" / "v2-ios-headers.json"
 
 

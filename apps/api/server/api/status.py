@@ -43,11 +43,18 @@ async def apple_status(request: Request, session: AsyncSession = Depends(get_ses
     # the same numbers. `request: Request` is excluded from the OpenAPI schema.
     owner_id = resolve_owner_id(request.headers.get(OWNER_HEADER))
     queries = {
-        "heart_rate": "SELECT count(*), min(time), max(time) FROM heart_rate WHERE status = 'active'",
+        "heart_rate": (
+            "SELECT count(*), min(time), max(time) FROM heart_rate WHERE status = 'active'"
+        ),
         "hrv": "SELECT count(*), min(time), max(time) FROM hrv WHERE status = 'active'",
-        "blood_oxygen": "SELECT count(*), min(time), max(time) FROM blood_oxygen WHERE status = 'active'",
+        "blood_oxygen": (
+            "SELECT count(*), min(time), max(time) FROM blood_oxygen WHERE status = 'active'"
+        ),
         "daily_activity": "SELECT count(*), min(date)::text, max(date)::text FROM daily_activity",
-        "sleep_sessions": "SELECT count(*), min(start_time), max(start_time) FROM sleep_sessions WHERE status = 'active'",
+        "sleep_sessions": (
+            "SELECT count(*), min(start_time), max(start_time) FROM sleep_sessions "
+            "WHERE status = 'active'"
+        ),
         "workouts": "SELECT count(*), min(start_time), max(start_time) FROM workouts",
         "quantity_samples": "SELECT count(*), min(time), max(time) FROM quantity_samples",
     }

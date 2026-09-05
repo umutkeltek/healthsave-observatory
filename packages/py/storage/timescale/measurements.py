@@ -405,9 +405,7 @@ async def _ingest_dedicated(
     if legacy_rows:
         # Dedup within batch on the legacy (time, device_id, owner_id) tuple.
         legacy_conflict_cols = list(spec["conflict"]) + ["owner_id"]
-        rows_leg, dedup_leg = _dedupe_rows_for_upsert(
-            legacy_rows, legacy_conflict_cols, metric
-        )
+        rows_leg, dedup_leg = _dedupe_rows_for_upsert(legacy_rows, legacy_conflict_cols, metric)
         dedup_count += dedup_leg
         conflict_sql = ", ".join(legacy_conflict_cols)
         columns = list(rows_leg[0].keys())
@@ -980,6 +978,8 @@ def sleep_session_rows(device_id: int, samples: list[dict]) -> list[dict]:
             }
         )
     return rows
+
+
 async def _upsert_sleep_session(session: AsyncSession, row: dict) -> int:
     row.setdefault("owner_id", str(DEFAULT_OWNER_ID))
     row.setdefault("source_id", None)

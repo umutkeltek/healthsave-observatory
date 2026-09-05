@@ -70,8 +70,6 @@ def main() -> int:
 
     sys.path.insert(0, str(REPO_ROOT / "apps" / "api"))
     sys.path.insert(0, str(REPO_ROOT / "packages" / "py"))
-    from contracts import ALL_MODELS
-
     # The ingest wire models live in the route module (not contracts/ —
     # contracts never imports server code), but they are load-bearing
     # shapes Eric's engine builds against. Emit them as standalone schema
@@ -84,6 +82,8 @@ def main() -> int:
         V2Deletion,
         V2Sample,
     )
+
+    from contracts import ALL_MODELS
 
     WIRE_MODELS = (V2AppleBatchPayload, V2Sample, V2Deletion)
 

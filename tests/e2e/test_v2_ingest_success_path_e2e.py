@@ -13,8 +13,6 @@ Skipped unless ``E2E_BASE_URL`` (HTTP surface) and ``E2E_DATABASE_URL``
 (direct Postgres assertions) are set. Drive with ``make e2e``.
 """
 
-
-
 from __future__ import annotations
 
 import json
@@ -69,7 +67,9 @@ def _v2_heart_rate_batch(uuid: str, *, deletions: list[dict] | None = None) -> d
     }
 
 
-def _v2_heart_rate_batch_with_offset(uuid: str, start: datetime, *, deletions: list[dict] | None = None) -> dict:
+def _v2_heart_rate_batch_with_offset(
+    uuid: str, start: datetime, *, deletions: list[dict] | None = None
+) -> dict:
     """Test fixture with a caller-provided start time so e2e convergence
     tests don't collide on the legacy partial unique index ``uq_heart_rate``
     (which sits on (time, device_id, owner_id) for v1 backward-compat).
@@ -98,6 +98,7 @@ def _v2_heart_rate_batch_with_offset(uuid: str, start: datetime, *, deletions: l
         "deletions": deletions or [],
     }
 
+
 def test_v2_success_path_canonical_projection_supersede_and_capture_context() -> None:
     """One v2 batch + one v2 deletion exercise the whole pipeline:
 
@@ -116,7 +117,9 @@ def test_v2_success_path_canonical_projection_supersede_and_capture_context() ->
         assert client.get("/ready").json().get("database") == "ok"
 
         # 1) ingest the v2 batch
-        resp = client.post("/api/v2/apple/batch", json=_v2_heart_rate_batch(uid), headers=_headers())
+        resp = client.post(
+            "/api/v2/apple/batch", json=_v2_heart_rate_batch(uid), headers=_headers()
+        )
         assert resp.status_code in (200, 201, 202), f"{resp.status_code} {resp.text[:400]}"
         receipt = resp.json()
         assert receipt["status"] == "processed"
@@ -143,8 +146,7 @@ def test_v2_success_path_canonical_projection_supersede_and_capture_context() ->
 
             # 3) projected v1 dedicated row carries source_uuid
             dedicated = await conn.fetchrow(
-                "SELECT status FROM heart_rate "
-                "WHERE owner_id = $1 AND source_uuid = $2",
+                "SELECT status FROM heart_rate WHERE owner_id = $1 AND source_uuid = $2",
                 OWNER,
                 uid,
             )
@@ -315,11 +317,12 @@ async def test_v2_add_then_delete_then_delete_again_converges() -> None:
             sample_uuid,
         )
         heart_rate_count = await conn.fetchval(
-            "SELECT COUNT(*) FROM heart_rate "
-            "WHERE source_uuid = $1 AND status = 'superseded'",
+            "SELECT COUNT(*) FROM heart_rate WHERE source_uuid = $1 AND status = 'superseded'",
             sample_uuid,
         )
         assert canon_count == 1, f"expected one superseded canonical row, got {canon_count}"
-        assert heart_rate_count == 1, f"expected one superseded heart_rate row, got {heart_rate_count}"
+        assert heart_rate_count == 1, (
+            f"expected one superseded heart_rate row, got {heart_rate_count}"
+        )
     finally:
         await conn.close()

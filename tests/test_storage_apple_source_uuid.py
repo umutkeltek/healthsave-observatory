@@ -83,16 +83,13 @@ class _RecordingSession:
         if "INSERT INTO" in sql:
             # Discover row count from the highest positional bind suffix.
             rows_in_this_insert = 1
-            for key in (params or {}):
+            for key in params or {}:
                 for suffix in key.split("_"):
                     if suffix.isdigit():
-                        rows_in_this_insert = max(
-                            rows_in_this_insert, int(suffix) + 1
-                        )
+                        rows_in_this_insert = max(rows_in_this_insert, int(suffix) + 1)
                         break
             rows = [
-                {"inserted_new": bool(self.insert_flags.pop(0))}
-                for _ in range(rows_in_this_insert)
+                {"inserted_new": bool(self.insert_flags.pop(0))} for _ in range(rows_in_this_insert)
             ]
             return _Result(rows)
         return _Result()
@@ -121,9 +118,7 @@ async def test_legacy_samples_use_time_device_owner_conflict():
     assert "ON CONFLICT (time, device_id, owner_id)" in sql, (
         f"legacy arm must conflict on (time, device_id, owner_id); got: {sql}"
     )
-    assert "source_uuid" not in sql, (
-        "legacy arm must not address source_uuid in ON CONFLICT"
-    )
+    assert "source_uuid" not in sql, "legacy arm must not address source_uuid in ON CONFLICT"
     assert result.accepted == 2
     assert result.rejected == 0
 
@@ -158,9 +153,9 @@ async def test_uuid_bearing_samples_use_identity_conflict():
         f"partial predicate; got: {sql}"
     )
     params = insert_calls[0][1]
-    assert any(
-        v == "d2c70000-0000-4000-8000-000000000001" for v in params.values()
-    ), f"expected source_uuid in bind params; got keys: {sorted(params.keys())}"
+    assert any(v == "d2c70000-0000-4000-8000-000000000001" for v in params.values()), (
+        f"expected source_uuid in bind params; got keys: {sorted(params.keys())}"
+    )
     assert result.accepted == 1
     assert result.rejected == 0
 
@@ -202,11 +197,8 @@ async def test_mixed_batch_splits_into_two_inserts():
     )
     sqls = [c[0] for c in insert_calls]
     assert any(
-        "ON CONFLICT (owner_id, source_uuid, time) WHERE source_uuid IS NOT NULL" in s
-        for s in sqls
-    ), (
-        "identity arm must appear in mixed batch"
-    )
+        "ON CONFLICT (owner_id, source_uuid, time) WHERE source_uuid IS NOT NULL" in s for s in sqls
+    ), "identity arm must appear in mixed batch"
     assert any("ON CONFLICT (time, device_id, owner_id)" in s for s in sqls), (
         "legacy arm must appear in mixed batch"
     )
@@ -239,9 +231,7 @@ async def test_step_count_ignores_uuid():
         ],
     )
 
-    assert result.accepted == 2, (
-        f"both samples on distinct dates must be accepted; got: {result}"
-    )
+    assert result.accepted == 2, f"both samples on distinct dates must be accepted; got: {result}"
     insert_calls = [c for c in session.calls if "INSERT INTO" in c[0]]
     assert insert_calls, "expected at least one INSERT for step_count"
     for sql, _ in insert_calls:

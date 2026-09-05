@@ -35,8 +35,7 @@ def _v2_route_path() -> str:
         if hasattr(route, "path") and route.path == "/api/v2/apple/batch":
             return route.path
     raise AssertionError(
-        "POST /api/v2/apple/batch is not registered. "
-        "Slice 2 of Plan 2026-09-03 must add it."
+        "POST /api/v2/apple/batch is not registered. Slice 2 of Plan 2026-09-03 must add it."
     )
 
 
