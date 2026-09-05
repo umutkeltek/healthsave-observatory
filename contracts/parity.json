@@ -1026,7 +1026,7 @@
     }
   },
   "wire_versions": {
-    "_comment": "Cross-repo wire-version ledger (Plan 2026-09-03). The v1 wire (POST /api/apple/batch) is frozen — Law 5 in workspace CLAUDE.md. The v2 wire (POST /api/v2/apple/batch, schema_version=2) shipped via Slices 1-5; iOS 1.7.0+ is the first build that emits v2 samples. Mirror discipline: byte-equal headers at ios_app/Tests/HealthSyncTests/Fixtures/v2-ios-headers.json (test_ios_v2_headers_in_sync.py).",
+    "_comment": "Cross-repo wire-version ledger (Plan 2026-09-03). The v1 wire (POST /api/apple/batch) is frozen — Law 5 in workspace CLAUDE.md. The v2 wire (POST /api/v2/apple/batch, schema_version=2) shipped via Slices 1-5; iOS 1.7.2+ is the first build that emits v2 samples (1.7.0 and 1.7.1 shipped the frozen v1 wire). Mirror discipline: byte-equal headers at ios_app/Tests/HealthSyncTests/Fixtures/v2-ios-headers.json (test_ios_v2_headers_in_sync.py).",
     "v1": "stable",
     "v2": "stable"
   }

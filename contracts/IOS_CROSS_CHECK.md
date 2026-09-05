@@ -339,27 +339,41 @@ v1 if the server returns 404/405 on the v2 route (`SyncEngine` slice-4 logic).
 }
 ```
 
-### v2 sample-key set (pinned by `tests/contract/api_v2/test_v2_apple_batch_contract.py`)
+### v2 sample-key set (pinned by `tests/contract/v2/test_v2_apple_batch.py` + `tests/contract/test_v2_requests_accepted.py`)
+
+Validation is split in two layers: a transport envelope (field FORMAT) and a
+metric-keyed semantic gate driven by the ontology. The gate keys on the
+sample's *emission family*: anchored `HKSample`s (quantity, sleep, workouts,
+ECG, medication, category events) carry identity; date-only aggregates
+(`HKStatistics` daily totals, activity summaries) legitimately do not.
 
 | Key | Type | Required | Notes |
 |---|---|---|---|
-| `uuid` | UUID string | required (quantity/category/workout/ECG); optional for medication | Stable identity for the sample's lifetime |
-| `startDate` | ISO-8601 with offset | required | Replaces v1's `date`/`start`; server accepts `start`/`startDate`/legacy `date` for migration window |
-| `endDate` | ISO-8601 with offset | required for intervals; same as `startDate` for instantaneous | Server falls back to `startDate` if missing on a quantity sample |
-| `qty` | number | required (quantity) | Same as v1 |
-| `unit` | UCUM/`HKUnit.unitString` | required | Per-sample; server validates against the metric's allowed-units list; unknown unit → **422** (deterministic, frozen-client-safe) |
-| `tzOffsetMinutes` | int (-1440…+1440) | optional | Server stamps the offset on the raw payload + the canonical row's provenance |
-| `motionContext` | enum string | optional, HR only | `sedentary` / `active` / `notSet`; omitted means "not present on the sample" |
-| `source` | string | required | Same as v1 |
+| `uuid` | UUID string | required on anchored samples (`startDate`/`start` present) | Stable `HKSample.uuid`; supersedes by deletion. Aggregates carry none |
+| `startDate` | ISO-8601 UTC (`Z`) | required on anchored samples | Local offset travels in `tzOffsetMinutes`; legacy `start` accepted |
+| `endDate` | ISO-8601 UTC (`Z`) | required on anchored samples | The end bound is what distinguishes an RHR revision from a duplicate |
+| `date` | ISO-8601 UTC (`Z`) | quantity samples + aggregates | Mirrors `startDate` on quantity samples so the body stays a strict superset of v1 (404/405 fallback re-posts the same bytes) |
+| `qty` | number | required (quantity) | Percent family is UCUM per-hundred (`94`, never HealthKit's `0.94`) |
+| `unit` | UCUM / `HKUnit.unitString` | required when `qty` + anchored | Validated against the metric's `allowed_units`; unknown unit → **422**. Aggregates fall back to the exact canonical unit |
+| `tzOffsetMinutes` | int (-1440…+1440) | on every anchored sample | `HKMetadataKeyTimeZone` when present, else device offset at `startDate`; persisted in canonical provenance |
+| `motionContext` | enum | optional (HR only) | `sedentary` / `active` / `notSet`; omitted means "not on the sample" |
+| `source` | string | required on quantity/sleep/workout/medication/category | ECG samples carry none (matches the extractor) |
 
 ### v2 top-level keys
 
 | Key | Required | Notes |
 |---|---|---|
-| `schema_version` | optional (default `1`) | v2 route rejects anything ≠ 2 |
-| `deletions` | optional | `[{uuid}]`; marked `superseded` on `canonical_observations` + (if present) on v1 dedicated tables |
-| `device` | optional | Free-form `{name, model}` |
+| `schema_version` | **required**, must be `2` | Absent or ≠ 2 → **422** — an unversioned body is ambiguous and is refused, never assumed |
+| `metric` | required | Same enum as v1 |
+| `batch_index` / `total_batches` | required | Same semantics as v1 |
+| `samples` | required (may be `[]` on a deletions-only batch) | |
+| `deletions` | optional | `[{uuid}]`; marked `superseded` on `canonical_observations` + the v1 dedicated tables. A deletions-only page is posted as its own batch with `samples: []` |
+| `device` | optional | `{name, model}` |
 | `source_bundle_id` | optional | iOS sends `com.healthsave.ios` |
+
+One golden per emission family lives at `tests/fixtures/apple_healthsave_v2/`
+(byte-equal mirrors of the iOS owner goldens
+`ios_app/Tests/HealthSyncTests/Fixtures/v2_health_data_hub_*_batch.json`).
 
 ## v2 request headers
 
@@ -377,15 +391,18 @@ The v2 manifest is enforced three ways:
 
 ## v2 response shape
 
-Identical to v1 (`_delivery_receipt_response` in `server/api/ingest.py`).
-No client-visible shape change. The v2 route reuses the same builder.
+The v1 delivery receipt plus two additive keys: `wire_schema_version: 2`
+(echoed on every `processed` and `empty` response) and, on `processed`, a
+`deletions` block — `{received, canonical_superseded, v1_dedicated_superseded:
+{<table>: n}}`. iOS pins the receipt shape via `BackendResponseCorpusTests`;
+the v2 replay gate asserts `wire_schema_version` and the deletions counts.
 
-## Cross-check is enforced by
+Cross-check enforced by:
 
-1. `tests/contract/api_v2/test_v2_apple_batch_contract.py` — happy path, missing uuid, unknown unit, malformed tz, schema_version=1 (rejected), idempotency replay, deletion supersedes canonical, deletion supersedes v1 dedicated rows.
-2. `tests/contract/test_ios_v2_corpus_in_sync.py` — iOS v2 batch payloads are byte-mirrored at `tests/fixtures/apple_healthsave_v2/`.
-3. `tests/contract/test_ios_v2_headers_in_sync.py` — byte-equal mirror invariant on the header manifest.
-4. `V2HeaderContractTests.swift` (iOS) — the app's real upload request emits exactly the v2 manifest.
+1. `tests/contract/v2/test_v2_apple_batch.py` — schema_version required/≠2, identity + interval + unit gates, deletions shape, eight-family envelope, iOS-serializer round trip.
+2. `tests/contract/test_v2_requests_accepted.py` — every v2 golden validates and replays through the live handler to a `processed` receipt with `wire_schema_version: 2`.
+3. `tests/contract/test_ios_v2_corpus_in_sync.py` — the golden mirror is byte-equal to the iOS owner files.
+4. `tests/contract/test_ios_v2_headers_in_sync.py` — byte-equal mirror invariant on the header manifest; `V2HeaderContractTests.swift` (iOS) — the app's real v2 upload request emits exactly the v2 manifest (and the v1 request never carries the advisory header).
 
 ## Migration ownership (Slice 1)
 

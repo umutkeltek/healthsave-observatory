@@ -78,7 +78,7 @@ additive-only contract as every prior migration. Existing rows are untouched.
 `uuid` / `startDate` / `endDate` / `unit` / `tzOffsetMinutes` / `motionContext`
 per sample plus a top-level `deletions: [{uuid}]` array. The
 response shape is identical to v1. Shipped iOS binaries keep posting to
-`/api/apple/batch` unchanged; HealthSave 1.7.0+ defaults to v2 and falls
+`/api/apple/batch` unchanged; HealthSave 1.7.2+ defaults to v2 and falls
 back to v1 on `404`/`405` (no infinite retry).
 
 #### 3. RHR and other revision-via-delete metrics
@@ -91,7 +91,7 @@ as before.
 
 #### 4. Self-host dry-run (recommended before flipping 1.7.0 clients to v2)
 
-A developer device running a `HealthSave 1.7.0+` build that has been promoted
+A developer device running a `HealthSave 1.7.2+` build that has been promoted
 to v2 should send a v2 batch against the migrated instance. The minimal
 post-deploy check is:
 
@@ -114,7 +114,19 @@ self-host dry-run with a sample batch that includes `deletions`, also confirm
 the targeted UUIDs flipped from `active` to `superseded` (and only those — the
 route applies `WHERE status='active'`).
 
-#### 5. Android adoption — follow-up
+#### 5. Percent-family values — v2 sends per-hundred
+
+HealthKit's `percent` unit is a fraction (`0.94` for 94 %). The v2 wire declares
+`unit: "%"` and sends UCUM per-hundred (`94`), for every `%` metric (oxygen
+saturation, AFib burden, perfusion index, blood alcohol content, walking
+asymmetry / double-support / steadiness, body fat). The canonical store is
+per-hundred for both wires: unit-less v1 samples keep the legacy `≤ 1 → × 100`
+rule (the one `blood_oxygen` always had), a declared `%` is never rescaled.
+The legacy catch-all `quantity_samples` table stores wire values as sent, so a
+`%` metric there mixes fractions (v1-era rows) and per-hundred (v2-era rows);
+read `%` metrics from the v2 series API, or scale rows without a `unit` of `%`.
+
+#### 6. Android adoption — follow-up
 
 Android is **not** on the v2 wire yet (Slice 8 of Plan 2026-09-03). Android
 clients continue to use `/api/apple/batch` (v1) unchanged.

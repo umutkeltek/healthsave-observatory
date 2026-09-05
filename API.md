@@ -687,8 +687,8 @@ Example response:
 
 > **Status: additive over v1.** The v1 contract above is **frozen and unchanged**
 > (the shipped App Store HealthSave binary parses it byte-exact). The v2 route
-> is the destination for `HealthSave 1.7.0+` builds that ship the new wire
-> shape. Self-hosters do **not** need to migrate — the v2 route is added at
+> is the destination for `HealthSave 1.7.2+` builds that ship the new wire
+> shape (1.7.0 and 1.7.1 shipped the frozen v1 wire). Self-hosters do **not** need to migrate — the v2 route is added at
 > the URL layer with no v1 changes and no DB schema renames.
 
 Receives one HealthKit metric batch in the v2 wire format. The v2 wire carries
@@ -709,9 +709,10 @@ sourced from `HKAnchoredObjectQuery`'s `HKDeletedObject` stream.
   "device": { "name": "Apple Watch", "model": "Watch7,2" },
   "samples": [
     {
-      "uuid": "D2C7…-0000-4000-8000-000000000001",
-      "startDate": "2026-08-30T07:14:00-04:00",
-      "endDate":   "2026-08-30T07:14:00-04:00",
+      "uuid": "D2C70000-0000-4000-8000-000000000001",
+      "startDate": "2026-08-30T11:14:00.000Z",
+      "endDate":   "2026-08-30T11:14:00.000Z",
+      "date":      "2026-08-30T11:14:00.000Z",
       "qty": 52,
       "unit": "count/min",
       "tzOffsetMinutes": -240,
@@ -720,10 +721,25 @@ sourced from `HKAnchoredObjectQuery`'s `HKDeletedObject` stream.
     }
   ],
   "deletions": [
-    { "uuid": "D2C7…-0000-4000-8000-00000000007A" }
+    { "uuid": "D2C70000-0000-4000-8000-00000000007A" }
   ]
 }
 ```
+
+Timestamps are ISO-8601 UTC (`Z`) exactly as the iOS formatter emits them;
+the local offset travels separately in `tzOffsetMinutes`. `date` duplicates
+`startDate` on quantity samples so the v2 body stays a strict superset of the
+frozen v1 shape (the 404/405 fallback re-posts the same bytes to
+`/api/apple/batch`).
+
+**Example payloads for every emission family** live in
+`tests/fixtures/apple_healthsave_v2/` (byte-equal mirrors of the iOS goldens
+`ios_app/Tests/HealthSyncTests/Fixtures/v2_health_data_hub_*_batch.json`):
+heart rate (motion context + deletions), resting heart rate (interval
+window), oxygen saturation (percent family), body temperature, step count
+(daily aggregate), sleep stages, workouts, ECG, medication dose event,
+mindful session (category event) and activity summaries. They replay through
+the live handler in `tests/contract/test_v2_requests_accepted.py`.
 
 ### Sample-key set (pinned by `tests/contract/v2/test_v2_apple_batch.py`)
 
@@ -748,7 +764,7 @@ legitimate shapes per batch type:
 
 | Key | Required | Notes |
 |---|---|---|
-| `schema_version` | optional (default `1`) | v2 route **rejects anything ≠ 2** |
+| `schema_version` | **required**, must be `2` | Absent or ≠ 2 → `422`. A body without a version is ambiguous and is refused, never assumed |
 | `metric` | required | Same enum as v1 |
 | `batch_index` / `total_batches` | required | Same semantics as v1 |
 | `source_bundle_id` | optional | iOS sends `com.healthsave.ios` |
@@ -758,19 +774,46 @@ legitimate shapes per batch type:
 
 ### Response
 
-Identical to v1 (`_delivery_receipt_response` in `apps/api/server/api/ingest.py`).
-No client-visible shape change:
+The v1 delivery receipt (`_delivery_receipt_response` in
+`apps/api/server/api/ingest.py`) plus two additive keys — the wire version
+echoed back (Eric's "schema version in every delivery", both directions) and
+the per-table supersede counts for the batch's deletions:
 
 ```json
 { "status": "processed", "metric": "heart_rate", "batch": 0,
-  "total_batches": 1, "records": 1 }
+  "total_batches": 1, "records": 1,
+  "wire_schema_version": 2,
+  "deletions": {
+    "received": 1,
+    "canonical_superseded": 1,
+    "v1_dedicated_superseded": { "heart_rate": 1, "hrv": 0, "blood_oxygen": 0,
+                                 "body_temperature": 0, "sleep_sessions": 0 }
+  } }
 ```
+
+`status: "empty"` responses (no samples, no deletions) carry
+`wire_schema_version` but no `deletions` block. Idempotent replays return the
+originally frozen receipt.
+
+### Percent-family values
+
+HealthKit's `percent` unit is a fraction (`0.94` for 94 %), but UCUM `%` — and
+every other exporter — is per-hundred. On the v2 wire the client scales, so
+`unit: "%"` always means per-hundred: oxygen saturation arrives as `94`, not
+`0.94`. This covers the whole percent family (oxygen saturation, AFib burden,
+peripheral perfusion index, blood alcohol content, walking asymmetry /
+double-support / steadiness, body fat percentage). The server never rescales
+a declared `%`; only unit-less v1 samples get the legacy ≤ 1 → × 100 rule
+(`packages/py/normalization/apple.py`).
 
 ### Deletion semantics
 
 `deletions` is a top-level array of `{uuid}` entries sourced from the iOS
 extractor capturing `[HKDeletedObject]` on every `HKAnchoredObjectQuery`
-callback. Clients may also include a client-stamped observation timestamp
+callback. A page with zero added samples and non-empty deletions is posted as
+its own batch with `samples: []` — Apple's delete-and-reinsert revisions
+often arrive that way — and the route applies it through the normal path
+(the `status: "empty"` short-circuit only fires when both arrays are empty). Clients may also include a client-stamped observation timestamp
 under any key name — ``extra='allow'`` on the schema swallows unknown fields
 silently; server-stamped timing lives in the sync receipt. For every entry,
 1. `UPDATE canonical_observations SET status='superseded'
@@ -798,7 +841,7 @@ on `canonical_observations`.
 
 | Condition | Status | Body shape |
 |---|---|---|
-| `schema_version` is present and ≠ 2 | `422` | `{detail: "...requires schema_version=2..."}` |
+| `schema_version` absent or ≠ 2 | `422` | `{detail: "...schema_version..."}` |
 | Anchored sample missing `uuid` | `422` | `{detail: "...uuid missing: anchored samples..."}` |
 | Anchored sample missing an interval bound | `422` | `{detail: "...endDate missing..."}` / `{detail: "...end missing..."}` |
 | Anchored quantity sample missing `unit` | `422` | `{detail: "...unit missing: anchored quantity samples..."}` |
@@ -820,9 +863,16 @@ the header is advisory only. See `contracts/v2-ios-headers.json` (canonical)
 and `ios_app/Tests/HealthSyncTests/Fixtures/v2-ios-headers.json` (byte-equal
 mirror; enforced by `tests/contract/test_ios_v2_headers_in_sync.py`).
 
+### Workouts
+
+Workouts are `HKSample`s too, so they carry `uuid`, `startDate`, `endDate`
+and `tzOffsetMinutes` like every anchored family, plus the v1 keys
+(`name`, `start`, `end`, `duration`, `activeEnergy`, `distance`,
+`avgHeartRate`, `maxHeartRate`, `source`) unchanged.
+
 ### iOS route selection
 
-`HealthSave 1.7.0+` defaults to the v2 endpoint via
+`HealthSave 1.7.2+` defaults to the v2 endpoint via
 `Config.v2BatchEndpoint = "/api/v2/apple/batch"`. If the server returns `404`
 or `405` on the v2 route, iOS falls back to v1 for the rest of the run
 (`SyncEngine.didFallBackToV1ThisRun` latch; no infinite retry). A `422` on

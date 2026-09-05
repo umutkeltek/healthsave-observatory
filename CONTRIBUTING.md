@@ -47,7 +47,7 @@ This repo enforces its boundaries with tests — respect them or CI goes red:
   Schema-version=2 endpoints (sample identity, interval bounds, per-sample unit, motion context,
   deletions) are additive over the v1 frozen surface. v2 may evolve **within reason** for the next
   two minor server releases (an additive field here, a new top-level deletion reason there), then
-  it freezes. New sample-key additions require (a) updating `contracts/json-schema/v2_apple_batch_request.json`
+  it freezes. New sample-key additions require (a) updating `contracts/json-schema/V2AppleBatchPayload.json` (+ `V2Sample.json`, `V2Deletion.json`)
   via `make -C datahub regen-v2-schemas`, (b) updating `contracts/v2-ios-headers.json` if a new
   header is added, and (c) updating both client mirror fixtures — the byte-equal mirror gate
   (`tests/contract/test_ios_v2_headers_in_sync.py`) makes drift loud at commit time.
