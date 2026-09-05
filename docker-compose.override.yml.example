@@ -3,13 +3,15 @@
 # Docker Compose auto-loads any file named ``docker-compose.override.yml``
 # in this directory. We intentionally ship this as ``.example`` so the
 # default ``docker compose up -d`` stays lightweight (no LLM container
-# required). Copy to ``docker-compose.override.yml`` to enable Ollama
-# locally:
+# required). The ``ollama`` service in docker-compose.yml sits behind the
+# ``local-ai`` profile (ADR-0003 D8), and this override only adds the host
+# port + volume — it does not lift the profile gate. So enabling Ollama
+# takes the copy AND the profile:
 #
 #   cp docker-compose.override.yml.example docker-compose.override.yml
-#   docker compose up -d
+#   docker compose --profile local-ai up -d      # or: ./healthsave up --ai
 #
-# The ``./setup.sh`` bootstrap handles this copy for you when you answer
+# The ``./setup.sh`` Advanced setup handles both for you when you answer
 # "y" to the "enable local LLM (Ollama)?" prompt.
 #
 # Expected RAM headroom: an 8 B-class model (llama3.1:8b, qwen3:8b)
