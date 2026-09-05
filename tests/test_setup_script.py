@@ -167,3 +167,30 @@ write_env_file "db-pass" "grafana-pass" "api-key"
         "MOSQUITTO_PORT=1883",
     ):
         assert key in body
+
+
+def test_setup_start_services_enables_local_ai_profile_for_ollama():
+    script = f"""
+set -euo pipefail
+export HEALTHSAVE_SETUP_TEST=1
+source "{ROOT / "setup.sh"}"
+
+compose() {{
+    printf '%s\\n' "$*"
+}}
+
+start_compose_services 1
+start_compose_services 0
+"""
+
+    proc = subprocess.run(
+        ["bash", "-c", script],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert proc.stdout.splitlines() == [
+        "--profile local-ai up -d",
+        "up -d",
+    ]
