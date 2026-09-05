@@ -1023,6 +1023,12 @@
       "ios": true,
       "android": true,
       "pro": false
+    },
+    "export_time_zone_choice": {
+      "ios": true,
+      "android": "planned",
+      "planned_since": "2026-09-05",
+      "pro": false
     }
   },
   "wire_versions": {
