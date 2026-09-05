@@ -255,6 +255,16 @@ compose() {
     docker compose "$@"
 }
 
+start_compose_services() {
+    local enable_ollama="${1:-0}"
+
+    if [ "$enable_ollama" -eq 1 ]; then
+        compose --profile local-ai up -d
+    else
+        compose up -d
+    fi
+}
+
 prompt_default() {
     # prompt_default <prompt> <default> -> value
     local prompt="$1"
@@ -620,7 +630,7 @@ cmd_setup() {
 
     # --- bring the stack up --------------------------------------------
     log_info "Starting Docker services (this may take a few minutes on first run)..."
-    compose up -d
+    start_compose_services "$enable_ollama"
     log_info "Waiting for API readiness on ${API_URL_DEFAULT}/ready..."
     if wait_for_api_ready; then
         log_ok "API ready."
