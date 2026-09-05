@@ -357,6 +357,7 @@ def test_deletions_array_rejects_short_uuid(client: TestClient) -> None:
     resp = client.post("/api/v2/apple/batch", json=body)
     assert resp.status_code == 422, resp.text
 
+
 def test_deletions_array_extra_keys_accepted() -> None:
     """V2Deletion uses ``extra='allow'`` so a future client-stamped
     observation timestamp (or any other key) parses cleanly. The route
@@ -372,6 +373,7 @@ def test_deletions_array_extra_keys_accepted() -> None:
     has none), but the validation pass must succeed.
     """
     from server.api.v2_apple_batch import V2AppleBatchPayload
+
     V2AppleBatchPayload.model_validate(
         {
             "schema_version": 2,
@@ -399,6 +401,7 @@ def test_deletion_convergence_two_payloads_parse_identically() -> None:
     Pinned here at the validation layer so the wire shape can't regress
     in a way that breaks the storage contract."""
     from server.api.v2_apple_batch import V2AppleBatchPayload
+
     payload = {
         "schema_version": 2,
         "metric": "heart_rate",
@@ -422,6 +425,7 @@ def test_no_deletions_field_is_accepted() -> None:
     a data-loss risk that the test suite had not pinned either way.
     """
     from server.api.v2_apple_batch import V2AppleBatchPayload
+
     payload = V2AppleBatchPayload.model_validate(
         {
             "schema_version": 2,
@@ -439,6 +443,7 @@ def test_deletions_field_empty_list_is_accepted() -> None:
     spelling the iOS test seam uses. Belt-and-braces with the no-field
     test above."""
     from server.api.v2_apple_batch import V2AppleBatchPayload
+
     payload = V2AppleBatchPayload.model_validate(
         {
             "schema_version": 2,
@@ -679,7 +684,6 @@ def test_identity_gate_requires_uuid_on_anchored_samples() -> None:
     HKSample UUID cannot be superseded by a later delete+reinsert —
     the whole point of the v2 identity — so it is a deterministic 422."""
     from pydantic import ValidationError
-
     from server.api.v2_apple_batch import V2AppleBatchPayload
 
     with pytest.raises(ValidationError, match="uuid"):
@@ -705,7 +709,6 @@ def test_identity_gate_requires_uuid_on_anchored_samples() -> None:
 def test_identity_gate_requires_interval_on_uuid_samples() -> None:
     """A UUID with no interval is unmatchable — reject at the gate."""
     from pydantic import ValidationError
-
     from server.api.v2_apple_batch import V2AppleBatchPayload
 
     with pytest.raises(ValidationError, match="startDate"):
@@ -731,7 +734,6 @@ def test_identity_gate_requires_end_bound_on_anchored_samples() -> None:
     """Eric's ask #1: without the end bound a RHR revision cannot be
     told from a duplicate. An anchored sample missing endDate is 422."""
     from pydantic import ValidationError
-
     from server.api.v2_apple_batch import V2AppleBatchPayload
 
     with pytest.raises(ValidationError, match="endDate"):
@@ -921,6 +923,7 @@ def test_ios_serializer_output_round_trips_through_v2_model() -> None:
     catch will fail here.
     """
     from server.api.v2_apple_batch import V2AppleBatchPayload
+
     payload = V2AppleBatchPayload.model_validate(IOS_PAYLOAD_SERIALIZER_FIXTURE)
     assert payload.schema_version == 2
     assert payload.metric == "heart_rate"
@@ -950,12 +953,36 @@ def test_ios_serializer_output_satisfies_generated_json_schema() -> None:
     skip with a clear message — the model-validation test above is the
     load-bearing gate."""
     import importlib.util as _ilu
+
     jsonschema_spec = _ilu.find_spec("jsonschema")
     if jsonschema_spec is None:
         pytest.skip("jsonschema not installed; model-validation test covers the contract")
     import json
-    import jsonschema as _js  # type: ignore[import-not-found]
     from pathlib import Path
-    schema_path = Path(__file__).resolve().parents[3] / "contracts" / "json-schema" / "V2AppleBatchPayload.json"
+
+    import jsonschema as _js  # type: ignore[import-not-found]
+
+    schema_path = (
+        Path(__file__).resolve().parents[3]
+        / "contracts"
+        / "json-schema"
+        / "V2AppleBatchPayload.json"
+    )
     schema = json.loads(schema_path.read_text())
     _js.validate(IOS_PAYLOAD_SERIALIZER_FIXTURE, schema)
+
+
+def test_route_rejects_missing_schema_version(client: TestClient) -> None:
+    """A body that omits ``schema_version`` is ambiguous — the v2 route
+    refuses it instead of defaulting to 2 (Eric: "reject an ambiguous
+    payload outright rather than guess at it"; audit 2026-09-04).
+    """
+    body = {
+        "metric": "heart_rate",
+        "batch_index": 0,
+        "total_batches": 1,
+        "samples": [],
+    }
+    resp = client.post("/api/v2/apple/batch", json=body)
+    assert resp.status_code == 422, resp.text
+    assert "schema_version" in resp.text.lower()

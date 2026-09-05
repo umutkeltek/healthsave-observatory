@@ -250,7 +250,6 @@
       "type": "array"
     },
     "schema_version": {
-      "default": 2,
       "title": "Schema Version",
       "type": "integer"
     },
@@ -273,6 +272,7 @@
     }
   },
   "required": [
+    "schema_version",
     "metric",
     "batch_index",
     "total_batches"

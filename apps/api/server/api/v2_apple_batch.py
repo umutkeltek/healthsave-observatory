@@ -72,32 +72,29 @@ import os
 import re
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID
-
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from compat_v1.models import BatchPayload  # noqa: F401  (used by sibling v1 tests)
-from normalization import apple_wire_metric, normalize_apple_batch
-from plugin_sdk import SDK_VERSION
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from normalization import apple_wire_metric
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from sqlalchemy.ext.asyncio import AsyncSession
 from storage.defaults import observation_repository
 from storage.timescale.measurements import (
     mark_canonical_observations_superseded,
     mark_v1_dedicated_superseded,
 )
+
+# Receipt completion on the success path. Was referenced without an import
+# (NameError → broad except → deterministic 422 on EVERY real client batch,
+# since iOS always sends Idempotency-Key + payload hash). The DB-free unit
+# suite never reached this line and the e2e run sent no idempotency headers;
+# tests/contract/test_v2_requests_accepted.py replays the iOS corpus with the
+# real header set and is the gate for it (audit 2026-09-05).
+from storage.timescale.sync_receipts import complete_receipt_idempotency
+
 from ..ingestion.owner import OWNER_HEADER, resolve_owner_id
-from ..ingestion.storage import (
-    AuditLog,
-    IngestStorage,
-    default_audit_log,
-    default_storage,
-)
+from .deps import get_session, verify_api_key
 from .ingest import (
-    APPLE_HEALTHKIT_SOURCE_ID,
-    _APPLE_PLUGIN_ID,
-    CANONICAL_DUAL_WRITE,
-    CANONICAL_REJECTED,
     INGEST_BATCHES,
     INGEST_DURATION,
     INGEST_ROWS,
@@ -108,10 +105,8 @@ from .ingest import (
     _header,
     _idempotency_key,
     _is_transient_write_error,
-    _load_apple_health_plugin,
     _optional_int,
     _persist_orphaned_raw_payload,
-    _rejection_reason_label,
     _record_failed_sync_receipt,
     _resolve_apple_health_plugin,
     _resolve_audit_log,
@@ -122,7 +117,6 @@ from .ingest import (
     _trusted_payload_hash,
     _write_canonical_observations,
 )
-from .deps import get_session, verify_api_key
 from .swr import v2_read_cache
 
 _log = logging.getLogger("healthsave.api.v2_apple_batch")
@@ -228,9 +222,7 @@ class V2Sample(BaseModel):
     @classmethod
     def _validate_motion(cls, v: str | None) -> str | None:
         if v is not None and v not in _MOTION_CONTEXT_VALUES:
-            raise ValueError(
-                "motionContext must be one of: sedentary, active, notSet"
-            )
+            raise ValueError("motionContext must be one of: sedentary, active, notSet")
         return v
 
 
@@ -287,7 +279,11 @@ class V2AppleBatchPayload(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    schema_version: int = Field(default=2)
+    # Required, no default. Eric's rule: "reject an ambiguous payload
+    # outright rather than guess at it" — a body without a schema version
+    # is ambiguous by definition, so the v2 route refuses it (422) instead
+    # of assuming v2 (audit 2026-09-04).
+    schema_version: int
     metric: str = Field(min_length=1, max_length=128)
     batch_index: int = Field(ge=0)
     total_batches: int = Field(ge=1)
@@ -309,7 +305,7 @@ class V2AppleBatchPayload(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def _sample_contract(self) -> "V2AppleBatchPayload":
+    def _sample_contract(self) -> V2AppleBatchPayload:
         """Metric-keyed semantic gates the field layer cannot see.
 
         Identity gate (Eric's ask #6 — "sample uuid ... stable identity
@@ -356,7 +352,9 @@ class V2AppleBatchPayload(BaseModel):
                 )
             if anchored:
                 has_bounds = (
-                    sample.endDate is not None if sample.startDate is not None else sample.end is not None
+                    sample.endDate is not None
+                    if sample.startDate is not None
+                    else sample.end is not None
                 )
                 if not has_bounds:
                     bound = "endDate" if sample.startDate is not None else "end"
@@ -386,16 +384,12 @@ class V2AppleBatchPayload(BaseModel):
                         f"(qty present) for metric {self.metric!r} must declare "
                         f"their unit; allowed: {sorted(metric_def.allowed_units)}"
                     )
-                if (
-                    sample.unit is not None
-                    and sample.unit not in metric_def.allowed_units
-                ):
+                if sample.unit is not None and sample.unit not in metric_def.allowed_units:
                     raise ValueError(
                         f"samples[{idx}].unit {sample.unit!r} is not allowed for "
                         f"metric {self.metric!r}; allowed: {sorted(metric_def.allowed_units)}"
                     )
         return self
-
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -570,7 +564,9 @@ async def v2_apple_batch(
 
     try:
         first_device_id = await storage.get_or_create_device(db_session, first_device_name)
-        raw_log_id = await audit.log_raw(db_session, first_device_id, raw_payload) if audit else None
+        raw_log_id = (
+            await audit.log_raw(db_session, first_device_id, raw_payload) if audit else None
+        )
 
         # Canonical writes first so the deletion pass can supersede rows
         # that the same batch just inserted (Apple's pattern: revise by
@@ -756,9 +752,7 @@ async def v2_apple_batch(
             count,
         )
 
-    INGEST_DURATION.labels(metric=metric).observe(
-        (datetime.now(UTC) - started_at).total_seconds()
-    )
+    INGEST_DURATION.labels(metric=metric).observe((datetime.now(UTC) - started_at).total_seconds())
     INGEST_ROWS.labels(metric=metric).inc(count)
     INGEST_BATCHES.labels(metric=metric).inc()
     _log.info(
