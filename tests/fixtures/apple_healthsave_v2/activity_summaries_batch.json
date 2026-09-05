@@ -1,0 +1,1 @@
+{"schema_version":2,"metric":"activity_summaries","batch_index":0,"total_batches":1,"samples":[{"date":"2026-08-30T00:00:00.000Z","activeEnergyBurned":412,"activeEnergyBurnedGoal":500,"appleExerciseTime":31,"appleExerciseTimeGoal":30,"appleStandHours":10,"appleStandHoursGoal":12}],"source_bundle_id":"com.healthsave.ios"}
