@@ -1029,6 +1029,12 @@
       "android": "planned",
       "planned_since": "2026-09-05",
       "pro": false
+    },
+    "export_split_date_time_columns": {
+      "ios": true,
+      "android": "planned",
+      "planned_since": "2026-09-06",
+      "pro": false
     }
   },
   "wire_versions": {
