@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { MetricSeries, MetricSummary, SeriesPoint } from "../../lib/api";
-import { sortCards } from "./DataSections";
+import { shouldUseDemoPatterns, sortCards } from "./DataSections";
 
 function metric(id: string): MetricSummary {
   return { id, display_name: id, category: "test", value_type: "quantity", canonical_unit: null };
@@ -31,5 +31,15 @@ describe("sortCards", () => {
       series: series("dense", [point("2026-07-20T00:00:00Z", 1), point("2026-07-21T00:00:00Z", 2)]),
     };
     expect(sortCards([sparse, dense], "coverage").map((card) => card.metric.id)).toEqual(["dense", "sparse"]);
+  });
+});
+
+describe("shouldUseDemoPatterns", () => {
+  test("does not substitute demo readings for a successful empty live series", () => {
+    expect(shouldUseDemoPatterns(series("empty", []))).toBe(false);
+  });
+
+  test("uses labelled demo readings when the live series could not be loaded", () => {
+    expect(shouldUseDemoPatterns(null)).toBe(true);
   });
 });

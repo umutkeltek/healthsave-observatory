@@ -48,6 +48,10 @@ export type DataFilters = {
 
 type Card = { metric: MetricSummary; series: MetricSeries | null };
 
+export function shouldUseDemoPatterns(series: MetricSeries | null): boolean {
+  return series === null;
+}
+
 // Sort the visible cards by the chosen key, derived from each series.
 export function sortCards(cards: Card[], sort: string): Card[] {
   if (sort === "name") {
@@ -154,7 +158,7 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
     null;
   if (selectedMetric) {
     const liveSeries = cards.length === 1 && cards[0].metric.id === metricSel ? cards[0].series : null;
-    const demo = (liveSeries?.points.length ?? 0) === 0;
+    const demo = shouldUseDemoPatterns(liveSeries);
     const src = demo ? demoPatternSeries(selectedMetric) : (liveSeries as MetricSeries);
     patterns = {
       metric: selectedMetric,
