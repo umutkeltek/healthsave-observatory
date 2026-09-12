@@ -22,7 +22,15 @@ function formatReadingTime(iso: string): string {
   return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-export function DataTable({ points, unit }: { points: SeriesPoint[]; unit?: string }) {
+export function DataTable({
+  points,
+  unit,
+  sourceLabels,
+}: {
+  points: SeriesPoint[];
+  unit?: string;
+  sourceLabels: Record<string, string>;
+}) {
   const [col, setCol] = useState<Col>("t");
   const [dir, setDir] = useState<"asc" | "desc">("desc");
 
@@ -38,7 +46,11 @@ export function DataTable({ points, unit }: { points: SeriesPoint[]; unit?: stri
     .sort((a, b) => {
       let cmp: number;
       if (col === "value") cmp = (a.value ?? Number.NEGATIVE_INFINITY) - (b.value ?? Number.NEGATIVE_INFINITY);
-      else if (col === "source_id") cmp = a.source_id < b.source_id ? -1 : a.source_id > b.source_id ? 1 : 0;
+      else if (col === "source_id") {
+        const aLabel = sourceLabels[a.source_id] ?? a.source_id;
+        const bLabel = sourceLabels[b.source_id] ?? b.source_id;
+        cmp = aLabel.localeCompare(bLabel);
+      }
       else cmp = a.t < b.t ? -1 : a.t > b.t ? 1 : 0;
       return dir === "asc" ? cmp : -cmp;
     })
@@ -75,7 +87,7 @@ export function DataTable({ points, unit }: { points: SeriesPoint[]; unit?: stri
               <td className="dt-val">
                 {formatValue(p.value, unit, { nullLabel: "-" })}
               </td>
-              <td className="prov-hw">{p.source_id}</td>
+              <td className="prov-hw">{sourceLabels[p.source_id] ?? p.source_id}</td>
             </tr>
           ))}
         </tbody>

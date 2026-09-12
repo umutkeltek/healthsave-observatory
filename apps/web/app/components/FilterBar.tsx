@@ -17,6 +17,7 @@ const SORTS = [
   { value: "coverage", label: "Most readings" },
 ];
 
+export type SourceOption = { id: string; label: string };
 export type DeviceOption = { id: string; label: string };
 
 export function FilterBar({
@@ -28,7 +29,7 @@ export function FilterBar({
 }: {
   metrics: MetricOption[];
   categories: string[];
-  sources: string[];
+  sources: SourceOption[];
   devices: DeviceOption[];
   ranges: string[];
 }) {
@@ -94,8 +95,8 @@ export function FilterBar({
         <select className="filter-select" value={source} onChange={(e) => set("source", e.target.value)}>
           <option value="">All sources</option>
           {sources.map((s) => (
-            <option key={s} value={s}>
-              {s}
+            <option key={s.id} value={s.id}>
+              {s.label}
             </option>
           ))}
         </select>

@@ -16,7 +16,7 @@ import { SourceDistribution } from "../SourceDistribution";
 import { ZoneBar } from "../ZoneBar";
 import { currentAnalyticalDayOfWeek, timeBasisLabel, UTC_TIME_BASIS } from "../../lib/analyticalTime";
 import { dayOfWeekPivot, distribution, hrZoneHistogram, weekHourPivot } from "../../lib/analytics";
-import type { MetricSeries, MetricSummary, SeriesPoint } from "../../lib/api";
+import type { MetricSeries, MetricSummary, SeriesPoint, StreamView } from "../../lib/api";
 import { demoPatternSeries } from "../../lib/demoSeries";
 import {
   GRID_METRICS,
@@ -28,6 +28,7 @@ import {
   safeSeries,
   safeStreams,
 } from "../../lib/load";
+import { friendlyName } from "../../lib/provenance";
 import { rangeLabel } from "../../lib/ranges";
 
 export const RANGES = ["24h", "7d", "30d", "90d", "1y", "all"];
@@ -50,6 +51,22 @@ type Card = { metric: MetricSummary; series: MetricSeries | null };
 
 export function shouldUseDemoPatterns(series: MetricSeries | null): boolean {
   return series === null;
+}
+
+export function buildSourceLabels(points: SeriesPoint[], streams: StreamView[]): Record<string, string> {
+  const streamById = new Map(streams.map((stream) => [stream.id, stream]));
+  const labels: Record<string, string> = {};
+
+  for (const point of points) {
+    const stream = point.stream_id ? streamById.get(point.stream_id) : undefined;
+    if (stream) {
+      labels[point.source_id] = friendlyName(stream.source_plugin_id);
+    } else if (!(point.source_id in labels)) {
+      labels[point.source_id] = point.source_id;
+    }
+  }
+
+  return labels;
 }
 
 // Sort the visible cards by the chosen key, derived from each series.
@@ -118,7 +135,10 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
 
   // Source + device facets from the actually-fetched points.
   const allPoints = seriesList.flatMap((s) => s?.points ?? []);
-  const sources = [...new Set(allPoints.map((p) => p.source_id))].sort();
+  const sourceLabels = buildSourceLabels(allPoints, streams ?? []);
+  const sources = [...new Set(allPoints.map((p) => p.source_id))]
+    .map((id) => ({ id, label: sourceLabels[id] ?? id }))
+    .sort((a, b) => a.label.localeCompare(b.label));
   const streamLabels = new Map((streams ?? []).map((s) => [s.id, s.device_label ?? s.source_plugin_id]));
   const deviceIds = [...new Set(allPoints.map((p) => p.stream_id).filter((s): s is string => Boolean(s)))];
   const devices = deviceIds
@@ -183,7 +203,7 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
         ranges={RANGES}
       />
 
-      <SourceDistribution dist={dist} />
+      <SourceDistribution dist={dist} sourceLabels={sourceLabels} />
 
       {unknownMetric ? (
         <p className="empty">No signal called “{metricSel}”. Pick one from the filter above.</p>
@@ -230,7 +250,7 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
             )}
             <article className="card col-12">
               <div className="card-title">Recent readings</div>
-              <DataTable points={patterns.points} unit={patterns.unit} />
+              <DataTable points={patterns.points} unit={patterns.unit} sourceLabels={sourceLabels} />
             </article>
           </div>
         </>
