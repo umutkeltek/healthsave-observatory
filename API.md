@@ -1000,6 +1000,39 @@ v2 is treated as a permanent reject — the batch is dropped, the failure is
 surfaced in the sync receipt, and iOS does **not** fall back. This matches
 workspace CLAUDE.md Error semantics.
 
+### Client behaviour a server can rely on (HealthSave iOS 1.8.0+)
+
+For anyone implementing this route rather than running datahub:
+
+- **Timestamps.** `startDate` / `endDate` / `date` are UTC (`Z`) with exactly
+  three fractional digits, rounded to the nearest millisecond. The local offset
+  travels separately in `tzOffsetMinutes`. To match the same sample from a
+  feed that sends whole seconds, key on `uuid` where present, otherwise
+  compare at one-second resolution.
+- **Day totals are re-sent on purpose.** Each run re-reads a rolling window of
+  cumulative day totals (7 days behind the last successful send, capped at 30)
+  so late HealthKit corrections land. A day total's identity is
+  `(metric, localDate)`: upsert it, never append. Most batches in a run
+  therefore carry nothing new; that is expected.
+- **Raw components** (`aggregation: "component"`) are sent only to a server
+  that has already acknowledged a v2 batch. The first run after an upgrade,
+  and every run against a v1-only server, sends day totals only.
+- **Delivery is the batch's own 2xx.** Sync-run receipts
+  (`/api/v2/sync/runs/*`) feed the app's status screen only; the app never
+  treats a receipt as proof that a particular batch arrived.
+- **Retries.** `5xx`, `408` and `429` are retried (with backoff while the app
+  is open; on the next run from a background wake). Other `4xx` hold the
+  batch and pause that metric; `401` / `403` are replayed once the key works.
+  Return `422` for a deterministic bad payload, never `500`.
+- **Duplicates carry the same `Idempotency-Key`** (the payload hash). A batch
+  can arrive twice — for example a background upload iOS delivered late after
+  the app had already resent it directly — so treat a repeated key as a
+  replay.
+- **The API key is always present when one is configured.** Before 1.8.0 the
+  key was unreadable while the phone was locked and background requests went
+  out without it. A request with no `X-API-Key` now means no key is set in the
+  app.
+
 ### Migration notes for self-hosters
 
 - **No `API_KEY` change required.** The v2 route enforces the same
