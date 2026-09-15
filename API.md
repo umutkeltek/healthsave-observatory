@@ -398,6 +398,35 @@ Correct response shape:
 Do not wrap this endpoint as `{"status":"ok","counts":{...}}`; that shape is
 not compatible with the current iOS status UI.
 
+### `GET /api/apple/coverage`
+
+The newest sample the server holds per metric. The iOS app reads it after a sync
+to clear a Recovery-lane row for a **day total** once the server has that day (it
+never uses it for individual samples: a newer sample proves nothing about an
+older one that is missing). Optional: without it, rows clear only when the upload
+that raised them lands, or by Backfill Past Data.
+
+The app decodes only `metrics`, keyed by HealthSave wire metric, with ISO 8601
+UTC timestamps (milliseconds, `Z`); `null` or an absent key means "no data", and
+the app keeps its row:
+
+```json
+{
+  "metrics": {
+    "heart_rate_variability": "2026-09-14T12:08:00.503Z",
+    "step_count": "2026-09-13T22:00:00.000Z",
+    "activity_summaries": "2026-09-14T00:00:00.000Z"
+  }
+}
+```
+
+A day total's timestamp is the start of its local day, as sent in the day-total
+sample's `startDate`. Data Hub also returns flat per-table keys (`heart_rate`,
+`hrv`, `daily_activity`, ...) next to `metrics`, mirroring `/api/apple/status`;
+the app ignores them. Before 2026-09-15 Data Hub returned only those flat keys, so
+the app read every answer as unreachable and never cleared a row from it. The
+shape is pinned in the shared response corpus (`coverage.json`).
+
 ## Sync Receipts and Setup Diagnostics
 
 These v2 operator endpoints are additive. They do not change the released v1
