@@ -1,0 +1,20 @@
+{
+  "body": {
+    "blood_oxygen": null,
+    "daily_activity": "2026-09-14",
+    "heart_rate": "2026-09-14 12:06:00+00:00",
+    "hrv": "2026-09-14 12:08:00.503000+00:00",
+    "metrics": {
+      "activity_summaries": "2026-09-14T00:00:00.000Z",
+      "heart_rate_variability": "2026-09-14T12:08:00.503Z",
+      "sleep_analysis": "2026-09-13T21:40:00.000Z",
+      "step_count": "2026-09-13T22:00:00.000Z"
+    },
+    "quantity_samples": "2026-09-14 12:10:00+00:00",
+    "sleep_sessions": "2026-09-13 21:40:00+00:00",
+    "workouts": null
+  },
+  "endpoint": "/api/apple/coverage",
+  "method": "GET",
+  "status": 200
+}

@@ -36,7 +36,9 @@ import argparse
 import asyncio
 import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -73,11 +75,44 @@ class _FakeResult:
     def all(self):
         return self.rows
 
+    def fetchall(self):
+        return self.rows
+
     def mappings(self):
         return self
 
     def scalar(self):
         return 1
+
+
+# /api/apple/coverage scenario: what a sync on 2026-09-14 in Berlin (+02:00) leaves behind.
+# HRV measured at 14:08:00.503 local (12:08Z); the day's step total starts at local
+# midnight (22:00Z the day before).
+_COVERAGE_LEGACY_LATEST: dict[str, Any] = {
+    "heart_rate": datetime(2026, 9, 14, 12, 6, tzinfo=UTC),
+    "hrv": datetime(2026, 9, 14, 12, 8, 0, 503000, tzinfo=UTC),
+    "daily_activity": "2026-09-14",
+    "sleep_sessions": datetime(2026, 9, 13, 21, 40, tzinfo=UTC),
+    "quantity_samples": datetime(2026, 9, 14, 12, 10, tzinfo=UTC),
+}
+_COVERAGE_CANONICAL_ROWS: list[Any] = [
+    SimpleNamespace(
+        metric_id="vital.hrv_sdnn",
+        observation_count=121,
+        days_with_data=9,
+        first_at=datetime(2026, 9, 6, 7, 0, tzinfo=UTC),
+        last_at=datetime(2026, 9, 14, 12, 8, 0, 503000, tzinfo=UTC),
+        last_ingested_at=datetime(2026, 9, 14, 12, 16, tzinfo=UTC),
+    ),
+    SimpleNamespace(
+        metric_id="activity.steps",
+        observation_count=9,
+        days_with_data=9,
+        first_at=datetime(2026, 9, 5, 22, 0, tzinfo=UTC),
+        last_at=datetime(2026, 9, 13, 22, 0, tzinfo=UTC),
+        last_ingested_at=datetime(2026, 9, 14, 12, 16, tzinfo=UTC),
+    ),
+]
 
 
 class CorpusSession:
@@ -97,6 +132,8 @@ class CorpusSession:
         latest_run_rows: list[dict[str, Any]] | None = None,
         run_metric_rows: list[dict[str, Any]] | None = None,
         run_summary_rows: list[dict[str, Any]] | None = None,
+        coverage_latest: dict[str, Any] | None = None,
+        canonical_coverage_rows: list[Any] | None = None,
     ):
         self.receipt_hash_row = receipt_hash_row
         self.latest_run_rows = latest_run_rows or []
@@ -104,9 +141,19 @@ class CorpusSession:
         # healthsave_sync_run_summaries (migration 026): the client's closing
         # summary per run. Empty ⇒ pre-026 / no client has PUT one yet.
         self.run_summary_rows = run_summary_rows or []
+        self.coverage_latest = coverage_latest
+        self.canonical_coverage_rows = canonical_coverage_rows
 
     async def execute(self, statement, params=None):
         sql = " ".join(str(statement).split())
+        # /api/apple/coverage scenario (only when configured, so every other fixture
+        # is untouched): canonical per-metric coverage rows, then max(<time>) per
+        # legacy table.
+        if self.canonical_coverage_rows is not None and "FROM canonical_observations" in sql:
+            return _FakeResult(rows=self.canonical_coverage_rows)
+        if self.coverage_latest is not None and sql.startswith("SELECT max("):
+            table = sql.split(" FROM ", 1)[1].split()[0]
+            return _FakeResult(row=(self.coverage_latest.get(table),))
         if sql.startswith("INSERT INTO healthsave_sync_run_summaries"):
             return _FakeResult(
                 row={
@@ -329,6 +376,7 @@ async def _call(endpoint: str, method: str, coro) -> dict[str, Any]:
 
 
 async def _generate() -> dict[str, dict[str, Any]]:
+    from server.api.coverage import apple_coverage
     from server.api.health_routes import api_health
     from server.api.ingest import apple_batch
     from server.api.status import apple_status
@@ -407,6 +455,22 @@ async def _generate() -> dict[str, dict[str, Any]]:
     # GET /api/apple/status — flat metric map (fresh install: all zero).
     fixtures["status.json"] = await _call(
         "/api/apple/status", "GET", apple_status(CorpusRequest(), CorpusSession())
+    )
+
+    # GET /api/apple/coverage — newest sample per metric. The flat table keys are the
+    # legacy shape; ``metrics`` is what the iOS Recovery-lane attestation decodes
+    # (``{wire metric: ISO 8601 UTC ms Z}``). HRV and steps come from the canonical
+    # store; activity rings from the date-keyed legacy table; workouts have no data.
+    fixtures["coverage.json"] = await _call(
+        "/api/apple/coverage",
+        "GET",
+        apple_coverage(
+            CorpusRequest(),
+            CorpusSession(
+                coverage_latest=_COVERAGE_LEGACY_LATEST,
+                canonical_coverage_rows=_COVERAGE_CANONICAL_ROWS,
+            ),
+        ),
     )
 
     # GET /api/v2/sync/runs/latest — populated and empty.
