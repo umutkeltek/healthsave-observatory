@@ -386,6 +386,65 @@ async def _promote_legacy_source_uuids(
     )
 
 
+async def _supersede_revised_source_uuids(
+    session: AsyncSession,
+    table: str,
+    rows: list[dict],
+) -> None:
+    """Retire the active row a revised sample replaces.
+
+    Apple Health revises a sample by deleting it and re-inserting it under a new
+    HKSample uuid at the same timestamp. The new uuid misses the
+    ``uq_<table>_source_uuid`` arbiter, so the insert would collide with the
+    legacy ``(time, device_id, owner_id) WHERE status = 'active'`` index and
+    reject the whole batch. Mark the row it replaces ``superseded`` first.
+
+    Only a uuid the table has never seen retires anything: an outbox replay can
+    deliver the old revision after the new one, and that must not retire the
+    newer row (the replayed row stays ``superseded`` — the upsert never writes
+    ``status``).
+    """
+    if not rows:
+        return
+
+    values = []
+    params = {}
+    for index, row in enumerate(rows):
+        values.append(
+            f"(CAST(:time_{index} AS TIMESTAMPTZ), CAST(:device_id_{index} AS INTEGER), "
+            f"CAST(:owner_id_{index} AS UUID), CAST(:source_uuid_{index} AS UUID))"
+        )
+        params[f"time_{index}"] = row["time"]
+        params[f"device_id_{index}"] = row["device_id"]
+        params[f"owner_id_{index}"] = row["owner_id"]
+        params[f"source_uuid_{index}"] = row["source_uuid"]
+
+    await session.execute(
+        text(
+            f"""
+            UPDATE {table} AS existing
+            SET status = 'superseded'
+            FROM (VALUES {", ".join(values)})
+              AS incoming(time, device_id, owner_id, source_uuid)
+            WHERE existing.time = incoming.time
+              AND existing.device_id = incoming.device_id
+              AND existing.owner_id = incoming.owner_id
+              AND existing.status = 'active'
+              AND existing.source_uuid IS NOT NULL
+              AND existing.source_uuid <> incoming.source_uuid
+              AND NOT EXISTS (
+                SELECT 1
+                FROM {table} AS known
+                WHERE known.owner_id = incoming.owner_id
+                  AND known.source_uuid = incoming.source_uuid
+                  AND known.time = incoming.time
+              )
+            """
+        ),
+        params,
+    )
+
+
 async def _ingest_dedicated(
     session: AsyncSession,
     device_id: int,
@@ -452,8 +511,16 @@ async def _ingest_dedicated(
             identity_rows, ["owner_id", "source_uuid", "time"], metric
         )
         dedup_count += dedup_id
+        # Two uuids at one timestamp (a revision and the sample it replaces, in the
+        # same export) still share the legacy active-row slot. Last one wins, as it
+        # always has for rows without a uuid.
+        rows_id, dedup_slot = _dedupe_rows_for_upsert(
+            rows_id, list(spec["conflict"]) + ["owner_id"], metric
+        )
+        dedup_count += dedup_slot
 
         await _promote_legacy_source_uuids(session, spec["table"], rows_id)
+        await _supersede_revised_source_uuids(session, spec["table"], rows_id)
 
         columns = list(rows_id[0].keys())
         update_set = ", ".join(
