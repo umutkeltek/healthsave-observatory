@@ -43,6 +43,29 @@ if TYPE_CHECKING:
 log = logging.getLogger("healthsave.plugins.apple_health_healthsave")
 
 
+def _projection_reported_work(result: IngestWriteResult) -> bool:
+    """True when the projection layer actually handled this batch.
+
+    The projection only knows quantity observations; events (workouts),
+    categorical records (sleep stages) and the rest come back as a bare
+    ``IngestWriteResult()`` so the caller falls through to the raw writers
+    that still own those shapes. That question must be asked of each
+    projection result on its own: ``IngestWriteResult.combine`` folds an
+    unset ``inserted_new`` (``None``) into ``0``, which then reads as
+    "projected, wrote zero rows" and skips the fallback — which froze the
+    v1 workouts and sleep tables for any batch that spanned two source
+    devices while the canonical store stayed correct.
+    """
+
+    return bool(
+        result.accepted
+        or result.rejected
+        or result.deduped_in_batch
+        or result.inserted_new is not None
+        or result.deduped_existing is not None
+    )
+
+
 class AppleHealthSource(Source):
     """Source plugin that ingests HealthSave iOS batches.
 
@@ -121,13 +144,7 @@ class AppleHealthSource(Source):
                     session, device_id, metric, canonical_observations, owner_id
                 )
                 projected = coerce_ingest_result(written)
-                if (
-                    projected.accepted
-                    or projected.rejected
-                    or projected.deduped_in_batch
-                    or projected.inserted_new is not None
-                    or projected.deduped_existing is not None
-                ):
+                if _projection_reported_work(projected):
                     return projected.to_plugin_result()
             else:
                 # Canonical observations carry per-sample stream identity, while
@@ -152,6 +169,7 @@ class AppleHealthSource(Source):
                         observations_by_stream[stream_id].append(observation)
                     else:
                         projected_summary = IngestWriteResult()
+                        projected_any = False
                         for stream_id, (device_name, _) in groups_by_stream.items():
                             device_observations = observations_by_stream[stream_id]
                             if not device_observations:
@@ -168,17 +186,11 @@ class AppleHealthSource(Source):
                                 device_observations,
                                 owner_id,
                             )
-                            projected_summary = projected_summary.combine(
-                                coerce_ingest_result(written)
-                            )
+                            projected = coerce_ingest_result(written)
+                            projected_any = projected_any or _projection_reported_work(projected)
+                            projected_summary = projected_summary.combine(projected)
 
-                        if (
-                            projected_summary.accepted
-                            or projected_summary.rejected
-                            or projected_summary.deduped_in_batch
-                            or projected_summary.inserted_new is not None
-                            or projected_summary.deduped_existing is not None
-                        ):
+                        if projected_any:
                             return projected_summary.to_plugin_result()
 
         summary = IngestWriteResult()

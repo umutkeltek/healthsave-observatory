@@ -392,6 +392,128 @@ async def test_apple_health_ingest_falls_back_when_device_labels_share_a_stream(
     ]
 
 
+@pytest.mark.asyncio
+async def test_apple_health_ingest_falls_back_to_raw_writers_for_multi_device_workouts():
+    """A workout batch from two devices must still reach the v1 writers.
+
+    The projection only speaks quantity, so non-quantity metrics (workouts,
+    sleep stages, ECG, category events) come back as an empty
+    ``IngestWriteResult`` and the raw writers have to run. Combining those
+    empty results turned the unset ``inserted_new`` into ``0``, which read as
+    "already projected" and skipped the fallback: the v1 ``workouts`` and
+    sleep tables froze on the day a self-hoster moved to v2 while the
+    canonical store stayed current, and every receipt claimed 0 accepted.
+    """
+    from datetime import UTC, datetime
+
+    from contracts._base import DEFAULT_OWNER_ID, Provenance
+    from contracts.observation import Observation, build_dedup_key
+    from contracts.values import EventValue
+    from normalization.identity import resolve_apple_origin
+    from storage.results import IngestWriteResult
+
+    from plugins.sources.apple_health_healthsave import AppleHealthSource
+
+    source_id = "a9b1e7e0-0000-4000-8000-000000000001"
+    started_at = datetime(2026, 9, 10, 7, 0, tzinfo=UTC)
+    ended_at = datetime(2026, 9, 10, 7, 45, tzinfo=UTC)
+
+    def workout(source: str, source_record_uid: str) -> Observation:
+        return Observation(
+            metric_id="activity.workout",
+            value=EventValue(type="event", label="Workout Session"),
+            interval_start=started_at,
+            interval_end=ended_at,
+            source_id=source_id,
+            stream_id=resolve_apple_origin(DEFAULT_OWNER_ID, source).stream_id,
+            source_record_uid=source_record_uid,
+            provenance=Provenance(
+                source_plugin_id="apple-health-healthsave",
+                sdk_version="test",
+                captured_at=started_at,
+            ),
+            normalizer_id="apple_health",
+            normalizer_version="test",
+            dedup_key=build_dedup_key(
+                owner_id=DEFAULT_OWNER_ID,
+                workspace_id=DEFAULT_OWNER_ID,
+                source_id=source_id,
+                metric_id="activity.workout",
+                interval_start=started_at,
+                interval_end=ended_at,
+                source_record_uid=source_record_uid,
+            ),
+        )
+
+    class RecordingStorage:
+        def __init__(self):
+            self.ingest_calls = []
+
+        async def get_or_create_device(self, session, device_name):
+            assert device_name == "iPhone"
+            return 21
+
+        async def ingest_metric(self, session, device_id, metric, samples, owner_id):
+            self.ingest_calls.append((device_id, metric, samples))
+            return IngestWriteResult(accepted=len(samples))
+
+    class EmptyProjection:
+        """What the real projection returns for a non-quantity observation."""
+
+        def __init__(self):
+            self.calls = 0
+
+        async def project_observations(self, session, device_id, metric, observations, owner_id):
+            self.calls += 1
+            return IngestWriteResult()
+
+    samples = [
+        {
+            "uuid": "watch-workout",
+            "start": started_at.isoformat(),
+            "end": ended_at.isoformat(),
+            "name": "Running",
+            "source": "Apple Watch",
+        },
+        {
+            "uuid": "phone-workout",
+            "start": started_at.isoformat(),
+            "end": ended_at.isoformat(),
+            "name": "Walking",
+            "source": "iPhone",
+        },
+    ]
+
+    manifest = load_manifest(PLUGIN_DIR / "plugin.yaml")
+    plugin = AppleHealthSource(manifest)
+    storage = RecordingStorage()
+    projection = EmptyProjection()
+
+    result = await plugin.ingest(
+        {
+            "storage": storage,
+            "projection": projection,
+            "session": object(),
+            "device_id": 20,
+            "first_device_name": "Apple Watch",
+            "metric": "workouts",
+            "samples": samples,
+            "canonical_observations": [
+                workout("Apple Watch", "watch-workout"),
+                workout("iPhone", "phone-workout"),
+            ],
+            "owner_id": DEFAULT_OWNER_ID,
+        }
+    )
+
+    assert projection.calls == 2
+    assert result["accepted"] == 2
+    assert storage.ingest_calls == [
+        (20, "workouts", [samples[0]]),
+        (21, "workouts", [samples[1]]),
+    ]
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Registry-path integration test — addresses advisor concern that the
 # Phase 6 SDK is "decorative" (registered but no test exercises the
