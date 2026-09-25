@@ -955,6 +955,50 @@ double-support / steadiness, body fat percentage). The server never rescales
 a declared `%`; only unit-less v1 samples get the legacy ≤ 1 → × 100 rule
 (`packages/py/normalization/apple.py`).
 
+### Heartbeat series (`heartbeat_series`)
+
+Next to most Apple Watch HRV readings, HealthKit keeps the heartbeat series the
+reading was computed from (`HKHeartbeatSeriesSample`). HRV (SDNN) is one number
+per reading; the same number can come from steady variability, from a missed
+stretch in the middle, or from a heart rate that changed during the reading, and
+only the beats tell those apart.
+
+HealthSave iOS sends them as their own metric, `heartbeat_series`, one sample per
+series. It is **off unless the user turns it on** (Settings → Heartbeat Series),
+and the app sends it only to a server that has acknowledged a v2 batch: a
+v1-only server never receives it.
+
+```json
+{"schema_version": 2, "metric": "heartbeat_series", "batch_index": 0, "total_batches": 1,
+ "samples": [{
+   "uuid": "D2C70000-0000-4000-8000-00000000000C",
+   "startDate": "2026-08-30T07:12:00.000Z", "endDate": "2026-08-30T07:12:08.000Z",
+   "tzOffsetMinutes": -240, "source": "Apple Watch",
+   "hrvUUID": "D2C70000-0000-4000-8000-0000000000B1",
+   "heartbeats": [{"timeSinceStart": 0, "precededByGap": false},
+                  {"timeSinceStart": 0.9765625, "precededByGap": false},
+                  {"timeSinceStart": 5.859375, "precededByGap": true}]
+ }],
+ "deletions": [{"uuid": "D2C70000-0000-4000-8000-00000000007D"}]}
+```
+
+| Key | Meaning |
+|---|---|
+| `uuid`, `startDate`, `endDate`, `tzOffsetMinutes`, `source` | The series' own identity and interval, as for every anchored sample |
+| `heartbeats[].timeSinceStart` | Seconds from `startDate` to this beat (HealthKit's `timeSinceSeriesStart`), non-negative, in order |
+| `heartbeats[].precededByGap` | `true` when collection had a gap before this beat: one or more beats may have happened since the previous one, so the interval between the two is not a beat-to-beat interval |
+| `hrvUUID` | Optional. The `uuid` of the `heart_rate_variability` sample this series belongs to. HealthKit stores no link between the two; the app sets it only when exactly one HRV sample from the same source has the same interval (±1 s), and leaves it out rather than guess. Without it, join on source and interval |
+
+There is no `qty` and no `unit`. A series with no beats is sent as
+`"heartbeats": []`. Deletions work as for every anchored metric. Batches hold at
+most 20 series.
+
+Data Hub stores each series as one `vital.heartbeat_series` event in
+`canonical_observations`, with the whole sample (beat list and `hrvUUID`
+included) in the value's `summary`; there is no v1 table for it. A sample whose
+`heartbeats` is missing or malformed is counted in `records_rejected` with its
+reason, never silently dropped.
+
 ### Deletion semantics
 
 `deletions` is a top-level array of `{uuid}` entries sourced from the iOS

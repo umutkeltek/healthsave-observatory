@@ -25,6 +25,7 @@ from .fusion import (
     classify_wire_aggregation_scope,
 )
 from .fusion import exact_ingest_key as build_exact_ingest_key
+from .heartbeat import heartbeat_series_problem
 from .parsers import sample_device_name
 
 NORMALIZER_ID = "apple_health"
@@ -263,6 +264,10 @@ def _build_value(
                 ),
                 "",
             )
+        if metric.id == "vital.heartbeat_series":
+            problem = heartbeat_series_problem(sample)
+            if problem is not None:
+                return None, problem
         summary = {
             key: value for key, value in sample.items() if key not in (*_TIME_KEYS, *_END_KEYS)
         }

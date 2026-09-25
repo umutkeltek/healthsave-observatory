@@ -26,6 +26,7 @@ from normalization.fusion import (
     AggregationScope,
     classify_wire_aggregation_scope,
 )
+from normalization.heartbeat import HEARTBEAT_SERIES_WIRE_METRIC, heartbeat_series_problem
 from normalization.identity import normalize_origin
 from normalization.mappers import (
     ACTIVITY_FIELDS,
@@ -336,6 +337,8 @@ async def _ingest_metric(
         return await _ingest_workouts(session, device_id, samples, owner_id=owner_id)
     if metric == "ecg":
         return await _ingest_ecg(session, device_id, samples, owner_id=owner_id)
+    if metric == HEARTBEAT_SERIES_WIRE_METRIC:
+        return _count_heartbeat_series(samples)
     if metric in DEDICATED_TABLES:
         return await _ingest_dedicated(session, device_id, metric, samples, owner_id=owner_id)
     return await _ingest_generic(session, device_id, metric, samples, owner_id=owner_id)
@@ -621,6 +624,25 @@ async def _ingest_generic(
             result = result.with_insert_flag(inserted_new)
 
     return result.with_counts(rejected=rejected_count, deduped_in_batch=dedup_count)
+
+
+def _count_heartbeat_series(samples: list) -> IngestWriteResult:
+    """Heartbeat series have no v1 table: canonical_observations keeps them.
+
+    Without this branch the catch-all writer rejects every series (no ``date``, no
+    ``qty``) and the receipt reports stored data as rejected. Validate with the same
+    rule the canonical normalizer applies and count, so the receipt tells the truth.
+    """
+    accepted = 0
+    rejected = 0
+    for sample in samples:
+        problem = heartbeat_series_problem(sample) if isinstance(sample, dict) else "not_an_object"
+        if problem is None:
+            accepted += 1
+        else:
+            rejected += 1
+            _bump_rejected(HEARTBEAT_SERIES_WIRE_METRIC, problem)
+    return IngestWriteResult(accepted=accepted, rejected=rejected)
 
 
 async def _ingest_ecg(

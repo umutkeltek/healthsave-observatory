@@ -1638,6 +1638,20 @@ _SPECIAL: list[MetricDefinition] = [
             strategy="ranked_source", source_priority=["oura", "whoop", "computed"]
         ),
     ),
+    # The beats behind an Apple Watch HRV reading (HKHeartbeatSeriesSample): an event
+    # whose summary carries the beat list. Wire rules in normalization.heartbeat.
+    MetricDefinition(
+        id="vital.heartbeat_series",
+        ontology_version=ONTOLOGY_VERSION,
+        display_name="Heartbeat Series",
+        category="vital",
+        value_type="event",
+        aggregation=AggregationSpec(kind="event", default_rollup="count"),
+        fusion=FusionPolicy(strategy="dedup", source_priority=["apple_healthkit"]),
+        source_mappings=[
+            SourceVocabularyMapping(source="apple_healthkit", source_metric="heartbeat_series")
+        ],
+    ),
     MetricDefinition(
         id="medication.dose_event",
         ontology_version=ONTOLOGY_VERSION,
