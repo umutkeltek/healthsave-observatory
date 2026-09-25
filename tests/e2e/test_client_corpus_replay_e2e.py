@@ -102,3 +102,47 @@ async def test_mixed_source_golden_lands_each_sample_under_its_own_device() -> N
 
     stored = {row["uuid"].upper(): row["device_type"] for row in rows}
     assert stored == {s["uuid"].upper(): s["source"] for s in samples}
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_series_golden_keeps_every_beat_in_postgres() -> None:
+    """The beats are the point of ``heartbeat_series``: they must reach Postgres whole.
+
+    There is no v1 table for the metric, so the receipt must still count every series as
+    accepted, and the canonical row's JSONB must hold the beat list and the HRV link as sent.
+    """
+    golden = FIXTURES / "apple_healthsave_v2" / "heartbeat_series_batch.json"
+    samples = json.loads(golden.read_text())["samples"]
+
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=30) as client:
+        resp = await client.post(
+            "/api/v2/apple/batch",
+            content=golden.read_bytes(),
+            headers={**_headers(), "Content-Type": "application/json"},
+        )
+    assert resp.status_code in (200, 201, 202), f"{resp.status_code} {resp.text[:400]}"
+    receipt = resp.json()
+    assert receipt["records_accepted"] == len(samples), receipt
+    assert receipt["records_rejected"] == 0, receipt
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        rows = await conn.fetch(
+            """
+            SELECT source_record_uid, value_json
+            FROM canonical_observations
+            WHERE metric_id = 'vital.heartbeat_series'
+              AND source_record_uid = ANY($1::text[])
+              AND status = 'active'
+            """,
+            [s["uuid"] for s in samples],
+        )
+    finally:
+        await conn.close()
+
+    stored = {row["source_record_uid"]: json.loads(row["value_json"])["summary"] for row in rows}
+    assert set(stored) == {s["uuid"] for s in samples}
+    for sample in samples:
+        summary = stored[sample["uuid"]]
+        assert summary["heartbeats"] == sample["heartbeats"]
+        assert summary.get("hrvUUID") == sample.get("hrvUUID")
