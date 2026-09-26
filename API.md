@@ -995,9 +995,11 @@ most 20 series.
 
 Data Hub stores each series as one `vital.heartbeat_series` event in
 `canonical_observations`, with the whole sample (beat list and `hrvUUID`
-included) in the value's `summary`; there is no v1 table for it. A sample whose
-`heartbeats` is missing or malformed is counted in `records_rejected` with its
-reason, never silently dropped.
+included) in the value's `summary` JSONB; there is no v1 table for it. A sample
+whose `heartbeats` is missing or malformed is counted in `records_rejected` with
+its reason, never silently dropped. No read endpoint returns the beats yet:
+`GET /api/v2/metrics/vital.heartbeat_series/series` lists each series' interval,
+and the beat list is read from the database.
 
 ### Deletion semantics
 
