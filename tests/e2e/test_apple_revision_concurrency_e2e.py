@@ -158,6 +158,77 @@ async def test_concurrent_uuid_revisions_do_not_reject_the_batch(existing_row: b
 
 
 @pytest.mark.asyncio
+async def test_concurrently_superseded_reattribution_cannot_retire_destination() -> None:
+    """An incoming identity may become old while its upsert waits on a writer."""
+    conn = await asyncpg.connect(DATABASE_URL)
+    engine = create_async_engine(DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"))
+    sample_time = datetime(2026, 9, 25, 8, 43, tzinfo=UTC)
+    original_uuid, destination_uuid, revision_uuid = (str(uuid4()) for _ in range(3))
+    second_task = None
+
+    def sample(uid):
+        return {"date": sample_time.isoformat(), "qty": 72, "uuid": uid}
+
+    try:
+        original_device = await conn.fetchval(
+            "INSERT INTO devices (device_type) VALUES ($1) RETURNING id",
+            f"e2e source old race {uuid4()}",
+        )
+        destination_device = await conn.fetchval(
+            "INSERT INTO devices (device_type) VALUES ($1) RETURNING id",
+            f"e2e source destination race {uuid4()}",
+        )
+        async with AsyncSession(engine) as seed:
+            await _ingest_dedicated(seed, original_device, "heart_rate", [sample(original_uuid)])
+            await _ingest_dedicated(
+                seed, destination_device, "heart_rate", [sample(destination_uuid)]
+            )
+            await seed.commit()
+        async with AsyncSession(engine) as first, AsyncSession(engine) as second:
+            await _ingest_dedicated(first, original_device, "heart_rate", [sample(revision_uuid)])
+            second_pid = (await second.execute(text("SELECT pg_backend_pid()"))).scalar_one()
+
+            async def write_second():
+                await _ingest_dedicated(
+                    second, destination_device, "heart_rate", [sample(original_uuid)]
+                )
+                await second.commit()
+
+            second_task = asyncio.create_task(write_second())
+            try:
+                async with asyncio.timeout(10):
+                    while not second_task.done():
+                        if (
+                            await conn.fetchval(
+                                "SELECT wait_event_type FROM pg_stat_activity WHERE pid = $1",
+                                second_pid,
+                            )
+                            == "Lock"
+                        ):
+                            break
+                        await asyncio.sleep(0.01)
+                    assert not second_task.done(), "must overlap the superseding transaction"
+            finally:
+                await first.commit()
+                await second_task
+        active_rows = await conn.fetch(
+            "SELECT source_uuid, device_id FROM heart_rate "
+            "WHERE device_id = ANY($1) AND status = 'active' ORDER BY device_id",
+            [original_device, destination_device],
+        )
+        assert [(str(r["source_uuid"]), r["device_id"]) for r in active_rows] == [
+            (revision_uuid, original_device),
+            (destination_uuid, destination_device),
+        ]
+    finally:
+        if second_task is not None and not second_task.done():
+            second_task.cancel()
+            await asyncio.gather(second_task, return_exceptions=True)
+        await engine.dispose()
+        await conn.close()
+
+
+@pytest.mark.asyncio
 async def test_v2_revision_race_commits_canonical_audit_and_projection_together() -> None:
     """Run the live v2 handler against PostgreSQL while another revision is open."""
     from server.api.v2_apple_batch import v2_apple_batch
