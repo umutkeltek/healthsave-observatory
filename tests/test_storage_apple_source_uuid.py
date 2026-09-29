@@ -77,6 +77,15 @@ class _RecordingSession:
         self.calls: list[tuple[str, dict]] = []
         self.insert_flags = list(insert_flags)
 
+    async def begin_nested(self):
+        return self
+
+    async def commit(self):
+        pass
+
+    async def rollback(self):
+        pass
+
     async def execute(self, statement, params=None):
         sql = " ".join(str(statement).split())
         self.calls.append((sql, params or {}))

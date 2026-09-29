@@ -11,7 +11,6 @@ import asyncpg
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-
 from storage.timescale.measurements import _ingest_dedicated
 
 DATABASE_URL = os.getenv("E2E_DATABASE_URL")
@@ -64,7 +63,8 @@ async def test_concurrent_uuid_revisions_do_not_reject_the_batch(existing_row: b
                 async with asyncio.timeout(10):
                     while not second_task.done():
                         wait_type = await conn.fetchval(
-                            "SELECT wait_event_type FROM pg_stat_activity WHERE pid = $1", second_pid
+                            "SELECT wait_event_type FROM pg_stat_activity WHERE pid = $1",
+                            second_pid,
                         )
                         if wait_type == "Lock":
                             break
@@ -78,7 +78,9 @@ async def test_concurrent_uuid_revisions_do_not_reject_the_batch(existing_row: b
         rows = await conn.fetch(
             "SELECT source_uuid, status FROM heart_rate "
             "WHERE time = $1 AND device_id = $2 AND owner_id = $3",
-            sample_time, device_id, OWNER,
+            sample_time,
+            device_id,
+            OWNER,
         )
         assert [str(r["source_uuid"]) for r in rows if r["status"] == "active"] == [second_uuid]
 
@@ -89,7 +91,9 @@ async def test_concurrent_uuid_revisions_do_not_reject_the_batch(existing_row: b
         active_uuid = await conn.fetchval(
             "SELECT source_uuid FROM heart_rate "
             "WHERE time = $1 AND device_id = $2 AND owner_id = $3 AND status = 'active'",
-            sample_time, device_id, OWNER,
+            sample_time,
+            device_id,
+            OWNER,
         )
         assert str(active_uuid) == second_uuid
     finally:

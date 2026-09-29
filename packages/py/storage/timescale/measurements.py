@@ -15,6 +15,7 @@ re-export shims for the API layer + plugins. This also retires the old
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from json import dumps
 from typing import TYPE_CHECKING
@@ -42,9 +43,10 @@ from normalization.parsers import (
     to_int,
 )
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from storage.results import IngestWriteResult
+from storage.results import IngestWriteResult, RetryableMeasurementConflict
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -448,6 +450,74 @@ async def _supersede_revised_source_uuids(
     )
 
 
+def _is_active_slot_conflict(exc: IntegrityError, table: str) -> bool:
+    """Recognize only this writer's legacy active-slot index, including chunks.
+
+    SQLAlchemy wraps asyncpg's error; constraint_name lives on its cause. Do
+    not infer contention from all IntegrityErrors or by parsing payload text.
+    """
+    error = exc.orig
+    seen = set()
+    while error is not None and id(error) not in seen:
+        seen.add(id(error))
+        if getattr(error, "sqlstate", None) == "23505":
+            constraint = getattr(error, "constraint_name", None)
+            if constraint is not None and re.fullmatch(
+                rf"(?:_hyper_\d+_\d+_chunk_)?uq_{re.escape(table)}", constraint
+            ):
+                return True
+        error = error.__cause__
+    return False
+
+
+async def _upsert_dedicated_identity_rows(
+    session: AsyncSession,
+    table: str,
+    rows: list[dict],
+) -> list[bool | None]:
+    """Reconcile and insert atomically, retrying only an overlapping slot write.
+
+    A concurrent transaction can replace an active row after UPDATE took its
+    snapshot. The identity INSERT then hits the other (active-slot) index.
+    Roll back the entire reconcile/insert attempt to a savepoint and retry
+    with a fresh READ COMMITTED snapshot. Canonical rows, audit records and
+    other projected devices remain in the caller's encompassing transaction.
+    """
+    columns = list(rows[0].keys())
+    update_set = ", ".join(
+        f"{c} = EXCLUDED.{c}" for c in rows[0] if c not in ("owner_id", "source_uuid", "time")
+    )
+    for attempt in range(3):
+        savepoint = await session.begin_nested()
+        try:
+            await _promote_legacy_source_uuids(session, table, rows)
+            await _supersede_revised_source_uuids(session, table, rows)
+            flags = await _execute_batch_insert_with_flags(
+                session,
+                table,
+                columns,
+                columns,
+                rows,
+                conflict_clause="(owner_id, source_uuid, time) WHERE source_uuid IS NOT NULL",
+                update_set=update_set,
+            )
+        except IntegrityError as exc:
+            await savepoint.rollback()
+            if not _is_active_slot_conflict(exc, table):
+                raise
+            if attempt == 2:
+                raise RetryableMeasurementConflict(
+                    f"Concurrent {table} revisions exceeded the retry budget; retry this batch"
+                ) from exc
+        except BaseException:
+            await savepoint.rollback()
+            raise
+        else:
+            await savepoint.commit()
+            return flags
+    raise AssertionError("bounded revision retry must return or raise")
+
+
 async def _ingest_dedicated(
     session: AsyncSession,
     device_id: int,
@@ -522,24 +592,7 @@ async def _ingest_dedicated(
         )
         dedup_count += dedup_slot
 
-        await _promote_legacy_source_uuids(session, spec["table"], rows_id)
-        await _supersede_revised_source_uuids(session, spec["table"], rows_id)
-
-        columns = list(rows_id[0].keys())
-        update_set = ", ".join(
-            f"{c} = EXCLUDED.{c}"
-            for c in rows_id[0]
-            if c not in ("owner_id", "source_uuid", "time")
-        )
-        flags_id = await _execute_batch_insert_with_flags(
-            session,
-            spec["table"],
-            columns,
-            columns,
-            rows_id,
-            conflict_clause="(owner_id, source_uuid, time) WHERE source_uuid IS NOT NULL",
-            update_set=update_set,
-        )
+        flags_id = await _upsert_dedicated_identity_rows(session, spec["table"], rows_id)
         for inserted_new in flags_id:
             result = result.with_insert_flag(inserted_new)
 

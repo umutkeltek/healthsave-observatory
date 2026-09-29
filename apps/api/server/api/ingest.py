@@ -31,6 +31,7 @@ from sqlalchemy.exc import DisconnectionError, InterfaceError, OperationalError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.defaults import observation_repository
+from storage.results import RetryableMeasurementConflict
 from storage.timescale import registry
 from storage.timescale.sync_receipts import (
     ReceiptIdempotencyConflict,
@@ -76,6 +77,7 @@ _APPLE_PLUGIN_ID = "apple-health-healthsave"
 # default here: a misclassified-transient 422 is recoverable via Backfill, while
 # a misclassified-deterministic 500 wedges the metric forever.
 _TRANSIENT_WRITE_ERRORS = (
+    RetryableMeasurementConflict,  # only the storage writer's exhausted active-slot retry
     OperationalError,  # DB disconnect / deadlock / lock timeout / admin shutdown
     InterfaceError,  # connection-interface failure
     # CONTRACT-001 gap: SQLAlchemy's connection-POOL checkout timeout is

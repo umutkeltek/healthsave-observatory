@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from typing import Any
 
 
+class RetryableMeasurementConflict(RuntimeError):
+    """Concurrent revisions exhausted the bounded, transaction-local retry budget."""
+
+
 @dataclass(frozen=True)
 class IngestWriteResult:
     """Storage write accounting for one ingest operation.
