@@ -404,10 +404,11 @@ async def _supersede_revised_source_uuids(
     legacy ``(time, device_id, owner_id) WHERE status = 'active'`` index and
     reject the whole batch. Mark the row it replaces ``superseded`` first.
 
-    Only a uuid the table has never seen retires anything: an outbox replay can
-    deliver the old revision after the new one, and that must not retire the
-    newer row (the replayed row stays ``superseded`` — the upsert never writes
-    ``status``).
+    A superseded uuid never retires anything: an outbox replay can deliver an
+    old revision after a new one and must not retire the newer row (the upsert
+    never writes ``status``). A known *active* uuid can change source/device
+    attribution, though: its identity upsert moves device_id, so it must also
+    retire an occupied destination slot before that move.
     """
     if not rows:
         return
@@ -441,8 +442,9 @@ async def _supersede_revised_source_uuids(
                 SELECT 1
                 FROM {table} AS known
                 WHERE known.owner_id = incoming.owner_id
-                  AND known.source_uuid = incoming.source_uuid
-                  AND known.time = incoming.time
+                    AND known.source_uuid = incoming.source_uuid
+                    AND known.time = incoming.time
+                    AND known.status = 'superseded'
               )
             """
         ),
