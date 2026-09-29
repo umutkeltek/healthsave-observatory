@@ -452,6 +452,48 @@ async def _supersede_revised_source_uuids(
     )
 
 
+async def _lock_identity_revision_rows(session: AsyncSession, table: str, rows: list[dict]) -> None:
+    """Lock known identities AND destination slots before deciding replacement.
+
+    An identity can become superseded while its upsert waits. Reading that
+    status without a lock could retire an unrelated destination and then move
+    only a superseded row into it. Lock both sides in a consistent order (not
+    incoming-identity order, which deadlocks opposite moves). Missing slots
+    remain protected by the bounded uniqueness retry below.
+    """
+    values = []
+    params = {}
+    for index, row in enumerate(rows):
+        values.append(
+            f"(CAST(:time_{index} AS TIMESTAMPTZ), CAST(:device_id_{index} AS INTEGER), "
+            f"CAST(:owner_id_{index} AS UUID), CAST(:source_uuid_{index} AS UUID))"
+        )
+        for key in ("time", "device_id", "owner_id", "source_uuid"):
+            params[f"{key}_{index}"] = row[key]
+    await session.execute(
+        text(
+            f"""
+            SELECT existing.owner_id, existing.time, existing.source_uuid, existing.device_id
+            FROM {table} AS existing
+            WHERE EXISTS (
+                SELECT 1
+                FROM (VALUES {", ".join(values)})
+                    AS incoming(time, device_id, owner_id, source_uuid)
+                WHERE existing.owner_id = incoming.owner_id
+                  AND existing.time = incoming.time
+                  AND (
+                    existing.source_uuid = incoming.source_uuid
+                    OR (existing.device_id = incoming.device_id AND existing.status = 'active')
+                  )
+            )
+            ORDER BY existing.owner_id, existing.time, existing.source_uuid, existing.device_id
+            FOR UPDATE OF existing
+            """
+        ),
+        params,
+    )
+
+
 def _is_active_slot_conflict(exc: IntegrityError, table: str) -> bool:
     """Recognize only this writer's legacy active-slot index, including chunks.
 
@@ -492,6 +534,7 @@ async def _upsert_dedicated_identity_rows(
     for attempt in range(3):
         savepoint = await session.begin_nested()
         try:
+            await _lock_identity_revision_rows(session, table, rows)
             await _promote_legacy_source_uuids(session, table, rows)
             await _supersede_revised_source_uuids(session, table, rows)
             flags = await _execute_batch_insert_with_flags(
