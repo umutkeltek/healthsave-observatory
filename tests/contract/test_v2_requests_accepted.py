@@ -284,6 +284,11 @@ def _v2_fake_session():
             self.rowcount = rowcount
 
     class _Session(FakeSession):
+        async def begin_nested(self):
+            from unittest.mock import AsyncMock
+
+            return AsyncMock()
+
         async def execute(self, statement, params=None):
             sql = " ".join(str(statement).split())
             if sql.startswith("UPDATE") and "'superseded'" in sql:

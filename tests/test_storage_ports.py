@@ -568,6 +568,11 @@ async def test_projection_carries_source_record_uid_as_source_uuid() -> None:
             self.calls.append((sql, params or {}))
             return _ProjectionResult({"inserted_new": True})
 
+        async def begin_nested(self):
+            from unittest.mock import AsyncMock
+
+            return AsyncMock()
+
     observed_at = datetime(2026, 8, 30, 11, 14, tzinfo=UTC)
     uid = "d2c70000-0000-4000-8000-000000000001"
     obs = Observation(

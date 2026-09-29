@@ -74,3 +74,40 @@ async def test_retry_reconciles_again_after_rolling_back_only_savepoint(monkeypa
     assert savepoint.rollback.await_count == 1
     assert savepoint.commit.await_count == 1
     assert session.rollback.await_count == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("wire_version", [1, 2])
+async def test_exhausted_revision_contention_is_not_a_permanent_payload_rejection(wire_version):
+    import server
+    from server.api.v2_apple_batch import v2_apple_batch
+    from storage.results import RetryableMeasurementConflict
+
+    from tests.test_api_contract import (
+        FakeSession,
+        _assert_failed_receipt,
+        _request_with_raising_plugin,
+    )
+
+    conflict = RetryableMeasurementConflict("synthetic concurrent revision retry exhaustion")
+    request = _request_with_raising_plugin(conflict)
+    if wire_version == 2:
+        request.payload["schema_version"] = 2
+        request.payload["samples"] = [
+            {
+                "uuid": SAMPLE["uuid"],
+                "startDate": SAMPLE["date"],
+                "endDate": SAMPLE["date"],
+                "qty": 72,
+                "unit": "count/min",
+                "source": "Apple Watch Ultra",
+            }
+        ]
+    session = FakeSession()
+    with pytest.raises(RetryableMeasurementConflict) as raised:
+        if wire_version == 2:
+            await v2_apple_batch(request, None, session)
+        else:
+            await server.apple_batch(request, session)
+    assert raised.value is conflict
+    _assert_failed_receipt(session)
