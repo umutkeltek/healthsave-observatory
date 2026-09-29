@@ -559,6 +559,9 @@ async def test_projection_carries_source_record_uid_as_source_uuid() -> None:
         def first(self):
             return self.row
 
+        def all(self):
+            return [self.row] if self.row is not None else []
+
     class _ProjectionSession:
         def __init__(self) -> None:
             self.calls: list[tuple[str, dict]] = []
@@ -566,7 +569,7 @@ async def test_projection_carries_source_record_uid_as_source_uuid() -> None:
         async def execute(self, statement, params=None):
             sql = " ".join(str(statement).split())
             self.calls.append((sql, params or {}))
-            return _ProjectionResult({"inserted_new": True})
+            return _ProjectionResult({"inserted_new": True} if sql.startswith("INSERT") else None)
 
         async def begin_nested(self):
             from unittest.mock import AsyncMock
