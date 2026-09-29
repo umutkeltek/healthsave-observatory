@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import asyncpg
 import pytest
 from server.api.ingest import _is_transient_write_error
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from storage.timescale import measurements
 
 
@@ -111,3 +111,47 @@ async def test_exhausted_revision_contention_is_not_a_permanent_payload_rejectio
             await server.apple_batch(request, session)
     assert raised.value is conflict
     _assert_failed_receipt(session)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("wire_version", [1, 2])
+@pytest.mark.parametrize(
+    "driver_error", [asyncpg.DeadlockDetectedError, asyncpg.SerializationError]
+)
+async def test_transaction_contention_is_retryable_not_bad_payload(wire_version, driver_error):
+    import server
+    from server.api.v2_apple_batch import v2_apple_batch
+
+    from tests.test_api_contract import (
+        FakeSession,
+        _assert_failed_receipt,
+        _request_with_raising_plugin,
+    )
+
+    error = DBAPIError("UPDATE", {}, driver_error("synthetic transaction contention"))
+    request = _request_with_raising_plugin(error)
+    if wire_version == 2:
+        request.payload["schema_version"] = 2
+        request.payload["samples"] = [
+            {
+                "uuid": SAMPLE["uuid"],
+                "startDate": SAMPLE["date"],
+                "endDate": SAMPLE["date"],
+                "qty": 72,
+                "unit": "count/min",
+                "source": "Apple Watch Ultra",
+            }
+        ]
+    session = FakeSession()
+    with pytest.raises(DBAPIError) as raised:
+        if wire_version == 2:
+            await v2_apple_batch(request, None, session)
+        else:
+            await server.apple_batch(request, session)
+    assert raised.value is error
+    _assert_failed_receipt(session)
+
+
+def test_unclassified_database_error_remains_nontransient():
+    for error in (asyncpg.NotNullViolationError(), asyncpg.UniqueViolationError()):
+        assert not _is_transient_write_error(DBAPIError("INSERT", {}, error))
