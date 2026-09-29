@@ -158,7 +158,12 @@ async def test_concurrent_uuid_revisions_do_not_reject_the_batch(existing_row: b
 
 
 @pytest.mark.asyncio
-async def test_concurrently_superseded_reattribution_cannot_retire_destination() -> None:
+@pytest.mark.parametrize(
+    "identity_visible", [True, False], ids=["known-identity", "absent-identity"]
+)
+async def test_concurrently_superseded_reattribution_cannot_retire_destination(
+    identity_visible,
+) -> None:
     """An incoming identity may become old while its upsert waits on a writer."""
     conn = await asyncpg.connect(DATABASE_URL)
     engine = create_async_engine(DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"))
@@ -179,12 +184,19 @@ async def test_concurrently_superseded_reattribution_cannot_retire_destination()
             f"e2e source destination race {uuid4()}",
         )
         async with AsyncSession(engine) as seed:
-            await _ingest_dedicated(seed, original_device, "heart_rate", [sample(original_uuid)])
+            if identity_visible:
+                await _ingest_dedicated(
+                    seed, original_device, "heart_rate", [sample(original_uuid)]
+                )
             await _ingest_dedicated(
                 seed, destination_device, "heart_rate", [sample(destination_uuid)]
             )
             await seed.commit()
         async with AsyncSession(engine) as first, AsyncSession(engine) as second:
+            if not identity_visible:
+                await _ingest_dedicated(
+                    first, original_device, "heart_rate", [sample(original_uuid)]
+                )
             await _ingest_dedicated(first, original_device, "heart_rate", [sample(revision_uuid)])
             second_pid = (await second.execute(text("SELECT pg_backend_pid()"))).scalar_one()
 
