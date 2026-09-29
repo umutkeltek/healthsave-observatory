@@ -395,7 +395,7 @@ async def _supersede_revised_source_uuids(
     session: AsyncSession,
     table: str,
     rows: list[dict],
-) -> None:
+) -> list[dict]:
     """Retire the active row a revised sample replaces.
 
     Apple Health revises a sample by deleting it and re-inserting it under a new
@@ -411,7 +411,7 @@ async def _supersede_revised_source_uuids(
     retire an occupied destination slot before that move.
     """
     if not rows:
-        return
+        return []
 
     values = []
     params = {}
@@ -425,7 +425,7 @@ async def _supersede_revised_source_uuids(
         params[f"owner_id_{index}"] = row["owner_id"]
         params[f"source_uuid_{index}"] = row["source_uuid"]
 
-    await session.execute(
+    result = await session.execute(
         text(
             f"""
             UPDATE {table} AS existing
@@ -446,10 +446,51 @@ async def _supersede_revised_source_uuids(
                     AND known.time = incoming.time
                     AND known.status = 'superseded'
               )
+            RETURNING incoming.owner_id, incoming.source_uuid, incoming.time
             """
         ),
         params,
     )
+    return [dict(row) for row in result.mappings().all()]
+
+
+async def _retired_identity_is_superseded(
+    session: AsyncSession,
+    table: str,
+    identities: list[dict],
+) -> bool:
+    """Validate replacements after upsert locked identities absent at preflight.
+
+    An uncommitted transaction may insert AND supersede an incoming identity,
+    invisible to the earlier lock query. ON CONFLICT then updates that old row
+    without a uniqueness error. Roll back every retirement in this savepoint
+    if such a row was used to retire a destination. The full arbiter includes
+    time and owner, not just UUID.
+    """
+    if not identities:
+        return False
+    values = []
+    params = {}
+    for index, row in enumerate(identities):
+        values.append(
+            f"(CAST(:owner_id_{index} AS UUID), CAST(:source_uuid_{index} AS UUID), "
+            f"CAST(:time_{index} AS TIMESTAMPTZ))"
+        )
+        for key in ("owner_id", "source_uuid", "time"):
+            params[f"{key}_{index}"] = row[key]
+    result = await session.execute(
+        text(f"""
+            SELECT 1 FROM {table} AS existing
+            JOIN (VALUES {", ".join(values)}) AS incoming(owner_id, source_uuid, time)
+              ON existing.owner_id = incoming.owner_id
+             AND existing.source_uuid = incoming.source_uuid
+             AND existing.time = incoming.time
+            WHERE existing.status = 'superseded'
+            LIMIT 1
+        """),
+        params,
+    )
+    return result.first() is not None
 
 
 async def _lock_identity_revision_rows(session: AsyncSession, table: str, rows: list[dict]) -> None:
@@ -531,12 +572,13 @@ async def _upsert_dedicated_identity_rows(
     update_set = ", ".join(
         f"{c} = EXCLUDED.{c}" for c in rows[0] if c not in ("owner_id", "source_uuid", "time")
     )
-    for attempt in range(3):
+    last_conflict = None
+    for _ in range(3):
         savepoint = await session.begin_nested()
         try:
             await _lock_identity_revision_rows(session, table, rows)
             await _promote_legacy_source_uuids(session, table, rows)
-            await _supersede_revised_source_uuids(session, table, rows)
+            retired_for = await _supersede_revised_source_uuids(session, table, rows)
             flags = await _execute_batch_insert_with_flags(
                 session,
                 table,
@@ -546,21 +588,25 @@ async def _upsert_dedicated_identity_rows(
                 conflict_clause="(owner_id, source_uuid, time) WHERE source_uuid IS NOT NULL",
                 update_set=update_set,
             )
+            invalid_replacement = await _retired_identity_is_superseded(session, table, retired_for)
         except IntegrityError as exc:
             await savepoint.rollback()
             if not _is_active_slot_conflict(exc, table):
                 raise
-            if attempt == 2:
-                raise RetryableMeasurementConflict(
-                    f"Concurrent {table} revisions exceeded the retry budget; retry this batch"
-                ) from exc
+            last_conflict = exc
         except BaseException:
             await savepoint.rollback()
             raise
         else:
+            if invalid_replacement:
+                await savepoint.rollback()
+                last_conflict = None
+                continue
             await savepoint.commit()
             return flags
-    raise AssertionError("bounded revision retry must return or raise")
+    raise RetryableMeasurementConflict(
+        f"Concurrent {table} revisions exceeded the retry budget; retry this batch"
+    ) from last_conflict
 
 
 async def _ingest_dedicated(

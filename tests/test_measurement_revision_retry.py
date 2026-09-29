@@ -1,6 +1,6 @@
 """Only active-slot races may be retried; retries must preserve the transaction."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import asyncpg
 import pytest
@@ -19,6 +19,9 @@ def _session() -> tuple[AsyncMock, AsyncMock]:
     session = AsyncMock()
     savepoint = AsyncMock()
     session.begin_nested.return_value = savepoint
+    result = MagicMock()
+    result.mappings.return_value.all.return_value = []
+    session.execute.return_value = result
     return session, savepoint
 
 
@@ -64,7 +67,7 @@ async def test_unrelated_integrity_failure_is_never_retried(monkeypatch, constra
 @pytest.mark.asyncio
 async def test_retry_reconciles_again_after_rolling_back_only_savepoint(monkeypatch):
     writer = AsyncMock(side_effect=[_unique_error("_hyper_1_572_chunk_uq_heart_rate"), [True]])
-    supersede = AsyncMock()
+    supersede = AsyncMock(return_value=[])
     monkeypatch.setattr(measurements, "_execute_batch_insert_with_flags", writer)
     monkeypatch.setattr(measurements, "_supersede_revised_source_uuids", supersede)
     session, savepoint = _session()
@@ -155,3 +158,34 @@ async def test_transaction_contention_is_retryable_not_bad_payload(wire_version,
 def test_unclassified_database_error_remains_nontransient():
     for error in (asyncpg.NotNullViolationError(), asyncpg.UniqueViolationError()):
         assert not _is_transient_write_error(DBAPIError("INSERT", {}, error))
+
+
+@pytest.mark.asyncio
+async def test_postwrite_eligibility_failure_rolls_back_and_has_same_bounded_budget(monkeypatch):
+    writer = AsyncMock(return_value=[True])
+    monkeypatch.setattr(measurements, "_execute_batch_insert_with_flags", writer)
+    monkeypatch.setattr(
+        measurements, "_retired_identity_is_superseded", AsyncMock(return_value=True)
+    )
+    session, savepoint = _session()
+    with pytest.raises(Exception) as raised:
+        await measurements._ingest_dedicated(session, 24, "heart_rate", [SAMPLE])
+    assert writer.await_count == savepoint.rollback.await_count == 3
+    assert savepoint.commit.await_count == session.rollback.await_count == 0
+    assert _is_transient_write_error(raised.value)
+
+
+@pytest.mark.asyncio
+async def test_postwrite_eligibility_uses_complete_arbiter_identity():
+    session, _ = _session()
+    session.execute.return_value.first.return_value = None
+    identity = {
+        "owner_id": "00000000-0000-0000-0000-000000000001",
+        "source_uuid": SAMPLE["uuid"],
+        "time": SAMPLE["date"],
+    }
+    assert not await measurements._retired_identity_is_superseded(session, "heart_rate", [identity])
+    sql, params = session.execute.await_args.args
+    for key, value in identity.items():
+        assert f"existing.{key} = incoming.{key}" in str(sql)
+        assert params[f"{key}_0"] == value
