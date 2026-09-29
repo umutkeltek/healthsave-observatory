@@ -27,7 +27,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from normalization import identity, normalize_apple_batch
 from plugin_sdk import SDK_VERSION
 from pydantic import ValidationError
-from sqlalchemy.exc import DisconnectionError, InterfaceError, OperationalError
+from sqlalchemy.exc import DBAPIError, DisconnectionError, InterfaceError, OperationalError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.defaults import observation_repository
@@ -102,6 +102,11 @@ def _is_transient_write_error(exc: BaseException) -> bool:
     connection via ``connection_invalidated`` — transient regardless of the
     concrete ``DBAPIError`` subtype, so honor that too."""
     if isinstance(exc, _TRANSIENT_WRITE_ERRORS):
+        return True
+    # asyncpg maps transaction deadlocks/serialization failures to DBAPIError,
+    # not OperationalError. The entire request transaction must retry after
+    # rollback; these two SQLSTATEs are contention, never bad sample payloads.
+    if isinstance(exc, DBAPIError) and getattr(exc.orig, "sqlstate", None) in {"40P01", "40001"}:
         return True
     return bool(getattr(exc, "connection_invalidated", False))
 
