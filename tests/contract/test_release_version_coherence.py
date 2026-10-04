@@ -12,7 +12,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts.release_notes import changelog_section, problems, pyproject_version
+from scripts.release_notes import (
+    absolute_links,
+    changelog_section,
+    problems,
+    pyproject_version,
+)
 
 
 def test_main_is_releasable_at_its_stated_version() -> None:
@@ -75,3 +80,15 @@ def test_release_notes_are_exactly_one_section(tmp_path: Path) -> None:
     )
     assert changelog_section("1.1.0", root) == "### Fixed\n\n- this one"
     assert changelog_section("1.0.1", root) is None
+
+
+def test_release_page_links_point_at_the_tagged_files() -> None:
+    base = "https://github.com/o/r/blob/v1.1.0/"
+    notes = (
+        "See [UPGRADING.md](UPGRADING.md), [docs](docs/a.md#b), "
+        "[#45](https://github.com/o/r/issues/45), [here](#upgrade), [mail](mailto:x@y.z)."
+    )
+    assert absolute_links(notes, base) == (
+        f"See [UPGRADING.md]({base}UPGRADING.md), [docs]({base}docs/a.md#b), "
+        "[#45](https://github.com/o/r/issues/45), [here](#upgrade), [mail](mailto:x@y.z)."
+    )

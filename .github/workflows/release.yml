@@ -73,7 +73,10 @@ jobs:
           python-version: "3.12"
 
       - name: Release notes from CHANGELOG.md
-        run: python scripts/release_notes.py "$GITHUB_REF_NAME" > release-notes.md
+        run: |
+          python scripts/release_notes.py "$GITHUB_REF_NAME" \
+            --link-base "https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME/" \
+            > release-notes.md
 
       - name: Create the GitHub Release
         env:

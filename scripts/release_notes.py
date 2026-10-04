@@ -8,6 +8,7 @@ in ``CHANGELOG.md`` that becomes the GitHub Release notes.
 Usage:
     python scripts/release_notes.py 1.1.0          # check, then print the notes
     python scripts/release_notes.py 1.1.0 --check  # check only
+    python scripts/release_notes.py 1.1.0 --link-base https://github.com/o/r/blob/v1.1.0/
 
 Used by ``scripts/release.sh`` before tagging, by ``.github/workflows/release.yml``
 before anything is published, and by ``tests/contract/test_release_version_coherence.py``.
@@ -57,6 +58,15 @@ def changelog_section(version: str, root: Path = REPO_ROOT) -> str | None:
     return body.strip() or None
 
 
+RELATIVE_LINK = re.compile(r"\]\((?!https?://|mailto:|#)([^)\s]+)\)")
+
+
+def absolute_links(markdown: str, base: str) -> str:
+    """Point relative links at ``base``: a GitHub Release page resolves them against
+    ``/releases/tag/``, where ``UPGRADING.md`` and the like do not exist."""
+    return RELATIVE_LINK.sub(lambda m: f"]({base}{m.group(1)})", markdown)
+
+
 def problems(version: str, root: Path = REPO_ROOT) -> list[str]:
     found: list[str] = []
     if not SEMVER.match(version):
@@ -80,6 +90,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--check", action="store_true", help="validate only, print nothing on success"
     )
+    parser.add_argument(
+        "--link-base", help="prefix for relative links, e.g. https://github.com/o/r/blob/v1.1.0/"
+    )
     args = parser.parse_args(argv)
 
     version = args.version.removeprefix("v")
@@ -89,7 +102,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"release check failed: {problem}", file=sys.stderr)
         return 1
     if not args.check:
-        print(changelog_section(version))
+        notes = changelog_section(version) or ""
+        print(absolute_links(notes, args.link_base) if args.link_base else notes)
     return 0
 
 
