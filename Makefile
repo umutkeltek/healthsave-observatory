@@ -5,7 +5,7 @@ E2E_API_PORT ?= 18000
 E2E_DB_HOST_PORT ?= 25434
 E2E_COMPOSE_ENV = COMPOSE_FILE=docker-compose.yml DB_PASSWORD=$(TEST_DATABASE_PASSWORD) GRAFANA_PASSWORD=$(E2E_GRAFANA_PASSWORD) API_HOST_PORT=$(E2E_API_PORT) DB_HOST_PORT=$(E2E_DB_HOST_PORT)
 
-.PHONY: help setup install-cli regen-lock check-lock regen-v2-schemas check-v2-schemas regen-ts-client check-ts-client typecheck-ts web-test web-typecheck regen-response-corpus check-response-corpus test e2e lint format verify-local doctor compose-up compose-down
+.PHONY: help release setup install-cli regen-lock check-lock regen-v2-schemas check-v2-schemas regen-ts-client check-ts-client typecheck-ts web-test web-typecheck regen-response-corpus check-response-corpus test e2e lint format verify-local doctor compose-up compose-down
 
 help:
 	@echo "Targets:"
@@ -30,6 +30,7 @@ help:
 	@echo "  install-cli        Install healthsave command wrapper into ~/.local/bin"
 	@echo "  compose-up         docker compose up -d"
 	@echo "  compose-down       docker compose down"
+	@echo "  release            Tag a release: make release VERSION=X.Y.Z [DRY_RUN=1] (RELEASING.md)"
 
 regen-lock:
 	@echo "Building Docker image (pinned FastAPI/Pydantic/Python)..."
@@ -131,3 +132,7 @@ compose-up:
 
 compose-down:
 	@docker compose down
+
+release:
+	@test -n "$(VERSION)" || (echo "usage: make release VERSION=X.Y.Z [DRY_RUN=1]  (see RELEASING.md)"; exit 1)
+	@DRY_RUN=$(DRY_RUN) scripts/release.sh $(VERSION)

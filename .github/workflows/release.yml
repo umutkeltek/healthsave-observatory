@@ -10,7 +10,24 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # A tag publishes nothing unless its version is the one the repo states and
+  # CHANGELOG.md has notes for it (scripts/release_notes.py, RELEASING.md).
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Tag matches pyproject, app, OpenAPI lock and CHANGELOG
+        run: python scripts/release_notes.py "$GITHUB_REF_NAME" --check
+
   release-image:
+    needs: verify
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -42,3 +59,27 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  github-release:
+    needs: [verify, release-image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Release notes from CHANGELOG.md
+        run: python scripts/release_notes.py "$GITHUB_REF_NAME" > release-notes.md
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "HealthSave Observatory $GITHUB_REF_NAME" \
+            --notes-file release-notes.md \
+            --verify-tag
