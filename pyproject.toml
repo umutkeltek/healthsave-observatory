@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "healthsave-observatory"
-version = "1.0.0"
+version = "1.1.0"
 description = "Self-hosted health-data backend for HealthSave Observatory: FastAPI, TimescaleDB, canonical observations, source/device/stream provenance, baseline-linked findings, and a private read API."
 requires-python = ">=3.12,<3.14"
 license = { text = "Elastic-2.0" }
