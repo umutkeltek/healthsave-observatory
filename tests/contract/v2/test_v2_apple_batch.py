@@ -714,6 +714,40 @@ def test_identity_gate_requires_uuid_on_anchored_samples() -> None:
         )
 
 
+def test_identity_gate_requires_uuid_on_medication_dose_events() -> None:
+    """A medication dose event is an HKSample (HKMedicationDoseEvent), so it
+    carries a uuid like any other anchored sample and the gate applies to it
+    unchanged. Pins API_REFERENCE.md's sample-key row (issue #45): uuid is
+    never optional for medication."""
+    from pydantic import ValidationError
+    from server.api.v2_apple_batch import V2AppleBatchPayload
+
+    dose = {
+        "startDate": "2026-08-30T12:00:00.000Z",
+        "endDate": "2026-08-30T12:00:00.000Z",
+        "date": "2026-08-30T12:00:00.000Z",
+        "medication_status": "taken",
+        "medication_name": "Aspirin",
+        "medication_metric": "medication_aspirin",
+        "medication_unit": "mg",
+        "source": "Health",
+    }
+    envelope = {
+        "schema_version": 2,
+        "metric": "medication_dose_event",
+        "batch_index": 0,
+        "total_batches": 1,
+    }
+
+    with pytest.raises(ValidationError, match="uuid"):
+        V2AppleBatchPayload.model_validate({**envelope, "samples": [dose]})
+
+    accepted = V2AppleBatchPayload.model_validate(
+        {**envelope, "samples": [{**dose, "uuid": "d2c70000-0000-4000-8000-00000000000a"}]}
+    )
+    assert accepted.samples[0].uuid is not None
+
+
 def test_identity_gate_requires_interval_on_uuid_samples() -> None:
     """A UUID with no interval is unmatchable — reject at the gate."""
     from pydantic import ValidationError

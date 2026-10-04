@@ -105,7 +105,7 @@ The versioned ingest route that addresses Eric Lorenzo Benjamin Jr.'s longitudin
 **Sample-key set** (pinned by `tests/contract/v2/test_v2_apple_batch.py`):
 | Key | Type | Required | Notes |
 |---|---|---|---|
-| `uuid` | UUID string | required (quantity / category / workout / ECG); optional for medication | Stable identity; supersedes via `deletions` |
+| `uuid` | UUID string | required on every anchored sample (`startDate`/`start` present): quantity, category, workout, ECG and medication dose events. Absent only on `date`-only HKStatistics aggregates | Stable HKSample identity; supersedes via `deletions` |
 | `startDate` | ISO-8601 with offset | required | Parser also accepts `start` / legacy `date` for migration window |
 | `endDate` | ISO-8601 with offset | required for intervals; falls back to `startDate` for instantaneous | |
 | `qty` | number | required (quantity) | |
