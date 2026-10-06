@@ -183,6 +183,49 @@ class FakeRequest:
         return self.payload
 
 
+@pytest.mark.asyncio
+async def test_activity_summaries_keep_bundled_fields_after_canonical_projection():
+    session = FakeSession()
+    request = FakeRequest(
+        {
+            "metric": "activity_summaries",
+            "samples": [
+                {
+                    "aggregation": "day_total",
+                    "localDate": "2026-10-06",
+                    "date": "2026-10-06T00:00:00Z",
+                    "startDate": "2026-10-06T00:00:00Z",
+                    "endDate": "2026-10-07T00:00:00Z",
+                    "activeEnergyBurned": 412,
+                    "appleExerciseTime": 31,
+                    "appleStandHours": 10,
+                    "units": {
+                        "activeEnergyBurned": "kcal",
+                        "appleExerciseTime": "min",
+                        "appleStandHours": "count",
+                    },
+                }
+            ],
+        }
+    )
+
+    result = await server.apple_batch(request, session)
+
+    canonical = next(
+        params for sql, params in session.calls if "INSERT INTO canonical_observations" in sql
+    )
+    assert {row["metric_id"] for row in canonical} == {
+        "activity.active_energy",
+        "activity.exercise_minutes",
+    }
+    daily = session.insert_params_for("daily_activity")
+    assert daily is not None
+    assert daily.get("active_calories") == 412
+    assert daily.get("active_minutes") == 31
+    assert daily.get("stand_hours") == 10
+    assert result["records"] == 1
+
+
 class BodyAwareFakeRequest(FakeRequest):
     """Request double that exposes the exact bytes sent on the wire."""
 

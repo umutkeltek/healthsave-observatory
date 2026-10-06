@@ -1648,6 +1648,13 @@ class TimescaleMeasurementProjectionRepository:
         observations: Iterable[Observation],
         owner_id: UUID = DEFAULT_OWNER_ID,
     ) -> IngestWriteResult:
+        # A summary bundles several named fields, including stand hours that
+        # have no canonical quantity mapping. Generic qty samples erase those
+        # fields before _ingest_activity sees them, so let the plugin use the
+        # field-aware raw summary writer, as it does for other composite shapes.
+        if metric == "activity_summaries":
+            return IngestWriteResult()
+
         samples = []
         for obs in observations:
             sample = _quantity_sample_from_observation(obs)

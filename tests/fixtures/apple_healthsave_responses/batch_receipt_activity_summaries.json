@@ -9,7 +9,7 @@
       "activity_summaries": {
         "accepted": 1,
         "deduped_existing": null,
-        "deduped_in_batch": 1,
+        "deduped_in_batch": 0,
         "inserted_new": null,
         "received": 1,
         "rejected": 0,
@@ -23,7 +23,7 @@
     "records": 1,
     "records_accepted": 1,
     "records_deduped_existing": null,
-    "records_deduped_in_batch": 1,
+    "records_deduped_in_batch": 0,
     "records_inserted_new": null,
     "records_received": 1,
     "records_rejected": 0,
