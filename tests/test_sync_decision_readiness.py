@@ -126,6 +126,90 @@ def test_readiness_marks_old_latest_sample_stale_even_with_fresh_coverage_state(
     assert row["freshness_seconds"] == 7 * 60 * 60
 
 
+def test_readiness_uses_newer_destination_when_the_receipt_payload_is_stale() -> None:
+    now = datetime(2026, 10, 6, 21, 30, tzinfo=UTC)
+    old_sample = now - timedelta(hours=8)
+    latest_sample = now - timedelta(minutes=5)
+
+    result = build_decision_readiness(
+        [
+            _coverage_row(
+                metric="heart_rate",
+                receipt_sample_window={
+                    "min_sample_time": old_sample,
+                    "max_sample_time": old_sample,
+                },
+                latest_destination_sample_time=latest_sample,
+                freshness_state="stale_payload",
+            )
+        ],
+        now=now,
+        known_metrics=("heart_rate",),
+    )
+    row = result["per_metric"][0]
+
+    assert row["ready"] is True
+    assert row["status"] == "ready"
+    assert row["observed_at"] == latest_sample
+    assert row["freshness_seconds"] == 5 * 60
+
+
+def test_readiness_daily_rollup_accepts_local_midnight_receipt_before_utc_date() -> None:
+    now = datetime(2026, 10, 6, 21, 30, tzinfo=UTC)
+    receipt_at = now - timedelta(minutes=4)
+    local_midnight_utc = datetime(2026, 10, 6, 21, tzinfo=UTC)
+    stored_date = datetime(2026, 10, 7, tzinfo=UTC)
+
+    result = build_decision_readiness(
+        [
+            _coverage_row(
+                metric="activity_summaries",
+                newest_receipt_at=receipt_at,
+                receipt_sample_window={
+                    "min_sample_time": local_midnight_utc,
+                    "max_sample_time": local_midnight_utc,
+                },
+                latest_destination_sample_time=stored_date,
+                freshness_state="stale_payload",
+            )
+        ],
+        now=now,
+        known_metrics=("activity_summaries",),
+    )
+    row = result["per_metric"][0]
+
+    assert row["ready"] is True
+    assert row["status"] == "ready"
+    assert row["observed_at"] == receipt_at
+    assert row["freshness_seconds"] == 4 * 60
+
+
+def test_readiness_waits_when_destination_is_actually_behind_the_receipt() -> None:
+    now = datetime(2026, 10, 6, 21, 30, tzinfo=UTC)
+    newest_sample = now - timedelta(minutes=5)
+
+    result = build_decision_readiness(
+        [
+            _coverage_row(
+                metric="heart_rate",
+                receipt_sample_window={
+                    "min_sample_time": newest_sample,
+                    "max_sample_time": newest_sample,
+                },
+                latest_destination_sample_time=now - timedelta(minutes=10),
+                freshness_state="fresh",
+            )
+        ],
+        now=now,
+        known_metrics=("heart_rate",),
+    )
+    row = result["per_metric"][0]
+
+    assert row["ready"] is False
+    assert row["status"] == "pending_materialization"
+    assert row["reason"] == "destination_is_behind_receipt_sample_window"
+
+
 def test_readiness_returns_missing_rows_for_known_unobserved_metrics() -> None:
     now = datetime(2026, 7, 1, 19, 30, tzinfo=UTC)
 

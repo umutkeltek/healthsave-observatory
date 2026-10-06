@@ -146,7 +146,11 @@ def _readiness_for_metric(
     if coverage_state == "receipt_only":
         status = "receipt_only"
         reason = "receipt_has_not_materialized_in_destination"
-    elif coverage_state == "stale_payload":
+    elif (
+        materialized_at is not None
+        and source_window_end is not None
+        and materialized_at < source_window_end
+    ):
         status = "pending_materialization"
         reason = "destination_is_behind_receipt_sample_window"
     elif coverage_state == "unknown":
@@ -231,11 +235,15 @@ def _observed_at_for_policy(
 ) -> datetime | None:
     if (
         policy.category == "daily_cumulative"
-        and coverage_state == "fresh"
+        and coverage_state in {"fresh", "stale_payload"}
         and materialized_at is not None
+        and (source_window_end is None or materialized_at >= source_window_end)
     ):
         return receipt_at or materialized_at
-    return source_window_end or materialized_at
+    # stale_payload describes an old receipt, not a lagging destination. A
+    # newer stored sample can still be ready even after a historical replay.
+    observed_samples = [sample for sample in (source_window_end, materialized_at) if sample]
+    return max(observed_samples) if observed_samples else None
 
 
 def _freshness_seconds(now: datetime, observed_at: datetime | None) -> int | None:
