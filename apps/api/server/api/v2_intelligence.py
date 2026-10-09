@@ -314,6 +314,7 @@ async def post_consent(
 
 @router.post("/test-connection")
 async def test_connection(
+    request: Request,
     body: TestConnectionRequest,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
@@ -337,7 +338,13 @@ async def test_connection(
             body.api_key or "",
         )
 
-    config = LLMConfig(provider=provider, model=model, base_url=base_url or "", api_key=api_key)
+    config = LLMConfig(
+        provider=provider,
+        model=model,
+        base_url=base_url or "",
+        api_key=api_key,
+        trusted_local_hosts=sorted(_trusted_local_hosts(request)),
+    )
     client = _make_client(config)
     try:
         result = await client.healthcheck()

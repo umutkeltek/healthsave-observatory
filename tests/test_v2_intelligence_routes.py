@@ -364,6 +364,7 @@ async def test_test_connection_inline_ok(repo, monkeypatch):
 
     monkeypatch.setattr(mod, "_make_client", lambda config: _OkClient())
     out = await mod.test_connection(
+        request=_request(),
         body=mod.TestConnectionRequest(provider="deepseek", model="deepseek/x", api_key="sk-x"),
         session=_FakeSession(),
     )
@@ -380,6 +381,7 @@ async def test_test_connection_ssrf_returns_400(repo, monkeypatch):
     monkeypatch.setattr(mod, "_make_client", lambda config: _Ssrf())
     with pytest.raises(HTTPException) as exc:
         await mod.test_connection(
+            request=_request(),
             body=mod.TestConnectionRequest(
                 provider="custom", model="m", base_url="https://sneaky.internal", api_key="k"
             ),
@@ -390,7 +392,9 @@ async def test_test_connection_ssrf_returns_400(repo, monkeypatch):
 
 async def test_test_connection_requires_provider_or_id(repo):
     with pytest.raises(HTTPException) as exc:
-        await mod.test_connection(body=mod.TestConnectionRequest(), session=_FakeSession())
+        await mod.test_connection(
+            request=_request(), body=mod.TestConnectionRequest(), session=_FakeSession()
+        )
     assert exc.value.status_code == 422
 
 
@@ -411,11 +415,67 @@ async def test_test_connection_stored_records_result(repo, monkeypatch):
 
     monkeypatch.setattr(mod, "_make_client", lambda config: _OkClient())
     out = await mod.test_connection(
-        body=mod.TestConnectionRequest(connection_id=conn_id), session=_FakeSession()
+        request=_request(),
+        body=mod.TestConnectionRequest(connection_id=conn_id),
+        session=_FakeSession(),
     )
     assert out["ok"] is True
     assert repo.connections[0].last_test_status == "ok"
     assert "provider_healthcheck" in repo.audit
+
+
+@pytest.mark.parametrize("stored", [False, True])
+@pytest.mark.parametrize("trusted", [False, True])
+async def test_connection_preserves_server_local_trust_over_http(
+    repo, monkeypatch, stored, trusted
+):
+    import httpx
+    from fastapi import FastAPI
+
+    # Documentation address; provider I/O is mocked, never sent to a LAN.
+    host = "192.0.2.46"
+    base_url = f"http://{host}:11434"
+    hosts = (host,) if trusted else ()
+    calls = []
+
+    async def complete(**kwargs):
+        calls.append(kwargs)
+        return None
+
+    # Keep the real HealthLLMClient classification and SSRF guard.
+    monkeypatch.setitem(sys.modules, "litellm", SimpleNamespace(acompletion=complete))
+    app = FastAPI()
+    app.state.analysis_config = _request(trusted=hosts).app.state.analysis_config
+    app.dependency_overrides[mod.get_session] = lambda: _FakeSession()
+    app.dependency_overrides[mod.verify_api_key] = lambda: None
+    app.include_router(mod.router)
+    payload = {"provider": "ollama", "model": "llama3.1:8b", "base_url": base_url}
+    if stored:
+        # A stored destination label must not override current server trust.
+        conn = await repo.upsert_connection(
+            _FakeSession(), provider="ollama", destination="local", base_url=base_url
+        )
+        payload = {"connection_id": conn.id, "model": "llama3.1:8b"}
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post("/api/v2/intelligence/test-connection", json=payload)
+
+    if trusted:
+        assert response.status_code == 200, response.text
+        assert response.json()["ok"] is True
+        assert response.json()["destination"] == "local"
+        assert len(calls) == 1
+        assert calls[0]["api_base"] == base_url
+        assert calls[0]["max_tokens"] == 1
+        assert calls[0]["messages"] == [{"role": "user", "content": "ping"}]
+        if stored:
+            assert "provider_healthcheck" in repo.audit
+    else:
+        assert response.status_code == 400
+        assert response.json()["detail"].startswith("unsafe target:")
+        assert calls == []
 
 
 # ── detect-local (Phase 4 easy-local discovery) ─────────────────────────
