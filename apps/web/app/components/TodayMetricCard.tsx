@@ -1,8 +1,13 @@
-import Link from "next/link";
 import type { MetricSeries } from "../lib/api";
 import { formatAgo, formatValue } from "../lib/format";
-import { dailyMedians, todayReadings } from "../lib/todayPresentation";
+import {
+  dailyReadings,
+  readingDate,
+  todayReadings,
+  trendWindow,
+} from "../lib/todayPresentation";
 import { hasOwnerDailyTotalSemantics } from "../lib/series";
+import { TodayReadingTile, TodayTileAffordance } from "./TodayExploration";
 import { Sparkline } from "./MetricCard";
 
 export function TodayMetricCard({
@@ -16,17 +21,17 @@ export function TodayMetricCard({
 }) {
   const readings = todayReadings(series);
   const latest = readings.at(-1);
-  const daily = dailyMedians(readings);
+  const daily = trendWindow(
+    dailyReadings(readings),
+    7,
+    new Date().toISOString(),
+  );
   const unit = series?.metric.canonical_unit;
   const isSleep = id === "sleep.duration" && unit === "min";
   const isDailyTotal = hasOwnerDailyTotalSemantics(readings);
-  const recentTotals = readings.slice(-7);
+  const recentTotals = daily.slice(-7);
   const largestTotal = Math.max(1, ...recentTotals.map((point) => point.value));
-  const average = readings.length
-    ? readings.reduce((sum, point) => sum + point.value, 0) / readings.length
-    : null;
   const sleepMinutes = Math.round(latest?.value ?? 0);
-  const averageMinutes = Math.round(average ?? 0);
   const value = latest
     ? isSleep
       ? Math.floor(sleepMinutes / 60)
@@ -45,31 +50,25 @@ export function TodayMetricCard({
       ? "activity"
       : "vital";
 
-  return (
-    <Link
-      href={
-        id === "sleep.duration"
-          ? "/sleep"
-          : `/library/${encodeURIComponent(id)}`
-      }
-      className={`today-metric today-metric-${tone}`}
-    >
+  const className = `today-metric today-metric-${tone}`;
+  const contents = (
+    <>
       <div className="today-metric-heading">
         <h2>{title}</h2>
-        <span aria-hidden>↗</span>
+        <TodayTileAffordance />
       </div>
       <div className="today-metric-reading">
         <strong>{value}</strong>
         {latest && <span>{displayUnit}</span>}
       </div>
       <div className="today-metric-chart" aria-hidden>
-        {isDailyTotal && readings.length >= 2 ? (
+        {isDailyTotal && daily.length >= 2 ? (
           <div className="today-total-bars">
             {recentTotals.map((point, index) => (
               <span
-                key={`${point.t}-${index}`}
+                key={`${point.date}-${index}`}
                 style={{
-                  height: `${point.value > 0 ? Math.max(3, point.value / largestTotal * 100) : 0}%`,
+                  height: `${point.value > 0 ? Math.max(3, (point.value / largestTotal) * 100) : 0}%`,
                 }}
               />
             ))}
@@ -82,28 +81,39 @@ export function TodayMetricCard({
         ) : (
           <span className="today-metric-empty">
             {latest
-              ? "More readings will build a trend"
-              : "No readings in the past 7 days"}
+              ? "More recent days will build a trend"
+              : "No readings in the past 30 days"}
           </span>
         )}
       </div>
       <div className="today-metric-footer">
-        <span>{latest ? formatAgo(latest.t) : "Waiting for data"}</span>
-        {average !== null && (
-          <span
-            title={
-              isDailyTotal
-                ? "Average of recorded daily totals; the latest day may be incomplete"
-                : "7-day average from the displayed source; sparkline shows daily medians in UTC"
-            }
-          >
-            Avg{" "}
-            {isSleep
-              ? `${Math.floor(averageMinutes / 60)}h ${averageMinutes % 60}m`
-              : formatValue(average, unit === "count" ? null : unit)}
-          </span>
+        {latest ? (
+          <>
+            <span>
+              {isDailyTotal
+                ? `Daily total · ${readingDate(latest.t)}`
+                : "Latest reading"}
+            </span>
+            <time dateTime={latest.t}>{formatAgo(latest.t)}</time>
+          </>
+        ) : (
+          <span>No recent data</span>
         )}
       </div>
-    </Link>
+    </>
+  );
+  return (
+    <TodayReadingTile
+      id={id}
+      title={title}
+      className={className}
+      readingLabel={
+        latest
+          ? `${value} ${displayUnit ?? ""}. ${isDailyTotal ? `Daily total for ${readingDate(latest.t)} UTC` : `Latest reading ${formatAgo(latest.t)}`}`
+          : "No recent readings"
+      }
+    >
+      {contents}
+    </TodayReadingTile>
   );
 }

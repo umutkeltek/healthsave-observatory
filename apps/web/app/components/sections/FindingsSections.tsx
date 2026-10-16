@@ -1,11 +1,12 @@
 // Findings page sections - the weekly brief and the evidence list stream
 // independently (both reads are cache()-deduped with the layout chrome).
 
+import Link from "next/link";
 import { EvidenceCard } from "../EvidenceCard";
 import { FindingCard, PROOF_RANGE } from "../FindingCard";
 import { WeeklyBriefCard } from "../WeeklyBriefCard";
 import { cardMetricIsPlottable } from "../../lib/findingPresentation";
-import { safeFindings, safeLatest, safeSeriesMany } from "../../lib/load";
+import { safeFindings, safeLatest, safeSeries, safeSeriesMany } from "../../lib/load";
 
 export async function BriefSection() {
   const latest = await safeLatest();
@@ -17,13 +18,52 @@ export async function BriefSection() {
   );
 }
 
-export async function FindingsEvidenceSection() {
+export async function FindingsEvidenceSection({
+  selectedId,
+}: { selectedId?: string } = {}) {
   const findings = await safeFindings();
 
   if (findings === null) {
     return (
       <section className="lead">
         <EvidenceCard findings={null} />
+      </section>
+    );
+  }
+
+  if (selectedId) {
+    const selected = /^\d+$/.test(selectedId)
+      ? findings.find((finding) => String(finding.id) === selectedId)
+      : undefined;
+    const metric = selected?.card?.metric;
+    const series =
+      metric && cardMetricIsPlottable(metric)
+        ? await safeSeries(metric, PROOF_RANGE)
+        : null;
+    return (
+      <section className="lead selected-finding" id="selected-finding">
+        <div className="today-section-heading">
+          <h2>Selected finding</h2>
+          <Link href="/findings">
+            All findings <span aria-hidden>→</span>
+          </Link>
+        </div>
+        {selected ? (
+          selected.card ? (
+            <FindingCard finding={selected} series={series} />
+          ) : (
+            <EvidenceCard
+              findings={[selected]}
+              title="Finding evidence"
+              subtitle="The recorded finding and its calculation."
+            />
+          )
+        ) : (
+          <article className="card">
+            <h3>This finding is no longer in the current list</h3>
+            <p>Open all findings to see the latest evidence.</p>
+          </article>
+        )}
       </section>
     );
   }
@@ -49,7 +89,9 @@ export async function FindingsEvidenceSection() {
   // API returns up to 200). safeSeriesMany is cache()-deduped and NUL-keyed.
   const proofMetrics = [
     ...new Set(
-      carded.map((finding) => finding.card?.metric ?? "").filter((metric) => cardMetricIsPlottable(metric)),
+      carded
+        .map((finding) => finding.card?.metric ?? "")
+        .filter((metric) => cardMetricIsPlottable(metric)),
     ),
   ];
   const seriesByMetric = await safeSeriesMany(proofMetrics, PROOF_RANGE);
@@ -59,8 +101,8 @@ export async function FindingsEvidenceSection() {
       <header className="findings-head">
         <h2>Evidence</h2>
         <p className="findings-sub">
-          Each finding, computed from your own data — the claim, its proof against your baseline, and
-          the numbers behind it.
+          Each finding, computed from your own data — the claim, its proof
+          against your baseline, and the numbers behind it.
         </p>
       </header>
       <div className="finding-cards">
@@ -68,7 +110,9 @@ export async function FindingsEvidenceSection() {
           <FindingCard
             key={finding.id}
             finding={finding}
-            series={(finding.card && seriesByMetric.get(finding.card.metric)) || null}
+            series={
+              (finding.card && seriesByMetric.get(finding.card.metric)) || null
+            }
           />
         ))}
       </div>

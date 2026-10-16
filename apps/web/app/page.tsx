@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { TodayExploration } from "./components/TodayExploration";
 
 import {
   GoalSection,
@@ -18,7 +19,11 @@ import {
 } from "./components/Skeletons";
 import { getDictionary } from "./lib/i18n";
 import { getLocale } from "./lib/i18n.server";
-import { getDashboardSections, getSavedPanels } from "./lib/prefs";
+import {
+  getDashboardSections,
+  getPinnedMetrics,
+  getSavedPanels,
+} from "./lib/prefs";
 
 export const revalidate = 30;
 
@@ -29,70 +34,76 @@ export const revalidate = 30;
 export default async function Home() {
   const sections = await getDashboardSections();
   const savedPanels = await getSavedPanels();
+  const pinnedMetrics = await getPinnedMetrics();
   const dict = getDictionary(await getLocale());
 
   return (
-    <div className="today-page">
-      <Suspense fallback={<HeroSkeleton showSignals={sections.signals} />}>
-        <HeroSection showSignals={sections.signals} />
-      </Suspense>
-
-      {sections.goal && (
-        <Suspense fallback={null}>
-          <GoalSection />
+    <TodayExploration
+      enabled={sections.story}
+      initialMetricId={pinnedMetrics[0] ?? "vital.hrv_sdnn"}
+    >
+      <div className="today-page">
+        <Suspense fallback={<HeroSkeleton showSignals={sections.signals} />}>
+          <HeroSection showSignals={sections.signals} />
         </Suspense>
-      )}
 
-      {sections.story && (
-        <Suspense fallback={<RowSkeleton />}>
-          <TodayStorySection />
-        </Suspense>
-      )}
+        {sections.goal && (
+          <Suspense fallback={null}>
+            <GoalSection />
+          </Suspense>
+        )}
 
-      {sections.savedPanels && savedPanels.length > 0 && (
-        <Suspense fallback={<GridSkeleton />}>
-          <div className="today-grid">
-            {savedPanels.map((panel) => (
-              <div key={panel.id} className="col-6">
-                <ExplorePanelCard
-                  id={panel.id}
-                  label={panel.label}
-                  encodedState={panel.state}
-                />
-              </div>
-            ))}
+        {sections.story && (
+          <Suspense fallback={<RowSkeleton />}>
+            <TodayStorySection />
+          </Suspense>
+        )}
+
+        {sections.savedPanels && savedPanels.length > 0 && (
+          <Suspense fallback={<GridSkeleton />}>
+            <div className="today-grid">
+              {savedPanels.map((panel) => (
+                <div key={panel.id} className="col-6">
+                  <ExplorePanelCard
+                    id={panel.id}
+                    label={panel.label}
+                    encodedState={panel.state}
+                  />
+                </div>
+              ))}
+            </div>
+          </Suspense>
+        )}
+
+        {(sections.vault || sections.readiness) && (
+          <div className="row-2 today-proof-row">
+            {sections.vault && (
+              <Suspense fallback={<CardSkeleton />}>
+                <details className="today-disclosure">
+                  <summary>
+                    Data privacy & sharing<span>View details</span>
+                  </summary>
+                  <VaultSection />
+                </details>
+              </Suspense>
+            )}
+            {sections.readiness && (
+              <Suspense fallback={<LeadSkeleton />}>
+                <details className="today-disclosure">
+                  <summary>
+                    Data coverage<span>View details</span>
+                  </summary>
+                  <ReadinessSection />
+                </details>
+              </Suspense>
+            )}
           </div>
-        </Suspense>
-      )}
+        )}
 
-      {(sections.vault || sections.readiness) && (
-        <div className="row-2 today-proof-row">
-          {sections.vault && (
-            <Suspense fallback={<CardSkeleton />}>
-              <details className="today-disclosure">
-                <summary>
-                  Data privacy & sharing<span>View details</span>
-                </summary>
-                <VaultSection />
-              </details>
-            </Suspense>
-          )}
-          {sections.readiness && (
-            <Suspense fallback={<LeadSkeleton />}>
-              <details className="today-disclosure">
-                <summary>
-                  Data coverage<span>View details</span>
-                </summary>
-                <ReadinessSection />
-              </details>
-            </Suspense>
-          )}
-        </div>
-      )}
+        <DashboardCustomizer sections={sections} />
 
-      <DashboardCustomizer sections={sections} />
-
-      <footer className="foot">{dict.chrome.footer}</footer>
-    </div>
+        <footer className="foot">{dict.chrome.footer}</footer>
+      </div>
+    </TodayExploration>
   );
 }

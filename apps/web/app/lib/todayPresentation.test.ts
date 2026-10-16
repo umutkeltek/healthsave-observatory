@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import type { Finding, MetricSeries, SeriesPoint } from "./api";
 import {
   dailyMedians,
+  dailyReadings,
+  trendWindow,
   sleepDurationFromStages,
   todayFindings,
   todayReadings,
@@ -41,6 +43,45 @@ function series(points: SeriesPoint[]): MetricSeries {
 }
 
 describe("Today readings", () => {
+  test("daily totals keep the latest snapshot instead of adding or averaging it", () => {
+    const readings = todayReadings(
+      series([
+        point(8000, "2026-10-02T12:00:00Z", "watch", {
+          aggregation_scope: "owner_all_source_day_total",
+        }),
+        point(2000, "2026-10-02T01:00:00Z", "watch", {
+          aggregation_scope: "owner_all_source_day_total",
+        }),
+        point(700, "2026-10-02T13:00:00Z", "phone"),
+        point(50, "2026-10-03T01:00:00Z", "watch", {
+          aggregation_scope: "owner_all_source_day_total",
+        }),
+      ]),
+    );
+    expect(dailyReadings(readings)).toEqual([
+      { date: "2026-10-02", value: 8000 },
+      { date: "2026-10-03", value: 50 },
+    ]);
+  });
+
+  test("seven-day windows include today and six previous UTC dates, without moving to stale data", () => {
+    const days = [
+      { date: "2026-10-09", value: 10 },
+      { date: "2026-10-10", value: 20 },
+      { date: "2026-10-16", value: 30 },
+      { date: "2026-10-17", value: 40 },
+    ];
+    expect(trendWindow(days, 7, "2026-10-16T23:59:00Z")).toEqual(
+      days.slice(1, 3),
+    );
+    expect(trendWindow(days.slice(0, 1), 7, "2026-10-16T01:00:00Z")).toEqual(
+      [],
+    );
+    expect(trendWindow(days.slice(0, 1), 30, "2026-10-16T01:00:00Z")).toEqual(
+      days.slice(0, 1),
+    );
+  });
+
   test("sorts valid readings and keeps a single source instead of averaging conflicting devices", () => {
     const values = todayReadings(
       series([

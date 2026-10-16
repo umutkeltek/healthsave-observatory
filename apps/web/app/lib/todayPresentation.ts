@@ -4,6 +4,55 @@ import { hasOwnerDailyTotalSemantics } from "./series";
 import { deriveNight, groupSleepNights } from "./sleep";
 
 type Reading = SeriesPoint & { value: number };
+export type TodayTrendOption = {
+  id: string;
+  title: string;
+  unit: string | null;
+  source: string;
+  kind: "daily-total" | "nightly" | "daily-median";
+  days: { date: string; value: number }[];
+  latestAt: string | null;
+};
+
+// Keep the last canonical snapshot of each day, never sum or average snapshots.
+export function dailyReadings(
+  readings: Reading[],
+): { date: string; value: number }[] {
+  if (!hasOwnerDailyTotalSemantics(readings)) return dailyMedians(readings);
+  const days = new Map<string, { date: string; value: number }>();
+  for (const point of [...readings].sort(
+    (a, b) => Date.parse(a.t) - Date.parse(b.t),
+  )) {
+    const date = new Date(point.t).toISOString().slice(0, 10);
+    days.set(date, { date, value: point.value });
+  }
+  return [...days.values()];
+}
+
+// Windows end today, not at the last observation: stale data stays visibly stale.
+export function trendWindow(
+  days: TodayTrendOption["days"],
+  count: number,
+  now: string,
+) {
+  const end = Date.parse(`${now.slice(0, 10)}T00:00:00Z`);
+  const start = end - (count - 1) * 86_400_000;
+  return days.filter(
+    ({ date }) => Date.parse(date) >= start && Date.parse(date) <= end,
+  );
+}
+
+export function readingDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+export function findingEvidenceHref(id: number): string {
+  return `/findings?finding=${id}#selected-finding`;
+}
 
 // A glance must never turn disagreement between devices into an average.
 // Prefer the canonical daily total or primary stream; otherwise show the

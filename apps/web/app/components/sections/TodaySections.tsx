@@ -1,3 +1,4 @@
+import { cache } from "react";
 import Link from "next/link";
 import { type Finding, isNarratorOff, type Privacy, type Readiness } from "../../lib/api";
 import {
@@ -16,13 +17,16 @@ import {
   safeReceipts,
   safeSeries,
   safeSeriesMany,
+  safeStreams,
 } from "../../lib/load";
 import { recoveryEvidence } from "../../lib/findingPresentation";
 import { getFocusGoal, getPinnedMetrics } from "../../lib/prefs";
-import { BaselineRibbon } from "../BaselineRibbon";
+import { TodayTrend } from "../TodayTrend";
+import { friendlyName } from "../../lib/provenance";
+import { hasOwnerDailyTotalSemantics } from "../../lib/series";
 import { TodayFindings } from "../TodayFindings";
 import { TodayMetricCard } from "../TodayMetricCard";
-import { dailyMedians, sleepDurationFromStages, todayReadings } from "../../lib/todayPresentation";
+import { dailyReadings, sleepDurationFromStages, todayReadings, type TodayTrendOption } from "../../lib/todayPresentation";
 import { ExperimentsCard } from "../ExperimentsCard";
 import { FocusGoalPicker } from "../FocusGoalPicker";
 import { GoalRibbon } from "../GoalRibbon";
@@ -294,9 +298,44 @@ export async function VaultSection() {
   );
 }
 
+// Tiles and the explorer share one window and source selection. This also
+// avoids fetching the same signals once per UI surface.
+const todaySeries30d = cache(async () => {
+  const { defs, pinned } = await gridDefs();
+  const [series, stages] = await Promise.all([
+    safeSeriesMany(defs.map((metric) => metric.id), "30d"),
+    defs.some((metric) => metric.id === "sleep.duration") ? safeSeries("sleep.stage", "30d") : null,
+  ]);
+  const displayMap = new Map(series);
+  if (defs.some((metric) => metric.id === "sleep.duration") && todayReadings(displayMap.get("sleep.duration") ?? null).length === 0) {
+    const sleep = sleepDurationFromStages(stages);
+    if (sleep) displayMap.set("sleep.duration", sleep);
+  }
+  return { defs, pinned, displayMap };
+});
+
+async function trendOptions(): Promise<TodayTrendOption[]> {
+  const [{ defs, displayMap }, streams] = await Promise.all([todaySeries30d(), safeStreams()]);
+  return defs.map(({ id, title }) => {
+    const data = displayMap.get(id) ?? null;
+    const readings = todayReadings(data);
+    const latest = readings.at(-1);
+    const dailyTotal = hasOwnerDailyTotalSemantics(readings);
+    const reconciled = latest?.source_id === "reconciled-sleep";
+    const stream = streams?.find((item) => item.id === latest?.stream_id);
+    return {
+      id, title, unit: id === "activity.steps" ? "steps" : data?.metric.canonical_unit ?? null,
+      days: dailyReadings(readings), latestAt: latest?.t ?? null,
+      kind: dailyTotal ? "daily-total" : reconciled ? "nightly" : "daily-median",
+      source: dailyTotal ? "Daily totals across sources" : reconciled ? "Reconciled sleep stages" :
+        stream ? stream.device_label ?? friendlyName(stream.source_plugin_id) : latest ? "One source selected · see full history for provenance" : "No source readings available",
+    };
+  });
+}
+
 export async function TodayStorySection() {
   if (!(await hasAnyData())) return null;
-  const [latest, findings, privacy, narratives, candidates, experiments, hrv] =
+  const [latest, findings, privacy, narratives, candidates, experiments, trends] =
     await Promise.all([
       safeLatest(),
       safeFindings(),
@@ -304,15 +343,8 @@ export async function TodayStorySection() {
       safeNarratives(),
       safeCandidates(),
       safeExperiments(),
-      safeSeries("vital.hrv_sdnn", "30d"),
+      trendOptions(),
     ]);
-  const days = dailyMedians(todayReadings(hrv));
-  const dateLabel = (date: string) =>
-    new Date(`${date}T12:00:00Z`).toLocaleDateString("en", {
-      month: "short",
-      day: "numeric",
-      timeZone: "UTC",
-    });
   const hasBrief = Boolean(latest?.weekly_summary || latest?.daily_briefing);
   return (
     <>
@@ -320,40 +352,7 @@ export async function TodayStorySection() {
         className="today-story-grid"
         aria-label="Trends and recent changes"
       >
-        <article className="card today-trend">
-          <div className="today-section-heading">
-            <div>
-              <span className="today-eyebrow">The bigger picture</span>
-              <h2>Your HRV over time</h2>
-            </div>
-            <Link href="/library/vital.hrv_sdnn">
-              Explore <span aria-hidden>↗</span>
-            </Link>
-          </div>
-          <p className="today-trend-caption">
-            SDNN · daily median · past 30 days
-          </p>
-          {days.length >= 2 ? (
-            <BaselineRibbon
-              values={days.map((day) => day.value)}
-              height={172}
-              timestamps={days.map((day) => day.date)}
-              axis={[
-                dateLabel(days[0].date),
-                dateLabel(days[days.length - 1].date),
-              ]}
-              hoverLabels={days.map((day) => dateLabel(day.date))}
-              unit="ms"
-              ariaLabel="HRV SDNN daily medians"
-            />
-          ) : (
-            <p className="empty">More daily readings will build your trend.</p>
-          )}
-          <div className="today-trend-note">
-            <span>Middle 50% of shown days · one source · UTC</span>
-            <Link href="/compare">Compare sources</Link>
-          </div>
-        </article>
+        <TodayTrend options={trends} now={new Date().toISOString()} />
         <TodayFindings findings={findings} />
       </section>
       <div className="today-secondary">
@@ -393,8 +392,8 @@ export async function TodayStorySection() {
 
 export async function SignalsSection() {
   if (!(await hasAnyData())) return null;
-  const [{ defs: baseDefs, pinned }, goal] = await Promise.all([
-    gridDefs(),
+  const [{ defs: baseDefs, pinned, displayMap }, goal] = await Promise.all([
+    todaySeries30d(),
     getFocusGoal(),
   ]);
   let defs = baseDefs;
@@ -405,19 +404,6 @@ export async function SignalsSection() {
       ...defs.filter((d) => !goalSet.has(d.id)),
     ];
   }
-  const [map, sleepStages] = await Promise.all([
-    todaySeries7d(),
-    safeSeries("sleep.stage", "7d"),
-  ]);
-  // The duration metric is optional: the Sleep page already derives nights
-  // from the real stage intervals, so use that same calculation here.
-  const sleep = map.get("sleep.duration") ?? null;
-  const reconciledSleep =
-    todayReadings(sleep).length === 0
-      ? sleepDurationFromStages(sleepStages)
-      : null;
-  const displayMap = new Map(map);
-  if (reconciledSleep) displayMap.set("sleep.duration", reconciledSleep);
   return (
     <section
       className="today-signals"
