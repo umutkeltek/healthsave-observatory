@@ -66,15 +66,15 @@ export function RecoveryHero({
   const state = score !== null ? stateFor(score) : null;
   const tone: DialTone = state ? state.tone : "muted";
   const [headline, dek] = splitSummary(summary);
-  const finiteDeltaPct = typeof deltaPct === "number" && Number.isFinite(deltaPct) ? deltaPct : null;
+  const finiteDeltaPct =
+    typeof deltaPct === "number" && Number.isFinite(deltaPct) ? deltaPct : null;
 
   return (
     <section className={`hero today-hero ${state ? `hero-${state.cls}` : ""}`}>
       <div className="today-hero-main">
         <div className="hero-lede">
-          <div className="hero-eyebrow">Today&rsquo;s lead finding</div>
-          <h1 className="hero-lede-head">{headline}</h1>
-          {dek && <p className="hero-lede-dek">{dek}</p>}
+          <div className="hero-eyebrow">Your recovery</div>
+          <h2 className="hero-lede-head">{headline}</h2>
           {byline.length > 0 && (
             <div className="hero-byline mono">
               {byline.map((item, i) => (
@@ -96,7 +96,6 @@ export function RecoveryHero({
             ) : (
               <span className="hero-chip">Building</span>
             )}
-            {evidenceLabel && <span className="hero-evidence mono">{evidenceLabel}</span>}
             {finiteDeltaPct !== null && (
               <span className="hero-delta mono">
                 {finiteDeltaPct >= 0 ? "+" : "−"}
@@ -104,6 +103,9 @@ export function RecoveryHero({
               </span>
             )}
           </div>
+          {evidenceLabel && (
+            <span className="hero-evidence">Based on {evidenceLabel}</span>
+          )}
         </div>
       </div>
 
@@ -113,7 +115,12 @@ export function RecoveryHero({
             <span>HRV baseline</span>
             <em>last reading {freshness}</em>
           </div>
-          <BaselineRibbon values={ribbon.values} band={ribbon.band} axis={ribbon.axis} live={live} />
+          <BaselineRibbon
+            values={ribbon.values}
+            band={ribbon.band}
+            axis={ribbon.axis}
+            live={live}
+          />
         </div>
       )}
 
@@ -121,6 +128,12 @@ export function RecoveryHero({
         <div className="today-contributors">
           <ContributorStack contributors={contributors} />
         </div>
+      )}
+      {dek && (
+        <details className="today-recovery-context">
+          <summary>About this reading</summary>
+          <p className="hero-lede-dek">{dek}</p>
+        </details>
       )}
     </section>
   );

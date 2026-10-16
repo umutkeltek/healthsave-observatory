@@ -1,16 +1,21 @@
 import { Suspense } from "react";
 
 import {
-GoalSection,
-HeroSection,
-ReadinessSection,
-SignalsSection,
-TodayStorySection,
-VaultSection,
+  GoalSection,
+  HeroSection,
+  ReadinessSection,
+  TodayStorySection,
+  VaultSection,
 } from "./components/sections/TodaySections";
 import { DashboardCustomizer } from "./components/DashboardCustomizer";
 import { ExplorePanelCard } from "./components/ExplorePanelCard";
-import { CardSkeleton, GridSkeleton, HeroSkeleton, LeadSkeleton, RowSkeleton } from "./components/Skeletons";
+import {
+  CardSkeleton,
+  GridSkeleton,
+  HeroSkeleton,
+  LeadSkeleton,
+  RowSkeleton,
+} from "./components/Skeletons";
 import { getDictionary } from "./lib/i18n";
 import { getLocale } from "./lib/i18n.server";
 import { getDashboardSections, getSavedPanels } from "./lib/prefs";
@@ -28,8 +33,8 @@ export default async function Home() {
 
   return (
     <div className="today-page">
-      <Suspense fallback={<HeroSkeleton />}>
-        <HeroSection />
+      <Suspense fallback={<HeroSkeleton showSignals={sections.signals} />}>
+        <HeroSection showSignals={sections.signals} />
       </Suspense>
 
       {sections.goal && (
@@ -41,12 +46,6 @@ export default async function Home() {
       {sections.story && (
         <Suspense fallback={<RowSkeleton />}>
           <TodayStorySection />
-        </Suspense>
-      )}
-
-      {sections.signals && (
-        <Suspense fallback={<GridSkeleton />}>
-          <SignalsSection />
         </Suspense>
       )}
 
@@ -70,12 +69,22 @@ export default async function Home() {
         <div className="row-2 today-proof-row">
           {sections.vault && (
             <Suspense fallback={<CardSkeleton />}>
-              <VaultSection />
+              <details className="today-disclosure">
+                <summary>
+                  Data privacy & sharing<span>View details</span>
+                </summary>
+                <VaultSection />
+              </details>
             </Suspense>
           )}
           {sections.readiness && (
             <Suspense fallback={<LeadSkeleton />}>
-              <ReadinessSection />
+              <details className="today-disclosure">
+                <summary>
+                  Data coverage<span>View details</span>
+                </summary>
+                <ReadinessSection />
+              </details>
             </Suspense>
           )}
         </div>

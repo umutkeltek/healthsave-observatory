@@ -5,7 +5,7 @@ import { rangeLabel } from "../lib/ranges";
 import { quantile } from "./chart/scale";
 import { CountUp } from "./CountUp";
 
-function Sparkline({ values, unit, label }: { values: number[]; unit?: string; label: string }) {
+export function Sparkline({ values, unit, label }: { values: number[]; unit?: string; label: string }) {
   if (values.length < 2) return null;
 
   const sorted = [...values].sort((a, b) => a - b);

@@ -15,18 +15,44 @@ export function CardSkeleton({ className = "" }: { className?: string }) {
   );
 }
 
-export function HeroSkeleton() {
+export function HeroSkeleton({
+  showSignals = true,
+}: {
+  showSignals?: boolean;
+}) {
   return (
-    <section className="hero today-hero skeleton-card" aria-hidden>
-      <div className="today-hero-main">
-        <div className="hero-lede">
-          <div className="sk sk-eyebrow" />
-          <div className="sk sk-line lg" style={{ height: 36, maxWidth: 420 }} />
-          <div className="sk sk-line" style={{ height: 56, maxWidth: 340 }} />
+    <div
+      className={`today-overview${showSignals ? "" : " today-overview-solo"}`}
+      aria-hidden
+    >
+      <section className="hero today-hero skeleton-card" aria-hidden>
+        <div className="today-hero-main">
+          <div className="hero-lede">
+            <div className="sk sk-eyebrow" />
+            <div
+              className="sk sk-line lg"
+              style={{ height: 36, maxWidth: 420 }}
+            />
+            <div className="sk sk-line" style={{ height: 56, maxWidth: 340 }} />
+          </div>
+          <div style={{ width: 160, height: 160 }} aria-hidden />
         </div>
-        <div style={{ width: 220, height: 220 }} aria-hidden />
-      </div>
-    </section>
+      </section>
+      {showSignals && (
+        <div className="today-signals">
+          <div className="sk sk-eyebrow" />
+          <div className="today-signal-grid">
+            {Array.from({ length: 6 }, (_, index) => (
+              <div className="today-metric" key={index}>
+                <div className="sk sk-eyebrow" />
+                <div className="sk sk-line lg" />
+                <div className="sk sk-line" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -17,6 +17,7 @@ type Props = {
   axis?: [string, string]; // left / right captions
   live?: boolean; // last reading <24h - adds the slow mint freshness shimmer
   hoverLabels?: string[]; // per-value captions (dates) - enables the tooltip overlay
+  timestamps?: string[]; // Real-time x positions aligned with values.
   unit?: string | null; // printed after the value in the tooltip
   ariaLabel?: string; // SVG accessible name; override so repeated figures aren't identical to AT
 };
@@ -29,6 +30,7 @@ export function BaselineRibbon({
   axis,
   live,
   hoverLabels,
+  timestamps,
   unit,
   ariaLabel = "Recent trace against your personal baseline range",
 }: Props) {
@@ -45,13 +47,17 @@ export function BaselineRibbon({
   const W = 1000;
   const H = 100;
   const padY = 12;
-  const x = (i: number) => (i / (values.length - 1)) * W;
+  const times = timestamps?.length === values.length ? timestamps.map(Date.parse) : null;
+  const timed = times !== null && times.every(Number.isFinite) && times.at(-1)! > times[0];
+  const x = (i: number) => timed
+    ? ((times![i] - times![0]) / (times!.at(-1)! - times![0])) * W
+    : (i / (values.length - 1)) * W;
   // Clamp into the domain so outliers pin at the top/bottom edge of the plot.
   const clampV = (v: number) => (v < min ? min : v > max ? max : v);
   const y = (v: number) => padY + (H - 2 * padY) * (1 - (clampV(v) - min) / span);
 
   const trace = values
-    .map((v, i) => `${i === 0 ? "M" : "L"} ${x(i).toFixed(1)} ${y(v).toFixed(1)}`)
+    .map((v, i) => `${i === 0 || (timed && times![i] - times![i - 1] > 36 * 3_600_000) ? "M" : "L"} ${x(i).toFixed(1)} ${y(v).toFixed(1)}`)
     .join(" ");
   const bandTop = y(hi);
   const bandBot = y(lo);
@@ -99,14 +105,14 @@ export function BaselineRibbon({
           <span
             key={i}
             className="ribbon-pin"
-            style={{ left: `${(i / (values.length - 1)) * 100}%`, top: `${(y(values[i]) / H) * 100}%` }}
+            style={{ left: `${x(i) / W * 100}%`, top: `${(y(values[i]) / H) * 100}%` }}
             aria-hidden
           />
         ))}
         {hoverLabels && hoverLabels.length === values.length && (
           <HoverOverlay
             points={values.map((v, i) => ({
-              xPct: (i / (values.length - 1)) * 100,
+              xPct: x(i) / W * 100,
               yPct: (y(v) / H) * 100,
               label: hoverLabels[i],
               value: `${Number(v.toFixed(1))}${unit ? ` ${unit}` : ""}`,

@@ -1,8 +1,8 @@
-import { type Finding, isNarratorOff, type MetricSeries, type Privacy, type Readiness } from "../../lib/api";
+import Link from "next/link";
+import { type Finding, isNarratorOff, type Privacy, type Readiness } from "../../lib/api";
 import {
   agoLabel,
   dataState,
-  GRID_METRICS,
   hasAnyData,
   loadReadinessSparklines,
   safeCandidates,
@@ -19,17 +19,16 @@ import {
 } from "../../lib/load";
 import { recoveryEvidence } from "../../lib/findingPresentation";
 import { getFocusGoal, getPinnedMetrics } from "../../lib/prefs";
-import { EvidenceCard } from "../EvidenceCard";
+import { BaselineRibbon } from "../BaselineRibbon";
+import { TodayFindings } from "../TodayFindings";
+import { TodayMetricCard } from "../TodayMetricCard";
+import { dailyMedians, sleepDurationFromStages, todayReadings } from "../../lib/todayPresentation";
 import { ExperimentsCard } from "../ExperimentsCard";
 import { FocusGoalPicker } from "../FocusGoalPicker";
 import { GoalRibbon } from "../GoalRibbon";
 import { LocalVaultReceipt, type VaultStep } from "../LocalVaultReceipt";
-import { MetricCard } from "../MetricCard";
-import { MobilityCard } from "../MobilityCard";
 import { ReadinessCard } from "../ReadinessCard";
-import { type BylineItem, RecoveryHero, type TodayHighlight } from "../RecoveryHero";
-import { SleepCard } from "../SleepCard";
-import { TodayPlumbing } from "../TodayPlumbing";
+import { RecoveryHero } from "../RecoveryHero";
 import { WeeklyBriefCard } from "../WeeklyBriefCard";
 
 function recoveryFinding(findings: Finding[] | null): Finding | undefined {
@@ -42,7 +41,7 @@ function recoveryScore(findings: Finding[] | null): number | null {
 
 function recoveryCompleteness(findings: Finding[] | null): string | null {
   const evidence = recoveryEvidence(recoveryFinding(findings));
-  return evidence ? `${evidence.inputCount}/${evidence.inputTotal} inputs` : null;
+  return evidence ? `${evidence.inputCount} of ${evidence.inputTotal} signals` : null;
 }
 
 const CONTRIBUTOR_DEFS = [
@@ -80,13 +79,6 @@ function readyMetricCount(readiness: Readiness | null): number {
   );
 }
 
-function metricsWithData(readiness: Readiness | null): number {
-  return (
-    readiness?.summary.metrics_with_data ??
-    readiness?.metrics.filter((metric) => metric.observation_count > 0).length ??
-    0
-  );
-}
 
 function changeCount(findings: Finding[] | null): number {
   return findings?.filter((finding) => finding.finding_type !== "recovery_score").length ?? 0;
@@ -102,52 +94,13 @@ function todaySummary(score: number | null, findings: Finding[] | null, readines
   }
   if (score >= 60) {
     return changes > 0
-      ? `You look steady. The brief below shows what changed. ${readyLine}`
+      ? `You look steady. The findings below show what changed. ${readyLine}`
       : `You look steady. No major changes need attention. ${readyLine}`;
   }
   if (score >= 45) {
     return `Some signals are worth watching today. Start with the first change below. ${readyLine}`;
   }
   return `Recovery is low today. Focus on rest, sleep, and heart-rate signals first. ${readyLine}`;
-}
-
-function todayHighlights(readiness: Readiness | null, findings: Finding[] | null, live: boolean): TodayHighlight[] {
-  return [
-    {
-      label: "Last sync",
-      value: agoLabel(readiness?.last_observation_at),
-      hint: live ? "recent readings" : "refresh soon",
-      tone: live ? "good" : "watch",
-    },
-    {
-      label: "Signals",
-      value: metricsWithData(readiness).toLocaleString(),
-      hint: "with data",
-    },
-    {
-      label: "Ready",
-      value: readyMetricCount(readiness).toLocaleString(),
-      hint: "enough history",
-    },
-    {
-      label: "Changes",
-      value: changeCount(findings).toLocaleString(),
-      hint: changeCount(findings) > 0 ? "review below" : "none flagged",
-    },
-  ];
-}
-
-// Byline for the hero lede — every atom is a fact the hero already holds
-// (that the score is measured against the personal baseline, the ready-signal
-// count, sync freshness). We deliberately do NOT print a "nights" count: the
-// only window figure on hand is the raw HRV sample count (thousands of
-// readings, not nights), so quoting it would be a misleading number.
-function heroByline(readiness: Readiness | null, freshness: string): BylineItem[] {
-  const items: BylineItem[] = [{ lead: "from ", strong: "your baseline" }];
-  const ready = readyMetricCount(readiness);
-  if (ready > 0) items.push({ strong: ready.toLocaleString(), trail: " signals ready" });
-  items.push({ lead: "synced ", strong: freshness });
-  return items;
 }
 
 function vaultSteps(privacy: Privacy | null, readiness: Readiness | null): VaultStep[] {
@@ -249,7 +202,14 @@ async function EmptyToday({ state }: { state: "empty" | "unreachable" }) {
 
 async function gridDefs(): Promise<{ defs: { id: string; title: string }[]; pinned: boolean }> {
   const pinned = await getPinnedMetrics();
-  if (pinned.length === 0) return { defs: GRID_METRICS, pinned: false };
+  if (pinned.length === 0) return { defs: [
+      { id: "sleep.duration", title: "Sleep" },
+      { id: "vital.resting_heart_rate", title: "Resting heart rate" },
+      { id: "vital.hrv_sdnn", title: "HRV · SDNN" },
+      { id: "vital.respiratory_rate", title: "Respiratory rate" },
+      { id: "activity.steps", title: "Steps" },
+      { id: "activity.active_energy", title: "Active energy" },
+    ], pinned: false };
   const catalog = await safeMetrics();
   return {
     defs: pinned.map((id) => ({
@@ -281,36 +241,34 @@ export async function GoalSection() {
   return <GoalRibbon goal={goal} seriesById={seriesById} />;
 }
 
-export async function HeroSection() {
+export async function HeroSection({ showSignals = true }: { showSignals?: boolean }) {
   const state = await dataState();
   if (state !== "data") return <EmptyToday state={state} />;
 
-  const [readiness, findings, hrv] = await Promise.all([
+  const [readiness, findings] = await Promise.all([
     safeReadiness(),
     safeFindings(),
-    safeSeries("vital.hrv_sdnn", "30d"),
   ]);
-  const ribbonValues = (hrv?.points ?? []).map((p) => p.value).filter((v): v is number => v !== null);
   const lastObs = readiness?.last_observation_at;
   const live = Boolean(lastObs && Date.now() - new Date(lastObs).getTime() < 24 * 3600_000);
   const score = recoveryScore(findings);
   const freshness = agoLabel(readiness?.last_observation_at);
 
   return (
-    <>
+    <div className={`today-overview${showSignals ? "" : " today-overview-solo"}`}>
       <RecoveryHero
         freshness={freshness}
         live={live}
         score={score}
         contributors={recoveryContributors(findings)}
         summary={todaySummary(score, findings, readiness)}
-        byline={heroByline(readiness, freshness)}
+        byline={[{ lead: "Compared with ", strong: "your baseline" }]}
         deltaPct={recoveryDelta(findings)}
         evidenceLabel={recoveryCompleteness(findings)}
-        ribbon={ribbonValues.length >= 2 ? { values: ribbonValues, axis: ["30 days ago", "today"] } : null}
+        ribbon={null}
       />
-      <TodayPlumbing highlights={todayHighlights(readiness, findings, live)} live={live} />
-    </>
+      {showSignals && <SignalsSection />}
+    </div>
   );
 }
 
@@ -338,63 +296,165 @@ export async function VaultSection() {
 
 export async function TodayStorySection() {
   if (!(await hasAnyData())) return null;
-  const [latest, findings, privacy, narratives, candidates, experiments] = await Promise.all([
-    safeLatest(),
-    safeFindings(),
-    safePrivacy(),
-    safeNarratives(),
-    safeCandidates(),
-    safeExperiments(),
-  ]);
+  const [latest, findings, privacy, narratives, candidates, experiments, hrv] =
+    await Promise.all([
+      safeLatest(),
+      safeFindings(),
+      safePrivacy(),
+      safeNarratives(),
+      safeCandidates(),
+      safeExperiments(),
+      safeSeries("vital.hrv_sdnn", "30d"),
+    ]);
+  const days = dailyMedians(todayReadings(hrv));
+  const dateLabel = (date: string) =>
+    new Date(`${date}T12:00:00Z`).toLocaleDateString("en", {
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    });
+  const hasBrief = Boolean(latest?.weekly_summary || latest?.daily_briefing);
   return (
-    <section className="today-story-grid" aria-label="Today summary and changes">
-      <div className="today-story-left">
-        <WeeklyBriefCard latest={latest} narratorOff={isNarratorOff(privacy?.provider)} history={narratives ?? []} />
-        <ExperimentsCard experiments={experiments} candidates={candidates} />
+    <>
+      <section
+        className="today-story-grid"
+        aria-label="Trends and recent changes"
+      >
+        <article className="card today-trend">
+          <div className="today-section-heading">
+            <div>
+              <span className="today-eyebrow">The bigger picture</span>
+              <h2>Your HRV over time</h2>
+            </div>
+            <Link href="/library/vital.hrv_sdnn">
+              Explore <span aria-hidden>↗</span>
+            </Link>
+          </div>
+          <p className="today-trend-caption">
+            SDNN · daily median · past 30 days
+          </p>
+          {days.length >= 2 ? (
+            <BaselineRibbon
+              values={days.map((day) => day.value)}
+              height={172}
+              timestamps={days.map((day) => day.date)}
+              axis={[
+                dateLabel(days[0].date),
+                dateLabel(days[days.length - 1].date),
+              ]}
+              hoverLabels={days.map((day) => dateLabel(day.date))}
+              unit="ms"
+              ariaLabel="HRV SDNN daily medians"
+            />
+          ) : (
+            <p className="empty">More daily readings will build your trend.</p>
+          )}
+          <div className="today-trend-note">
+            <span>Middle 50% of shown days · one source · UTC</span>
+            <Link href="/compare">Compare sources</Link>
+          </div>
+        </article>
+        <TodayFindings findings={findings} />
+      </section>
+      <div className="today-secondary">
+        {hasBrief ? (
+          <WeeklyBriefCard
+            latest={latest}
+            narratorOff={isNarratorOff(privacy?.provider)}
+            history={narratives ?? []}
+          />
+        ) : (
+          <details className="today-disclosure">
+            <summary>
+              Weekly brief
+              <span>
+                {isNarratorOff(privacy?.provider)
+                  ? "Briefs are off"
+                  : "Not available yet"}
+              </span>
+            </summary>
+            <WeeklyBriefCard
+              latest={latest}
+              narratorOff={isNarratorOff(privacy?.provider)}
+              history={narratives ?? []}
+            />
+          </details>
+        )}
+        <details className="today-disclosure">
+          <summary>
+            Experiments<span>Ideas & progress</span>
+          </summary>
+          <ExperimentsCard experiments={experiments} candidates={candidates} />
+        </details>
       </div>
-      <EvidenceCard findings={findings} compact />
-    </section>
+    </>
   );
 }
 
 export async function SignalsSection() {
   if (!(await hasAnyData())) return null;
-  const [{ defs: baseDefs, pinned }, goal] = await Promise.all([gridDefs(), getFocusGoal()]);
+  const [{ defs: baseDefs, pinned }, goal] = await Promise.all([
+    gridDefs(),
+    getFocusGoal(),
+  ]);
   let defs = baseDefs;
   if (goal) {
     const goalSet = new Set(goal.metricIds);
-    defs = [...defs.filter((d) => goalSet.has(d.id)), ...defs.filter((d) => !goalSet.has(d.id))];
+    defs = [
+      ...defs.filter((d) => goalSet.has(d.id)),
+      ...defs.filter((d) => !goalSet.has(d.id)),
+    ];
   }
-  // Pull both the metric grid series and the dedicated mobility-card series in
-  // one batch — fewer round-trips to the backend per Today page render.
-  const mobilityIds = [
-    "vital.walking_heart_rate_average",
-    "mobility.walking_speed",
-    "mobility.walking_step_length",
-    "mobility.walking_asymmetry",
-  ];
-  const [map, sleep, mobility] = await Promise.all([
+  const [map, sleepStages] = await Promise.all([
     todaySeries7d(),
     safeSeries("sleep.stage", "7d"),
-    safeSeriesMany(mobilityIds, "7d"),
   ]);
-  const mobilitySeries: Record<string, MetricSeries | null> = {
-    "vital.walking_heart_rate_average": mobility.get("vital.walking_heart_rate_average") ?? null,
-    "mobility.walking_speed": mobility.get("mobility.walking_speed") ?? null,
-    "mobility.walking_step_length": mobility.get("mobility.walking_step_length") ?? null,
-    "mobility.walking_asymmetry": mobility.get("mobility.walking_asymmetry") ?? null,
-  };
+  // The duration metric is optional: the Sleep page already derives nights
+  // from the real stage intervals, so use that same calculation here.
+  const sleep = map.get("sleep.duration") ?? null;
+  const reconciledSleep =
+    todayReadings(sleep).length === 0
+      ? sleepDurationFromStages(sleepStages)
+      : null;
+  const displayMap = new Map(map);
+  if (reconciledSleep) displayMap.set("sleep.duration", reconciledSleep);
   return (
-    <>
-      <div className="section-label">Signals{pinned ? " - pinned" : ""}</div>
-      <section className="grid today-signals-grid">
-        {defs.map((metric) => (
-          <MetricCard key={metric.id} series={map.get(metric.id) ?? null} fallbackTitle={metric.title} />
+    <section
+      className="today-signals"
+      aria-label={pinned ? "Pinned readings" : "Your latest readings"}
+    >
+      <div className="today-section-heading">
+        <h2>{pinned ? "Your pinned readings" : "Your latest readings"}</h2>
+        <Link href="/library">
+          All signals <span aria-hidden>↗</span>
+        </Link>
+      </div>
+      <div className="today-signal-grid">
+        {defs.slice(0, 6).map((metric) => (
+          <TodayMetricCard
+            key={metric.id}
+            id={metric.id}
+            title={metric.title}
+            series={displayMap.get(metric.id) ?? null}
+          />
         ))}
-        <SleepCard series={sleep} />
-        <MobilityCard seriesByMetric={mobilitySeries} />
-      </section>
-    </>
+      </div>
+      {defs.length > 6 && (
+        <details className="today-more-signals">
+          <summary>{defs.length - 6} more pinned readings</summary>
+          <div className="today-signal-grid">
+            {defs.slice(6).map((metric) => (
+              <TodayMetricCard
+                key={metric.id}
+                id={metric.id}
+                title={metric.title}
+                series={displayMap.get(metric.id) ?? null}
+              />
+            ))}
+          </div>
+        </details>
+      )}
+    </section>
   );
 }
 
@@ -402,5 +462,7 @@ export async function ReadinessSection() {
   if (!(await hasAnyData())) return null;
   const readiness = await safeReadiness();
   const sparklines = await loadReadinessSparklines(readiness);
-  return <ReadinessCard readiness={readiness} sparklines={sparklines} compact />;
+  return (
+    <ReadinessCard readiness={readiness} sparklines={sparklines} compact />
+  );
 }
