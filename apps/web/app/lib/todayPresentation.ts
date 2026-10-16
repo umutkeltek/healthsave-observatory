@@ -4,6 +4,50 @@ import { hasOwnerDailyTotalSemantics } from "./series";
 import { deriveNight, groupSleepNights } from "./sleep";
 
 type Reading = SeriesPoint & { value: number };
+export const DEFAULT_TODAY_METRICS = [
+  { id: "sleep.duration", title: "Sleep" },
+  { id: "vital.resting_heart_rate", title: "Resting heart rate" },
+  { id: "vital.hrv_sdnn", title: "HRV · SDNN" },
+  { id: "vital.respiratory_rate", title: "Respiratory rate" },
+  { id: "activity.steps", title: "Steps" },
+  { id: "activity.active_energy", title: "Active energy" },
+];
+
+export type RecoveryRecency = "current" | "older" | "unknown";
+export function recoveryRecency(
+  computedAt: string | null | undefined,
+  now = Date.now(),
+): RecoveryRecency {
+  const time = computedAt ? Date.parse(computedAt) : NaN;
+  if (!Number.isFinite(time) || time > now) return "unknown";
+  return now - time < 24 * 3_600_000 ? "current" : "older";
+}
+
+export type TodayRange = 7 | 30;
+export function todaySelection(
+  params: { get: (key: string) => string | null } | null,
+  ids: string[],
+  initialId: string,
+) {
+  const requestedId = params?.get("metric");
+  return {
+    selectedId:
+      requestedId && ids.includes(requestedId) ? requestedId : initialId,
+    range: (params?.get("range") === "7d" ? 7 : 30) as TodayRange,
+  };
+}
+
+export function todaySelectionUrl(
+  currentUrl: string,
+  id: string,
+  range: TodayRange,
+) {
+  const url = new URL(currentUrl);
+  url.searchParams.set("metric", id);
+  url.searchParams.set("range", `${range}d`);
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
 export type TodayTrendOption = {
   id: string;
   title: string;

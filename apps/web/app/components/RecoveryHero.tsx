@@ -1,3 +1,5 @@
+import Link from "next/link";
+import type { RecoveryRecency } from "../lib/todayPresentation";
 import { BaselineRibbon } from "./BaselineRibbon";
 import { BodyDial, type DialTone } from "./BodyDial";
 import { type Contributor, ContributorStack } from "./ContributorStack";
@@ -52,6 +54,10 @@ export function RecoveryHero({
   byline = [],
   deltaPct = null,
   evidenceLabel = null,
+  recency = "current",
+  computedAt,
+  evidenceHref,
+  unavailable = false,
 }: {
   freshness: string;
   score: number | null;
@@ -62,19 +68,56 @@ export function RecoveryHero({
   byline?: BylineItem[];
   deltaPct?: number | null;
   evidenceLabel?: string | null;
+  recency?: RecoveryRecency;
+  computedAt?: string | null;
+  evidenceHref?: string;
+  unavailable?: boolean;
 }) {
-  const state = score !== null ? stateFor(score) : null;
+  const state =
+    score !== null && recency === "current" ? stateFor(score) : null;
   const tone: DialTone = state ? state.tone : "muted";
   const [headline, dek] = splitSummary(summary);
   const finiteDeltaPct =
     typeof deltaPct === "number" && Number.isFinite(deltaPct) ? deltaPct : null;
+  const dated =
+    recency !== "unknown" &&
+    computedAt &&
+    Number.isFinite(Date.parse(computedAt));
 
   return (
     <section className={`hero today-hero ${state ? `hero-${state.cls}` : ""}`}>
       <div className="today-hero-main">
         <div className="hero-lede">
-          <div className="hero-eyebrow">Your recovery</div>
+          <div className="hero-eyebrow today-recovery-heading">
+            <span>Your recovery</span>
+            {evidenceHref && (
+              <Link className="today-recovery-evidence" href={evidenceHref}>
+                View evidence <span aria-hidden>↗</span>
+              </Link>
+            )}
+          </div>
           <h2 className="hero-lede-head">{headline}</h2>
+          {score !== null &&
+            (computedAt !== undefined || recency !== "current") && (
+              <div className="today-estimate-date">
+                {dated ? (
+                  <time dateTime={computedAt}>
+                    Computed{" "}
+                    {new Date(computedAt).toLocaleString("en", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hourCycle: "h23",
+                      timeZone: "UTC",
+                    })}{" "}
+                    UTC
+                  </time>
+                ) : (
+                  "Calculation date unavailable"
+                )}
+              </div>
+            )}
           {byline.length > 0 && (
             <div className="hero-byline mono">
               {byline.map((item, i) => (
@@ -89,14 +132,30 @@ export function RecoveryHero({
         </div>
 
         <div className={`hero-instrument dial-tone-${tone}`}>
-          <BodyDial score={score} tone={tone} caption="Recovery" />
+          <BodyDial
+            score={score}
+            tone={tone}
+            caption={
+              score !== null && recency !== "current"
+                ? "Last estimate"
+                : "Recovery"
+            }
+          />
           <div className="hero-instrument-meta">
             {state ? (
               <span className="hero-chip">{state.label}</span>
             ) : (
-              <span className="hero-chip">Building</span>
+              <span className="hero-chip">
+                {score !== null
+                  ? recency === "older"
+                    ? "Older estimate"
+                    : "Date unavailable"
+                  : unavailable
+                    ? "Unavailable"
+                    : "Building"}
+              </span>
             )}
-            {finiteDeltaPct !== null && (
+            {finiteDeltaPct !== null && recency === "current" && (
               <span className="hero-delta mono">
                 {finiteDeltaPct >= 0 ? "+" : "−"}
                 {Math.abs(finiteDeltaPct).toFixed(0)}% vs baseline

@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { DEFAULT_TODAY_METRICS } from "./lib/todayPresentation";
 import { TodayExploration } from "./components/TodayExploration";
 
 import {
@@ -40,6 +41,11 @@ export default async function Home() {
   return (
     <TodayExploration
       enabled={sections.story}
+      metricIds={
+        pinnedMetrics.length
+          ? pinnedMetrics
+          : DEFAULT_TODAY_METRICS.map((metric) => metric.id)
+      }
       initialMetricId={pinnedMetrics[0] ?? "vital.hrv_sdnn"}
     >
       <div className="today-page">

@@ -26,7 +26,7 @@ import { friendlyName } from "../../lib/provenance";
 import { hasOwnerDailyTotalSemantics } from "../../lib/series";
 import { TodayFindings } from "../TodayFindings";
 import { TodayMetricCard } from "../TodayMetricCard";
-import { dailyReadings, sleepDurationFromStages, todayReadings, type TodayTrendOption } from "../../lib/todayPresentation";
+import { DEFAULT_TODAY_METRICS, recoveryRecency, findingEvidenceHref, dailyReadings, sleepDurationFromStages, todayReadings, type TodayTrendOption } from "../../lib/todayPresentation";
 import { ExperimentsCard } from "../ExperimentsCard";
 import { FocusGoalPicker } from "../FocusGoalPicker";
 import { GoalRibbon } from "../GoalRibbon";
@@ -94,7 +94,7 @@ function todaySummary(score: number | null, findings: Finding[] | null, readines
   const readyLine = ready > 0 ? `${ready} signals have enough history.` : "Your baseline is still building.";
 
   if (score === null) {
-    return `Your data is syncing. ${readyLine}`;
+    return `Recovery is still building. ${readyLine}`;
   }
   if (score >= 60) {
     return changes > 0
@@ -206,14 +206,7 @@ async function EmptyToday({ state }: { state: "empty" | "unreachable" }) {
 
 async function gridDefs(): Promise<{ defs: { id: string; title: string }[]; pinned: boolean }> {
   const pinned = await getPinnedMetrics();
-  if (pinned.length === 0) return { defs: [
-      { id: "sleep.duration", title: "Sleep" },
-      { id: "vital.resting_heart_rate", title: "Resting heart rate" },
-      { id: "vital.hrv_sdnn", title: "HRV · SDNN" },
-      { id: "vital.respiratory_rate", title: "Respiratory rate" },
-      { id: "activity.steps", title: "Steps" },
-      { id: "activity.active_energy", title: "Active energy" },
-    ], pinned: false };
+  if (pinned.length === 0) return { defs: DEFAULT_TODAY_METRICS, pinned: false };
   const catalog = await safeMetrics();
   return {
     defs: pinned.map((id) => ({
@@ -257,6 +250,15 @@ export async function HeroSection({ showSignals = true }: { showSignals?: boolea
   const live = Boolean(lastObs && Date.now() - new Date(lastObs).getTime() < 24 * 3600_000);
   const score = recoveryScore(findings);
   const freshness = agoLabel(readiness?.last_observation_at);
+  const finding = recoveryFinding(findings);
+  const recency = recoveryRecency(finding?.created_at);
+  const summary = findings === null
+    ? "Recovery could not load. You can still explore your recorded readings."
+    : score !== null && recency !== "current"
+      ? recency === "older"
+        ? "Your last recovery estimate. This calculation is over 24 hours old. Explore your latest readings below."
+        : "Recovery date unavailable. The date of this estimate could not be verified. Explore your latest readings below."
+      : todaySummary(score, findings, readiness);
 
   return (
     <div className={`today-overview${showSignals ? "" : " today-overview-solo"}`}>
@@ -265,7 +267,11 @@ export async function HeroSection({ showSignals = true }: { showSignals?: boolea
         live={live}
         score={score}
         contributors={recoveryContributors(findings)}
-        summary={todaySummary(score, findings, readiness)}
+        summary={summary}
+        recency={recency}
+        computedAt={finding?.created_at}
+        evidenceHref={finding ? findingEvidenceHref(finding.id) : undefined}
+        unavailable={findings === null}
         byline={[{ lead: "Compared with ", strong: "your baseline" }]}
         deltaPct={recoveryDelta(findings)}
         evidenceLabel={recoveryCompleteness(findings)}

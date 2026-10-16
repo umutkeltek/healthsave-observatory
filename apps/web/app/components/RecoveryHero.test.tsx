@@ -3,6 +3,28 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { RecoveryHero } from "./RecoveryHero";
 
 describe("RecoveryHero", () => {
+  test("an older estimate is dated, muted, and linked to its calculation instead of presented as current", () => {
+    const html = renderToStaticMarkup(
+      <RecoveryHero
+        freshness="just now"
+        score={92}
+        summary="Your last recovery estimate. This calculation is over 24 hours old."
+        ribbon={null}
+        recency="older"
+        computedAt="2026-10-13T06:00:00Z"
+        evidenceHref="/findings?finding=103#selected-finding"
+        deltaPct={20}
+      />,
+    );
+    expect(html).toContain("Older estimate");
+    expect(html).toContain("Last estimate");
+    expect(html).toContain("dial-tone-muted");
+    expect(html).toContain('dateTime="2026-10-13T06:00:00Z"');
+    expect(html).toContain('href="/findings?finding=103#selected-finding"');
+    expect(html).not.toContain("Prime");
+    expect(html).not.toContain("+20% vs baseline");
+  });
+
   test("shows the headline and dek split from the summary", () => {
     const html = renderToStaticMarkup(
       <RecoveryHero
@@ -31,10 +53,20 @@ describe("RecoveryHero", () => {
 
   test("maps score 65 to Steady and score 50 to Caution", () => {
     const html65 = renderToStaticMarkup(
-      <RecoveryHero freshness="fresh" score={65} summary="Steady day. Nothing dramatic." ribbon={null} />,
+      <RecoveryHero
+        freshness="fresh"
+        score={65}
+        summary="Steady day. Nothing dramatic."
+        ribbon={null}
+      />,
     );
     const html50 = renderToStaticMarkup(
-      <RecoveryHero freshness="fresh" score={50} summary="Caution day. Watch your load." ribbon={null} />,
+      <RecoveryHero
+        freshness="fresh"
+        score={50}
+        summary="Caution day. Watch your load."
+        ribbon={null}
+      />,
     );
     expect(html65).toContain("Steady");
     expect(html50).toContain("Caution");
@@ -42,7 +74,12 @@ describe("RecoveryHero", () => {
 
   test("renders 'Building' chip and muted tone when score is null", () => {
     const html = renderToStaticMarkup(
-      <RecoveryHero freshness="fresh" score={null} summary="Building…" ribbon={null} />,
+      <RecoveryHero
+        freshness="fresh"
+        score={null}
+        summary="Building…"
+        ribbon={null}
+      />,
     );
     expect(html).toContain("Building");
     expect(html).toContain("dial-tone-muted");
@@ -50,7 +87,12 @@ describe("RecoveryHero", () => {
 
   test("shows evidence label only when provided", () => {
     const without = renderToStaticMarkup(
-      <RecoveryHero freshness="fresh" score={70} summary="Steady. Calm baseline." ribbon={null} />,
+      <RecoveryHero
+        freshness="fresh"
+        score={70}
+        summary="Steady. Calm baseline."
+        ribbon={null}
+      />,
     );
     const withEvidence = renderToStaticMarkup(
       <RecoveryHero

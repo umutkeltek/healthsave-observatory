@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { formatValue } from "../lib/format";
 import {
   readingDate,
@@ -19,7 +18,7 @@ export function TodayTrend({
   now: string;
 }) {
   const exploration = useTodayExploration();
-  const [range, setRange] = useState(30);
+  const range = exploration?.range ?? 30;
   const option =
     options.find((item) => item.id === exploration?.selectedId) ?? options[0];
   if (!option) return null;
@@ -46,6 +45,9 @@ export function TodayTrend({
       className="card today-trend"
       id="today-reading-detail"
       aria-label="Reading explorer"
+      aria-labelledby="today-trend-title"
+      tabIndex={-1}
+      ref={exploration?.registerDetail}
     >
       <div className="today-section-heading">
         <div>
@@ -53,12 +55,12 @@ export function TodayTrend({
           <h2 id="today-trend-title">{option.title} over time</h2>
         </div>
         <div className="today-range" role="group" aria-label="Chart time range">
-          {[7, 30].map((count) => (
+          {([7, 30] as const).map((count) => (
             <button
               key={count}
               type="button"
               aria-pressed={range === count}
-              onClick={() => setRange(count)}
+              onClick={() => exploration?.setRange(count)}
             >
               {count} days
             </button>

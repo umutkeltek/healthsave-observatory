@@ -4,6 +4,9 @@ import {
   dailyMedians,
   dailyReadings,
   trendWindow,
+  recoveryRecency,
+  todaySelection,
+  todaySelectionUrl,
   sleepDurationFromStages,
   todayFindings,
   todayReadings,
@@ -43,6 +46,38 @@ function series(points: SeriesPoint[]): MetricSeries {
 }
 
 describe("Today readings", () => {
+  test("recovery ages independently of sync, with explicit missing and future-date states", () => {
+    const now = Date.parse("2026-10-17T06:00:00Z");
+    expect(recoveryRecency("2026-10-17T05:59:00Z", now)).toBe("current");
+    expect(recoveryRecency("2026-10-16T06:00:00Z", now)).toBe("older");
+    expect(recoveryRecency(null, now)).toBe("unknown");
+    expect(recoveryRecency("not-a-date", now)).toBe("unknown");
+    expect(recoveryRecency("2026-10-18T00:00:00Z", now)).toBe("unknown");
+  });
+
+  test("exploration links restore known metrics and ranges and safely default unknown ones", () => {
+    const ids = ["vital.hrv_sdnn", "activity.steps"];
+    const href = todaySelectionUrl(
+      "http://localhost:4173/?mode=observatory#today-reading-detail",
+      "activity.steps",
+      7,
+    );
+    const url = new URL(href, "http://localhost:4173");
+    expect(url.searchParams.get("mode")).toBe("observatory");
+    expect(url.hash).toBe("#today-reading-detail");
+    expect(todaySelection(url.searchParams, ids, ids[0])).toEqual({
+      selectedId: "activity.steps",
+      range: 7,
+    });
+    expect(
+      todaySelection(
+        new URLSearchParams("metric=missing&range=999d"),
+        ids,
+        ids[0],
+      ),
+    ).toEqual({ selectedId: "vital.hrv_sdnn", range: 30 });
+  });
+
   test("daily totals keep the latest snapshot instead of adding or averaging it", () => {
     const readings = todayReadings(
       series([
