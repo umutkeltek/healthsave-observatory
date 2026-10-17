@@ -6136,9 +6136,18 @@ body {
 }
 @media (max-width: 560px) {
   .today-trend > .today-section-heading { align-items: start; flex-wrap: wrap; }
-  .today-range button { min-height: 38px; }
+  .today-range button { min-height: 44px; min-width: 44px; }
   .today-metric-picker { flex: 1 1 100%; }
-  .today-metric-picker select { flex: 1; }
+  .today-metric-picker select { flex: 1; min-height: 44px; font-size: 16px; }
+  .today-recovery-evidence,
+  .today-section-heading > a,
+  .today-trend-controls > a,
+  .today-trend-note > a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .today-trend-data > summary { padding-block: 14px; }
 }
 @media (max-width: 380px) {
   .today-overview .today-hero-main { grid-template-columns: minmax(0, 1fr); }
