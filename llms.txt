@@ -1,0 +1,84 @@
+# HealthSave Observatory
+
+> Self-hosted backend for the HealthSave iOS app. It brings Apple Health data (and Whoop, Amazfit, Garmin and Samsung data) into one canonical record in TimescaleDB on your own hardware, then serves it to an insight-first web app, bundled Grafana dashboards, a private v2 read API, optional local-AI briefings, and Home Assistant over MQTT. Raw observations stay on the host unless you enable an egress route.
+
+Key facts for assistants:
+
+- Runs as a Docker Compose v2 stack on macOS, Linux, or WSL2 (laptop, NAS, Proxmox VM, homelab box). Install with `npm i -g healthsave && healthsave onboard`, or `npx healthsave`. Check a running stack with `healthsave doctor`.
+- Default ports: API 8000, Observatory web 4173, Grafana 3000, TimescaleDB 5432.
+- Pair the HealthSave iOS app in Settings → Server Sync with the base server URL (for example `http://<server-lan-ip>:8000`); the app appends the API paths itself.
+- Two API surfaces. v1 ingest (`POST /api/apple/batch`, `GET /api/apple/status`, `GET /api/health`) is frozen because the App Store app depends on it byte for byte. `/api/v2/*` is the evolving read API for your own scripts and dashboards. Send `X-API-Key` when `API_KEY` is set.
+- Two-brain analytics: a statistical engine computes findings; an optional language model (local Ollama) only narrates them. Cloud narration is opt-in and receives derived findings only, never raw rows.
+- Licensing: the core is source-available under the Elastic License 2.0 (self-hosting is free; offering it as a hosted service to others is not permitted). The protocol, contracts and SDK layer are Apache-2.0. Do not describe the core as "open source".
+
+## Start here
+
+- [README](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/README.md): What Observatory is, screenshots of each surface, install and pairing in brief.
+- [Documentation index](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/README.md): Map of every docs page by topic.
+- [Overview](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/overview.md): Product layers, which are required, and how data flows from sources to surfaces.
+- [Zero to Ready](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/zero-to-ready.md): Full clean-machine walkthrough from Docker install to iOS sync, web, Grafana, optional AI and Home Assistant.
+- [Quick Start](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/quick-start.md): Install paths per platform, Basic vs Advanced setup, health checks, non-interactive setup for agents and CI.
+- [Connect HealthSave](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/connect-healthsave.md): Pairing the iOS app, LAN URL rules, and what needs the one-time Pro unlock.
+
+## Concepts
+
+- [Private Body Observatory](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/concepts/private-body-observatory.md): Why one private, owned, long-term record of body data on your own hardware.
+- [Source, Device, Stream](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/concepts/source-device-stream.md): The three-part identity on every observation and how it prevents double counting.
+- [Canonical observations](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/concepts/canonical-observations.md): The single append-only record type, its tagged value shapes, and read-time fusion.
+- [Privacy & egress](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/concepts/privacy-and-egress.md): The default-deny trust boundary: what may leave the host, what never does, and how to audit it.
+
+## Capture
+
+- [Capture overview](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/capture/index.md): Every way data gets in today, and the source-agnostic capture model.
+- [Apple Health](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/capture/apple-health.md): HealthKit coverage through the HealthSave iOS app and the `/api/apple/batch` route.
+- [Whoop & Amazfit plugins](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/capture/plugins-whoop-amazfit.md): Poll-based vendor-cloud plugins: credentials, encrypted storage, emitted metrics, operator commands.
+- [Garmin & Samsung importers](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/capture/importers-garmin-samsung.md): CLI importers for Garmin Connect and Samsung/Huawei Health exports through the normal ingest path.
+- [Android & webhooks roadmap](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/capture/roadmap-android-webhooks.md): Planned universal ingest: a signed, idempotent batch endpoint for any registered source.
+
+## API
+
+- [API overview](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/api/index.md): The frozen v1 ingest surface vs the evolving v2 read surface, and authentication.
+- [v1 Apple contract](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/api/v1-apple-contract.md): The three frozen routes the App Store app depends on, with request and response shapes.
+- [v2 read API](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/api/v2-read-api.md): Orientation map of `/api/v2/*`: auth, versioning, and which endpoints are open.
+- [API reference](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/API_REFERENCE.md): Payload-level request/response examples for every endpoint, v1 and v2, and who calls each one.
+- [API contract (v1 prose)](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/API.md): Long-form frozen v1 ingest contract: batch format, status shape, raw ingestion log, daily metrics.
+
+## Surfaces
+
+- [Observatory web](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/surfaces/observatory-web.md): The primary Next.js surface: today vs your baseline, what changed, and where each reading came from.
+- [Grafana](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/surfaces/grafana.md): Bundled SQL-backed power-user dashboards and what is provisioned.
+- [Web vs Grafana](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/surfaces/web-vs-grafana.md): Which surface to use for what.
+- [Findings & Body Briefs](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/surfaces/findings-and-body-briefs.md): Deterministic findings, optional local narration, and the weekly Body Brief.
+
+## Integrations
+
+- [Home Assistant & MQTT](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/integrations/home-assistant.md): Publishing health signals to Home Assistant through MQTT discovery and state topics.
+
+## Operations
+
+- [Deployment](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/deployment.md): Supported platforms, default services and ports, guided and manual Compose setup.
+- [CLI distribution](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/cli-distribution.md): How the `healthsave` command installs (npm, npx, installer, checkout) and uninstalls.
+- [Security model](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/security.md): Threat model, fail-closed API-key auth, network exposure, secret storage, egress limits.
+- [Reverse proxy & HTTPS](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/reverse-proxy.md): Putting HTTPS in front of the API, with a Caddy example. Never expose plain HTTP to the internet.
+- [Local LLM](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/local-llm.md): Enabling Ollama narration, model choice by RAM, running Ollama on another LAN host.
+- [Backup & migrations](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/backup-and-migrations.md): Backing up the TimescaleDB volume and applying additive schema migrations.
+- [Metrics](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/metrics.md): Prometheus counters at `/metrics`, scrape config, and how to protect the endpoint.
+- [Multi-user / household](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/multi-user.md): Separating residents on one install with `X-User-Id` and `owner_id`.
+- [Troubleshooting](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/troubleshooting.md): First-run failures: Docker not running or short on memory, failing services, wrong phone URL.
+- [Upgrading](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/UPGRADING.md): Updating an existing install safely, with per-release version notes.
+
+## Development
+
+- [Dev setup](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/development/dev-setup.md): Python 3.12 environment, tests, and the same checks CI runs.
+- [Storage backends](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/development/storage-backends.md): The pluggable ingest backend, writing your own, and idempotent ingest rules.
+- [Contributing](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/CONTRIBUTING.md): DCO sign-off, which license a change falls under, and the PR workflow.
+
+## Optional
+
+- [Roadmap](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/roadmap.md): Release sequence R0–R6, marked shipped vs planned.
+- [Scientific product plan](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/SCIENTIFIC_PRODUCT_PLAN.md): Implementation sequence for evidence-linked findings, and the rules that keep incomplete evidence from looking complete.
+- [Changelog](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/CHANGELOG.md): Every tagged release, newest first.
+- [Releasing](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/RELEASING.md): How a release is cut and tagged.
+- [Licensing (plain-language)](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/licensing.md): Friendly explanation of the Apache-2.0 / Elastic-2.0 split.
+- [Licensing (authoritative)](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/LICENSING.md): Which license governs which path.
+- [Trademark policy](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/TRADEMARK.md): Use of the HealthSave and HealthSave Observatory names; forks use their own name.
