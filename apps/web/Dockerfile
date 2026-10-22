@@ -13,7 +13,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN bun run build
 
-FROM node:20-slim AS runtime
+FROM node:22-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
