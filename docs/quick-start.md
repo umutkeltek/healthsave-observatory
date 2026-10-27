@@ -39,8 +39,8 @@ irm https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/ins
 
 ## Setup Modes
 
-- Basic setup: generates local passwords, writes `.env`, creates `config.yaml`, skips AI questions, and starts TimescaleDB, API, worker, Observatory web, and Grafana.
-- Advanced setup: asks for passwords, API key, local AI/Ollama, and model choice.
+- Basic setup: generates local passwords and an API key, writes `.env`, creates `config.yaml` with local analysis on (anomalies, trends, correlations, recovery; no AI model needed), skips AI questions, and starts TimescaleDB, API, worker, Observatory web, and Grafana. `healthsave pair` shows the key again.
+- Advanced setup: asks for passwords, API key (a generated one is suggested), local AI/Ollama, and model choice.
 
 Re-running setup preserves existing `.env` and `config.yaml` values unless you edit them.
 

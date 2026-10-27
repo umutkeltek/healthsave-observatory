@@ -495,12 +495,13 @@ DRY RUN: Basic setup
 
 Would:
 1. Check that Docker is installed and running.
-2. Create .env with generated DB and Grafana passwords if missing.
-3. Create config.yaml from config.yaml.example if missing.
+2. Create .env with generated DB and Grafana passwords and an API key if missing.
+3. Create config.yaml from config.yaml.example if missing, with local analysis
+   (anomalies, trends, correlations, recovery) on. These need no AI model.
 4. Keep local AI disabled unless already configured.
 5. Start default layers: database, migrations, API, worker, Observatory web, Grafana.
 6. Wait for API readiness.
-7. Print HealthSave app URL, Observatory web URL, and Grafana login.
+7. Print the HealthSave app server URL and API key, Observatory web URL, and Grafana login.
 
 No files would be changed, and Docker would not be started.
 EOF
@@ -553,7 +554,8 @@ cmd_setup_basic() {
             exit 1
         fi
         cp "$CONFIG_EXAMPLE" "$CONFIG_FILE"
-        log_ok "Wrote $CONFIG_FILE from $CONFIG_EXAMPLE."
+        enable_local_analysis_jobs
+        log_ok "Wrote $CONFIG_FILE from $CONFIG_EXAMPLE with local analysis on (no AI, nothing leaves this machine)."
     fi
 
     ensure_env_value "ANALYSIS_CONFIG_FILE" "./config.yaml"

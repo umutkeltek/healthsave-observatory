@@ -145,3 +145,33 @@ def test_basic_setup_keeps_existing_env_and_key(tmp_path: Path) -> None:
     # An existing install keeps its (empty) key: minting one silently would cut off paired phones.
     assert _env_value(checkout, "API_KEY") == ""
     assert "No API key is set" in proc.stdout + proc.stderr
+
+
+def test_basic_setup_turns_on_local_analysis_jobs_only(tmp_path: Path) -> None:
+    import yaml
+
+    checkout, bin_dir = _checkout(tmp_path, None)
+    _fake(bin_dir, "docker", "exit 0")
+    _fake(bin_dir, "curl", "exit 0")
+    proc = _run(checkout, bin_dir, "setup", "basic", "--no-input")
+    assert proc.returncode == 0, proc.stderr
+
+    jobs = yaml.safe_load((checkout / "config.yaml").read_text())["analysis"]
+    for job in ("anomaly_detection", "trend_analysis", "correlation_analysis", "recovery"):
+        assert jobs[job]["enabled"] is True, job
+    # The two jobs that call a language model stay off until AI is set up.
+    assert jobs["daily_briefing"]["enabled"] is False
+    assert jobs["weekly_summary"]["enabled"] is False
+
+
+def test_set_config_job_enabled_touches_only_the_named_job(tmp_path: Path) -> None:
+    import yaml
+
+    config = tmp_path / "config.yaml"
+    shutil.copy(ROOT / "config.yaml.example", config)
+    _setup_helper(f'CONFIG_FILE="{config}"; set_config_job_enabled trend_analysis true')
+
+    data = yaml.safe_load(config.read_text())
+    assert data["analysis"]["trend_analysis"]["enabled"] is True
+    assert data["analysis"]["anomaly_detection"]["enabled"] is False
+    assert data["notifications"]["mqtt"]["enabled"] is False

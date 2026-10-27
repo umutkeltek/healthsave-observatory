@@ -25,6 +25,14 @@ Plugins carry their own versions.
   LAN address: `server_name _`, and `generate-self-signed.sh` takes
   `CERT_HOSTNAMES` / `CERT_IPS`.
 
+### Changed
+
+- Setup turns on the four analysis jobs that need no AI model (anomalies,
+  trends, correlations, recovery) when it writes a new `config.yaml`, so
+  Findings fill in without any AI setup. Advanced setup now keeps them on when
+  you skip Ollama. Existing `config.yaml` files and `config.yaml.example` are
+  unchanged.
+
 ### Fixed
 
 - The installers check out the newest `vX.Y.Z` release instead of `main`.

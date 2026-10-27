@@ -476,22 +476,20 @@ ensure_env_value() {
     fi
 }
 
-set_config_daily_briefing_enabled() {
-    # set_config_daily_briefing_enabled true|false
-    local enabled="$1"
+set_config_job_enabled() {
+    # set_config_job_enabled <analysis-job> true|false - flips analysis.<job>.enabled
+    local job="$1"
+    local enabled="$2"
     [ ! -f "$CONFIG_FILE" ] && return 0
     local tmp="${CONFIG_FILE}.tmp.$$"
-    awk -v enabled="$enabled" '
-        BEGIN { in_analysis = 0; in_daily = 0 }
-        /^analysis:/ { in_analysis = 1; in_daily = 0; print; next }
+    awk -v job="$job" -v enabled="$enabled" '
+        BEGIN { in_analysis = 0; in_job = 0 }
+        /^analysis:/ { in_analysis = 1; in_job = 0; print; next }
         /^[^[:space:]][^:]*:/ {
-            if ($0 !~ /^analysis:/) { in_analysis = 0; in_daily = 0 }
+            if ($0 !~ /^analysis:/) { in_analysis = 0; in_job = 0 }
         }
-        in_analysis && /^  daily_briefing:/ { in_daily = 1; print; next }
-        in_analysis && /^  [A-Za-z_][A-Za-z_]*:/ && $1 != "daily_briefing:" {
-            in_daily = 0
-        }
-        in_daily && /^    enabled:/ {
+        in_analysis && /^  [A-Za-z_][A-Za-z_]*:/ { in_job = ($1 == job ":") }
+        in_job && /^    enabled:/ {
             sub(/enabled:.*/, "enabled: " enabled)
             print
             next
@@ -501,29 +499,25 @@ set_config_daily_briefing_enabled() {
     mv "$tmp" "$CONFIG_FILE"
 }
 
+set_config_daily_briefing_enabled() {
+    # set_config_daily_briefing_enabled true|false
+    set_config_job_enabled daily_briefing "$1"
+}
+
 set_config_anomaly_detection_enabled() {
     # set_config_anomaly_detection_enabled true|false
-    local enabled="$1"
-    [ ! -f "$CONFIG_FILE" ] && return 0
-    local tmp="${CONFIG_FILE}.tmp.$$"
-    awk -v enabled="$enabled" '
-        BEGIN { in_analysis = 0; in_anomaly = 0 }
-        /^analysis:/ { in_analysis = 1; in_anomaly = 0; print; next }
-        /^[^[:space:]][^:]*:/ {
-            if ($0 !~ /^analysis:/) { in_analysis = 0; in_anomaly = 0 }
-        }
-        in_analysis && /^  anomaly_detection:/ { in_anomaly = 1; print; next }
-        in_analysis && /^  [A-Za-z_][A-Za-z_]*:/ && $1 != "anomaly_detection:" {
-            in_anomaly = 0
-        }
-        in_anomaly && /^    enabled:/ {
-            sub(/enabled:.*/, "enabled: " enabled)
-            print
-            next
-        }
-        { print }
-    ' "$CONFIG_FILE" >"$tmp"
-    mv "$tmp" "$CONFIG_FILE"
+    set_config_job_enabled anomaly_detection "$1"
+}
+
+# Jobs that compute findings on this machine with no language model, so a fresh
+# install shows Findings without any AI setup. Nothing leaves the box.
+LOCAL_ANALYSIS_JOBS="anomaly_detection trend_analysis correlation_analysis recovery"
+
+enable_local_analysis_jobs() {
+    local job
+    for job in $LOCAL_ANALYSIS_JOBS; do
+        set_config_job_enabled "$job" true
+    done
 }
 
 set_config_llm_model() {
@@ -688,15 +682,14 @@ cmd_setup() {
     fi
 
     ensure_env_value "ANALYSIS_CONFIG_FILE" "./config.yaml"
+    enable_local_analysis_jobs
     if [ "$enable_ollama" -eq 1 ]; then
         set_config_daily_briefing_enabled true
-        set_config_anomaly_detection_enabled true
         if [ -n "${OLLAMA_MODEL_CHOICE:-}" ]; then
             set_config_llm_model "$OLLAMA_MODEL_CHOICE"
         fi
     else
         set_config_daily_briefing_enabled false
-        set_config_anomaly_detection_enabled false
     fi
 
     # --- bring the stack up --------------------------------------------
