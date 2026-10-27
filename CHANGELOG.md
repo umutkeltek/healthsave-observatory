@@ -20,6 +20,11 @@ Plugins carry their own versions.
 - `healthsave doctor` warns when no API key is set.
 - Advanced setup suggests a generated key instead of open access.
 
+- `SECURITY.md` says how to report a vulnerability privately.
+- The reverse-proxy example no longer carries the maintainer's hostnames and
+  LAN address: `server_name _`, and `generate-self-signed.sh` takes
+  `CERT_HOSTNAMES` / `CERT_IPS`.
+
 ### Fixed
 
 - The installers check out the newest `vX.Y.Z` release instead of `main`.

@@ -42,6 +42,18 @@ Two supported paths:
    `nginx.conf` and set your proxy's CIDR so rate limits key on the real client
    IP, not the upstream.
 
+### A self-signed certificate for your LAN
+
+```bash
+CERT_HOSTNAMES="observatory.lan observatory" CERT_IPS="127.0.0.1 192.168.1.20" \
+  ./deploy/reverse-proxy/generate-self-signed.sh
+```
+
+List every name and IP your phone or browser uses to reach the machine. The
+script skips if `certs/fullchain.pem` already exists. Browsers show a one-time
+warning for a self-signed certificate, and shipped HealthSave builds sync over
+the plain-HTTP API listener, which this config proxies instead of redirecting.
+
 ## Remote-VM flow
 
 `deploy/remote-vm/deploy.sh` generates its own override that publishes the API on

@@ -58,7 +58,8 @@ Key facts for assistants:
 
 - [Deployment](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/deployment.md): Supported platforms, default services and ports, guided and manual Compose setup.
 - [CLI distribution](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/cli-distribution.md): How the `healthsave` command installs (npm, npx, installer, checkout) and uninstalls.
-- [Security model](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/security.md): Threat model, fail-closed API-key auth, network exposure, secret storage, egress limits.
+- [Security model](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/security.md): Threat model, generated API key and pairing, network exposure, secret storage, egress limits.
+- [Security policy](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/SECURITY.md): How to report a vulnerability privately.
 - [Reverse proxy & HTTPS](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/reverse-proxy.md): Putting HTTPS in front of the API, with a Caddy example. Never expose plain HTTP to the internet.
 - [Local LLM](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/local-llm.md): Enabling Ollama narration, model choice by RAM, running Ollama on another LAN host.
 - [Backup & migrations](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/backup-and-migrations.md): Backing up the TimescaleDB volume and applying additive schema migrations.

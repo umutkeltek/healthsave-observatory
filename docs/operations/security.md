@@ -24,12 +24,15 @@ HTTPS at a [reverse proxy](reverse-proxy.md) and never expose port 8000 directly
 
 The PHI surface (`/api/apple/*` and the v2 read API) is gated by an API key:
 
-- **`X-API-Key`** — set a long random `API_KEY` in `.env`, and the matching key in
-  the HealthSave app. Requests without it are rejected.
-- **Fail-closed by default.** If `API_KEY` is left empty, the PHI surface is
-  *refused* (`503`) rather than served open. You must deliberately set
-  `ALLOW_NO_AUTH=true` to run without a key — an explicit, logged opt-out, not an
-  accident. Leave authentication on for any deployment that holds real data.
+- **`X-API-Key`** — `healthsave setup` generates a long random `API_KEY` in
+  `.env`. `healthsave pair` shows it (and a QR code for the HealthSave app);
+  `healthsave pair --new-key` rotates it. Requests without the key are rejected.
+- **Keyless means refused, unless you opt out.** If `API_KEY` is empty, the PHI
+  surface is *refused* (`503`) unless `ALLOW_NO_AUTH=true` is set. The bundled
+  `docker-compose.yml` sets that opt-out by default so a bare
+  `docker compose up` works as a local demo, and the API logs a loud warning on
+  every start. `healthsave doctor` flags it too. Leave authentication on for any
+  deployment that holds real data.
 
 A handful of endpoints are intentionally unauthenticated because they expose no
 health data: `/health`, `/api/health`, and `/ready` (liveness/readiness), and
