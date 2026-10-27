@@ -148,3 +148,14 @@ def test_restore_rejects_files_that_are_not_backups(tmp_path: Path) -> None:
     assert proc.returncode == 1
     assert "not a healthsave backup" in proc.stderr
     assert not log.exists() or "DROP DATABASE" not in log.read_text()
+
+
+def test_web_password_reset_deletes_the_settings_file_in_the_running_web_container(
+    tmp_path: Path,
+) -> None:
+    checkout, bin_dir, log = _setup(tmp_path)
+    (checkout / ".env").write_text("WEB_PASSWORD=fromenv\n", encoding="utf-8")
+    proc = _cli(checkout, bin_dir, "web-password", "reset")
+    assert proc.returncode == 0, proc.stderr
+    assert "compose exec -T web rm -f /app/data/web-auth.json" in log.read_text()
+    assert "Observatory web sign-in password: fromenv" in proc.stdout

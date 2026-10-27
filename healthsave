@@ -53,6 +53,7 @@ Commands:
   doctor                    Check platform, config, services, and URLs
   pair [--new-key]          Show the server URL, API key and pairing QR for the app
   update [--to TAG] [--yes] Move to the newest release (takes a backup first)
+  web-password reset        Forget the Settings password; WEB_PASSWORD in .env applies again
   backup [--out DIR]        Save the database, .env and config.yaml to one file
   restore FILE [--yes]      Replace the database with a backup (takes a safety backup first)
   verify                    Run lint, tests, TS/web checks, Docker E2E
@@ -192,6 +193,49 @@ Options:
 
 The key and password are printed in full. Treat this output like a password.
 EOF
+}
+
+print_web_password_usage() {
+    cat <<'EOF'
+HealthSave web-password
+
+The web dashboard password can be set, changed or turned off in Settings ->
+Web sign-in. That setting lives in the web container's data volume and takes
+over from WEB_PASSWORD in .env.
+
+Usage:
+  healthsave web-password reset
+
+reset deletes the Settings choice, so WEB_PASSWORD from .env applies again
+(or no sign-in, if .env has none). Use it when the Settings password is lost.
+EOF
+}
+
+cmd_web_password() {
+    case "${1:-}" in
+        reset)
+            require_docker
+            if running_services | grep -qx web; then
+                docker compose exec -T web rm -f /app/data/web-auth.json
+            else
+                docker compose run --rm --no-deps --entrypoint rm web -f /app/data/web-auth.json
+            fi
+            log_ok "Settings password removed."
+            if [ -n "$(read_env_value WEB_PASSWORD)" ]; then
+                print_web_password
+            else
+                log_warn "WEB_PASSWORD is empty in .env, so the dashboard has no sign-in now. Set one in Settings -> Web sign-in."
+            fi
+            ;;
+        ""|-h|--help|help)
+            print_web_password_usage
+            ;;
+        *)
+            log_error "Unknown web-password command: $1"
+            print_web_password_usage
+            exit 2
+            ;;
+    esac
 }
 
 print_update_usage() {
@@ -2256,6 +2300,13 @@ case "$cmd" in
         # The checkout just replaced this file on disk; exit before bash reads
         # any more of it.
         exit 0
+        ;;
+    web-password)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for web-password."
+            exit 2
+        fi
+        cmd_web_password "$@"
         ;;
     backup)
         if [ "$json_mode" = "1" ]; then

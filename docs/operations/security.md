@@ -34,8 +34,14 @@ The PHI surface (`/api/apple/*` and the v2 read API) is gated by an API key:
   every start. `healthsave doctor` flags it too. Leave authentication on for any
   deployment that holds real data.
 
-The **Observatory web dashboard** asks for a password when `WEB_PASSWORD` is set
-in `.env`; setup generates one and `healthsave pair` shows it. Signing in sets an
+The **Observatory web dashboard** asks for a password when one is set. Set,
+change or turn it off in **Settings -> Web sign-in** (changing it or turning it
+off asks for the current password). That choice is stored as a salted scrypt
+hash in the web container's `web_data` volume and takes over from
+`WEB_PASSWORD` in `.env`, which setup generates and `healthsave pair` shows.
+Lost the Settings password? `healthsave web-password reset` deletes the stored
+choice so `.env` applies again. A damaged settings file locks the dashboard
+(503) rather than opening it. Signing in sets an
 HttpOnly session cookie that lasts 30 days, signed with a key built from
 `WEB_PASSWORD` and `WEB_SESSION_SECRET` (also generated), so a captured cookie
 cannot be cracked back to the password. Changing either value signs every
@@ -129,9 +135,10 @@ Be honest about what is and isn't there today:
 - **Trust within the LAN is assumed.** The default posture trusts the local
   network; harden it (segmentation, the reverse proxy, Grafana auth) if your LAN
   is shared with untrusted devices.
-- **One password for the web dashboard.** Sign-in uses `WEB_PASSWORD`; there
-  are no separate accounts yet. An older `.env` without it has no sign-in, which
-  is only safe while `WEB_BIND=127.0.0.1` (`healthsave doctor` warns otherwise).
+- **One password for the web dashboard.** There are no separate accounts yet.
+  With no password in Settings or `.env`, sign-in is off, which is only safe
+  while `WEB_BIND=127.0.0.1` (`healthsave doctor` warns about `.env`; it cannot
+  see a Settings choice).
 - **The egress gate covers the AI narrator only.** The Home Assistant MQTT
   bridge, exports and Grafana send data where you point them without passing
   through it.

@@ -19,7 +19,8 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=4173 \
     HOSTNAME=0.0.0.0
-RUN useradd --create-home --uid 10001 appuser
+RUN useradd --create-home --uid 10001 appuser \
+    && mkdir -p /app/data && chown appuser:appuser /app/data
 # Next standalone output: a minimal server.js + traced node_modules + static.
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static

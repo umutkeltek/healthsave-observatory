@@ -37,6 +37,11 @@ Plugins carry their own versions.
 
 ### Added
 
+- Settings -> Web sign-in sets, changes or turns off the dashboard password
+  (changes need the current password; this browser stays signed in, others are
+  signed out). It is stored as a salted scrypt hash in the new `web_data`
+  volume and takes over from `WEB_PASSWORD`. `healthsave web-password reset`
+  removes it when the password is lost.
 - `healthsave update [--to TAG]` moves a git install to the newest release:
   backup first, then checkout of the tag, then a rebuild of exactly the
   services that were running. It refuses local edits to tracked files and

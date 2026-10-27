@@ -1,25 +1,28 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-import {
-  BARE_LAYOUT_HEADER,
-  isPublicRequest,
-  isValidSessionToken,
-  SESSION_COOKIE,
-  sessionCredential,
-} from "./app/lib/webAuth";
+import { BARE_LAYOUT_HEADER, isPublicRequest, isValidSessionToken, SESSION_COOKIE } from "./app/lib/webAuth";
+import { resolveWebAuth } from "./app/lib/webAuthStore.server";
 
 // Every request except hashed build assets passes through here: pages, server
 // actions, route handlers, the /api rewrite, and paths that only 404. Without a
 // valid session cookie a page request goes to /login and anything else gets 401.
-// With WEB_PASSWORD unset, requests pass as before (see app/lib/webAuth.ts).
+// With sign-in off (no password in Settings or .env), requests pass as before;
+// see app/lib/webAuthStore.server.ts for where the setting comes from.
 export async function proxy(request: NextRequest) {
   const headers = new Headers(request.headers);
   headers.delete(BARE_LAYOUT_HEADER);
 
-  const credential = sessionCredential();
+  const auth = await resolveWebAuth();
   const { pathname, search } = request.nextUrl;
   const method = request.method;
 
+  if (auth.mode === "unreadable" && pathname !== "/api/health") {
+    return NextResponse.json(
+      { detail: "web_sign_in_settings_unreadable: fix or delete data/web-auth.json (healthsave web-password reset)" },
+      { status: 503 },
+    );
+  }
+  const credential = auth.credential;
   if (pathname === "/login" && (method === "GET" || method === "HEAD")) headers.set(BARE_LAYOUT_HEADER, "1");
   if (!credential || isPublicRequest(pathname, method)) {
     return NextResponse.next({ request: { headers } });

@@ -354,11 +354,15 @@ services:
       # Mixed into the session-cookie key; changing it signs every browser out.
       WEB_SESSION_SECRET: ${WEB_SESSION_SECRET:-}
       HEALTHSAVE_EXPERIMENTAL_LOCALES: ${HEALTHSAVE_EXPERIMENTAL_LOCALES:-0}
+    # Settings -> Web sign-in writes its (hashed) setting here.
+    volumes:
+      - web_data:/app/data
     ports:
       - "${WEB_BIND:-127.0.0.1}:4173:4173"
 
 volumes:
   db_data:
+  web_data:
   grafana_data:
   mqtt_data:
   mqtt_log:

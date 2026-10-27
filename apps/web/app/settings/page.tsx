@@ -6,10 +6,12 @@ import {
   PreferencesSection,
   ServicesSection,
   SystemSection,
+  WebSignInSection,
 } from "../components/sections/SettingsSections";
 import { CardSkeleton, LeadSkeleton, RowSkeleton } from "../components/Skeletons";
 
-export const revalidate = 30;
+// Dynamic: the web sign-in section must show the current setting, not a cached one.
+export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Settings · HealthSave Observatory" };
 
 // One place to see and manage everything configurable, end to end. Each
@@ -34,6 +36,9 @@ export default function SettingsPage() {
       </Suspense>
       <Suspense fallback={<RowSkeleton />}>
         <ServicesSection />
+      </Suspense>
+      <Suspense fallback={<CardSkeleton />}>
+        <WebSignInSection />
       </Suspense>
       <Suspense fallback={<CardSkeleton />}>
         <SystemSection />

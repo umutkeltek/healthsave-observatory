@@ -120,6 +120,7 @@ print_web_password() {
     password="$(read_env_value WEB_PASSWORD)"
     if [ -n "$password" ]; then
         echo "  Observatory web sign-in password: ${password}"
+        echo "    (from .env; if you changed it in Settings -> Web sign-in, use that one)"
         echo
     fi
 }

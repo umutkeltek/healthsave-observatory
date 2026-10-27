@@ -13,7 +13,8 @@ import { getDictionary } from "../../lib/i18n";
 import { getAvailableLocales, getLocale } from "../../lib/i18n.server";
 import { safeIntelligence, safeMetrics, safePrivacy, safeSources } from "../../lib/load";
 import { getDensity, getPinnedMetrics } from "../../lib/prefs";
-import { configuredWebPassword } from "../../lib/webAuth";
+import { MIN_WEB_PASSWORD_LENGTH, resolveWebAuth } from "../../lib/webAuthStore.server";
+import { WebSignInSettingsForm } from "../WebSignInSettings";
 
 async function safeMeta() {
   try {
@@ -160,6 +161,25 @@ export async function ServicesSection() {
   );
 }
 
+export async function WebSignInSection() {
+  const auth = await resolveWebAuth();
+  if (auth.mode === "unreadable") {
+    return (
+      <section className="lead">
+        <article className="card">
+          <h2>Web sign-in</h2>
+          <p className="empty">The sign-in setting file is damaged. Run healthsave web-password reset on the server.</p>
+        </article>
+      </section>
+    );
+  }
+  return (
+    <section className="lead">
+      <WebSignInSettingsForm mode={auth.mode} source={auth.source} minLength={MIN_WEB_PASSWORD_LENGTH} />
+    </section>
+  );
+}
+
 export async function SystemSection() {
   const meta = await safeMeta();
   return (
@@ -190,7 +210,7 @@ export async function SystemSection() {
         <p className="meta" style={{ marginTop: 10 }}>
           Egress posture and the chain of custody live under <Link href="/privacy">Privacy</Link>.
         </p>
-        {configuredWebPassword() ? (
+        {(await resolveWebAuth()).mode === "password" ? (
           <form method="post" action="/auth/logout" className="exp-action">
             <button className="btn btn-ghost" type="submit">
               Sign out of this browser
