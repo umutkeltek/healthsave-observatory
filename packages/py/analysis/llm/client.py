@@ -10,6 +10,7 @@ every touch of this module.
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
 from dataclasses import dataclass
@@ -37,6 +38,22 @@ log = logging.getLogger("healthsave.analysis")
 # as "no custom endpoint" for a non-Ollama provider — otherwise a cloud probe
 # would be pointed at the local Ollama and the SSRF guard would false-positive.
 _OLLAMA_DEFAULT_BASE_URL = "http://ollama:11434"
+
+
+def _import_litellm():
+    """Import LiteLLM without its own outbound calls.
+
+    On import LiteLLM downloads its model price list from GitHub unless
+    LITELLM_LOCAL_MODEL_COST_MAP is set. That request bypasses the egress gate,
+    so the bundled copy is forced here before the first import (setdefault keeps
+    an operator's explicit choice). Telemetry is switched off for the same reason.
+    """
+    os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
+    import litellm
+
+    litellm.telemetry = False
+    return litellm
+
 
 # Inline chain-of-thought block emitted by reasoning models (qwen3, DeepSeek R1)
 # when the serving layer doesn't separate it out; some chat templates spell it
@@ -327,7 +344,7 @@ class HealthLLMClient:
 
         model = f"ollama/{self.config.model}" if provider == "ollama" else self.config.model
 
-        import litellm  # deferred import - single transport (see module docstring)
+        litellm = _import_litellm()  # deferred import - single transport (see module docstring)
 
         kwargs: dict = {
             "model": model,
@@ -376,7 +393,7 @@ class HealthLLMClient:
                 candidate.provider,
             )
 
-        import litellm  # deferred import - keeps module-load light
+        litellm = _import_litellm()  # deferred import - keeps module-load light
 
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},

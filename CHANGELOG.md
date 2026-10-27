@@ -39,6 +39,12 @@ Plugins carry their own versions.
   you skip Ollama. Existing `config.yaml` files and `config.yaml.example` are
   unchanged.
 
+- The AI narrator no longer downloads LiteLLM's model price list from GitHub
+  each time LiteLLM loads (it uses the bundled copy), and LiteLLM telemetry is
+  off. Bundled Grafana no longer sends usage reports or checks for updates.
+  Neither request carried health data, but neither went through the egress
+  gate.
+
 ### Fixed
 
 - The installers check out the newest `vX.Y.Z` release instead of `main`.

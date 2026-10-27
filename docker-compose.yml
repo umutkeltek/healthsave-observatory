@@ -318,6 +318,12 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set (see .env.example)}
       HDH_GRAFANA_DATASOURCE_URL: ${HDH_GRAFANA_DATASOURCE_URL:-db:5432}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set (see .env.example)}
+      # No usage reports, update checks or news feed: the Observatory makes no
+      # outbound calls you did not turn on.
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro

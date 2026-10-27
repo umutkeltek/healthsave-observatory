@@ -78,6 +78,15 @@ The egress boundary is the core privacy guarantee:
 The full data-flow detail, the redaction step, and the local-vs-cloud paths are
 documented in [Privacy & the egress boundary](../concepts/privacy-and-egress.md).
 
+### Outbound calls the stack makes by itself
+
+None that you did not turn on. Bundled Grafana has usage reporting, update
+checks and the news feed switched off, and the AI narrator loads LiteLLM with
+its bundled model price list (`LITELLM_LOCAL_MODEL_COST_MAP`) and telemetry
+off, so it does not fetch from GitHub on import. The connectors you enable
+(Whoop, Amazfit and others) call their vendors, and a cloud AI model you
+configure receives the redacted prompt. Ollama runs with `OLLAMA_NO_CLOUD=1`.
+
 ## Backup security
 
 Your backups contain the same health data the live database does, so protect them
@@ -104,6 +113,15 @@ Be honest about what is and isn't there today:
 - **Trust within the LAN is assumed.** The default posture trusts the local
   network; harden it (segmentation, the reverse proxy, Grafana auth) if your LAN
   is shared with untrusted devices.
+- **The Observatory web dashboard has no login yet.** It binds to `127.0.0.1`
+  by default. If you set `WEB_BIND=0.0.0.0`, anyone who can reach port 4173 sees
+  your data. Put it behind the reverse proxy with authentication until a login
+  ships.
+- **The egress gate covers the AI narrator only.** The Home Assistant MQTT
+  bridge, exports and Grafana send data where you point them without passing
+  through it.
+- **Health data is not encrypted by the stack.** Use disk encryption on the
+  host (FileVault, LUKS, or your NAS's encrypted volumes).
 
 ## See also
 

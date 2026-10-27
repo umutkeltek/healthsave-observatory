@@ -8,6 +8,7 @@ because ``MagicMock`` would fail on ``await``.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -572,3 +573,23 @@ def test_litellm_is_not_imported_at_module_scope():
         if line.startswith("import litellm") or line.startswith("from litellm")
     ]
     assert offending == [], f"litellm imported at module scope: {offending}"
+
+
+def test_litellm_import_pins_local_price_list_and_disables_telemetry(monkeypatch):
+    # LiteLLM fetches its price list from GitHub on import unless this is set;
+    # that request would bypass the egress gate.
+    fake = SimpleNamespace(telemetry=True)
+    monkeypatch.setitem(sys.modules, "litellm", fake)
+    monkeypatch.delenv("LITELLM_LOCAL_MODEL_COST_MAP", raising=False)
+
+    assert llm_client._import_litellm() is fake
+    assert os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] == "True"
+    assert fake.telemetry is False
+
+
+def test_litellm_import_keeps_operator_price_list_choice(monkeypatch):
+    monkeypatch.setitem(sys.modules, "litellm", SimpleNamespace(telemetry=True))
+    monkeypatch.setenv("LITELLM_LOCAL_MODEL_COST_MAP", "False")
+
+    llm_client._import_litellm()
+    assert os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] == "False"
