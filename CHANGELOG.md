@@ -7,6 +7,19 @@ cut and [UPGRADING.md](UPGRADING.md) for upgrade detail.
 Versions follow [semantic versioning](https://semver.org): tag `vX.Y.Z`.
 Plugins carry their own versions.
 
+## [Unreleased]
+
+### Security
+
+- `healthsave setup basic` now generates an API key. A fresh install no longer
+  accepts unauthenticated reads and writes from everyone on your network.
+  Existing installs keep their `.env` untouched.
+- New `healthsave pair` shows the server URL, the API key and, when `qrencode`
+  is installed, a QR code for the HealthSave app. `healthsave pair --new-key`
+  rotates the key and restarts the API and web.
+- `healthsave doctor` warns when no API key is set.
+- Advanced setup suggests a generated key instead of open access.
+
 ## [1.1.0] - 2026-10-04
 
 The first tagged release since 1.0.0. It contains everything built since May,

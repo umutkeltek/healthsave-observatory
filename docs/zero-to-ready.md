@@ -97,8 +97,8 @@ Do not use `localhost` from the phone.
 
 1. Open HealthSave on iPhone.
 2. Go to Settings -> Server Sync.
-3. Set Server URL to the LAN URL printed by `healthsave doctor`.
-4. Set the API key if you configured one during Advanced setup.
+3. Set Server URL to the LAN URL printed by `healthsave pair`.
+4. Set the API key that `healthsave pair` prints (setup generates one).
 5. Tap **Sync New Data**.
 
 The iOS app sends Apple Health data through the frozen v1 ingest contract. The backend normalizes readings into the canonical record used by web, Grafana, findings, integrations, and exports.

@@ -7,8 +7,8 @@ HealthSave expects a **base server URL** and appends API paths itself.
 ## Pair The App
 
 1. Open **HealthSave -> Settings -> Server Sync**.
-2. Set **Server URL** to the backend URL printed by `healthsave doctor`, for example `http://<server-lan-ip>:8000`.
-3. Optional: set your **API key** if you configured one.
+2. Set **Server URL** to the backend URL printed by `healthsave pair`, for example `http://<server-lan-ip>:8000`.
+3. Set the **API key** that `healthsave pair` prints. Setup generates one, and the server refuses requests without it.
 4. Tap **Sync New Data**.
 
 iOS will not sync to `localhost` from the phone; use the backend's LAN IP. Running `healthsave doctor` prints the exact URL to paste into the app.

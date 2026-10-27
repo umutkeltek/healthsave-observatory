@@ -28,6 +28,7 @@ Examples:
   healthsave setup basic
   healthsave setup advanced
   healthsave doctor
+  healthsave pair
   healthsave --json doctor
   healthsave layers
   healthsave status
@@ -49,6 +50,7 @@ Commands:
   version                   Print CLI version
   layers                    Explain API, DB, worker, web, Grafana, AI layers
   doctor                    Check platform, config, services, and URLs
+  pair [--new-key]          Show the server URL, API key and pairing QR for the app
   verify                    Run lint, tests, TS/web checks, Docker E2E
   status                    Show layer-aware Docker Compose service status
   logs [layer|service]      Show recent Docker Compose logs
@@ -130,6 +132,7 @@ HealthSave doctor
 
 Examples:
   healthsave doctor
+  healthsave pair
   healthsave --json doctor
   healthsave doctor --json
 
@@ -160,6 +163,29 @@ Flags:
   --home-assistant  Include Home Assistant MQTT bridge profile
   --all-optional    Include all optional profiles
   -h, --help        Show help
+EOF
+}
+
+print_pair_usage() {
+    cat <<'EOF'
+HealthSave pair
+
+Shows what the HealthSave app needs to connect: the server URL, the API key, and
+a QR code you can scan with the iPhone Camera (when qrencode is installed).
+
+Usage:
+  healthsave pair
+  healthsave pair --url https://observatory.example.com
+  healthsave pair --new-key [--yes]
+
+Options:
+  --url URL       Address the phone should use (default: http://<this machine's LAN IP>:8000)
+  --new-key       Generate a new API key, write it to .env and restart the API and web.
+                  Phones that still use the old key stop syncing until you enter the new one.
+  --yes           Skip the confirmation for --new-key (for scripts)
+  -h, --help      Show this help
+
+The key is printed in full. Treat this output like a password.
 EOF
 }
 
@@ -437,19 +463,28 @@ resolve_service_alias() {
 }
 
 print_connection_summary() {
-    local lan_ip
+    # print_connection_summary [show_key] - setup passes 1 to show the API key
+    # once; doctor output gets pasted into issues, so it only says where to find it.
+    local show_key="${1:-0}"
     local grafana_user="admin"
     local grafana_pw
+    local server_url
 
-    lan_ip="$(detect_lan_ip)"
     grafana_pw="$(read_env_value GRAFANA_PASSWORD)"
+    server_url="$(default_server_url)"
 
     echo
     log_ok "HealthSave Observatory ready."
     echo "  Observatory web: ${WEB_URL_DEFAULT}"
-    echo "  iOS app URL:     http://${lan_ip}:8000"
     echo "  API health:      ${API_URL_DEFAULT}/ready"
     echo "  Grafana:         ${GRAFANA_URL_DEFAULT} (user: ${grafana_user}, pass: ${grafana_pw})"
+    echo
+    if [ "$show_key" = "1" ]; then
+        print_pairing_block "$server_url" "$(read_env_value API_KEY)"
+    else
+        echo "  HealthSave app server URL: ${server_url}"
+        echo "  Run 'healthsave pair' to show the API key and pairing QR."
+    fi
     echo
     log_info "Next step: healthsave doctor"
 }
@@ -506,8 +541,8 @@ cmd_setup_basic() {
             log_error "$ENV_EXAMPLE missing - cannot generate $ENV_FILE."
             exit 1
         fi
-        write_env_file "$(rand_hex)" "$(rand_hex)" ""
-        log_ok "Wrote $ENV_FILE with local defaults."
+        write_env_file "$(rand_hex)" "$(rand_hex)" "$(rand_api_key)"
+        log_ok "Wrote $ENV_FILE with local defaults and a new API key."
     fi
 
     if [ -f "$CONFIG_FILE" ]; then
@@ -536,7 +571,7 @@ cmd_setup_basic() {
     fi
 
     log_info "[5/5] Setup summary"
-    print_connection_summary
+    print_connection_summary 1
 }
 
 cmd_setup_advanced() {
@@ -855,6 +890,14 @@ cmd_doctor_human() {
         failures=$((failures + 1))
     fi
 
+    if [ -f "$ENV_FILE" ]; then
+        if [ -n "$(read_env_value API_KEY)" ]; then
+            log_ok "API key set"
+        else
+            log_warn "API key not set - anyone on your network can read and write your health data. Run 'healthsave pair --new-key'."
+        fi
+    fi
+
     if [ -f "$CONFIG_FILE" ]; then
         log_ok "config config.yaml"
     else
@@ -926,6 +969,7 @@ cmd_doctor_json() {
     local curl_ok
     local env_file
     local config_file
+    local api_key_set
     local api_ready
     local web_ready
     local grafana_ready
@@ -939,11 +983,13 @@ cmd_doctor_json() {
     prime_compose_status_cache
     env_file=0
     config_file=0
+    api_key_set=0
     api_ready=0
     web_ready=0
     grafana_ready=0
 
     [ -f "$ENV_FILE" ] && env_file=1
+    [ -n "$(read_env_value API_KEY)" ] && api_key_set=1
     [ -f "$CONFIG_FILE" ] && config_file=1
     endpoint_ok "${API_URL_DEFAULT}/ready" && api_ready=1
     endpoint_ok "${WEB_URL_DEFAULT}/" && web_ready=1
@@ -980,7 +1026,7 @@ cmd_doctor_json() {
     printf '"bunx":%s,' "$(json_bool "$(tool_flag bunx)")"
     printf '"brew":%s' "$(json_bool "$(tool_flag brew)")"
     printf '},'
-    printf '"config":{"env_file":%s,"config_file":%s},' "$(json_bool "$env_file")" "$(json_bool "$config_file")"
+    printf '"config":{"env_file":%s,"config_file":%s,"api_key_set":%s},' "$(json_bool "$env_file")" "$(json_bool "$config_file")" "$(json_bool "$api_key_set")"
     printf '"endpoints":{"api_ready":%s,"web":%s,"grafana":%s},' "$(json_bool "$api_ready")" "$(json_bool "$web_ready")" "$(json_bool "$grafana_ready")"
     printf '"layers":'
     cmd_status_json | sed 's/^{"layers"://; s/}$//'
@@ -1081,6 +1127,70 @@ cmd_up() {
     else
         log_warn "API did not become ready within 120 seconds. Run 'healthsave logs api'."
     fi
+}
+
+cmd_pair() {
+    local new_key=0
+    local assume_yes=0
+    local server_url=""
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help|help)
+                print_pair_usage
+                return 0
+                ;;
+            --new-key) new_key=1 ;;
+            --yes|-y) assume_yes=1 ;;
+            --url)
+                shift
+                if [ "$#" -eq 0 ] || [ -z "$1" ]; then
+                    log_error "--url needs a value."
+                    exit 2
+                fi
+                server_url="$1"
+                ;;
+            *)
+                log_error "Unknown pair argument: $1"
+                print_pair_usage
+                exit 2
+                ;;
+        esac
+        shift
+    done
+
+    if [ ! -f "$ENV_FILE" ]; then
+        log_error "$ENV_FILE missing - run 'healthsave setup basic' first."
+        exit 1
+    fi
+
+    if [ "$new_key" = "1" ]; then
+        if [ "$assume_yes" != "1" ]; then
+            if [ ! -t 0 ]; then
+                log_error "--new-key replaces the key every paired phone uses. Re-run with --yes to confirm."
+                exit 2
+            fi
+            if ! prompt_yes_no "Replace the API key? Phones using the old key stop syncing until you enter the new one" "N"; then
+                log_info "Kept the existing key."
+                return 0
+            fi
+        fi
+        ensure_env_value "API_KEY" "$(rand_api_key)"
+        log_ok "Wrote a new API key to $ENV_FILE."
+        if docker_available; then
+            docker compose up -d api web
+            log_ok "Restarted the API and web with the new key."
+        else
+            log_warn "Docker is not running; the new key applies the next time you run 'healthsave up'."
+        fi
+    fi
+
+    if [ -z "$server_url" ]; then
+        server_url="$(default_server_url)"
+    fi
+
+    echo
+    print_pairing_block "$server_url" "$(read_env_value API_KEY)"
 }
 
 cmd_down() {
@@ -1669,6 +1779,13 @@ case "$cmd" in
             json_mode=1
         fi
         cmd_doctor "$json_mode"
+        ;;
+    pair)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for pair."
+            exit 2
+        fi
+        cmd_pair "$@"
         ;;
     verify)
         if [ "$json_mode" = "1" ]; then

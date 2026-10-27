@@ -75,6 +75,71 @@ rand_hex() {
     fi
 }
 
+rand_api_key() {
+    # 48-char hex API key, the same length deploy/remote-vm/deploy.sh mints.
+    if command -v openssl >/dev/null 2>&1; then
+        openssl rand -hex 24
+    else
+        head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n'
+    fi
+}
+
+url_encode() {
+    # Percent-encode everything outside RFC 3986 unreserved characters.
+    local LC_ALL=C
+    local input="$1"
+    local out=""
+    local i ch
+    for ((i = 0; i < ${#input}; i++)); do
+        ch="${input:i:1}"
+        case "$ch" in
+            [a-zA-Z0-9.~_-]) out+="$ch" ;;
+            *) out+="$(printf '%%%02X' "'$ch")" ;;
+        esac
+    done
+    printf '%s' "$out"
+}
+
+build_pairing_url() {
+    # build_pairing_url <server_url> <api_key> - the payload the HealthSave app
+    # scans to fill its server URL and API key. The app shows the host and asks
+    # before saving, so a stranger's QR cannot silently redirect anyone's data.
+    local server_url="$1"
+    local api_key="$2"
+    local url
+    url="healthsave://pair?url=$(url_encode "$server_url")"
+    if [ -n "$api_key" ]; then
+        url="${url}&key=$(url_encode "$api_key")"
+    fi
+    printf '%s' "$url"
+}
+
+print_pairing_block() {
+    # print_pairing_block <server_url> <api_key> - what the HealthSave app needs,
+    # plus a scannable code when qrencode is installed. Prints the full key, so
+    # only call it from commands that exist to show it (setup, pair).
+    local server_url="$1"
+    local api_key="$2"
+    echo "  HealthSave app → Settings → Server Sync"
+    echo "    Server URL:  ${server_url}"
+    if [ -n "$api_key" ]; then
+        echo "    API key:     ${api_key}"
+    else
+        log_warn "No API key is set: anyone who can reach this server can read and write your health data. Run 'healthsave pair --new-key'."
+    fi
+    if command -v qrencode >/dev/null 2>&1; then
+        echo
+        echo "  Or scan with the iPhone Camera to fill both (needs a HealthSave version with QR pairing):"
+        qrencode -t ANSIUTF8 -m 2 "$(build_pairing_url "$server_url" "$api_key")"
+    else
+        log_info "Install qrencode for a scannable pairing code (brew install qrencode, or apt install qrencode)."
+    fi
+}
+
+default_server_url() {
+    printf 'http://%s:%s' "$(detect_lan_ip)" "$(read_env_value API_HOST_PORT | grep . || printf '8000')"
+}
+
 detect_lan_ip() {
     local ip=""
     case "$(uname -s)" in
@@ -316,9 +381,10 @@ GRAFANA_BIND=127.0.0.1
 # it to other devices on your LAN.
 WEB_BIND=127.0.0.1
 
-# Access control. API_KEY gates the API via the X-API-Key header; setup leaves
-# it as chosen above (empty = open access, and the server logs a loud warning at
-# startup). ALLOW_NO_AUTH=true acknowledges open mode silently. ALLOW_MULTI_USER
+# Access control. API_KEY gates the API via the X-API-Key header; setup
+# generates one (show it again with 'healthsave pair'). Empty = open access: the
+# bundled compose then serves everyone on your network and the server logs a loud
+# warning at startup. ALLOW_NO_AUTH=true acknowledges open mode. ALLOW_MULTI_USER
 # =true honors the X-User-Id header for per-owner data (default off = single
 # owner; leave off unless you run a trusted multi-user household).
 API_KEY=${api_key}
@@ -543,13 +609,18 @@ cmd_setup() {
         generated_db_pw="$(rand_hex)"
         local generated_grafana_pw
         generated_grafana_pw="$(rand_hex)"
-        local api_key_default=""
+        local api_key_default
+        api_key_default="$(rand_api_key)"
 
         local db_pw grafana_pw api_key
         log_info "Press Enter to accept generated defaults; type a value to override."
         db_pw="$(prompt_default 'Database password' "$generated_db_pw")"
         grafana_pw="$(prompt_default 'Grafana admin password' "$generated_grafana_pw")"
-        api_key="$(prompt_default 'API key for X-API-Key header (leave empty for open access)' "$api_key_default")"
+        api_key="$(prompt_default "API key for the X-API-Key header (type 'open' to run without one)" "$api_key_default")"
+        if [ "$api_key" = "open" ]; then
+            api_key=""
+            log_warn "No API key: anyone who can reach port 8000 can read and write your health data."
+        fi
 
         write_env_file "$db_pw" "$grafana_pw" "$api_key"
         log_ok "Wrote $ENV_FILE"
@@ -660,8 +731,6 @@ cmd_setup() {
     fi
 
     # --- final summary --------------------------------------------------
-    local lan_ip
-    lan_ip="$(detect_lan_ip)"
     local grafana_user="admin"
     local grafana_pw
     grafana_pw="$(read_env_value GRAFANA_PASSWORD)"
@@ -669,9 +738,10 @@ cmd_setup() {
     echo
     log_ok "HealthSave Observatory is up."
     echo "  ▸ Observatory:  ${WEB_URL_DEFAULT}   ← open this — your dashboard"
-    echo "  iOS app URL:    http://${lan_ip}:8000   (point the HealthSave app here)"
     echo "  API:            ${API_URL_DEFAULT}   (health: /ready)"
     echo "  Grafana:        ${GRAFANA_URL_DEFAULT}  (optional power-user view — user: ${grafana_user}, pass: ${grafana_pw})"
+    echo
+    print_pairing_block "$(default_server_url)" "$(read_env_value API_KEY)"
     echo
     log_info "Next step: ./healthsave doctor - verify every service is healthy."
 }
