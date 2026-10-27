@@ -78,6 +78,8 @@ Then restart:
 ./healthsave up
 ```
 
+Keep `WEB_PASSWORD` set when `WEB_BIND=0.0.0.0`: the dashboard then asks for it before showing anything. `healthsave pair` prints it.
+
 For anything beyond LAN, use a reverse proxy with HTTPS instead of binding services directly to the internet.
 
 ## Ollama Container Will Not Start

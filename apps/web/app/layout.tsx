@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { type ReactNode, Suspense } from "react";
 
 import { CommandPalette } from "./components/CommandPalette";
@@ -14,6 +15,7 @@ import {
 import "./globals.css";
 import { getAvailableLocales, getLocale } from "./lib/i18n.server";
 import { getDensity } from "./lib/prefs";
+import { BARE_LAYOUT_HEADER } from "./lib/webAuth";
 
 export const metadata: Metadata = {
   title: "HealthSave Observatory",
@@ -24,8 +26,11 @@ export const metadata: Metadata = {
 // posture/sync status streams in via Suspense (see ShellStatus). The density
 // cookie read is local and instant - it decides Essentials vs Observatory nav.
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const [density, locale] = await Promise.all([getDensity(), getLocale()]);
+  const [density, locale, requestHeaders] = await Promise.all([getDensity(), getLocale(), headers()]);
   const availableLocales = getAvailableLocales();
+  // /login renders without the shell: its status widgets read health data, and
+  // the visitor is not signed in yet. Only the proxy sets this header.
+  const bare = requestHeaders.get(BARE_LAYOUT_HEADER) === "1";
   return (
     <html lang={locale} suppressHydrationWarning>
       <head>
@@ -38,27 +43,33 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         />
       </head>
       <body>
-        <I18nProvider locale={locale} availableLocales={availableLocales}>
-          <Shell
-            density={density}
-            sidebarStatus={
-              <Suspense fallback={<SidebarStatusFallback />}>
-                <SidebarStatus />
-              </Suspense>
-            }
-            topbarStatus={
-              <Suspense fallback={<TopbarStatusFallback />}>
-                <TopbarStatus />
-              </Suspense>
-            }
-          >
+        {bare ? (
+          <I18nProvider locale={locale} availableLocales={availableLocales}>
             {children}
-          </Shell>
-          {/* Command palette: pages-only while the catalog streams in. */}
-          <Suspense fallback={<CommandPalette metrics={[]} />}>
-            <PaletteHost />
-          </Suspense>
-        </I18nProvider>
+          </I18nProvider>
+        ) : (
+          <I18nProvider locale={locale} availableLocales={availableLocales}>
+            <Shell
+              density={density}
+              sidebarStatus={
+                <Suspense fallback={<SidebarStatusFallback />}>
+                  <SidebarStatus />
+                </Suspense>
+              }
+              topbarStatus={
+                <Suspense fallback={<TopbarStatusFallback />}>
+                  <TopbarStatus />
+                </Suspense>
+              }
+            >
+              {children}
+            </Shell>
+            {/* Command palette: pages-only while the catalog streams in. */}
+            <Suspense fallback={<CommandPalette metrics={[]} />}>
+              <PaletteHost />
+            </Suspense>
+          </I18nProvider>
+        )}
       </body>
     </html>
   );

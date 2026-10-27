@@ -171,7 +171,8 @@ print_pair_usage() {
 HealthSave pair
 
 Shows what the HealthSave app needs to connect: the server URL, the API key, and
-a QR code you can scan with the iPhone Camera (when qrencode is installed).
+a QR code you can scan with the iPhone Camera (when qrencode is installed). Also
+shows the web dashboard sign-in password when one is set.
 
 Usage:
   healthsave pair
@@ -185,7 +186,7 @@ Options:
   --yes           Skip the confirmation for --new-key (for scripts)
   -h, --help      Show this help
 
-The key is printed in full. Treat this output like a password.
+The key and password are printed in full. Treat this output like a password.
 EOF
 }
 
@@ -480,6 +481,7 @@ print_connection_summary() {
     echo "  Grafana:         ${GRAFANA_URL_DEFAULT} (user: ${grafana_user}, pass: ${grafana_pw})"
     echo
     if [ "$show_key" = "1" ]; then
+        print_web_password
         print_pairing_block "$server_url" "$(read_env_value API_KEY)"
     else
         echo "  HealthSave app server URL: ${server_url}"
@@ -898,6 +900,13 @@ cmd_doctor_human() {
         else
             log_warn "API key not set - anyone on your network can read and write your health data. Run 'healthsave pair --new-key'."
         fi
+        if [ -n "$(read_env_value WEB_PASSWORD)" ]; then
+            log_ok "web sign-in on"
+        elif [ "$(read_env_value WEB_BIND)" = "0.0.0.0" ]; then
+            log_warn "Web dashboard is open to your network with no password - set WEB_PASSWORD in .env and run 'healthsave up'."
+        else
+            log_info "web sign-in off (dashboard only reachable from this machine)"
+        fi
     fi
 
     if [ -f "$CONFIG_FILE" ]; then
@@ -1211,6 +1220,7 @@ cmd_pair() {
     fi
 
     echo
+    print_web_password
     print_pairing_block "$server_url" "$(read_env_value API_KEY)"
 }
 

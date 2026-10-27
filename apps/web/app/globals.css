@@ -2549,6 +2549,28 @@ input.filter-select {
   line-height: 1.45;
 }
 
+/* sign-in page (/login): rendered without the shell, so it centers itself */
+.signin {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+.signin .card {
+  width: 100%;
+  max-width: 360px;
+  padding: 24px;
+  border-radius: var(--radius-lg);
+}
+.signin .empty {
+  margin-bottom: 16px;
+}
+.signin-error {
+  color: var(--down);
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+
 /* fields */
 .field {
   display: flex;

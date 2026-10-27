@@ -11,6 +11,12 @@ Plugins carry their own versions.
 
 ### Security
 
+- The Observatory web dashboard asks for a password when `WEB_PASSWORD` is set.
+  Setup generates one for new installs, and `healthsave pair` shows it. Without
+  a session, pages redirect to `/login` and every data route (including the
+  `/api/*` pass-through to the API) returns `401`. An older `.env` without
+  `WEB_PASSWORD` behaves as before, and `healthsave doctor` warns when such a
+  dashboard is published with `WEB_BIND=0.0.0.0`.
 - `healthsave setup basic` now generates an API key. A fresh install no longer
   accepts unauthenticated reads and writes from everyone on your network.
   Existing installs keep their `.env` untouched.

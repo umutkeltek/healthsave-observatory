@@ -79,6 +79,8 @@ GRAFANA_BIND=0.0.0.0
 WEB_BIND=0.0.0.0
 ```
 
+With `WEB_BIND=0.0.0.0`, keep `WEB_PASSWORD` set (setup generates it) so the dashboard asks for a password.
+
 Do not expose plain HTTP directly to the internet. For remote access, put the API, Observatory web, and Grafana behind HTTPS with deliberate auth; see [Reverse proxy](reverse-proxy.md).
 
 ## Optional Local AI

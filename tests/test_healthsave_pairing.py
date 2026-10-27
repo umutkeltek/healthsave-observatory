@@ -175,3 +175,28 @@ def test_set_config_job_enabled_touches_only_the_named_job(tmp_path: Path) -> No
     assert data["analysis"]["trend_analysis"]["enabled"] is True
     assert data["analysis"]["anomaly_detection"]["enabled"] is False
     assert data["notifications"]["mqtt"]["enabled"] is False
+
+
+def test_basic_setup_generates_web_password_and_shows_it(tmp_path: Path) -> None:
+    checkout, bin_dir = _checkout(tmp_path, None)
+    _fake(bin_dir, "docker", "exit 0")
+    _fake(bin_dir, "curl", "exit 0")
+    proc = _run(checkout, bin_dir, "setup", "basic", "--no-input")
+    assert proc.returncode == 0, proc.stderr
+    password = _env_value(checkout, "WEB_PASSWORD")
+    assert re.fullmatch(r"[0-9a-f]{32}", password)
+    assert f"Observatory web sign-in password: {password}" in proc.stdout
+
+
+def test_pair_shows_web_password_when_set(tmp_path: Path) -> None:
+    checkout, bin_dir = _checkout(tmp_path, f"API_KEY={KEY}\nWEB_PASSWORD=webpw123\n")
+    proc = _run(checkout, bin_dir, "pair", "--url", "http://h:8000")
+    assert proc.returncode == 0, proc.stderr
+    assert "Observatory web sign-in password: webpw123" in proc.stdout
+
+
+def test_compose_passes_web_password_to_the_web_service() -> None:
+    import yaml
+
+    web = yaml.safe_load((ROOT / "docker-compose.yml").read_text())["services"]["web"]
+    assert web["environment"]["WEB_PASSWORD"] == "${WEB_PASSWORD:-}"

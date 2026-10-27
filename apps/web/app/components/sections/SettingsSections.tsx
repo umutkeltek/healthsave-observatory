@@ -13,6 +13,7 @@ import { getDictionary } from "../../lib/i18n";
 import { getAvailableLocales, getLocale } from "../../lib/i18n.server";
 import { safeIntelligence, safeMetrics, safePrivacy, safeSources } from "../../lib/load";
 import { getDensity, getPinnedMetrics } from "../../lib/prefs";
+import { configuredWebPassword } from "../../lib/webAuth";
 
 async function safeMeta() {
   try {
@@ -189,6 +190,13 @@ export async function SystemSection() {
         <p className="meta" style={{ marginTop: 10 }}>
           Egress posture and the chain of custody live under <Link href="/privacy">Privacy</Link>.
         </p>
+        {configuredWebPassword() ? (
+          <form method="post" action="/auth/logout" className="exp-action">
+            <button className="btn btn-ghost" type="submit">
+              Sign out of this browser
+            </button>
+          </form>
+        ) : null}
       </div>
     </section>
   );

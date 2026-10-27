@@ -114,6 +114,16 @@ build_pairing_url() {
     printf '%s' "$url"
 }
 
+print_web_password() {
+    # Prints the web dashboard password in full; same rule as print_pairing_block.
+    local password
+    password="$(read_env_value WEB_PASSWORD)"
+    if [ -n "$password" ]; then
+        echo "  Observatory web sign-in password: ${password}"
+        echo
+    fi
+}
+
 print_pairing_block() {
     # print_pairing_block <server_url> <api_key> - what the HealthSave app needs,
     # plus a scannable code when qrencode is installed. Prints the full key, so
@@ -380,6 +390,9 @@ GRAFANA_BIND=127.0.0.1
 # PHI; it binds to 127.0.0.1 (loopback) by default. Set WEB_BIND=0.0.0.0 to open
 # it to other devices on your LAN.
 WEB_BIND=127.0.0.1
+# Password for signing in to the web dashboard (show it again with
+# 'healthsave pair'). Empty = no sign-in, only safe while WEB_BIND=127.0.0.1.
+WEB_PASSWORD=$(rand_hex)
 
 # Access control. API_KEY gates the API via the X-API-Key header; setup
 # generates one (show it again with 'healthsave pair'). Empty = open access: the

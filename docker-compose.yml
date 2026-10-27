@@ -348,6 +348,9 @@ services:
     environment:
       API_BASE: ${WEB_API_BASE:-http://api:8000}
       API_KEY: ${API_KEY:-}
+      # Password for the web dashboard. Empty = no sign-in (fine while WEB_BIND
+      # is 127.0.0.1). Setup generates one for new installs.
+      WEB_PASSWORD: ${WEB_PASSWORD:-}
       HEALTHSAVE_EXPERIMENTAL_LOCALES: ${HEALTHSAVE_EXPERIMENTAL_LOCALES:-0}
     ports:
       - "${WEB_BIND:-127.0.0.1}:4173:4173"

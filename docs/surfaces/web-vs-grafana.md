@@ -50,7 +50,7 @@ Grafana remains valuable because many self-hosters want health data inside their
 Both surfaces can reveal private health data.
 
 - API publishes on port `8000`.
-- Observatory web binds `127.0.0.1:4173` by default through `WEB_BIND`.
+- Observatory web binds `127.0.0.1:4173` by default through `WEB_BIND`, and asks for `WEB_PASSWORD` when it is set.
 - Grafana binds `127.0.0.1:3000` by default through `GRAFANA_BIND`.
 - Keep them on a trusted network by default.
 - Do not expose either surface over plain HTTP to the internet.

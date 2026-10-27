@@ -34,6 +34,12 @@ The PHI surface (`/api/apple/*` and the v2 read API) is gated by an API key:
   every start. `healthsave doctor` flags it too. Leave authentication on for any
   deployment that holds real data.
 
+The **Observatory web dashboard** asks for a password when `WEB_PASSWORD` is set
+in `.env`; setup generates one and `healthsave pair` shows it. Signing in sets an
+HttpOnly session cookie that lasts 30 days. Changing `WEB_PASSWORD` signs every
+browser out. Without a session, pages redirect to `/login` and data routes
+return `401`.
+
 A handful of endpoints are intentionally unauthenticated because they expose no
 health data: `/health`, `/api/health`, and `/ready` (liveness/readiness), and
 `/metrics` (see below).
@@ -113,10 +119,9 @@ Be honest about what is and isn't there today:
 - **Trust within the LAN is assumed.** The default posture trusts the local
   network; harden it (segmentation, the reverse proxy, Grafana auth) if your LAN
   is shared with untrusted devices.
-- **The Observatory web dashboard has no login yet.** It binds to `127.0.0.1`
-  by default. If you set `WEB_BIND=0.0.0.0`, anyone who can reach port 4173 sees
-  your data. Put it behind the reverse proxy with authentication until a login
-  ships.
+- **One password for the web dashboard.** Sign-in uses `WEB_PASSWORD`; there
+  are no separate accounts yet. An older `.env` without it has no sign-in, which
+  is only safe while `WEB_BIND=127.0.0.1` (`healthsave doctor` warns otherwise).
 - **The egress gate covers the AI narrator only.** The Home Assistant MQTT
   bridge, exports and Grafana send data where you point them without passing
   through it.
