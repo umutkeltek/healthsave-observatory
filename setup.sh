@@ -393,6 +393,8 @@ WEB_BIND=127.0.0.1
 # Password for signing in to the web dashboard (show it again with
 # 'healthsave pair'). Empty = no sign-in, only safe while WEB_BIND=127.0.0.1.
 WEB_PASSWORD=$(rand_hex)
+# Mixed into the sign-in cookie key; change it to sign out every browser.
+WEB_SESSION_SECRET=$(rand_api_key)
 
 # Access control. API_KEY gates the API via the X-API-Key header; setup
 # generates one (show it again with 'healthsave pair'). Empty = open access: the

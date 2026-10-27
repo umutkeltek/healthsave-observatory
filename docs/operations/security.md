@@ -36,9 +36,18 @@ The PHI surface (`/api/apple/*` and the v2 read API) is gated by an API key:
 
 The **Observatory web dashboard** asks for a password when `WEB_PASSWORD` is set
 in `.env`; setup generates one and `healthsave pair` shows it. Signing in sets an
-HttpOnly session cookie that lasts 30 days. Changing `WEB_PASSWORD` signs every
-browser out. Without a session, pages redirect to `/login` and data routes
-return `401`.
+HttpOnly session cookie that lasts 30 days, signed with a key built from
+`WEB_PASSWORD` and `WEB_SESSION_SECRET` (also generated), so a captured cookie
+cannot be cracked back to the password. Changing either value signs every
+browser out. Without a session, every page (including ones that only 404)
+redirects to `/login`, data routes and server actions return `401`, and each
+server action checks the session again itself. Ten wrong passwords in a minute
+pause sign-in for that minute. Sign-in and sign-out only accept form posts from
+the dashboard's own pages.
+
+The cookie is sent to every port on the same host, so other web apps on the same
+machine can see it. If that matters to you, give the dashboard its own hostname
+behind the reverse proxy.
 
 A handful of endpoints are intentionally unauthenticated because they expose no
 health data: `/health`, `/api/health`, and `/ready` (liveness/readiness), and

@@ -947,12 +947,17 @@ cmd_doctor_human() {
         else
             log_warn "API key not set - anyone on your network can read and write your health data. Run 'healthsave pair --new-key'."
         fi
+        local web_bind
+        web_bind="$(read_env_value WEB_BIND)"
         if [ -n "$(read_env_value WEB_PASSWORD)" ]; then
             log_ok "web sign-in on"
-        elif [ "$(read_env_value WEB_BIND)" = "0.0.0.0" ]; then
-            log_warn "Web dashboard is open to your network with no password - set WEB_PASSWORD in .env and run 'healthsave up'."
-        else
+            if [ -z "$(read_env_value API_KEY)" ]; then
+                log_warn "The web dashboard has a password but the API (port 8000) has no key, so the same data is readable there. Run 'healthsave pair --new-key'."
+            fi
+        elif bind_is_loopback "${web_bind:-127.0.0.1}"; then
             log_info "web sign-in off (dashboard only reachable from this machine)"
+        else
+            log_warn "Web dashboard listens on ${web_bind} with no password - anyone who can reach it sees your data. Set WEB_PASSWORD in .env and run 'healthsave up'."
         fi
     fi
 
@@ -1190,6 +1195,13 @@ cmd_up() {
     else
         log_warn "API did not become ready within 120 seconds. Run 'healthsave logs api'."
     fi
+}
+
+bind_is_loopback() {
+    case "$1" in
+        127.*|localhost|::1|"[::1]") return 0 ;;
+        *) return 1 ;;
+    esac
 }
 
 print_mosquitto_login() {

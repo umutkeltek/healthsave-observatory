@@ -16,6 +16,7 @@ import "./globals.css";
 import { getAvailableLocales, getLocale } from "./lib/i18n.server";
 import { getDensity } from "./lib/prefs";
 import { BARE_LAYOUT_HEADER } from "./lib/webAuth";
+import { hasWebSession } from "./lib/webSession.server";
 
 export const metadata: Metadata = {
   title: "HealthSave Observatory",
@@ -26,11 +27,17 @@ export const metadata: Metadata = {
 // posture/sync status streams in via Suspense (see ShellStatus). The density
 // cookie read is local and instant - it decides Essentials vs Observatory nav.
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const [density, locale, requestHeaders] = await Promise.all([getDensity(), getLocale(), headers()]);
+  const [density, locale, requestHeaders, signedIn] = await Promise.all([
+    getDensity(),
+    getLocale(),
+    headers(),
+    hasWebSession(),
+  ]);
   const availableLocales = getAvailableLocales();
   // /login renders without the shell: its status widgets read health data, and
-  // the visitor is not signed in yet. Only the proxy sets this header.
-  const bare = requestHeaders.get(BARE_LAYOUT_HEADER) === "1";
+  // the visitor is not signed in yet. Only the proxy sets the header; the session
+  // check is the backstop, so a path the proxy never sees still gets no shell.
+  const bare = requestHeaders.get(BARE_LAYOUT_HEADER) === "1" || !signedIn;
   return (
     <html lang={locale} suppressHydrationWarning>
       <head>

@@ -16,7 +16,11 @@ Plugins carry their own versions.
   a session, pages redirect to `/login` and every data route (including the
   `/api/*` pass-through to the API) returns `401`. An older `.env` without
   `WEB_PASSWORD` behaves as before, and `healthsave doctor` warns when such a
-  dashboard is published with `WEB_BIND=0.0.0.0`.
+  dashboard listens on anything but loopback, or when the dashboard has a
+  password but the API has no key. Session cookies are also keyed with a
+  generated `WEB_SESSION_SECRET`; server actions check the session themselves;
+  ten wrong passwords in a minute pause sign-in; sign-in and sign-out refuse
+  cross-site posts.
 - `healthsave setup basic` now generates an API key. A fresh install no longer
   accepts unauthenticated reads and writes from everyone on your network.
   Existing installs keep their `.env` untouched.

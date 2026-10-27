@@ -200,3 +200,34 @@ def test_compose_passes_web_password_to_the_web_service() -> None:
 
     web = yaml.safe_load((ROOT / "docker-compose.yml").read_text())["services"]["web"]
     assert web["environment"]["WEB_PASSWORD"] == "${WEB_PASSWORD:-}"
+
+
+def _doctor(checkout: Path, bin_dir: Path) -> str:
+    _fake(bin_dir, "docker", "exit 1")  # no daemon: doctor still reads .env
+    proc = _run(checkout, bin_dir, "doctor")
+    return proc.stdout + proc.stderr
+
+
+def test_doctor_warns_for_any_non_loopback_web_bind_without_password(tmp_path: Path) -> None:
+    checkout, bin_dir = _checkout(tmp_path, f"API_KEY={KEY}\nWEB_BIND=192.168.1.20\n")
+    assert "listens on 192.168.1.20 with no password" in _doctor(checkout, bin_dir)
+
+
+def test_doctor_is_quiet_for_loopback_web_bind(tmp_path: Path) -> None:
+    checkout, bin_dir = _checkout(tmp_path, f"API_KEY={KEY}\nWEB_BIND=127.0.0.1\n")
+    out = _doctor(checkout, bin_dir)
+    assert "web sign-in off" in out
+    assert "with no password" not in out
+
+
+def test_doctor_warns_when_web_password_is_set_but_api_is_open(tmp_path: Path) -> None:
+    checkout, bin_dir = _checkout(tmp_path, "API_KEY=\nWEB_PASSWORD=pw\n")
+    assert "the API (port 8000) has no key" in _doctor(checkout, bin_dir)
+
+
+def test_basic_setup_generates_web_session_secret(tmp_path: Path) -> None:
+    checkout, bin_dir = _checkout(tmp_path, None)
+    _fake(bin_dir, "docker", "exit 0")
+    _fake(bin_dir, "curl", "exit 0")
+    assert _run(checkout, bin_dir, "setup", "basic", "--no-input").returncode == 0
+    assert re.fullmatch(r"[0-9a-f]{48}", _env_value(checkout, "WEB_SESSION_SECRET"))

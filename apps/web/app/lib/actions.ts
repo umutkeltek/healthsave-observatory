@@ -50,6 +50,7 @@ import {
   type TemplateId,
   TEMPLATES,
 } from "./prefs";
+import { assertWebSession } from "./webSession.server";
 
 export type ActionResult = { ok: boolean; error?: string };
 
@@ -61,6 +62,7 @@ export async function startExperimentAction(
   leverMetricId: string,
   outcomeMetricId: string,
 ): Promise<ActionResult> {
+  await assertWebSession();
   try {
     await createExperiment({ lever_metric_id: leverMetricId, outcome_metric_id: outcomeMetricId });
     revalidatePath("/");
@@ -71,6 +73,7 @@ export async function startExperimentAction(
 }
 
 export async function analyzeExperimentAction(id: string): Promise<ActionResult> {
+  await assertWebSession();
   try {
     await analyzeExperiment(id);
     revalidatePath("/");
@@ -81,6 +84,7 @@ export async function analyzeExperimentAction(id: string): Promise<ActionResult>
 }
 
 export async function abandonExperimentAction(id: string): Promise<ActionResult> {
+  await assertWebSession();
   try {
     await abandonExperiment(id);
     revalidatePath("/");
@@ -97,6 +101,7 @@ export async function abandonExperimentAction(id: string): Promise<ActionResult>
 export async function applyIntelligenceAction(
   payload: ApplyIntelligencePayload,
 ): Promise<ActionResult> {
+  await assertWebSession();
   try {
     await applyIntelligence(payload);
     revalidatePath("/intelligence");
@@ -108,6 +113,7 @@ export async function applyIntelligenceAction(
 }
 
 export async function consentAction(payload: ConsentPayload): Promise<ActionResult> {
+  await assertWebSession();
   try {
     await postConsent(payload);
     revalidatePath("/intelligence");
@@ -123,6 +129,7 @@ export type TestActionResult = ActionResult & { result?: TestConnectionResult };
 export async function testConnectionAction(
   payload: TestConnectionPayload,
 ): Promise<TestActionResult> {
+  await assertWebSession();
   try {
     const result = await postTestConnection(payload);
     return { ok: true, result };
@@ -134,6 +141,7 @@ export async function testConnectionAction(
 export type DetectActionResult = ActionResult & { candidates?: DetectCandidate[] };
 
 export async function detectLocalAction(): Promise<DetectActionResult> {
+  await assertWebSession();
   try {
     const { candidates } = await fetchDetectLocal();
     return { ok: true, candidates };
@@ -145,6 +153,7 @@ export async function detectLocalAction(): Promise<DetectActionResult> {
 export async function updateAnalyticalTimeAction(
   payload: UpdateAnalyticalTimePayload,
 ): Promise<ActionResult> {
+  await assertWebSession();
   try {
     await updateAnalyticalTime(payload);
     revalidatePath("/settings");
@@ -162,6 +171,7 @@ export async function updateAnalyticalTimeAction(
 export async function createMomentAction(
   payload: CreateMomentPayload,
 ): Promise<ActionResult> {
+  await assertWebSession();
   try {
     await createMoment(payload);
     revalidatePath("/timeline");
@@ -175,6 +185,7 @@ export async function createMomentAction(
 // ── Preference actions (cookie-backed; see lib/prefs.ts) ──────────────
 
 export async function togglePinAction(metricId: string): Promise<ActionResult> {
+  await assertWebSession();
   try {
     const jar = await cookies();
     const pinned = parsePinned(jar.get(PINNED_COOKIE)?.value);
@@ -196,6 +207,7 @@ export async function togglePinAction(metricId: string): Promise<ActionResult> {
 }
 
 export async function setDensityAction(mode: Density): Promise<ActionResult> {
+  await assertWebSession();
   try {
     const jar = await cookies();
     jar.set(DENSITY_COOKIE, mode === "observatory" ? "observatory" : "essentials", {
@@ -215,6 +227,7 @@ export async function setDensityAction(mode: Density): Promise<ActionResult> {
 }
 
 export async function setLocaleAction(locale: Locale): Promise<ActionResult> {
+  await assertWebSession();
   try {
     const selected = resolveAvailableLocale(
       locale,
@@ -237,6 +250,7 @@ export async function setLocaleAction(locale: Locale): Promise<ActionResult> {
 }
 
 export async function setFocusGoalAction(goal: FocusGoal): Promise<ActionResult> {
+  await assertWebSession();
   try {
     // Round-trip through the parser so only a well-formed goal is ever stored.
     const clean = parseFocusGoal(JSON.stringify(goal));
@@ -256,6 +270,7 @@ export async function setFocusGoalAction(goal: FocusGoal): Promise<ActionResult>
 }
 
 export async function clearFocusGoalAction(): Promise<ActionResult> {
+  await assertWebSession();
   try {
     const jar = await cookies();
     jar.delete(FOCUS_GOAL_COOKIE);
@@ -269,6 +284,7 @@ export async function clearFocusGoalAction(): Promise<ActionResult> {
 // ── Dashboard template / section toggle actions ──────────────────────────
 
 export async function applyTemplateAction(templateId: TemplateId): Promise<ActionResult> {
+  await assertWebSession();
   try {
     const template = TEMPLATES.find((t) => t.id === templateId);
     if (!template) return { ok: false, error: "Unknown template." };
@@ -287,6 +303,7 @@ export async function applyTemplateAction(templateId: TemplateId): Promise<Actio
 }
 
 export async function toggleSectionAction(section: string): Promise<ActionResult> {
+  await assertWebSession();
   try {
     const jar = await cookies();
     const current = parseSections(jar.get(DASHBOARD_COOKIE)?.value);
@@ -306,6 +323,7 @@ export async function toggleSectionAction(section: string): Promise<ActionResult
 }
 
 export async function resetSectionsAction(): Promise<ActionResult> {
+  await assertWebSession();
   try {
     const jar = await cookies();
     jar.delete(DASHBOARD_COOKIE);
@@ -322,6 +340,7 @@ export async function saveExplorePanelAction(
   state: string,
   label: string,
 ): Promise<ActionResult> {
+  await assertWebSession();
   try {
     const cleanLabel = label.trim().slice(0, MAX_SAVED_PANEL_LABEL);
     if (!cleanLabel) return { ok: false, error: "A label is required." };
@@ -346,6 +365,7 @@ export async function saveExplorePanelAction(
 }
 
 export async function removeSavedPanelAction(id: string): Promise<ActionResult> {
+  await assertWebSession();
   try {
     const jar = await cookies();
     const panels = parseSavedPanels(jar.get(SAVED_PANELS_COOKIE)?.value);
@@ -374,6 +394,7 @@ export type TriggerAnalysisResult = ActionResult & { status?: string };
 export async function triggerAnalysisAction(
   type: "correlation_analysis" | "recovery_check" | "daily_briefing" | "weekly_summary",
 ): Promise<TriggerAnalysisResult> {
+  await assertWebSession();
   try {
     const result = await postInsightsTrigger(type);
     revalidatePath("/");

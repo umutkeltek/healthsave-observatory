@@ -1,11 +1,21 @@
 import { NextResponse } from "next/server";
 
-import { relativeRedirect, requestIsHttps, SESSION_COOKIE, sessionCookieOptions } from "../../lib/webAuth";
+import {
+  isSameOriginPost,
+  relativeRedirect,
+  requestIsHttps,
+  SESSION_COOKIE,
+  sessionCookieOptions,
+} from "../../lib/webAuth";
 
 export const dynamic = "force-dynamic";
 
-// POST only, so a link or image on another page cannot sign you out.
+// POST only, and only from this site's own pages, so another page (or another
+// service on the same host) cannot sign you out.
 export async function POST(request: Request) {
+  if (!isSameOriginPost(request.headers)) {
+    return NextResponse.json({ detail: "cross_site_request" }, { status: 403 });
+  }
   const url = new URL(request.url);
   const response = new NextResponse(null, relativeRedirect("/login"));
   response.cookies.set(
