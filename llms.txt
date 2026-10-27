@@ -78,6 +78,7 @@ Key facts for assistants:
 
 - [Roadmap](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/roadmap.md): Release sequence R0–R6, marked shipped vs planned.
 - [Scientific product plan](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/SCIENTIFIC_PRODUCT_PLAN.md): Implementation sequence for evidence-linked findings, and the rules that keep incomplete evidence from looking complete.
+- [Experiment lab design note](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/design/experiment-lab.md): Design discussion, not a plan: a first web UI organized around n-of-1 experiments.
 - [Changelog](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/CHANGELOG.md): Every tagged release, newest first.
 - [Releasing](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/RELEASING.md): How a release is cut and tagged.
 - [Licensing (plain-language)](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/licensing.md): Friendly explanation of the Apache-2.0 / Elastic-2.0 split.
