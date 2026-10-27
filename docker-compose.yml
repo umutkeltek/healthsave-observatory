@@ -246,8 +246,13 @@ services:
     image: eclipse-mosquitto:2
     restart: unless-stopped
     profiles: ["mosquitto"]
+    entrypoint: ["/bin/sh", "/healthsave/entrypoint.sh"]
+    environment:
+      MOSQUITTO_USERNAME: ${MOSQUITTO_USERNAME:-}
+      MOSQUITTO_PASSWORD: ${MOSQUITTO_PASSWORD:-}
     volumes:
       - ./deploy/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./deploy/mosquitto/entrypoint.sh:/healthsave/entrypoint.sh:ro
       - mqtt_data:/mosquitto/data
       - mqtt_log:/mosquitto/log
     ports:
@@ -255,7 +260,7 @@ services:
     healthcheck:
       test:
         - "CMD-SHELL"
-        - "mosquitto_sub -h localhost -t '$$SYS/broker/uptime' -C 1 -W 3 || exit 1"
+        - "mosquitto_sub -h localhost $${MOSQUITTO_PASSWORD:+-u \"$$MOSQUITTO_USERNAME\" -P \"$$MOSQUITTO_PASSWORD\"} -t '$$SYS/broker/uptime' -C 1 -W 3 || exit 1"
       interval: 15s
       timeout: 5s
       retries: 3
@@ -278,8 +283,9 @@ services:
       HA_MQTT_ENABLED: ${HA_MQTT_ENABLED:-false}
       HA_MQTT_BROKER: ${HA_MQTT_BROKER:-mqtt}
       HA_MQTT_PORT: ${HA_MQTT_PORT:-1883}
-      HA_MQTT_USERNAME: ${HA_MQTT_USERNAME:-}
-      HA_MQTT_PASSWORD: ${HA_MQTT_PASSWORD:-}
+      # Falls back to the bundled broker's login when you leave these empty.
+      HA_MQTT_USERNAME: ${HA_MQTT_USERNAME:-${MOSQUITTO_USERNAME:-}}
+      HA_MQTT_PASSWORD: ${HA_MQTT_PASSWORD:-${MOSQUITTO_PASSWORD:-}}
       HA_MQTT_DISCOVERY_PREFIX: ${HA_MQTT_DISCOVERY_PREFIX:-homeassistant}
       HA_MQTT_STATE_TOPIC_PREFIX: ${HA_MQTT_STATE_TOPIC_PREFIX:-observatory}
       HA_MQTT_DEVICE_IDENTIFIER: ${HA_MQTT_DEVICE_IDENTIFIER:-observatory}

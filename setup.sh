@@ -440,6 +440,11 @@ HA_MQTT_LEGACY_DEVICE_IDENTIFIER=
 HA_MQTT_LEGACY_DEVICE_NAME=
 HA_MQTT_PUBLISH_INTERVAL_SECONDS=60
 MOSQUITTO_PORT=1883
+# Login for the bundled Mosquitto broker. Enter the same values in Home
+# Assistant's MQTT integration. The bridge uses them when HA_MQTT_USERNAME
+# and HA_MQTT_PASSWORD are empty.
+MOSQUITTO_USERNAME=healthsave
+MOSQUITTO_PASSWORD=$(rand_hex)
 EOF
     chmod 600 "$ENV_FILE" 2>/dev/null || true
 }

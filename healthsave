@@ -1119,7 +1119,12 @@ cmd_up() {
     if { [ -z "$broker" ] || [ "$broker" = "mqtt" ]; } && [ "$wants_mqtt" = "0" ]; then
       log_info "Including bundled MQTT broker for Home Assistant bridge."
       compose_args+=(--profile mosquitto)
+      wants_mqtt=1
     fi
+  fi
+
+  if [ "$wants_mqtt" = "1" ]; then
+    print_mosquitto_login
   fi
 
   docker compose "${compose_args[@]}" up -d
@@ -1128,6 +1133,20 @@ cmd_up() {
         log_ok "API ready."
     else
         log_warn "API did not become ready within 120 seconds. Run 'healthsave logs api'."
+    fi
+}
+
+print_mosquitto_login() {
+    local user
+    local password
+    user="$(read_env_value MOSQUITTO_USERNAME)"
+    password="$(read_env_value MOSQUITTO_PASSWORD)"
+    if [ -n "$user" ] && [ -n "$password" ]; then
+        log_info "Bundled MQTT broker requires a login. In Home Assistant's MQTT integration use:"
+        echo "  Broker: $(detect_lan_ip)  Port: $(read_env_value MOSQUITTO_PORT | grep . || printf '1883')"
+        echo "  Username: ${user}  Password: ${password}"
+    else
+        log_warn "Bundled MQTT broker allows anonymous access: anyone who can reach port 1883 can read your health topics. Set MOSQUITTO_USERNAME and MOSQUITTO_PASSWORD in .env, then rerun."
     fi
 }
 

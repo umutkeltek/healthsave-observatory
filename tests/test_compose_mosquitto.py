@@ -91,10 +91,12 @@ def test_mosquitto_conf_file_exists_and_enables_persistence():
     body = conf_path.read_text()
     assert "listener 1883" in body
     assert "persistence true" in body
-    # Anonymous-allowed default is intentional for the single-user LAN
-    # case. If we ever flip this, callers must overlay a compose
-    # override; this test pins the default so a flip is loud.
-    assert "allow_anonymous true" in body
+    # Anonymous access is decided at start by deploy/mosquitto/entrypoint.sh
+    # (login when MOSQUITTO_USERNAME/PASSWORD are set, anonymous with a warning
+    # otherwise), so the base file must not hard-code it. Behavior is pinned in
+    # tests/test_mosquitto_auth.py.
+    directives = [line.strip() for line in body.splitlines() if not line.lstrip().startswith("#")]
+    assert not any(line.startswith("allow_anonymous") for line in directives)
 
 
 def test_mqtt_port_published_for_external_home_assistant():

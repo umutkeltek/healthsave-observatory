@@ -27,6 +27,12 @@ Plugins carry their own versions.
 
 ### Changed
 
+- The bundled Mosquitto broker requires a login when `MOSQUITTO_USERNAME` and
+  `MOSQUITTO_PASSWORD` are set. Setup generates both for new installs, and
+  `healthsave up --home-assistant` prints them for Home Assistant's MQTT
+  integration. The bridge falls back to this login when `HA_MQTT_USERNAME` and
+  `HA_MQTT_PASSWORD` are empty. An older `.env` keeps the broker anonymous,
+  with a warning in its logs.
 - Setup turns on the four analysis jobs that need no AI model (anomalies,
   trends, correlations, recovery) when it writes a new `config.yaml`, so
   Findings fill in without any AI setup. Advanced setup now keeps them on when

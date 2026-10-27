@@ -42,7 +42,11 @@ This starts:
 - `mqtt` - bundled Mosquitto broker, profile `mosquitto`.
 - `homeassistant-mqtt` - HealthSave bridge, profile `home-assistant`.
 
-The bundled broker publishes host port `1883` by default so a Home Assistant instance on the same LAN can connect to the host IP. The bundled broker defaults to anonymous LAN access; harden it with an override that disables anonymous access and mounts a password file. Base config: `deploy/mosquitto/mosquitto.conf`.
+The bundled broker publishes host port `1883` by default so a Home Assistant instance on the same LAN can connect to the host IP.
+
+The broker requires a login when `MOSQUITTO_USERNAME` and `MOSQUITTO_PASSWORD` are set in `.env`. `healthsave setup` generates both for new installs, and `healthsave up --home-assistant` prints them. Enter the same broker address, username and password in Home Assistant's MQTT integration. The bridge uses this login too when `HA_MQTT_USERNAME` and `HA_MQTT_PASSWORD` are empty.
+
+An older `.env` without these values keeps the broker anonymous, so anyone who can reach port 1883 can read your health topics, and `docker compose logs mqtt` warns about it. To add a login, set both values, restart with `healthsave up --mqtt --home-assistant`, then update Home Assistant's MQTT integration. Base config: `deploy/mosquitto/mosquitto.conf`; authentication is added at start by `deploy/mosquitto/entrypoint.sh`.
 
 ## Published Topics
 
