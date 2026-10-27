@@ -113,8 +113,8 @@ Publish checklist:
 set -euo pipefail
 npm login
 npm publish --access public
-test "$(npm view healthsave@0.1.5 version)" = "0.1.5"
-npx --yes healthsave@0.1.5 --version
+test "$(npm view healthsave@0.2.0 version)" = "0.2.0"
+npx --yes healthsave@0.2.0 --version
 ```
 
 Before publishing, run the verification suite and scan the diff for secrets.

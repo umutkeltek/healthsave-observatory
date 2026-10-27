@@ -7,7 +7,7 @@
     },
     "packages/npm/healthsave-observatory": {
       "name": "healthsave",
-      "version": "0.1.5",
+      "version": "0.2.0",
       "bin": {
         "healthsave": "bin/healthsave-observatory.mjs",
         "healthsave-observatory": "bin/healthsave-observatory.mjs",

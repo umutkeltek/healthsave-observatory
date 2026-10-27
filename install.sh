@@ -2,7 +2,10 @@
 set -eu
 
 REPO_URL="${HEALTHSAVE_OBSERVATORY_REPO:-https://github.com/umutkeltek/healthsave-observatory.git}"
-TARBALL_URL="${HEALTHSAVE_OBSERVATORY_TARBALL:-https://github.com/umutkeltek/healthsave-observatory/archive/refs/heads/main.tar.gz}"
+RELEASES_API="${HEALTHSAVE_OBSERVATORY_RELEASES_API:-https://api.github.com/repos/umutkeltek/healthsave-observatory/releases/latest}"
+# Self-hosters install releases, never main (RELEASING.md). "latest" = the newest
+# vX.Y.Z tag; set HEALTHSAVE_OBSERVATORY_REF to a tag, branch or commit to override.
+REF="${HEALTHSAVE_OBSERVATORY_REF:-latest}"
 TARGET_DIR="${HEALTHSAVE_OBSERVATORY_HOME:-${HOME:-$(pwd)}/healthsave-observatory}"
 
 info() {
@@ -54,6 +57,14 @@ check_platform() {
   fi
 }
 
+latest_tag_in_checkout() {
+  git -C "$1" tag --list 'v[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1
+}
+
+latest_tag_from_api() {
+  curl -fsSL "$RELEASES_API" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
+}
+
 is_checkout() {
   [ -x "$1/healthsave" ] && [ -f "$1/setup.sh" ] && [ -f "$1/docker-compose.yml" ]
 }
@@ -72,17 +83,40 @@ ensure_checkout() {
   if have git; then
     info "Cloning HealthSave Observatory into $TARGET_DIR"
     git clone "$REPO_URL" "$TARGET_DIR"
+    ref="$REF"
+    if [ "$ref" = "latest" ]; then
+      ref="$(latest_tag_in_checkout "$TARGET_DIR")"
+      if [ -z "$ref" ]; then
+        rm -rf "$TARGET_DIR"
+        fail "$REPO_URL has no vX.Y.Z release tag. Set HEALTHSAVE_OBSERVATORY_REF to choose a branch or commit."
+      fi
+    fi
+    info "Checking out $ref"
+    if ! git -C "$TARGET_DIR" checkout --quiet "$ref"; then
+      rm -rf "$TARGET_DIR"
+      fail "Could not check out $ref."
+    fi
     return 0
   fi
 
   have curl || fail "git is missing and curl is not available for tarball fallback."
   have tar || fail "git is missing and tar is not available for tarball fallback."
 
+  tarball_url="${HEALTHSAVE_OBSERVATORY_TARBALL:-}"
+  if [ -z "$tarball_url" ]; then
+    ref="$REF"
+    if [ "$ref" = "latest" ]; then
+      ref="$(latest_tag_from_api)"
+      [ -n "$ref" ] || fail "Could not look up the latest release. Install git, or set HEALTHSAVE_OBSERVATORY_REF=vX.Y.Z."
+    fi
+    tarball_url="https://github.com/umutkeltek/healthsave-observatory/archive/${ref}.tar.gz"
+  fi
+
   tmp_dir="$(mktemp -d)"
   trap 'rm -rf "$tmp_dir"' EXIT HUP INT TERM
   mkdir -p "$TARGET_DIR"
   info "Downloading HealthSave Observatory into $TARGET_DIR"
-  curl -fsSL "$TARBALL_URL" -o "$tmp_dir/healthsave-observatory.tar.gz"
+  curl -fsSL "$tarball_url" -o "$tmp_dir/healthsave-observatory.tar.gz"
   tar -xzf "$tmp_dir/healthsave-observatory.tar.gz" -C "$TARGET_DIR" --strip-components=1
 }
 

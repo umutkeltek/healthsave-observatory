@@ -5,13 +5,16 @@ import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-const VERSION = "0.1.5";
+const VERSION = "0.2.0";
 const PRIMARY_COMMAND = "healthsave";
 const ALIAS_COMMAND = "healthsave-observatory";
 const DEFAULT_REPO =
   process.env.HEALTHSAVE_OBSERVATORY_REPO ||
   "https://github.com/umutkeltek/healthsave-observatory.git";
-const DEFAULT_REF = process.env.HEALTHSAVE_OBSERVATORY_REF || "v0.1.5";
+// "latest" resolves to the newest vX.Y.Z release tag after cloning: self-hosters
+// install releases, never main (RELEASING.md).
+const LATEST_REF = "latest";
+const DEFAULT_REF = process.env.HEALTHSAVE_OBSERVATORY_REF || LATEST_REF;
 const DEFAULT_HOME = process.env.HOME || process.env.USERPROFILE || process.cwd();
 const DEFAULT_DIR =
   process.env.HEALTHSAVE_OBSERVATORY_HOME ||
@@ -65,7 +68,7 @@ Examples:
 Flags:
   --dir DIR             Stack checkout directory. Defaults to ~/healthsave-observatory.
   --repo URL            Git repository for new checkout.
-  --ref REF             Git tag, branch, or commit for new checkout. Default: ${DEFAULT_REF}.
+  --ref REF             Git tag, branch, or commit for new checkout. Default: ${DEFAULT_REF} (newest release tag).
   --json                Machine-readable output where supported.
   --dry-run             Show planned bootstrap/setup action.
   --install-cli         Explicitly install a checkout-local wrapper after init/onboard/setup.
@@ -253,6 +256,11 @@ function capture(command, args, options = {}) {
   return (result.stdout || "").trim();
 }
 
+function latestReleaseTag(dir) {
+  const tags = capture("git", ["-C", dir, "tag", "--list", "v[0-9]*", "--sort=-v:refname"]);
+  return tags.split("\n").map((tag) => tag.trim()).find((tag) => /^v\d+\.\d+\.\d+$/.test(tag)) || "";
+}
+
 function gitAvailable() {
   const result = spawnSync("git", ["--version"], { stdio: "ignore" });
   return !result.error && result.status === 0;
@@ -363,8 +371,17 @@ function ensureCheckout(dir, options) {
   let result = run("git", ["clone", options.repo, dir], { json: options.json });
   if (result.status !== 0) process.exit(result.status || 1);
 
-  info(`Checking out ${options.ref}`);
-  result = run("git", ["-C", dir, "checkout", options.ref], { json: options.json });
+  let ref = options.ref;
+  if (ref === LATEST_REF) {
+    ref = latestReleaseTag(dir);
+    if (!ref) {
+      rmSync(dir, { recursive: true, force: true });
+      fail(`${options.repo} has no vX.Y.Z release tag. Pass --ref to choose a branch or commit.`, 1, options.json);
+    }
+  }
+
+  info(`Checking out ${ref}`);
+  result = run("git", ["-C", dir, "checkout", "--quiet", ref], { json: options.json });
   if (result.status !== 0) {
     rmSync(dir, { recursive: true, force: true });
     process.exit(result.status || 1);

@@ -20,6 +20,13 @@ Plugins carry their own versions.
 - `healthsave doctor` warns when no API key is set.
 - Advanced setup suggests a generated key instead of open access.
 
+### Fixed
+
+- The installers check out the newest `vX.Y.Z` release instead of `main`.
+  `npx healthsave` defaulted to a `v0.1.5` tag that never existed, so a fresh
+  `npx` install failed. Set `HEALTHSAVE_OBSERVATORY_REF` (or `--ref`) to pick a
+  tag, branch or commit. The npm bootstrapper is now 0.2.0.
+
 ## [1.1.0] - 2026-10-04
 
 The first tagged release since 1.0.0. It contains everything built since May,

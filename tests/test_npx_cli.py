@@ -97,7 +97,7 @@ def test_node_cli_version_command() -> None:
         check=True,
     )
 
-    assert proc.stdout.strip() == "healthsave 0.1.5"
+    assert proc.stdout.strip() == "healthsave 0.2.0"
 
     components = subprocess.run(
         ["node", str(BIN), "version", "--dir", str(ROOT), "--json"],
@@ -108,8 +108,8 @@ def test_node_cli_version_command() -> None:
         check=True,
     )
     payload = json.loads(components.stdout)
-    assert payload["bootstrapper"]["version"] == "0.1.5"
-    assert payload["bootstrapper"]["default_ref"] == "v0.1.5"
+    assert payload["bootstrapper"]["version"] == "0.2.0"
+    assert payload["bootstrapper"]["default_ref"] == "latest"
     assert payload["checkout"]["core_version"] == "healthsave 0.3.0"
 
 
@@ -127,7 +127,7 @@ def test_node_cli_init_dry_run_is_non_mutating(tmp_path: Path) -> None:
     )
 
     assert "Would clone" in proc.stdout
-    assert "Would checkout ref v0.1.5" in proc.stdout
+    assert "Would checkout ref latest" in proc.stdout
     assert "Would install wrapper command" not in proc.stdout
     assert not target.exists()
 
@@ -200,7 +200,7 @@ def test_npm_exec_runs_packaged_healthsave_bin() -> None:
         check=True,
     )
 
-    assert proc.stdout.strip() == "healthsave 0.1.5"
+    assert proc.stdout.strip() == "healthsave 0.2.0"
 
 
 def test_npm_packed_global_install_uses_real_healthsave_shim(tmp_path: Path) -> None:
@@ -242,7 +242,7 @@ def test_npm_packed_global_install_uses_real_healthsave_shim(tmp_path: Path) -> 
         check=True,
     )
 
-    assert proc.stdout.strip() == "healthsave 0.1.5"
+    assert proc.stdout.strip() == "healthsave 0.2.0"
 
     stack = _fake_checkout(tmp_path)
     subprocess.run(
@@ -375,6 +375,67 @@ def test_node_cli_removes_fresh_clone_when_ref_checkout_fails(tmp_path: Path) ->
     assert second.returncode != 0
     assert not target.exists()
     assert "stack ready" not in second.stderr
+
+
+def _commit_tag(repo: Path, version: str, tag: str) -> None:
+    (repo / "healthsave").write_text(
+        f"#!/usr/bin/env bash\nprintf 'healthsave {version}\\n'\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "commit", "-qam", tag], cwd=repo, check=True)
+    subprocess.run(["git", "tag", tag], cwd=repo, check=True)
+
+
+def test_node_cli_default_ref_checks_out_newest_release_tag(tmp_path: Path) -> None:
+    _require_node()
+    if not shutil.which("git"):
+        pytest.skip("git is required for the release tag test")
+
+    repo = _fake_git_repo(tmp_path)
+    _commit_tag(repo, "1.9.0", "v1.9.0")
+    _commit_tag(repo, "1.10.0", "v1.10.0")
+    _commit_tag(repo, "2.0.0-rc1", "v2.0.0-rc1")
+    _commit_tag(repo, "main-only", "not-a-release")
+    target = tmp_path / "target"
+
+    subprocess.run(
+        ["node", str(BIN), "init", "--dir", str(target), "--repo", str(repo)],
+        cwd="/tmp",
+        env={**os.environ, "HEALTHSAVE_OBSERVATORY_REF": ""},
+        text=True,
+        capture_output=True,
+        timeout=20,
+    )
+
+    head_tags = subprocess.run(
+        ["git", "-C", str(target), "tag", "--points-at", "HEAD"],
+        check=True,
+        text=True,
+        capture_output=True,
+    ).stdout.split()
+    assert head_tags == ["v1.10.0"]
+
+
+def test_node_cli_default_ref_fails_cleanly_without_release_tags(tmp_path: Path) -> None:
+    _require_node()
+    if not shutil.which("git"):
+        pytest.skip("git is required for the release tag test")
+
+    repo = _fake_git_repo(tmp_path)  # only tag is "vfixture"
+    target = tmp_path / "target"
+
+    proc = subprocess.run(
+        ["node", str(BIN), "init", "--dir", str(target), "--repo", str(repo)],
+        cwd="/tmp",
+        env={**os.environ, "HEALTHSAVE_OBSERVATORY_REF": ""},
+        text=True,
+        capture_output=True,
+        timeout=20,
+    )
+
+    assert proc.returncode != 0
+    assert "no vX.Y.Z release tag" in proc.stderr
+    assert not target.exists()
 
 
 def test_node_cli_delegates_up_flags_without_dir_from_checkout(tmp_path: Path) -> None:
