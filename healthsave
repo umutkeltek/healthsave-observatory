@@ -52,6 +52,7 @@ Commands:
   layers                    Explain API, DB, worker, web, Grafana, AI layers
   doctor                    Check platform, config, services, and URLs
   pair [--new-key]          Show the server URL, API key and pairing QR for the app
+  update [--to TAG] [--yes] Move to the newest release (takes a backup first)
   backup [--out DIR]        Save the database, .env and config.yaml to one file
   restore FILE [--yes]      Replace the database with a backup (takes a safety backup first)
   verify                    Run lint, tests, TS/web checks, Docker E2E
@@ -190,6 +191,30 @@ Options:
   -h, --help      Show this help
 
 The key and password are printed in full. Treat this output like a password.
+EOF
+}
+
+print_update_usage() {
+    cat <<'EOF'
+HealthSave update
+
+Moves this checkout to the newest vX.Y.Z release and restarts what was running.
+Before it changes anything it saves the database to ./backups (when the stack
+is running), so an update can be rolled back.
+
+Usage:
+  healthsave update
+  healthsave update --to v1.2.0
+  healthsave update --yes
+
+Options:
+  --to TAG        Release tag to move to (default: the newest vX.Y.Z tag)
+  --yes           Skip the confirmation (for scripts)
+  -h, --help      Show this help
+
+Migrations run automatically when the API starts; they only add tables and
+columns, so going back to the previous release keeps working. Read the
+release notes in CHANGELOG.md before a major version jump.
 EOF
 }
 
@@ -1283,6 +1308,127 @@ cmd_pair() {
     print_pairing_block "$server_url" "$(read_env_value API_KEY)"
 }
 
+newest_release_tag() {
+    git -C "$CLI_DIR" tag --list 'v[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1
+}
+
+cmd_update() {
+    local target=""
+    local assume_yes=0
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help|help)
+                print_update_usage
+                return 0
+                ;;
+            --yes|-y) assume_yes=1 ;;
+            --to)
+                shift
+                if [ "$#" -eq 0 ] || [ -z "$1" ]; then
+                    log_error "--to needs a release tag."
+                    exit 2
+                fi
+                target="$1"
+                ;;
+            *)
+                log_error "Unknown update argument: $1"
+                print_update_usage
+                exit 2
+                ;;
+        esac
+        shift
+    done
+
+    if ! git -C "$CLI_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        log_error "This copy was not installed with git, so it cannot update itself. Download the newest release from GitHub, or reinstall with the installer."
+        exit 1
+    fi
+    if [ -n "$(git -C "$CLI_DIR" status --porcelain --untracked-files=no)" ]; then
+        log_error "This checkout has local changes to tracked files. Commit or undo them first (git status shows them); .env, config.yaml and backups/ are not affected."
+        exit 1
+    fi
+
+    log_info "Checking for releases..."
+    if ! git -C "$CLI_DIR" fetch --tags --quiet origin; then
+        log_error "Could not reach the release server. Check your connection and try again."
+        exit 1
+    fi
+    if [ -z "$target" ]; then
+        target="$(newest_release_tag)"
+        if [ -z "$target" ]; then
+            log_error "No vX.Y.Z release tag found."
+            exit 1
+        fi
+    elif ! git -C "$CLI_DIR" rev-parse --verify --quiet "refs/tags/${target}" >/dev/null; then
+        log_error "No release tag called ${target}."
+        exit 1
+    fi
+
+    local current_commit target_commit current_label
+    current_commit="$(git -C "$CLI_DIR" rev-parse HEAD)"
+    target_commit="$(git -C "$CLI_DIR" rev-list -n 1 "refs/tags/${target}")"
+    current_label="$(git -C "$CLI_DIR" describe --tags --exact-match HEAD 2>/dev/null || git -C "$CLI_DIR" rev-parse --short HEAD)"
+    if [ "$current_commit" = "$target_commit" ]; then
+        log_ok "Already on ${target}."
+        return 0
+    fi
+
+    log_info "Update ${current_label} -> ${target}. Release notes: CHANGELOG.md"
+    if [ "$assume_yes" != "1" ]; then
+        if [ ! -t 0 ]; then
+            log_error "Re-run with --yes to update without a prompt."
+            exit 2
+        fi
+        if ! prompt_yes_no "Update now?" "N"; then
+            log_info "Nothing changed."
+            return 0
+        fi
+    fi
+
+    local running=""
+    local safety=""
+    if docker_available; then
+        running="$(running_services | tr '\n' ' ')"
+        if printf ' %s ' "$running" | grep -q ' db '; then
+            safety="$(write_backup backups pre-update)" || {
+                log_error "Could not back up the database first, so nothing was changed."
+                exit 1
+            }
+            log_ok "Saved the database to ${safety}"
+        fi
+    fi
+
+    git -C "$CLI_DIR" -c advice.detachedHead=false checkout --quiet "$target"
+    log_ok "Checked out ${target}."
+
+    if [ -z "${running// /}" ]; then
+        log_info "The stack was not running. Start it with 'healthsave up'."
+        return 0
+    fi
+
+    # Bring back exactly what was running, rebuilt from the new code. Naming a
+    # profile-gated service (mqtt, ollama, ...) starts it without its --profile flag.
+    # shellcheck disable=SC2086
+    if ! docker compose up -d --build $running; then
+        log_error "The new release did not start. To go back:"
+        log_error "  git checkout ${current_label} && healthsave up"
+        [ -n "$safety" ] && log_error "  and, only if data looks wrong: healthsave restore ${safety} --yes"
+        exit 1
+    fi
+    if printf ' %s ' "$running" | grep -q ' api '; then
+        log_info "Waiting for API readiness on ${API_URL_DEFAULT}/ready..."
+        if wait_for_api_ready; then
+            log_ok "Updated to ${target}."
+        else
+            log_warn "The API is not ready yet. Check 'healthsave logs api'. To go back: git checkout ${current_label} && healthsave up"
+            exit 1
+        fi
+    else
+        log_ok "Updated to ${target}."
+    fi
+    [ -n "$safety" ] && log_info "Pre-update backup kept in ${safety}"
+}
+
 BACKUP_FORMAT="healthsave-backup-1"
 # Services that hold database connections; a restore stops the running ones.
 DB_CLIENT_SERVICES="api worker web grafana homeassistant-mqtt agents"
@@ -2100,6 +2246,16 @@ case "$cmd" in
             exit 2
         fi
         cmd_pair "$@"
+        ;;
+    update)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for update."
+            exit 2
+        fi
+        cmd_update "$@"
+        # The checkout just replaced this file on disk; exit before bash reads
+        # any more of it.
+        exit 0
         ;;
     backup)
         if [ "$json_mode" = "1" ]; then

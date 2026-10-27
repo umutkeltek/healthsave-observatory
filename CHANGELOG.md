@@ -37,6 +37,10 @@ Plugins carry their own versions.
 
 ### Added
 
+- `healthsave update [--to TAG]` moves a git install to the newest release:
+  backup first, then checkout of the tag, then a rebuild of exactly the
+  services that were running. It refuses local edits to tracked files and
+  prints the way back if the new release does not start.
 - `healthsave backup` writes the database (`pg_dump`), `.env` and
   `config.yaml` to one owner-only `.tar` file. `healthsave restore FILE`
   saves the current database first, then restores with TimescaleDB's

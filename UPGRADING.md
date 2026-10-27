@@ -1,9 +1,23 @@
 # Upgrading HealthSave Observatory
 
-How to update an existing install safely. The general procedure:
+How to update an existing install safely. The simplest way:
 
 ```bash
-git pull
+healthsave update            # newest vX.Y.Z release; asks before changing anything
+healthsave update --to v1.2.0
+```
+
+It backs up the database to `backups/healthsave-pre-update-<time>.tar` first,
+checks out the release tag, and rebuilds and restarts exactly the services that
+were running. It refuses to run over local edits to tracked files (`.env`,
+`config.yaml` and `backups/` are never touched). If the new release does not
+start, it prints the commands to go back.
+
+By hand, the same thing is:
+
+```bash
+git fetch --tags
+git checkout vX.Y.Z                 # self-hosters install releases, not main
 docker compose up -d --build        # the `migrate` service applies additive
                                     # schema migrations before `api` starts
 ```
