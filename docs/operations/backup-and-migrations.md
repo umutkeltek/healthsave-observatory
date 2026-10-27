@@ -4,7 +4,24 @@ TimescaleDB is the only stateful piece of the stack, so backups and schema upgra
 
 ## Backups
 
-Back up the TimescaleDB Docker volume (`db_data`) regularly. It holds every observation you've captured; everything else in the stack is stateless and rebuilds from the image and `.env`.
+The simplest backup is one command:
+
+```bash
+healthsave backup                      # writes ./backups/healthsave-backup-<time>.tar
+healthsave backup --out /mnt/nas/hs    # or somewhere already in your backup rotation
+```
+
+The file holds a `pg_dump` of the database plus copies of `.env` and `config.yaml`, so it is everything you need to bring the Observatory back, on this machine or a new one. It is written with owner-only permissions and is **not encrypted**: it contains your health data and the secrets in `.env`. Encrypt it before it leaves the machine, for example `gpg -c backups/healthsave-backup-<time>.tar`.
+
+To restore:
+
+```bash
+healthsave restore backups/healthsave-backup-<time>.tar
+```
+
+Restore first saves the current database as `backups/healthsave-pre-restore-<time>.tar`, so a wrong file can be undone with `healthsave restore` on that file. It stops the services that use the database, rebuilds it with TimescaleDB's `timescaledb_pre_restore()` / `timescaledb_post_restore()`, checks the migration count against the backup, and starts the services again. It refuses a backup made with a different TimescaleDB version: set `TIMESCALE_IMAGE` to the matching version, restore, then upgrade. `.env` and `config.yaml` are never overwritten; when moving to a new machine, take them from the archive with `tar -xf <file> env config.yaml` and rename `env` to `.env`.
+
+You can also back up the TimescaleDB Docker volume (`db_data`) directly. It holds every observation you've captured; everything else in the stack is stateless and rebuilds from the image and `.env`.
 
 - History grows slowly — roughly megabytes per month for one person — so the volume stays light and snapshots are cheap.
 - If you run on a VM or NAS, point the volume at a disk that's already in your backup rotation (a ZFS dataset you snapshot, a backed-up directory, etc.).

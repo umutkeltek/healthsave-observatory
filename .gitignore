@@ -19,3 +19,6 @@ docker-compose.override.yml
 docs_private/
 agents.md
 AGENTS.md
+
+# healthsave backup / restore output (health data + .env secrets)
+/backups/

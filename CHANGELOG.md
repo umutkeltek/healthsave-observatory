@@ -31,6 +31,14 @@ Plugins carry their own versions.
   LAN address: `server_name _`, and `generate-self-signed.sh` takes
   `CERT_HOSTNAMES` / `CERT_IPS`.
 
+### Added
+
+- `healthsave backup` writes the database (`pg_dump`), `.env` and
+  `config.yaml` to one owner-only `.tar` file. `healthsave restore FILE`
+  saves the current database first, then restores with TimescaleDB's
+  pre/post-restore steps, checks the migration count, and restarts the
+  services it stopped. It refuses a backup from a different TimescaleDB version.
+
 ### Changed
 
 - The bundled Mosquitto broker requires a login when `MOSQUITTO_USERNAME` and

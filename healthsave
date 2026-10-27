@@ -29,6 +29,7 @@ Examples:
   healthsave setup advanced
   healthsave doctor
   healthsave pair
+  healthsave backup
   healthsave --json doctor
   healthsave layers
   healthsave status
@@ -51,6 +52,8 @@ Commands:
   layers                    Explain API, DB, worker, web, Grafana, AI layers
   doctor                    Check platform, config, services, and URLs
   pair [--new-key]          Show the server URL, API key and pairing QR for the app
+  backup [--out DIR]        Save the database, .env and config.yaml to one file
+  restore FILE [--yes]      Replace the database with a backup (takes a safety backup first)
   verify                    Run lint, tests, TS/web checks, Docker E2E
   status                    Show layer-aware Docker Compose service status
   logs [layer|service]      Show recent Docker Compose logs
@@ -187,6 +190,50 @@ Options:
   -h, --help      Show this help
 
 The key and password are printed in full. Treat this output like a password.
+EOF
+}
+
+print_backup_usage() {
+    cat <<'EOF'
+HealthSave backup
+
+Saves everything needed to bring this Observatory back: a pg_dump of the
+database, plus copies of .env and config.yaml, in one .tar file.
+
+Usage:
+  healthsave backup
+  healthsave backup --out /mnt/nas/healthsave
+
+Options:
+  --out DIR       Where to write the file (default: ./backups)
+  -h, --help      Show this help
+
+The file holds your health data and the secrets in .env, unencrypted. Keep it
+on a disk you trust, or encrypt it before it leaves this machine, e.g.
+  gpg -c healthsave-backup-<time>.tar
+Restore it with: healthsave restore <file>
+EOF
+}
+
+print_restore_usage() {
+    cat <<'EOF'
+HealthSave restore
+
+Replaces this Observatory's database with the one in a 'healthsave backup' file.
+Before it touches anything it saves the current database to ./backups as a
+pre-restore backup, so a wrong file can be undone.
+
+Usage:
+  healthsave restore backups/healthsave-backup-20261027-120000Z.tar
+  healthsave restore FILE --yes
+
+Options:
+  --yes           Skip the confirmation (for scripts)
+  -h, --help      Show this help
+
+The services that read the database stop during the restore and start again
+after. .env and config.yaml are not changed: the copies inside the backup are
+for moving to a new machine (tar -xf FILE env config.yaml).
 EOF
 }
 
@@ -1224,6 +1271,230 @@ cmd_pair() {
     print_pairing_block "$server_url" "$(read_env_value API_KEY)"
 }
 
+BACKUP_FORMAT="healthsave-backup-1"
+# Services that hold database connections; a restore stops the running ones.
+DB_CLIENT_SERVICES="api worker web grafana homeassistant-mqtt agents"
+
+running_services() {
+    docker compose ps --status running --services 2>/dev/null || true
+}
+
+db_query() {
+    # db_query <database> <sql> - one unaligned value from psql inside the db container.
+    docker compose exec -T db psql -U healthsave -d "$1" -v ON_ERROR_STOP=1 -Atc "$2"
+}
+
+manifest_value() {
+    # manifest_value <MANIFEST file> <key>
+    grep -E "^$2=" "$1" 2>/dev/null | head -n 1 | cut -d= -f2- || true
+}
+
+require_db_running() {
+    if ! running_services | grep -qx db; then
+        log_error "The database is not running. Start the stack with 'healthsave up' first."
+        exit 1
+    fi
+}
+
+write_backup() {
+    # write_backup <out_dir> <label> - prints the path of the new backup file.
+    local out_dir="$1"
+    local label="$2"
+    local stamp work file ts_version migrations
+    stamp="$(date -u +%Y%m%d-%H%M%SZ)"
+    work="$(mktemp -d)"
+    mkdir -p "$out_dir"
+    file="${out_dir%/}/healthsave-${label}-${stamp}.tar"
+
+    if ! (umask 077 && docker compose exec -T db pg_dump -U healthsave -d healthsave -Fc >"$work/db.dump"); then
+        rm -rf "$work"
+        log_error "pg_dump failed; no backup was written."
+        return 1
+    fi
+    ts_version="$(db_query healthsave "SELECT extversion FROM pg_extension WHERE extname = 'timescaledb'")"
+    migrations="$(db_query healthsave "SELECT CASE WHEN to_regclass('schema_migrations') IS NULL THEN 0 ELSE (SELECT count(*) FROM schema_migrations) END")"
+    [ -f "$ENV_FILE" ] && cp "$ENV_FILE" "$work/env"
+    [ -f "$CONFIG_FILE" ] && cp "$CONFIG_FILE" "$work/config.yaml"
+    {
+        echo "format=${BACKUP_FORMAT}"
+        echo "created_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "cli_version=${VERSION}"
+        echo "timescaledb=${ts_version}"
+        echo "migrations=${migrations}"
+    } >"$work/MANIFEST"
+
+    local members=(MANIFEST db.dump)
+    [ -f "$work/env" ] && members+=(env)
+    [ -f "$work/config.yaml" ] && members+=(config.yaml)
+    # COPYFILE_DISABLE: macOS tar would otherwise add ._* metadata entries.
+    (umask 077 && COPYFILE_DISABLE=1 tar -C "$work" -cf "$file" "${members[@]}")
+    chmod 600 "$file"
+    rm -rf "$work"
+    printf '%s' "$file"
+}
+
+cmd_backup() {
+    local out_dir="backups"
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help|help)
+                print_backup_usage
+                return 0
+                ;;
+            --out)
+                shift
+                if [ "$#" -eq 0 ] || [ -z "$1" ]; then
+                    log_error "--out needs a directory."
+                    exit 2
+                fi
+                out_dir="$1"
+                ;;
+            *)
+                log_error "Unknown backup argument: $1"
+                print_backup_usage
+                exit 2
+                ;;
+        esac
+        shift
+    done
+
+    require_docker
+    require_db_running
+    local file
+    file="$(write_backup "$out_dir" backup)"
+    log_ok "Backup written: ${file} ($(du -h "$file" | cut -f1))"
+    log_warn "It holds your health data and your .env secrets, unencrypted. Encrypt it before it leaves this machine, e.g. gpg -c ${file}"
+}
+
+cmd_restore() {
+    local file=""
+    local assume_yes=0
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help|help)
+                print_restore_usage
+                return 0
+                ;;
+            --yes|-y) assume_yes=1 ;;
+            -*)
+                log_error "Unknown restore argument: $1"
+                print_restore_usage
+                exit 2
+                ;;
+            *)
+                if [ -n "$file" ]; then
+                    log_error "restore takes one backup file."
+                    exit 2
+                fi
+                file="$1"
+                ;;
+        esac
+        shift
+    done
+
+    if [ -z "$file" ]; then
+        log_error "Name the backup file to restore."
+        print_restore_usage
+        exit 2
+    fi
+    if [ ! -f "$file" ]; then
+        log_error "No such file: $file"
+        exit 1
+    fi
+
+    local work
+    work="$(mktemp -d)"
+    if ! tar -C "$work" -xf "$file" MANIFEST db.dump 2>/dev/null; then
+        rm -rf "$work"
+        log_error "$file is not a healthsave backup (MANIFEST or db.dump missing)."
+        exit 1
+    fi
+    if [ "$(manifest_value "$work/MANIFEST" format)" != "$BACKUP_FORMAT" ]; then
+        rm -rf "$work"
+        log_error "$file was made by an unsupported backup format."
+        exit 1
+    fi
+
+    require_docker
+    require_db_running
+
+    local want_ts have_ts
+    want_ts="$(manifest_value "$work/MANIFEST" timescaledb)"
+    have_ts="$(db_query healthsave "SELECT extversion FROM pg_extension WHERE extname = 'timescaledb'" 2>/dev/null || true)"
+    if [ -n "$want_ts" ] && [ -n "$have_ts" ] && [ "$want_ts" != "$have_ts" ]; then
+        rm -rf "$work"
+        log_error "The backup was made with TimescaleDB ${want_ts}; this database runs ${have_ts}. Set TIMESCALE_IMAGE in .env to the matching version, restore, then upgrade."
+        exit 1
+    fi
+
+    log_info "Backup from $(manifest_value "$work/MANIFEST" created_at), TimescaleDB ${want_ts:-unknown}."
+    if [ "$assume_yes" != "1" ]; then
+        if [ ! -t 0 ]; then
+            rm -rf "$work"
+            log_error "restore replaces the whole database. Re-run with --yes to confirm."
+            exit 2
+        fi
+        if ! prompt_yes_no "Replace this Observatory's database with the backup?" "N"; then
+            rm -rf "$work"
+            log_info "Nothing changed."
+            return 0
+        fi
+    fi
+
+    local safety
+    safety="$(write_backup backups pre-restore)" || {
+        rm -rf "$work"
+        log_error "Could not save the current database first, so nothing was changed."
+        exit 1
+    }
+    log_ok "Saved the current database to ${safety}"
+
+    local stopped=()
+    local svc
+    for svc in $(running_services); do
+        case " $DB_CLIENT_SERVICES " in
+            *" $svc "*) stopped+=("$svc") ;;
+        esac
+    done
+    if [ "${#stopped[@]}" -gt 0 ]; then
+        log_info "Stopping ${stopped[*]} during the restore."
+        docker compose stop "${stopped[@]}"
+    fi
+
+    local failed=0
+    db_query postgres "DROP DATABASE IF EXISTS healthsave WITH (FORCE)" >/dev/null || failed=1
+    [ "$failed" = "0" ] && { db_query postgres "CREATE DATABASE healthsave" >/dev/null || failed=1; }
+    [ "$failed" = "0" ] && { db_query healthsave "CREATE EXTENSION IF NOT EXISTS timescaledb" >/dev/null || failed=1; }
+    [ "$failed" = "0" ] && { db_query healthsave "SELECT timescaledb_pre_restore()" >/dev/null || failed=1; }
+    if [ "$failed" = "0" ]; then
+        # TimescaleDB dumps restore with harmless warnings (e.g. the extension
+        # already exists), so judge the result by the checks below, not the exit code.
+        docker compose exec -T db pg_restore -U healthsave -d healthsave --no-owner <"$work/db.dump" 2>"$work/pg_restore.log" || true
+        db_query healthsave "SELECT timescaledb_post_restore()" >/dev/null || failed=1
+    fi
+
+    local want_migrations have_migrations
+    want_migrations="$(manifest_value "$work/MANIFEST" migrations)"
+    have_migrations="$(db_query healthsave "SELECT CASE WHEN to_regclass('schema_migrations') IS NULL THEN 0 ELSE (SELECT count(*) FROM schema_migrations) END" 2>/dev/null || true)"
+    if [ "$failed" = "0" ] && [ -n "$want_migrations" ] && [ "$have_migrations" != "$want_migrations" ]; then
+        failed=1
+    fi
+
+    if [ "${#stopped[@]}" -gt 0 ]; then
+        docker compose start "${stopped[@]}"
+    fi
+
+    if [ "$failed" != "0" ]; then
+        log_error "The restore did not complete (schema_migrations: expected ${want_migrations:-?}, found ${have_migrations:-none})."
+        log_error "pg_restore output: ${work}/pg_restore.log"
+        log_error "Your previous database is saved in ${safety}. Undo with: healthsave restore ${safety} --yes"
+        exit 1
+    fi
+    rm -rf "$work"
+    log_ok "Restored. ${have_migrations} migrations recorded, matching the backup."
+    log_info "Previous database kept in ${safety}"
+}
+
 cmd_down() {
     require_docker
     docker compose down
@@ -1817,6 +2088,20 @@ case "$cmd" in
             exit 2
         fi
         cmd_pair "$@"
+        ;;
+    backup)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for backup."
+            exit 2
+        fi
+        cmd_backup "$@"
+        ;;
+    restore)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for restore."
+            exit 2
+        fi
+        cmd_restore "$@"
         ;;
     verify)
         if [ "$json_mode" = "1" ]; then

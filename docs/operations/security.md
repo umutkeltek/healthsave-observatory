@@ -98,8 +98,9 @@ configure receives the redacted prompt. Ollama runs with `OLLAMA_NO_CLOUD=1`.
 Your backups contain the same health data the live database does, so protect them
 the same way:
 
-- Back up the TimescaleDB data volume (volume snapshots or `pg_dump` — see
-  [Backups & migrations](backup-and-migrations.md)).
+- Back up with `healthsave backup`, or snapshot the TimescaleDB data volume (see
+  [Backups & migrations](backup-and-migrations.md)). A `healthsave backup` file
+  also contains your `.env` secrets.
 - **Encrypt backups at rest**, especially if they leave the host (offsite copies,
   cloud object storage, removable media). An unencrypted dump on a shared drive
   defeats the local-first posture.
