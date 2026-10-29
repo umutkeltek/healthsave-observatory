@@ -8,7 +8,9 @@ import {
   effectSizeText,
   findingCardChips,
   groupFindingsForDisplay,
+  percentChangePhrase,
   recoveryEvidence,
+  userFindingSummary,
   userFindingTitle,
 } from "./findingPresentation";
 
@@ -165,7 +167,7 @@ describe("finding card presentation", () => {
       }),
     );
     const byKey = Object.fromEntries(chips.map((c) => [c.key, c]));
-    expect(byKey.delta.value).toBe("↑ +5.8%");
+    expect(byKey.delta.value).toBe("↑ 5.8%");
     expect(byKey.effect.value).toBe("z = 2.1");
     expect(byKey.effect.label).toBe("small effect");
     expect(byKey.p.value).toBe("p = 0.008");
@@ -185,7 +187,7 @@ describe("finding card presentation", () => {
         card({ delta: { absolute: -0.42, pct: null, unit: "kg", direction: "down" } }),
       ).map((c) => [c.key, c]),
     );
-    expect(down.delta.value).toBe("↓ -0.42 kg");
+    expect(down.delta.value).toBe("↓ 0.42 kg");
 
     const up = Object.fromEntries(
       findingCardChips(
@@ -208,6 +210,39 @@ describe("finding card presentation", () => {
       }),
     );
     expect(chips[0]).toMatchObject({ key: "coverage", value: "thin", tone: "warn" });
+  });
+
+  test("summary text uses a direction word with an absolute percent", () => {
+    const summary = (delta: number) =>
+      userFindingSummary(
+        finding({
+          finding_type: "summary",
+          structured_data: { avg: 58, delta_pct_vs_baseline: delta },
+        }),
+      );
+    expect(summary(-1.7)).toBe("Average 58.0, decreased by 1.7% vs baseline");
+    expect(summary(4.2)).toBe("Average 58.0, increased by 4.2% vs baseline");
+    expect(summary(0)).toBe("Average 58.0, unchanged (0.0%) vs baseline");
+  });
+
+  test("percent phrases and chips agree for negative, positive, and zero deltas", () => {
+    expect(percentChangePhrase(-1.7)).toBe("decreased by 1.7%");
+    expect(percentChangePhrase(1.7)).toBe("increased by 1.7%");
+    expect(percentChangePhrase(0)).toBe("unchanged (0.0%)");
+    expect(percentChangePhrase(-0.04)).toBe("unchanged (0.0%)");
+
+    const chip = (pct: number, direction: "up" | "down" | "flat" | null) =>
+      findingCardChips(
+        card({ delta: { absolute: null, pct, unit: null, direction } }),
+      ).find((item) => item.key === "delta")?.value;
+
+    expect(chip(-1.7, "down")).toBe("↓ 1.7%");
+    expect(chip(4.2, "up")).toBe("↑ 4.2%");
+    expect(chip(0, "flat")).toBe("→ 0%");
+    // No direction word: a signed number is the whole statement.
+    expect(chip(-1.7, null)).toBe("-1.7%");
+    expect(chip(4.2, null)).toBe("+4.2%");
+    expect(chip(0, null)).toBe("0%");
   });
 
   test("a correlation-pair metric is not plottable as one series", () => {

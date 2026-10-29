@@ -2,10 +2,11 @@
 
 Brain-1, pure: each function turns one persisted finding's ``structured_data``
 (the math the detectors already did) into a :class:`contracts.findings.FindingCard`.
-No DB, no HTTP, no LLM — this module imports only ``contracts`` and its pure
-sibling :mod:`analysis.statistical.experiment_readiness`, so it unit-tests
-without a database and never violates the two-brain seal (the narrator later
-renders these cards; it never builds one).
+No DB, no HTTP, no LLM — this module imports only ``contracts``, the pure
+wording helper :mod:`analysis.change_phrasing`, and its pure sibling
+:mod:`analysis.statistical.experiment_readiness`, so it unit-tests without a
+database and never violates the two-brain seal (the narrator later renders
+these cards; it never builds one).
 
 The single entry point is :func:`build_card`, which the analysis engine calls at
 its one finding-insertion seam. It dispatches on ``finding_type``; an unknown
@@ -37,10 +38,11 @@ from contracts.findings import (
     WindowRef,
 )
 
+from ..change_phrasing import percent_change_phrase
 from . import experiment_readiness as readiness
 from .gates import MINIMUM_DATA_REQUIREMENTS
 
-# A "ran X% vs baseline" delta claim needs enough samples in the window to be
+# A percent-change claim needs enough samples in the window to be
 # meaningful — a single reading's %-vs-baseline is noise, not a signal. No entry
 # in MINIMUM_DATA_REQUIREMENTS fits (``weekly_summary`` is day-based, not
 # observation-based, so reusing it would conflate days with samples), so we name
@@ -302,11 +304,19 @@ def _summary_card(metric: str | None, sd: dict[str, Any]) -> FindingCard | None:
     )
 
     if delta_is_analyzable:
-        direction = "up" if delta_pct > 0 else "down" if delta_pct < 0 else "flat"
+        # Direction word + absolute magnitude. A signed percent ("ran -6.4%")
+        # makes a narrator write "decreased by -6.4%".
+        phrase = percent_change_phrase(delta_pct)
+        if phrase.startswith("unchanged"):
+            direction = "flat"
+        elif delta_pct > 0:
+            direction = "up"
+        else:
+            direction = "down"
         # The aggregator baseline is (end − 30d → window_start), i.e. 30 − window
         # days long — the exact length isn't derivable from the builder's inputs,
         # so we say "recent baseline" rather than overstate it as "30-day".
-        claim = f"{_short(metric)} ran {delta_pct:+.1f}% vs your recent baseline"
+        claim = f"{_short(metric)} {phrase} vs your recent baseline"
         delta = Delta(pct=delta_pct, direction=direction)
         baseline_window = WindowRef(label="recent baseline")
         coverage = Coverage(observation_count=n)

@@ -168,7 +168,7 @@ export function userFindingSummary(finding: Finding): string {
   if (avg !== null || delta !== null) {
     return [
       avg !== null ? `Average ${avg.toFixed(1)}` : null,
-      delta !== null ? `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}% vs baseline` : null,
+      delta !== null ? `${percentChangePhrase(delta)} vs baseline` : null,
     ]
       .filter(Boolean)
       .join(", ");
@@ -302,6 +302,26 @@ function fmtNum(value: number, digits = 1): string {
   return Number(value.toFixed(digits)).toString();
 }
 
+// Direction word (or arrow) plus an absolute magnitude. A signed percent is
+// only used when no direction is shown ("changed by -1.7%", not "↓ -1.7%").
+export function percentChangePhrase(delta: number, digits = 1): string {
+  const rendered = Math.abs(delta).toFixed(digits);
+  if (Number(rendered) === 0) return `unchanged (${rendered}%)`;
+  if (delta > 0) return `increased by ${rendered}%`;
+  return `decreased by ${rendered}%`;
+}
+
+function formatDeltaNumber(value: number, digits: number, direction: string | null): string {
+  const magnitude = fmtNum(Math.abs(value), digits);
+  if (!direction) {
+    if (value > 0) return `+${magnitude}`;
+    if (value < 0) return `-${magnitude}`;
+    return magnitude;
+  }
+  const arrow = DIRECTION_ARROW[direction];
+  return arrow ? `${arrow} ${magnitude}` : magnitude;
+}
+
 // "z = 2.1", "ρ = 0.62", "slope 0.34/day" - method-tagged so a coefficient is
 // never mistaken for a standardized difference.
 export function effectSizeText(effect: CardEffectSize): string | null {
@@ -326,14 +346,15 @@ export function findingCardChips(card: FindingCard): CardChip[] {
 
   const delta = card.delta;
   if (delta) {
-    const arrow = delta.direction ? `${DIRECTION_ARROW[delta.direction] ?? ""} ` : "";
     // Explicit narrowing (not `delta.absolute!`): a percentage delta wins, an
     // absolute-only delta carries its unit, and a delta with neither adds no chip.
+    // A direction arrow takes the absolute magnitude so the chip never reads "↓ -1.7%".
     let value: string | null = null;
     if (delta.pct != null) {
-      value = `${arrow}${delta.pct >= 0 ? "+" : ""}${fmtNum(delta.pct)}%`;
+      value = `${formatDeltaNumber(delta.pct, 1, delta.direction)}%`;
     } else if (delta.absolute != null) {
-      value = `${arrow}${delta.absolute >= 0 ? "+" : ""}${fmtNum(delta.absolute, 2)}${delta.unit ? ` ${delta.unit}` : ""}`;
+      const number = formatDeltaNumber(delta.absolute, 2, delta.direction);
+      value = `${number}${delta.unit ? ` ${delta.unit}` : ""}`;
     }
     if (value != null) chips.push({ key: "delta", label: "vs baseline", value, tone: "neutral" });
   }

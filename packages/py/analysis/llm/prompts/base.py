@@ -44,6 +44,12 @@ Hard rules - follow every time:
    the user message. Honor it: skip that pillar entirely rather than
    generating a score you cannot defend.
 
+8. Percent changes must agree with themselves. Use a direction word with a
+   positive magnitude ("decreased by 1.7%", "increased by 1.7%") or a signed
+   number with no direction word ("changed by -1.7%"). Never combine them
+   ("decreased by -1.7%", "increased by +1.7%"). Copy the change phrasing
+   already given in the findings.
+
 The critical-alert path bypasses you. If you are invoked for an insight
 related to a critical-threshold breach, describe the finding factually
 without editorializing, and defer to the static alert text.

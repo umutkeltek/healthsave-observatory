@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
+from ..change_phrasing import normalize_direction_magnitude
 from ..egress import (
     Destination,
     EgressDenied,
@@ -484,7 +485,7 @@ class HealthLLMClient:
                 + ")"
             )
 
-        narrative = inject_disclaimer(raw)
+        narrative = inject_disclaimer(normalize_direction_magnitude(raw))
         return InsightResult(
             narrative=narrative,
             tokens_in=tokens_in,
