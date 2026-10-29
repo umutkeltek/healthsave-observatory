@@ -28,6 +28,7 @@ from typing import Any, TypeVar
 
 from contracts.analytical_time import AnalyticalTime, analytical_day_bounds
 
+from .change_phrasing import percent_change_phrase
 from .llm.client import HealthLLMClient
 from .llm.prompts.daily_briefing import DAILY_BRIEFING_PROMPT_TEMPLATE
 from .llm.prompts.weekly_summary import WEEKLY_SUMMARY_PROMPT_TEMPLATE
@@ -232,7 +233,7 @@ class AnalysisEngine:
             recent_correlations = await self._fetch_recent_findings(session, "correlation")
 
             prompt = DAILY_BRIEFING_PROMPT_TEMPLATE.format(
-                period_summary=json.dumps(summary.metrics, indent=2, default=str),
+                period_summary=_format_period_summary(summary.metrics),
                 anomalies=_format_anomalies_for_prompt(anomalies),
                 trends=_format_trends_for_prompt(recent_trends),
                 correlations=_format_correlations_for_prompt(recent_correlations),
@@ -347,7 +348,7 @@ class AnalysisEngine:
             cards = _finding_cards_for_brief(summary.metrics, recent_trends, recent_correlations)
 
             prompt = WEEKLY_SUMMARY_PROMPT_TEMPLATE.format(
-                period_summary=json.dumps(summary.metrics, indent=2, default=str),
+                period_summary=_format_period_summary(summary.metrics),
                 week_comparison=_format_week_comparison(summary.metrics),
                 trends=_format_trends_for_prompt(recent_trends),
                 correlations=_format_correlations_for_prompt(recent_correlations),
@@ -688,7 +689,7 @@ def _format_anomalies_for_prompt(anomalies: list[Anomaly]) -> str:
     if not anomalies:
         return "no unusual readings vs baseline"
     return "\n".join(
-        f"- {a.metric}: {a.direction} deviation, severity={a.severity}, z={a.magnitude:.2f}"
+        f"- {a.metric}: {a.direction} deviation, severity={a.severity}, z={abs(a.magnitude):.2f}"
         for a in anomalies
     )
 
@@ -700,9 +701,14 @@ def _format_trends_for_prompt(trends: list[Any]) -> str:
     lines = []
     for trend in trends:
         data = trend.structured_data
+        slope = data.get("slope")
+        # Direction is already in the bullet; a signed slope next to "down"
+        # is the same double-negative trap as a signed percent.
+        if isinstance(slope, int | float) and not isinstance(slope, bool):
+            slope = abs(slope)
         lines.append(
             f"- {trend.metric or data.get('metric')}: {data.get('direction')} trend "
-            f"(slope={data.get('slope')}, p={data.get('p_value')})"
+            f"(slope={slope}, p={data.get('p_value')})"
         )
     return "\n".join(lines)
 
@@ -764,13 +770,41 @@ def _format_finding_cards_for_prompt(cards: list[Any]) -> str:
     return "\n".join(lines)
 
 
+def _is_number(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+def _metric_for_prompt(metric: dict) -> dict:
+    """Copy one metric for the narrator, with the percent delta phrased.
+
+    The signed ``delta_pct_vs_baseline`` stays on the stored finding. The
+    prompt sees ``change_vs_baseline`` ("decreased by 1.7%") so the model
+    cannot copy a minus sign onto a direction word.
+    """
+    item = dict(metric)
+    delta = item.get("delta_pct_vs_baseline")
+    if _is_number(delta):
+        item["change_vs_baseline"] = percent_change_phrase(float(delta))
+        del item["delta_pct_vs_baseline"]
+    return item
+
+
+def _format_period_summary(metrics: dict[str, dict]) -> str:
+    """JSON period block for the narrator, with percent deltas already phrased."""
+    rendered = {
+        name: _metric_for_prompt(metric) if isinstance(metric, dict) else metric
+        for name, metric in metrics.items()
+    }
+    return json.dumps(rendered, indent=2, default=str)
+
+
 def _format_week_comparison(metrics: dict[str, dict]) -> str:
     """Per-metric week-over-baseline deltas the aggregator already computed."""
-    lines = [
-        f"- {name}: {metric['delta_pct_vs_baseline']:+.1f}% vs 30-day baseline"
-        for name, metric in metrics.items()
-        if metric.get("delta_pct_vs_baseline") is not None
-    ]
+    lines = []
+    for name, metric in metrics.items():
+        delta = metric.get("delta_pct_vs_baseline")
+        if _is_number(delta):
+            lines.append(f"- {name}: {percent_change_phrase(float(delta))} vs 30-day baseline")
     return "\n".join(lines) if lines else "insufficient baseline for week-over-week comparison"
 
 
