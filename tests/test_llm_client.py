@@ -88,6 +88,123 @@ async def test_generate_insight_calls_ollama_with_prefixed_model(monkeypatch):
     assert "not medical advice" in result.narrative.lower()
 
 
+@pytest.mark.parametrize(
+    ("content", "expected"),
+    [
+        (
+            "Your activity decreased by -1.7% compared with your recent baseline.",
+            "Your activity decreased by 1.7% compared with your recent baseline.",
+        ),
+        ("Activity DECREASED by −1.7%.", "Activity DECREASED by 1.7%."),
+        ("Resting heart rate fell by -2%.", "Resting heart rate fell by 2%."),
+        ("Activity dropped by -0.4%.", "Activity dropped by 0.4%."),
+        ("Activity declined by -.5%.", "Activity declined by .5%."),
+        ("Activity was reduced by -1.0%.", "Activity was reduced by 1.0%."),
+        ("Activity was down by -1.7 %.", "Activity was down by 1.7 %."),
+    ],
+    ids=["reported-decrease", "unicode-minus", "fell", "dropped", "declined", "reduced", "down"],
+)
+@pytest.mark.asyncio
+async def test_generate_insight_normalizes_downward_percentage_magnitude(
+    monkeypatch, content, expected
+):
+    acompletion = AsyncMock(return_value=_fake_response(content))
+    _install_fake_litellm(monkeypatch, acompletion)
+    client = llm_client.HealthLLMClient(LLMConfig(provider="ollama", model="example-model"))
+
+    result = await client.generate_insight("Computed findings", insight_type="weekly_summary")
+
+    assert result.narrative == llm_client.inject_disclaimer(expected)
+    assert acompletion.await_count == 1
+    assert result.tokens_in == 42
+    assert result.tokens_out == 77
+    assert result.insight_type == "weekly_summary"
+    assert result.model == "ollama/llama3.1:8b"
+    assert acompletion.await_args.kwargs["messages"][1] == {
+        "role": "user",
+        "content": "Computed findings",
+    }
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "pct_change=-1.7%",
+        "Activity decreased by -1.7% to -0.5%.",
+        "Activity decreased by -1.7%–-0.5%.",
+        "Activity decreased by -1.7–-0.5%.",
+        "Activity decreased by -1.7% or more.",
+        "Activity decreased by -1.7% or less.",
+        "Activity: -1.7% vs your recent baseline.",
+        "Activity: −1.7% vs your recent baseline.",
+        "Temperature decreased to -1.7 °C.",
+        "Temperature decreased by -1.7 °C.",
+        "The rate decreased from -1.7% to -2.1%.",
+        "Activity decreased by 1.7%.",
+        "Activity increased by -1.7%.",
+        "Activity changed by -1.7%.",
+        "The correlation was -0.3.",
+        "The share decreased by -1.7 percentage points.",
+        "Activity decreased by -1.7%\nto -0.5%.",
+        "Activity decreased by -1.7%\u00a0to -0.5%.",
+        "Activity decreased by -1.7%\nor more.",
+        "Activity decreased by -1.7%\u00a0or less.",
+    ],
+    ids=[
+        "raw-stat",
+        "range-to",
+        "range-dash",
+        "range-no-first-percent",
+        "bound-more",
+        "bound-less",
+        "signed-stat",
+        "unicode-signed-stat",
+        "negative-destination",
+        "negative-measurement",
+        "signed-range",
+        "positive-magnitude",
+        "opposite-direction",
+        "neutral-change",
+        "negative-correlation",
+        "percentage-points",
+        "newline-range",
+        "nbsp-range",
+        "newline-bound",
+        "nbsp-bound",
+    ],
+)
+@pytest.mark.asyncio
+async def test_generate_insight_preserves_signed_values(monkeypatch, content):
+    acompletion = AsyncMock(return_value=_fake_response(content))
+    _install_fake_litellm(monkeypatch, acompletion)
+    client = llm_client.HealthLLMClient(LLMConfig(provider="ollama", model="example-model"))
+
+    result = await client.generate_insight("Computed findings", insight_type="weekly_summary")
+
+    assert result.narrative == llm_client.inject_disclaimer(content)
+    assert acompletion.await_count == 1
+    assert result.tokens_in == 42
+    assert result.tokens_out == 77
+
+
+@pytest.mark.asyncio
+async def test_reasoning_fallback_normalizes_percentage_after_removing_think_block(monkeypatch):
+    response = _fake_response(
+        "",
+        reasoning_content="<think>Check the wording.</think>Activity decreased by -1.7%.",
+    )
+    acompletion = AsyncMock(return_value=response)
+    _install_fake_litellm(monkeypatch, acompletion)
+    client = llm_client.HealthLLMClient(LLMConfig(provider="ollama", model="example-model"))
+
+    result = await client.generate_insight("Computed findings", insight_type="weekly_summary")
+
+    assert result.narrative == llm_client.inject_disclaimer("Activity decreased by 1.7%.")
+    assert acompletion.await_count == 1
+    assert result.tokens_in == 42
+    assert result.tokens_out == 77
+
+
 @pytest.mark.asyncio
 async def test_generate_insight_preserves_existing_disclaimer(monkeypatch):
     content = "Your heart rate looks fine.\n\nThis is not medical advice. Please consult a doctor."

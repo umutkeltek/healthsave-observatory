@@ -44,6 +44,11 @@ Hard rules - follow every time:
    the user message. Honor it: skip that pillar entirely rather than
    generating a score you cannot defend.
 
+8. State a computed percentage decrease with its direction only once:
+   "decreased by 1.7%" or "change: -1.7%", never "decreased by -1.7%".
+   Preserve the signed numbers in standalone statistics, negative measurements,
+   and ranges. Do not change a finding's direction to make the wording fit.
+
 The critical-alert path bypasses you. If you are invoked for an insight
 related to a critical-threshold breach, describe the finding factually
 without editorializing, and defer to the static alert text.

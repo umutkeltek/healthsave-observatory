@@ -63,6 +63,16 @@ _THINK_BLOCK_RE = re.compile(
     r"<think(?:ing)?>.*?(?:</think(?:ing)?>|\Z)", re.IGNORECASE | re.DOTALL
 )
 
+# A downward verb already supplies the sign: "decreased by -1.7%" should
+# read "decreased by 1.7%". Match only scalar percentages after "by"; signed
+# stats, negative measurements, destinations, ranges and bounds stay verbatim.
+_DOWNWARD_PERCENT_RE = re.compile(
+    r"(?P<direction>\b(?:decreased|declined|dropped|fell|reduced|down)[ \t]+by[ \t]+)"
+    r"[-−](?P<magnitude>(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)[ \t]*%)"
+    r"(?!\s*(?:to\b|through\b|or\b|[-−–—]))",
+    re.IGNORECASE,
+)
+
 # Adaptive budget for reasoning models: when an attempt ends with
 # a length limit (reported or inferred for Ollama) and NO extractable prose
 # (the model spent the whole budget thinking), retry the same candidate
@@ -484,6 +494,9 @@ class HealthLLMClient:
                 + ")"
             )
 
+        # Correct wording locally, after extraction; never retry the model or
+        # alter the structured findings and usage accounting to fix prose.
+        raw = _DOWNWARD_PERCENT_RE.sub(r"\g<direction>\g<magnitude>", raw)
         narrative = inject_disclaimer(raw)
         return InsightResult(
             narrative=narrative,
