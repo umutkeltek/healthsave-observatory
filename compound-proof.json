@@ -1,0 +1,78 @@
+{
+  "schema_version": "compound.proof_consumers.v1",
+  "profile": "python_uv_bun_consumers_v1",
+  "consumers": [
+    {
+      "id": "python-narrator-safety",
+      "command": [
+        "sh",
+        "scripts/compound_proof.sh",
+        "python"
+      ],
+      "dir": ".",
+      "timeout_seconds": 240,
+      "required_tools": [
+        "sh",
+        "uv",
+        "python3.12"
+      ],
+      "required_environment": [
+        "UV_CACHE_DIR"
+      ],
+      "report_kind": "pytest_junit",
+      "required_tests": [
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_normalizes_downward_percentage_magnitude[reported-decrease]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_normalizes_downward_percentage_magnitude[unicode-minus]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_normalizes_downward_percentage_magnitude[fell]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_normalizes_downward_percentage_magnitude[dropped]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_normalizes_downward_percentage_magnitude[declined]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_normalizes_downward_percentage_magnitude[reduced]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_normalizes_downward_percentage_magnitude[down]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[raw-stat]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[range-to]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[range-dash]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[range-no-first-percent]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[bound-more]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[bound-less]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[signed-stat]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[unicode-signed-stat]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[negative-destination]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[negative-measurement]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[signed-range]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[positive-magnitude]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[opposite-direction]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[neutral-change]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[negative-correlation]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[percentage-points]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[newline-range]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[nbsp-range]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[newline-bound]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_generate_insight_preserves_signed_values[nbsp-bound]\"]",
+        "[\"tests/test_llm_client.py\",\"tests.test_llm_client\",\"test_reasoning_fallback_normalizes_percentage_after_removing_think_block\"]",
+        "[\"tests/test_egress.py\",\"tests.test_egress\",\"test_raw_observations_never_leave_even_when_opted_in\"]"
+      ],
+      "allowed_skips": []
+    },
+    {
+      "id": "bun-brief-presentation",
+      "command": [
+        "sh",
+        "scripts/compound_proof.sh",
+        "bun"
+      ],
+      "dir": ".",
+      "timeout_seconds": 60,
+      "required_tools": [
+        "sh",
+        "bun"
+      ],
+      "report_kind": "bun_junit",
+      "required_tests": [
+        "[\"apps/web/app/lib/textPresentation.test.ts\",\"text presentation\",\"turns narrator markdown into readable plain paragraphs\",[\"apps/web/app/lib/textPresentation.test.ts\",\"text presentation\"]]",
+        "[\"apps/web/app/lib/textPresentation.test.ts\",\"text presentation\",\"uses the first useful sentence instead of a generic brief title\",[\"apps/web/app/lib/textPresentation.test.ts\",\"text presentation\"]]",
+        "[\"apps/web/app/lib/textPresentation.test.ts\",\"text presentation\",\"normalizes narrator dash punctuation\",[\"apps/web/app/lib/textPresentation.test.ts\",\"text presentation\"]]"
+      ],
+      "allowed_skips": []
+    }
+  ]
+}
