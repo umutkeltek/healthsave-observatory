@@ -39,8 +39,26 @@ DATE_ROLLUP_METRICS: tuple[str, ...] = (
 )
 
 
-def _destination_union_sql() -> str:
+_COVERAGE_OWNER = "owner_id = CAST(:owner_id AS UUID)"
+_COVERAGE_RECEIPT_OWNER = "(owner_id = CAST(:owner_id AS UUID) OR owner_id IS NULL)"
+
+
+def _scope_fragment(fragment: str) -> str:
+    """Add the ``:owner_id`` predicate to one ``destination_union`` SELECT."""
+
+    head, group, tail = fragment.partition(" GROUP BY")
+    if " WHERE " in head:
+        head = head.replace(" WHERE ", f" WHERE {_COVERAGE_OWNER} AND ", 1)
+    else:
+        head = f"{head} WHERE {_COVERAGE_OWNER}"
+    return head + group + tail
+
+
+def _destination_union_sql(scoped: bool = False) -> str:
     """Build the ``destination_union`` CTE body.
+
+    ``scoped=True`` filters every destination table to the ``:owner_id`` bind
+    parameter; the default keeps the historical unscoped SQL byte for byte.
 
     The ``daily_activity`` quantity rollups are derived from the source-of-truth
     mapper (``DAILY_ACTIVITY_QUANTITY_FIELDS``) so a newly added field can never
@@ -101,16 +119,29 @@ def _destination_union_sql() -> str:
         "max(time) AS latest_sample_at FROM quantity_samples "
         f"WHERE metric_name <> '{ECG_DESTINATION_METRIC}' GROUP BY metric_name"
     )
+    if scoped:
+        fragments = [_scope_fragment(fragment) for fragment in fragments]
     return "\n                UNION ALL\n                ".join(fragments)
 
 
-def _sync_coverage_query() -> str:
+def _sync_coverage_query(owner_id: UUID | None = None) -> str:
     """Assemble the full metric-coverage SQL.
 
     The ``destination_union`` body and the date-rollup metric list are
     interpolated from trusted internal constants (never client input).
+
+    ``owner_id`` scopes receipts and destinations to one person through the
+    ``:owner_id`` bind parameter; ``None`` keeps the historical unscoped SQL.
+    The default owner also owns receipts with a NULL owner (pre-migration 024).
     """
 
+    receipt_where = ""
+    if owner_id is not None:
+        receipt_where = (
+            f" WHERE {_COVERAGE_RECEIPT_OWNER}"
+            if owner_id == DEFAULT_OWNER_ID
+            else f" WHERE {_COVERAGE_OWNER}"
+        )
     date_rollup_in = ", ".join(f"'{metric}'" for metric in DATE_ROLLUP_METRICS)
     return f"""
             WITH receipt_coverage AS (
@@ -134,11 +165,11 @@ def _sync_coverage_query() -> str:
                     max(coalesce(completed_at, received_at)) AS newest_receipt_at,
                     min(sample_min_at) AS receipt_sample_min_at,
                     max(sample_max_at) AS receipt_sample_max_at
-                FROM healthsave_sync_receipts
+                FROM healthsave_sync_receipts{receipt_where}
                 GROUP BY metric
             ),
             destination_union AS (
-                {_destination_union_sql()}
+                {_destination_union_sql(scoped=owner_id is not None)}
             ),
             destination_coverage AS (
                 SELECT
@@ -1068,10 +1099,19 @@ async def sync_run(
     }
 
 
-async def sync_coverage(session: AsyncSession) -> dict[str, Any]:
-    """Return metric-level receipt and destination sample coverage."""
+async def sync_coverage(session: AsyncSession, owner_id: UUID | None = None) -> dict[str, Any]:
+    """Return metric-level receipt and destination sample coverage.
 
-    result = await session.execute(text(_sync_coverage_query()))
+    ``owner_id=None`` is the historical all-rows read (the phone-facing sync
+    routes); the Home Assistant bridge passes its owner.
+    """
+
+    if owner_id is None:
+        result = await session.execute(text(_sync_coverage_query()))
+    else:
+        result = await session.execute(
+            text(_sync_coverage_query(owner_id)), {"owner_id": str(owner_id)}
+        )
     rows = [_format_coverage_row(dict(row)) for row in result.mappings().all()]
     decision_readiness = build_decision_readiness(rows)
     return {

@@ -86,6 +86,9 @@ Sub-devices link to the parent HealthSave Observatory device through Home Assist
 | Publish interval | `60` seconds |
 | Per-metric readiness entities | Off |
 | Source slug allowlist | Empty (publish all sources) |
+| Person published (`HEALTHSAVE_BRIDGE_OWNER`) | The default owner (the person your `.env` `API_KEY` maps to) |
+
+The bridge publishes exactly one person. Every query it runs is filtered to that person's `owner_id`, so on an Observatory that also holds participants (see [Participants](../operations/participants.md)) their heart rate, sleep and steps never reach your Home Assistant. Leave `HEALTHSAVE_BRIDGE_OWNER` empty for the primary person, or set it to another owner UUID (listed by `GET /api/v2/owners`) to publish that person instead. A malformed UUID stops the bridge at start rather than falling back. Discovery topics and entity IDs do not change.
 
 Set `HA_MQTT_READINESS_ENTITIES=true` only when you want per-metric readiness discovery entities. Readiness fields remain in the aggregate JSON state payload when this is off.
 

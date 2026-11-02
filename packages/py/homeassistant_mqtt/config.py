@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from uuid import UUID
+
+from contracts._base import DEFAULT_OWNER_ID
 
 from .bridge import HomeAssistantMQTTConfig
 
@@ -21,6 +24,9 @@ class HomeAssistantMQTTBridgeConfig:
     # Heartbeat file updated on every successful publish; a Docker HEALTHCHECK
     # reads its freshness so a stalled worker shows "unhealthy" instead of "Up".
     heartbeat_path: str = "/tmp/ha_mqtt_heartbeat"
+    # The ONE person whose rows the bridge reads and publishes. Defaults to the
+    # default owner (the person the `.env` admin API_KEY maps to).
+    owner_id: UUID = DEFAULT_OWNER_ID
 
     @property
     def publish_configs(self) -> tuple[HomeAssistantMQTTConfig, ...]:
@@ -79,7 +85,24 @@ def load_config_from_env() -> HomeAssistantMQTTBridgeConfig:
         source_slugs=_env_source_slugs(),
         liveness_deadline_seconds=liveness_deadline_seconds,
         heartbeat_path=_env_text("HA_MQTT_HEARTBEAT_PATH", "/tmp/ha_mqtt_heartbeat"),
+        owner_id=_env_owner(),
     )
+
+
+def _env_owner() -> UUID:
+    """``HEALTHSAVE_BRIDGE_OWNER``: owner UUID the bridge publishes (default owner).
+
+    A malformed value fails loudly at startup: silently falling back to the
+    default owner would publish the wrong person's data.
+    """
+
+    raw = os.getenv("HEALTHSAVE_BRIDGE_OWNER")
+    if raw is None or raw.strip() == "":
+        return DEFAULT_OWNER_ID
+    try:
+        return UUID(raw.strip())
+    except ValueError as exc:
+        raise ValueError("HEALTHSAVE_BRIDGE_OWNER must be an owner UUID") from exc
 
 
 def _env_source_slugs() -> frozenset[str] | None:

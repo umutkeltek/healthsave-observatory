@@ -196,7 +196,7 @@ async def run() -> None:
         log.info("Home Assistant MQTT bridge disabled; set HA_MQTT_ENABLED=true to run")
         return
 
-    repository = TimescaleHealthSnapshotRepository()
+    repository = TimescaleHealthSnapshotRepository(owner_id=bridge_config.owner_id)
     publish_configs = bridge_config.publish_configs
     _warn_for_reserved_prefixes(publish_configs)
 
