@@ -11,6 +11,7 @@ import { cache } from "react";
 
 import {
   ApiError,
+  currentOwner,
   type AnalyticalTimeSettings,
   type Candidates,
   type Correlation,
@@ -27,6 +28,7 @@ import {
   fetchMetrics,
   fetchMoments,
   fetchNarratives,
+  fetchOwners,
   fetchPrivacy,
   fetchReadiness,
   fetchReceipts,
@@ -42,6 +44,7 @@ import {
   type MetricSummary,
   type Moment,
   type NarrativeHistoryItem,
+  type OwnerView,
   type Privacy,
   type Readiness,
   type Receipts,
@@ -50,6 +53,7 @@ import {
 } from "./api";
 import { formatAgo } from "./format";
 import { hasUsablePoints } from "./ranges";
+import { ownerCacheKey, PRIMARY_ONLY } from "./participants";
 import { swrCache } from "./ttlCache";
 
 // The one logged choke point for swallowed fetch failures: a card rendering
@@ -58,6 +62,8 @@ import { swrCache } from "./ttlCache";
 // Deduped per label+message so a hot page doesn't spam.
 const _warned = new Set<string>();
 function swallow(label: string, error: unknown): null {
+  // A primary-only surface while a participant is selected is not a failure.
+  if (error instanceof ApiError && error.detail === PRIMARY_ONLY) return null;
   const message = error instanceof Error ? error.message : String(error);
   const key = `${label}:${message}`;
   if (!_warned.has(key)) {
@@ -66,6 +72,22 @@ function swallow(label: string, error: unknown): null {
   }
   return null;
 }
+
+// Process-level SWR keyed per person: with a participant selected (migration
+// 029) a cached answer for one person must never serve another.
+async function ownerSwr<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
+  return swrCache(ownerCacheKey(key, await currentOwner()), ttlMs, fetcher);
+}
+
+// The people this Observatory holds data for; the shell shows its participant
+// switcher only when there is more than one. Not person data, so one cache key.
+export const safeOwners = cache(async (): Promise<OwnerView[] | null> => {
+  try {
+    return (await swrCache("owners", 30_000, fetchOwners)).owners;
+  } catch (error) {
+    return swallow("owners", error);
+  }
+});
 
 // Curated sparkline metrics for the Data view grid. Each is a real ontology
 // metric_id the v2 series endpoint serves; an empty one renders its own state.
@@ -89,7 +111,7 @@ export const GRID_METRICS: { id: string; title: string }[] = [
 
 export async function safeAnalyticalTime(): Promise<AnalyticalTimeSettings | null> {
   try {
-    return await swrCache("analytical-time", 30_000, fetchAnalyticalTime);
+    return await ownerSwr("analytical-time", 30_000, fetchAnalyticalTime);
   } catch (error) {
     return swallow("analytical-time", error);
   }
@@ -97,7 +119,7 @@ export async function safeAnalyticalTime(): Promise<AnalyticalTimeSettings | nul
 
 export async function safeSeries(id: string, range = "7d"): Promise<MetricSeries | null> {
   try {
-    return await swrCache(`series:${id}:${range}`, 30_000, () => fetchSeries(id, range));
+    return await ownerSwr(`series:${id}:${range}`, 30_000, () => fetchSeries(id, range));
   } catch (error) {
     return swallow("loader", error);
   }
@@ -112,7 +134,7 @@ const batchSeriesCached = cache(
     const ids = idsKey.split("\u0000");
     const map = new Map<string, MetricSeries>();
     try {
-      const batch = await swrCache(`series-batch:${idsKey}:${range}`, 30_000, () =>
+      const batch = await ownerSwr(`series-batch:${idsKey}:${range}`, 30_000, () =>
         fetchSeriesBatch(ids, range),
       );
       for (const item of batch.series) {
@@ -154,7 +176,7 @@ export function safeSeriesMany(ids: string[], range = "7d"): Promise<Map<string,
 // and refreshed in the background.
 export const safeMetrics = cache(async (): Promise<MetricSummary[] | null> => {
   try {
-    return await swrCache("metrics-catalog", 300_000, fetchMetrics);
+    return await ownerSwr("metrics-catalog", 300_000, fetchMetrics);
   } catch (error) {
     return swallow("loader", error);
   }
@@ -162,7 +184,7 @@ export const safeMetrics = cache(async (): Promise<MetricSummary[] | null> => {
 
 export const safeReadiness = cache(async (): Promise<Readiness | null> => {
   try {
-    return await swrCache("readiness", 30_000, fetchReadiness);
+    return await ownerSwr("readiness", 30_000, fetchReadiness);
   } catch (error) {
     return swallow("loader", error);
   }
@@ -188,7 +210,7 @@ export const safeExportMetrics = cache(async (): Promise<ExportMetricInfo[] | nu
   try {
     // Counts one full-table aggregate per exportable metric - ride the SWR
     // cache like the other heavy coverage reads.
-    return await swrCache("export-metrics", 60_000, fetchExportMetrics);
+    return await ownerSwr("export-metrics", 60_000, fetchExportMetrics);
   } catch (error) {
     return swallow("loader", error);
   }
@@ -228,7 +250,7 @@ export const safePrivacy = cache(async (): Promise<Privacy | null> => {
 
 export const safeReceipts = cache(async (): Promise<Receipts | null> => {
   try {
-    return await swrCache("receipts", 60_000, () => fetchReceipts());
+    return await ownerSwr("receipts", 60_000, () => fetchReceipts());
   } catch (error) {
     return swallow("loader", error);
   }
@@ -306,7 +328,7 @@ export async function safeSeriesWithFallback(
 
 export async function safeMoments(limit = 50): Promise<Moment[]> {
   try {
-    const result = await swrCache("moments", 30_000, () => fetchMoments(limit));
+    const result = await ownerSwr("moments", 30_000, () => fetchMoments(limit));
     return result.moments;
   } catch (error) {
     return swallow("moments", error) ?? [];

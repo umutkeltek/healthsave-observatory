@@ -5,6 +5,7 @@ import { type ReactNode, Suspense } from "react";
 import { CommandPalette } from "./components/CommandPalette";
 import { I18nProvider } from "./components/I18nProvider";
 import { PaletteHost } from "./components/PaletteHost";
+import { ParticipantSwitcher } from "./components/ParticipantSwitcher";
 import { Shell } from "./components/Shell";
 import {
   SidebarStatus,
@@ -58,6 +59,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <I18nProvider locale={locale} availableLocales={availableLocales}>
             <Shell
               density={density}
+              participantSwitcher={
+                <Suspense fallback={null}>
+                  <ParticipantSwitcher />
+                </Suspense>
+              }
               sidebarStatus={
                 <Suspense fallback={<SidebarStatusFallback />}>
                   <SidebarStatus />

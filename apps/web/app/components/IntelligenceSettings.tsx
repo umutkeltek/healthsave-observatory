@@ -2,12 +2,8 @@
 
 import { useMemo } from "react";
 
-import {
-  isNarratorOff,
-  type IntelligenceView,
-  type IntelMode,
-  type Privacy,
-} from "../lib/api";
+import type { IntelligenceView, IntelMode, Privacy } from "../lib/api";
+import { isNarratorOff } from "../lib/narrator";
 import { ConsentPanel } from "./intelligence/ConsentPanel";
 import { leavesCopy } from "./intelligence/constants";
 import { FallbackChainEditor } from "./intelligence/FallbackChainEditor";

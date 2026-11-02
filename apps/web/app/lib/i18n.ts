@@ -47,6 +47,12 @@ const englishDictionary = {
     essentials: "Essentials",
     observatory: "Observatory",
   },
+  participants: {
+    label: "Viewing",
+    primary: "Primary person",
+    revoked: "revoked",
+    primaryOnly: "Findings, experiments and briefs cover the primary person only.",
+  },
   navGroups: {
     essentials: "Essentials",
     explore: "Analyze",
@@ -139,6 +145,12 @@ export const dictionaries = {
       footer: "HealthSave Observatory · observaciones canónicas · local primero",
     },
     density: { label: "Modo de vista", essentials: "Esencial", observatory: "Observatorio" },
+    participants: {
+      label: "Viendo",
+      primary: "Persona principal",
+      revoked: "revocado",
+      primaryOnly: "Hallazgos, experimentos y resúmenes cubren solo a la persona principal.",
+    },
     navGroups: { essentials: "Esencial", explore: "Analizar", manage: "Gestionar" },
     nav: {
       today: "Hoy",
@@ -218,6 +230,12 @@ export const dictionaries = {
       footer: "HealthSave Observatory · observations canoniques · local d'abord",
     },
     density: { label: "Mode d'affichage", essentials: "Essentiel", observatory: "Observatoire" },
+    participants: {
+      label: "Affichage",
+      primary: "Personne principale",
+      revoked: "révoqué",
+      primaryOnly: "Les constats, expériences et synthèses ne couvrent que la personne principale.",
+    },
     navGroups: { essentials: "Essentiel", explore: "Analyser", manage: "Gérer" },
     nav: {
       today: "Aujourd'hui",
@@ -297,6 +315,12 @@ export const dictionaries = {
       footer: "HealthSave Observatory · kanonische Beobachtungen · lokal zuerst",
     },
     density: { label: "Ansichtsmodus", essentials: "Basis", observatory: "Observatorium" },
+    participants: {
+      label: "Ansicht",
+      primary: "Hauptperson",
+      revoked: "widerrufen",
+      primaryOnly: "Befunde, Experimente und Berichte gelten nur für die Hauptperson.",
+    },
     navGroups: { essentials: "Basis", explore: "Analysieren", manage: "Verwalten" },
     nav: {
       today: "Heute",
@@ -376,6 +400,12 @@ export const dictionaries = {
       footer: "HealthSave Observatory · 標準化された観測 · ローカルファースト",
     },
     density: { label: "表示モード", essentials: "基本", observatory: "観測所" },
+    participants: {
+      label: "表示中",
+      primary: "メインの人",
+      revoked: "取り消し済み",
+      primaryOnly: "所見・実験・ブリーフはメインの人だけが対象です。",
+    },
     navGroups: { essentials: "基本", explore: "分析", manage: "管理" },
     nav: {
       today: "今日",
@@ -455,6 +485,12 @@ export const dictionaries = {
       footer: "HealthSave Observatory · 標準化觀測 · 本機優先",
     },
     density: { label: "檢視模式", essentials: "重點", observatory: "觀測台" },
+    participants: {
+      label: "檢視中",
+      primary: "主要使用者",
+      revoked: "已撤銷",
+      primaryOnly: "發現、實驗與摘要僅涵蓋主要使用者。",
+    },
     navGroups: { essentials: "重點", explore: "分析", manage: "管理" },
     nav: {
       today: "今日",

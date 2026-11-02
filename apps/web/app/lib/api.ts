@@ -1,6 +1,10 @@
 // Typed client for the HealthSave Observatory v2 read API (the same contract the LLM narrator
 // consumes). Shapes mirror server/api/v2_metrics.py responses.
 
+import { cookies } from "next/headers";
+
+import { ownerScope, PARTICIPANT_COOKIE, parseOwnerCookie, PRIMARY_ONLY, scopePath } from "./participants";
+
 export type MetricSummary = {
   id: string;
   display_name: string;
@@ -83,7 +87,32 @@ async function readDetail(res: Response): Promise<string | null> {
   }
 }
 
-async function getJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+// The person the shell's switcher selected (null = the primary person). Read
+// per request from the cookie; outside a request (tests, build) it is null.
+export async function currentOwner(): Promise<string | null> {
+  try {
+    const jar = await cookies();
+    return parseOwnerCookie(jar.get(PARTICIPANT_COOKIE)?.value);
+  } catch {
+    return null;
+  }
+}
+
+// Writes go to the primary person's records only (moments, experiments,
+// settings): refuse them while a participant is selected instead of quietly
+// writing into the coach's own data.
+async function assertWritable(path: string): Promise<void> {
+  if ((await currentOwner()) !== null && ownerScope(path) === "primary") {
+    throw new Error(`${PRIMARY_ONLY}: switch back to the primary person to change this`);
+  }
+}
+
+async function getJson<T>(requestedPath: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+  const path = scopePath(requestedPath, await currentOwner());
+  if (path === null) {
+    // Primary-only surface while a participant is selected: no data, not an outage.
+    throw new ApiError(`${requestedPath} -> ${PRIMARY_ONLY}`, 409, PRIMARY_ONLY);
+  }
   const headers: Record<string, string> = {};
   if (API_KEY) headers["X-API-Key"] = API_KEY;
   let res: Response;
@@ -107,6 +136,7 @@ async function getJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise
 // reaches the browser (these run in server actions). On error we surface the
 // backend's `detail` (e.g. a 422 readiness rationale) so the UI can show it.
 async function postJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+  await assertWritable(path);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (API_KEY) headers["X-API-Key"] = API_KEY;
   let res: Response;
@@ -138,6 +168,7 @@ async function postJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIME
 
 // Server-side PUT - mirrors postJson. Used by the Intelligence settings apply.
 async function putJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+  await assertWritable(path);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (API_KEY) headers["X-API-Key"] = API_KEY;
   let res: Response;
@@ -169,6 +200,7 @@ async function putJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEO
 
 // Server-side DELETE. The key never reaches the browser.
 async function deleteJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+  await assertWritable(path);
   const headers: Record<string, string> = {};
   if (API_KEY) headers["X-API-Key"] = API_KEY;
   let res: Response;
@@ -628,15 +660,8 @@ export function fetchPrivacy(): Promise<Privacy> {
   return getJson<Privacy>("/api/v2/privacy");
 }
 
-// A deployment with no LLM narrator (provider "disabled"/empty) performs zero
-// egress - it is the *most* private posture, not "cloud". The egress classifier
-// only knows ollama→local / everything-else→cloud, so a narrator-off host is
-// bucketed as cloud; callers special-case it here so the UI never mislabels a
-// no-egress host as a cloud one.
-export function isNarratorOff(provider: string | null | undefined): boolean {
-  const p = (provider ?? "").trim().toLowerCase();
-  return p === "" || p === "disabled" || p === "none";
-}
+// Re-exported for server callers; client components import it from ./narrator.
+export { isNarratorOff } from "./narrator";
 
 // Experiments - committed n-of-1 ABAB runs. Mirrors the lifecycle routes in
 // server/api/v2_experiments.py (ExperimentView et al.).
@@ -891,4 +916,23 @@ export function fetchStreams(): Promise<StreamsResponse> {
 
 export function fetchDevices(): Promise<DevicesResponse> {
   return getJson<DevicesResponse>("/api/v2/devices");
+}
+
+// People this Observatory holds data for (participant keys, migration 029).
+// Mirrors server/api/v2_owners.py. The default owner comes first with a null
+// label; a participant whose keys are all revoked stays listed (active false).
+export type OwnerView = {
+  id: string;
+  label: string | null;
+  is_default: boolean;
+  active: boolean;
+  scopes: string[];
+  created_at: string | null;
+  last_ingest_at: string | null;
+};
+
+export type OwnersResponse = { count: number; owners: OwnerView[] };
+
+export function fetchOwners(): Promise<OwnersResponse> {
+  return getJson<OwnersResponse>("/api/v2/owners");
 }

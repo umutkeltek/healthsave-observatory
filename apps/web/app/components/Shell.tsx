@@ -15,11 +15,13 @@ import { Topbar } from "./Topbar";
 // in the layout) so the chrome never blocks on backend reads.
 export function Shell({
   sidebarStatus,
+  participantSwitcher,
   topbarStatus,
   density,
   children,
 }: {
   sidebarStatus: ReactNode;
+  participantSwitcher?: ReactNode;
   topbarStatus: ReactNode;
   density: Density;
   children: ReactNode;
@@ -32,6 +34,7 @@ export function Shell({
     <div className={`app density-${shownDensity} ${open ? "nav-open" : ""}`}>
       <Sidebar
         status={sidebarStatus}
+        participantSwitcher={participantSwitcher}
         density={shownDensity}
         onDensityChange={pickDensity}
         onNavigate={() => setOpen(false)}

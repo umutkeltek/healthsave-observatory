@@ -66,6 +66,7 @@ TYPE_TO_MODULES: dict[str, list[str]] = {
     "SourcesResponse": ["server.api.v2_identity"],
     "StreamsResponse": ["server.api.v2_identity"],
     "DevicesResponse": ["server.api.v2_identity"],
+    "OwnersResponse": ["server.api.v2_owners"],
 }
 
 

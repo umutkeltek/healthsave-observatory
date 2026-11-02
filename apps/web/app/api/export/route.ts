@@ -3,6 +3,10 @@
 // whitelisted and re-validated here so the route can't be steered anywhere
 // but the one upstream endpoint; the backend enforces its own row cap.
 
+import { cookies } from "next/headers";
+
+import { PARTICIPANT_COOKIE, parseOwnerCookie } from "../../lib/participants";
+
 export const dynamic = "force-dynamic";
 
 const API_BASE = process.env.API_BASE ?? "http://localhost:8000";
@@ -32,6 +36,10 @@ export async function GET(request: Request): Promise<Response> {
   if (DAYS.has(days)) qs.set("days", days);
   if (DATE_RE.test(from)) qs.set("from", from);
   if (DATE_RE.test(to)) qs.set("to", to);
+  // Participant view (migration 029): export the person on screen, never the
+  // primary person by accident.
+  const owner = parseOwnerCookie((await cookies()).get(PARTICIPANT_COOKIE)?.value);
+  if (owner) qs.set("owner", owner);
 
   const headers: Record<string, string> = {};
   if (API_KEY) headers["X-API-Key"] = API_KEY;
