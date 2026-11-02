@@ -58,6 +58,7 @@ Commands:
   restore FILE [--yes]      Replace the database with a backup (takes a safety backup first)
   verify                    Run lint, tests, TS/web checks, Docker E2E
   status                    Show layer-aware Docker Compose service status
+  labs import FILE.csv      Import blood test results from a CSV file
   logs [layer|service]      Show recent Docker Compose logs
   up [flags]                Start stack
   down                      Stop stack
@@ -1717,6 +1718,93 @@ cmd_verify() {
   exec make verify-local
 }
 
+print_labs_usage() {
+    cat <<'EOF'
+Usage:
+  healthsave labs import FILE.csv [--dry-run]
+
+Import blood test results from a CSV file. The file is read on this machine
+and handed to the running API container; it does not cross the network.
+Template and columns: docs/capture/labs-csv.md
+
+The whole file is checked first. If any row has a problem, nothing is
+written and every problem is listed with its row and column.
+
+Options:
+  --dry-run   Check the file and show what would be imported; write nothing.
+
+Exit codes:
+  0   imported (or the dry run passed)
+  2   usage error
+  65  file rejected; nothing written. Fix the listed rows and run it again.
+  75  database not reachable; nothing written. Safe to run again.
+EOF
+}
+
+cmd_labs() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            print_labs_usage
+            return 0
+            ;;
+        import)
+            shift
+            ;;
+        *)
+            log_error "Unknown labs command: $1"
+            print_labs_usage
+            exit 2
+            ;;
+    esac
+
+    local file=""
+    local dry_run=""
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help)
+                print_labs_usage
+                return 0
+                ;;
+            --dry-run) dry_run="--dry-run" ;;
+            -*)
+                log_error "Unknown labs import argument: $1"
+                print_labs_usage
+                exit 2
+                ;;
+            *)
+                if [ -n "$file" ]; then
+                    log_error "Give one CSV file at a time."
+                    exit 2
+                fi
+                file="$1"
+                ;;
+        esac
+        shift
+    done
+
+    if [ -z "$file" ]; then
+        log_error "labs import needs a CSV file."
+        print_labs_usage
+        exit 2
+    fi
+    if [ ! -f "$file" ]; then
+        log_error "No such file: $file"
+        exit 2
+    fi
+
+    require_docker
+    if ! running_services | grep -qx api; then
+        log_error "The API is not running. Start the stack with 'healthsave up' and run this again."
+        exit 75
+    fi
+
+    local rc=0
+    # shellcheck disable=SC2086 # $dry_run is a single optional flag
+    docker compose exec -T api python -m scripts.import_labs $dry_run \
+        --name "$(basename "$file")" - <"$file" || rc=$?
+    exit "$rc"
+}
+
 validate_cli_command_name() {
     case "$1" in
         ""|*/*|*\\*|"."|"..")
@@ -2328,6 +2416,13 @@ case "$cmd" in
             exit 2
         fi
         cmd_verify "$@"
+        ;;
+    labs)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for labs."
+            exit 2
+        fi
+        cmd_labs "$@"
         ;;
     status)
         if [ "${1:-}" = "--json" ]; then

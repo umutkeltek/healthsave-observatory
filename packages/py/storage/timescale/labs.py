@@ -22,6 +22,13 @@ from uuid import UUID
 
 from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
 from sqlalchemy import text
+from sqlalchemy.exc import (
+    DBAPIError,
+    DisconnectionError,
+    InterfaceError,
+    OperationalError,
+)
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import registry
@@ -277,6 +284,31 @@ class TimescaleLabRepository:
         return [_row(row) for row in result.fetchall()]
 
 
+# Transient infra failures a retry can clear. Everything else that goes wrong
+# while writing a validated file is deterministic and must not be retried in a
+# loop. Mirrors the deny-list in server.api.ingest (note: SQLAlchemy's pool
+# TimeoutError is not the builtin TimeoutError).
+_TRANSIENT_DB_ERRORS = (
+    OperationalError,
+    InterfaceError,
+    SQLAlchemyTimeoutError,
+    DisconnectionError,
+    TimeoutError,
+    ConnectionError,
+    OSError,
+)
+
+
+def is_transient_db_error(exc: BaseException) -> bool:
+    """True when retrying the same write could succeed (database unreachable,
+    pool exhausted, deadlock); False for deterministic failures."""
+    if isinstance(exc, _TRANSIENT_DB_ERRORS):
+        return True
+    if isinstance(exc, DBAPIError) and getattr(exc.orig, "sqlstate", None) in {"40P01", "40001"}:
+        return True
+    return bool(getattr(exc, "connection_invalidated", False))
+
+
 default_repository = TimescaleLabRepository()
 
 __all__ = [
@@ -285,4 +317,5 @@ __all__ = [
     "LabResultWrite",
     "TimescaleLabRepository",
     "default_repository",
+    "is_transient_db_error",
 ]

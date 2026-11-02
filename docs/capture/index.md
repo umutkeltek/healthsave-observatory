@@ -21,6 +21,7 @@ devices.
 | **Amazfit / Zepp** | Direct poll plugin — see [Direct plugins: Whoop & Amazfit](./plugins-whoop-amazfit.md) | **Shipped** (early) |
 | **Garmin Connect** | CLI importer — see [Importers: Garmin & Samsung](./importers-garmin-samsung.md) | **Shipped** (via importer) |
 | **Samsung / Huawei Health** | CLI importer (via the Health Sync app) — see [Importers: Garmin & Samsung](./importers-garmin-samsung.md) | **Shipped** (via importer) |
+| **Blood test results** | CSV import (`healthsave labs import`) — see [Blood test results (CSV)](./labs-csv.md) | **Shipped** (CSV; PDF and Apple Health clinical records planned) |
 | **Android Health Connect** | Native capture into the generic ingest API — see [Roadmap: Android & webhooks](./roadmap-android-webhooks.md) | **Planned** |
 | **Generic webhook / native API** | Any registered source posting canonical observations (HMAC-signed) — see [Roadmap: Android & webhooks](./roadmap-android-webhooks.md) | **Planned** |
 | **Oura via Apple Health** | Any Oura data written into HealthKit is forwarded by HealthSave | Shipped indirectly |
@@ -73,6 +74,7 @@ without inflating your data.
 - [Apple Health / HealthKit coverage](./apple-health.md) — what the iOS app syncs.
 - [Direct plugins: Whoop & Amazfit](./plugins-whoop-amazfit.md) — poll a wearable cloud directly.
 - [Importers: Garmin & Samsung](./importers-garmin-samsung.md) — sideload file exports.
+- [Blood test results (CSV)](./labs-csv.md) — lab results with the lab's own reference ranges.
 - [Roadmap: Android & webhooks](./roadmap-android-webhooks.md) — planned universal ingest.
 - [Quick start](../quick-start.md) — bring the stack up.
 - Root [`README.md`](../../README.md) and [`API.md`](../../API.md) — overview and the wire contract.
