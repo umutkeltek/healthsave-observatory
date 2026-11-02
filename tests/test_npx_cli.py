@@ -5,6 +5,10 @@ import os
 import shutil
 import stat
 import subprocess
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -12,6 +16,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 NPM_PACKAGE = ROOT / "packages" / "npm" / "healthsave-observatory"
 BIN = NPM_PACKAGE / "bin" / "healthsave-observatory.mjs"
+# Release lookups in tests never reach GitHub: port 9 refuses at once.
+OFFLINE_RELEASES_API = {"HEALTHSAVE_OBSERVATORY_RELEASES_API": "http://127.0.0.1:9/releases/latest"}
 
 
 def _require_node() -> None:
@@ -401,7 +407,7 @@ def test_node_cli_default_ref_checks_out_newest_release_tag(tmp_path: Path) -> N
     subprocess.run(
         ["node", str(BIN), "init", "--dir", str(target), "--repo", str(repo)],
         cwd="/tmp",
-        env={**os.environ, "HEALTHSAVE_OBSERVATORY_REF": ""},
+        env={**os.environ, "HEALTHSAVE_OBSERVATORY_REF": "", **OFFLINE_RELEASES_API},
         text=True,
         capture_output=True,
         timeout=20,
@@ -427,7 +433,7 @@ def test_node_cli_default_ref_fails_cleanly_without_release_tags(tmp_path: Path)
     proc = subprocess.run(
         ["node", str(BIN), "init", "--dir", str(target), "--repo", str(repo)],
         cwd="/tmp",
-        env={**os.environ, "HEALTHSAVE_OBSERVATORY_REF": ""},
+        env={**os.environ, "HEALTHSAVE_OBSERVATORY_REF": "", **OFFLINE_RELEASES_API},
         text=True,
         capture_output=True,
         timeout=20,
@@ -730,3 +736,77 @@ def test_node_cli_delegates_uninstall_cli_command(tmp_path: Path) -> None:
     assert (stack / "delegated-args.txt").read_text(encoding="utf-8").splitlines() == [
         "uninstall-cli",
     ]
+
+
+@contextmanager
+def _releases_api(tag_name: str) -> Iterator[str]:
+    """A local stand-in for GitHub's releases/latest endpoint."""
+    body = json.dumps({"tag_name": tag_name}).encode()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802 - http.server API
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_address[1]}/releases/latest"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def _init_with_releases_api(tmp_path: Path, repo: Path, api_url: str) -> list[str]:
+    target = tmp_path / "target"
+    proc = subprocess.run(
+        ["node", str(BIN), "init", "--dir", str(target), "--repo", str(repo)],
+        cwd="/tmp",
+        env={
+            **os.environ,
+            "HEALTHSAVE_OBSERVATORY_REF": "",
+            "HEALTHSAVE_OBSERVATORY_RELEASES_API": api_url,
+        },
+        text=True,
+        capture_output=True,
+        timeout=20,
+    )
+    assert proc.returncode == 0, proc.stderr
+    return subprocess.run(
+        ["git", "-C", str(target), "tag", "--points-at", "HEAD"],
+        check=True,
+        text=True,
+        capture_output=True,
+    ).stdout.split()
+
+
+def test_node_cli_default_ref_prefers_the_published_release(tmp_path: Path) -> None:
+    """A pushed tag whose release workflow has not published yet is not installed."""
+    _require_node()
+    if not shutil.which("git"):
+        pytest.skip("git is required for the release tag test")
+
+    repo = _fake_git_repo(tmp_path)
+    _commit_tag(repo, "1.9.0", "v1.9.0")
+    _commit_tag(repo, "1.10.0", "v1.10.0")
+    with _releases_api("v1.9.0") as api_url:
+        assert _init_with_releases_api(tmp_path, repo, api_url) == ["v1.9.0"]
+
+
+def test_node_cli_default_ref_ignores_a_published_tag_the_clone_lacks(tmp_path: Path) -> None:
+    _require_node()
+    if not shutil.which("git"):
+        pytest.skip("git is required for the release tag test")
+
+    repo = _fake_git_repo(tmp_path)
+    _commit_tag(repo, "1.9.0", "v1.9.0")
+    _commit_tag(repo, "1.10.0", "v1.10.0")
+    with _releases_api("v3.0.0") as api_url:
+        assert _init_with_releases_api(tmp_path, repo, api_url) == ["v1.10.0"]

@@ -11,9 +11,15 @@ const ALIAS_COMMAND = "healthsave-observatory";
 const DEFAULT_REPO =
   process.env.HEALTHSAVE_OBSERVATORY_REPO ||
   "https://github.com/umutkeltek/healthsave-observatory.git";
-// "latest" resolves to the newest vX.Y.Z release tag after cloning: self-hosters
-// install releases, never main (RELEASING.md).
+// "latest" resolves to the newest published release: self-hosters install
+// releases, never main (RELEASING.md). GitHub's "latest release" exists only once
+// the release workflow has published that tag's images, so it is asked first; the
+// newest vX.Y.Z tag in the fresh clone is the fallback.
 const LATEST_REF = "latest";
+const RELEASES_API =
+  process.env.HEALTHSAVE_OBSERVATORY_RELEASES_API ||
+  "https://api.github.com/repos/umutkeltek/healthsave-observatory/releases/latest";
+const RELEASE_TAG = /^v\d+\.\d+\.\d+$/;
 const DEFAULT_REF = process.env.HEALTHSAVE_OBSERVATORY_REF || LATEST_REF;
 const DEFAULT_HOME = process.env.HOME || process.env.USERPROFILE || process.cwd();
 const DEFAULT_DIR =
@@ -256,9 +262,31 @@ function capture(command, args, options = {}) {
   return (result.stdout || "").trim();
 }
 
-function latestReleaseTag(dir) {
+function latestTagInCheckout(dir) {
   const tags = capture("git", ["-C", dir, "tag", "--list", "v[0-9]*", "--sort=-v:refname"]);
-  return tags.split("\n").map((tag) => tag.trim()).find((tag) => /^v\d+\.\d+\.\d+$/.test(tag)) || "";
+  return tags.split("\n").map((tag) => tag.trim()).find((tag) => RELEASE_TAG.test(tag)) || "";
+}
+
+async function latestTagFromApi() {
+  try {
+    const response = await fetch(RELEASES_API, {
+      headers: { Accept: "application/vnd.github+json", "User-Agent": `${PRIMARY_COMMAND}-npm/${VERSION}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) return "";
+    const body = await response.json();
+    return typeof body?.tag_name === "string" ? body.tag_name : "";
+  } catch {
+    return "";
+  }
+}
+
+async function latestReleaseTag(dir) {
+  const published = await latestTagFromApi();
+  if (RELEASE_TAG.test(published) && capture("git", ["-C", dir, "rev-parse", "--verify", "--quiet", `refs/tags/${published}`])) {
+    return published;
+  }
+  return latestTagInCheckout(dir);
 }
 
 function gitAvailable() {
@@ -340,7 +368,7 @@ function splitDelegateArgs(command, commandArgs, options) {
   return { dir: defaultStackDir(), args: [...commandArgs] };
 }
 
-function ensureCheckout(dir, options) {
+async function ensureCheckout(dir, options) {
   if (isCheckout(dir)) {
     return dir;
   }
@@ -373,7 +401,7 @@ function ensureCheckout(dir, options) {
 
   let ref = options.ref;
   if (ref === LATEST_REF) {
-    ref = latestReleaseTag(dir);
+    ref = await latestReleaseTag(dir);
     if (!ref) {
       rmSync(dir, { recursive: true, force: true });
       fail(`${options.repo} has no vX.Y.Z release tag. Pass --ref to choose a branch or commit.`, 1, options.json);
@@ -419,9 +447,9 @@ function delegate(dir, healthsaveArgs, options) {
   process.exit(result.status || 0);
 }
 
-function commandInit(commandArgs, options) {
+async function commandInit(commandArgs, options) {
   const { dir } = stackDirFromArgs(commandArgs, options, 0, false);
-  ensureCheckout(dir, options);
+  await ensureCheckout(dir, options);
   installWrapper(dir, options);
   if (!options.dryRun) {
     ok(`HealthSave Observatory stack ready at ${dir}`);
@@ -429,9 +457,9 @@ function commandInit(commandArgs, options) {
   }
 }
 
-function commandOnboard(commandArgs, options) {
+async function commandOnboard(commandArgs, options) {
   const { dir } = stackDirFromArgs(commandArgs, options, 0, true);
-  ensureCheckout(dir, options);
+  await ensureCheckout(dir, options);
   installWrapper(dir, options);
   if (options.dryRun) {
     process.stdout.write(`Would open interactive control center: healthsave onboard --dir ${dir}\n`);
@@ -440,7 +468,7 @@ function commandOnboard(commandArgs, options) {
   delegate(dir, ["onboard"], options);
 }
 
-function commandSetup(commandArgs, options) {
+async function commandSetup(commandArgs, options) {
   let mode = "";
   let dirOffset = 0;
   if (["basic", "advanced"].includes(commandArgs[0])) {
@@ -450,7 +478,7 @@ function commandSetup(commandArgs, options) {
 
   const { dir, args } = stackDirFromArgs(commandArgs, options, dirOffset, true);
   const delegatedArgs = mode ? args : args;
-  ensureCheckout(dir, options);
+  await ensureCheckout(dir, options);
   installWrapper(dir, options);
   if (options.dryRun && !isCheckout(dir)) return;
   delegate(dir, ["setup", ...delegatedArgs], options);
@@ -533,7 +561,7 @@ function commandVersion(options) {
   }
 }
 
-function main() {
+async function main() {
   const { options, command, commandArgs } = parseArgs(process.argv.slice(2));
 
   if (options.version) {
@@ -548,7 +576,7 @@ function main() {
   assertSupportedPlatform(options);
 
   if (!command || looksLikePath(command)) {
-    commandOnboard(command ? [command, ...commandArgs] : commandArgs, options);
+    await commandOnboard(command ? [command, ...commandArgs] : commandArgs, options);
     return;
   }
 
@@ -557,14 +585,14 @@ function main() {
       commandVersion(options);
       return;
     case "init":
-      commandInit(commandArgs, options);
+      await commandInit(commandArgs, options);
       return;
     case "setup":
     case "install":
-      commandSetup(commandArgs, options);
+      await commandSetup(commandArgs, options);
       return;
     case "onboard":
-      commandOnboard(commandArgs, options);
+      await commandOnboard(commandArgs, options);
       return;
     default:
       if (DELEGATED_COMMANDS.has(command)) {
@@ -575,4 +603,4 @@ function main() {
   }
 }
 
-main();
+await main();
