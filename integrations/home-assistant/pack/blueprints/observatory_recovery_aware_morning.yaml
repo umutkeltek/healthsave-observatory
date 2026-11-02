@@ -1,0 +1,256 @@
+blueprint:
+  name: "HealthSave Observatory: recovery-aware morning"
+  description: >-
+    At your wake time, sends one phone notification with this morning's readings from HealthSave
+    Observatory in plain words: HRV against your 7-day average, resting heart rate (against a
+    baseline if you give one), and last night's sleep. For example: "HRV 42 ms, 12% below your
+    7-day average (48 ms)."
+
+
+    There is no score and no advice. It reports the numbers and how they compare. You can also pick
+    a scene to turn on when HRV is well below your 7-day average.
+
+
+    If Observatory's data is older than your limit, the message says so, because the readings may be
+    from an earlier day. Not medical advice.
+  domain: automation
+  author: HealthSave
+  source_url: https://github.com/umutkeltek/healthsave-observatory/blob/main/integrations/home-assistant/pack/blueprints/observatory_recovery_aware_morning.yaml
+  homeassistant:
+    min_version: "2024.10.0"
+  input:
+    notify_device:
+      name: Phone to notify
+      description: A phone with the Home Assistant Companion app.
+      selector:
+        device:
+          filter:
+            - integration: mobile_app
+    wake_time:
+      name: Wake time
+      description: When to send the readings.
+      default: "07:00:00"
+      selector:
+        time: {}
+    weekdays:
+      name: Days
+      description: The days to send it.
+      default: [mon, tue, wed, thu, fri, sat, sun]
+      selector:
+        select:
+          multiple: true
+          mode: list
+          options:
+            - label: Monday
+              value: mon
+            - label: Tuesday
+              value: tue
+            - label: Wednesday
+              value: wed
+            - label: Thursday
+              value: thu
+            - label: Friday
+              value: fri
+            - label: Saturday
+              value: sat
+            - label: Sunday
+              value: sun
+    notification_title:
+      name: Notification title
+      default: Morning readings
+      selector:
+        text: {}
+    hrv_sensor:
+      name: HRV
+      description: Observatory's latest HRV reading, in ms ("HRV" on the Observatory device).
+      default: sensor.healthsave_observatory_hrv
+      selector:
+        entity:
+          filter:
+            - integration: mqtt
+              domain: sensor
+    hrv_baseline_sensor:
+      name: HRV 7-day average
+      description: >-
+        Observatory's 7-day HRV average ("HRV 7d Avg" on the Observatory device). The message calls
+        it "your 7-day average".
+      default: sensor.healthsave_observatory_hrv_7d_avg
+      selector:
+        entity:
+          filter:
+            - integration: mqtt
+              domain: sensor
+    rhr_sensor:
+      name: Resting heart rate
+      description: Observatory's latest resting heart rate, in bpm.
+      default: sensor.healthsave_observatory_resting_heart_rate
+      selector:
+        entity:
+          filter:
+            - integration: mqtt
+              domain: sensor
+    rhr_baseline_sensor:
+      name: Resting heart rate baseline (optional)
+      description: >-
+        Observatory publishes no resting heart rate baseline. To compare against one, create a
+        Statistics helper (mean, max age 7 days) on the resting heart rate sensor and pick it here.
+        Leave empty to report the plain number.
+      default: ""
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+    sleep_sensor:
+      name: Last sleep (hours)
+      description: Observatory's length of the most recent sleep session, in hours.
+      default: sensor.healthsave_observatory_last_sleep_hours
+      selector:
+        entity:
+          filter:
+            - integration: mqtt
+              domain: sensor
+    same_band_percent:
+      name: '"About the same" band'
+      description: Differences smaller than this are reported as "about the same".
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 20
+          step: 1
+          unit_of_measurement: "%"
+          mode: slider
+    calm_scene:
+      name: Scene when HRV is low (optional)
+      description: >-
+        A scene to turn on at wake time when HRV is at least the percentage below your 7-day average
+        set below. Leave empty for notification only.
+      default: ""
+      selector:
+        entity:
+          filter:
+            - domain: scene
+    scene_below_percent:
+      name: HRV drop that turns on the scene
+      default: 15
+      selector:
+        number:
+          min: 5
+          max: 50
+          step: 1
+          unit_of_measurement: "%"
+          mode: slider
+    check_data_freshness:
+      name: Mention old data
+      description: When on, the message says so if the data freshness sensor is older than the limit.
+      default: true
+      selector:
+        boolean: {}
+    sync_timestamp_sensor:
+      name: Data freshness sensor
+      description: >-
+        A timestamp sensor that moves when Observatory receives new data. The default is the time
+        of the last step sync from your phone ("Steps Synced At" on the Observatory device).
+      default: sensor.healthsave_observatory_steps_synced_at
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+              device_class: timestamp
+    max_data_age_hours:
+      name: Data counts as old after (hours)
+      default: 12
+      selector:
+        number:
+          min: 1
+          max: 72
+          step: 1
+          unit_of_measurement: h
+          mode: slider
+
+mode: single
+max_exceeded: silent
+
+triggers:
+  - trigger: time
+    at: !input wake_time
+
+conditions:
+  - condition: time
+    weekday: !input weekdays
+
+variables:
+  hrv_entity: !input hrv_sensor
+  hrv_base_entity: !input hrv_baseline_sensor
+  rhr_entity: !input rhr_sensor
+  rhr_base_entity: !input rhr_baseline_sensor
+  sleep_entity: !input sleep_sensor
+  same_band: !input same_band_percent
+  calm_scene: !input calm_scene
+  scene_below: !input scene_below_percent
+  check_freshness: !input check_data_freshness
+  freshness_entity: !input sync_timestamp_sensor
+  max_age_hours: !input max_data_age_hours
+  hrv: "{{ states(hrv_entity) | float(none) }}"
+  hrv_base: "{{ states(hrv_base_entity) | float(none) }}"
+  rhr: "{{ states(rhr_entity) | float(none) }}"
+  rhr_base: "{{ states(rhr_base_entity) | float(none) if rhr_base_entity else none }}"
+  slept: "{{ states(sleep_entity) | float(none) }}"
+  hrv_pct: >-
+    {{ ((hrv - hrv_base) / hrv_base * 100) | round(0)
+       if hrv is number and hrv_base is number and hrv_base > 0 else none }}
+  rhr_pct: >-
+    {{ ((rhr - rhr_base) / rhr_base * 100) | round(0)
+       if rhr is number and rhr_base is number and rhr_base > 0 else none }}
+  data_age_hours: >-
+    {%- set ts = as_timestamp(states(freshness_entity), none) -%}
+    {{ ((as_timestamp(now()) - ts) / 3600) | round(0) if ts is not none else none }}
+  hrv_line: >-
+    {%- if hrv is not number -%}No HRV reading from Observatory.
+    {%- elif hrv_pct is not number -%}HRV {{ hrv | round(0) | int }} ms.
+    {%- elif hrv_pct | abs < same_band -%}HRV {{ hrv | round(0) | int }} ms, about the same as your
+    7-day average ({{ hrv_base | round(0) | int }} ms).
+    {%- elif hrv_pct > 0 -%}HRV {{ hrv | round(0) | int }} ms, {{ hrv_pct | int }}% above your
+    7-day average ({{ hrv_base | round(0) | int }} ms).
+    {%- else -%}HRV {{ hrv | round(0) | int }} ms, {{ hrv_pct | abs | int }}% below your 7-day
+    average ({{ hrv_base | round(0) | int }} ms).
+    {%- endif -%}
+  rhr_line: >-
+    {%- if rhr is not number -%}No resting heart rate reading from Observatory.
+    {%- elif rhr_pct is not number -%}Resting heart rate {{ rhr | round(0) | int }} bpm.
+    {%- elif rhr_pct | abs < same_band -%}Resting heart rate {{ rhr | round(0) | int }} bpm, about
+    the same as your baseline ({{ rhr_base | round(0) | int }} bpm).
+    {%- elif rhr_pct > 0 -%}Resting heart rate {{ rhr | round(0) | int }} bpm, {{ rhr_pct | int }}%
+    above your baseline ({{ rhr_base | round(0) | int }} bpm).
+    {%- else -%}Resting heart rate {{ rhr | round(0) | int }} bpm, {{ rhr_pct | abs | int }}% below
+    your baseline ({{ rhr_base | round(0) | int }} bpm).
+    {%- endif -%}
+  sleep_line: >-
+    {%- if slept is number -%}Last sleep {{ slept | round(1) }} h.
+    {%- else -%}No sleep reading from Observatory.
+    {%- endif -%}
+  stale_line: >-
+    {%- if check_freshness and data_age_hours is number and data_age_hours > max_age_hours -%}
+    Observatory last received data {{ data_age_hours | int }} h ago, so these may be from an
+    earlier day.
+    {%- elif check_freshness and data_age_hours is not number -%}
+    Observatory has not said when it last received data.
+    {%- endif -%}
+  message: '{{ [hrv_line, rhr_line, sleep_line, stale_line] | select | join("\n") }}'
+
+actions:
+  - alias: Send the readings
+    domain: mobile_app
+    type: notify
+    device_id: !input notify_device
+    title: !input notification_title
+    message: "{{ message }}"
+  - alias: Turn on the scene when HRV is well below the 7-day average
+    if:
+      - condition: template
+        value_template: >-
+          {{ calm_scene not in ['', none] and hrv_pct is number and hrv_pct <= -(scene_below) }}
+    then:
+      - action: scene.turn_on
+        target:
+          entity_id: "{{ calm_scene }}"

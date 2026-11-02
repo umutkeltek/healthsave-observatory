@@ -1,0 +1,138 @@
+blueprint:
+  name: "HealthSave Observatory: low-data warning"
+  description: >-
+    Tells you when Home Assistant stops getting real data from HealthSave Observatory, instead of
+    letting a dashboard quietly show old numbers.
+
+
+    It warns in two cases. (1) The MQTT bridge is offline: the bridge publishes "online" and
+    "offline" on its availability topic (observatory/status by default, with a last-will message),
+    and Home Assistant marks every Observatory entity unavailable when that topic says offline or
+    when it loses the MQTT broker. (2) The bridge is online but no new data has arrived: the data
+    freshness sensor is older than your limit.
+
+
+    The bridge republishes every value about once a minute, so an entity's "last updated" time only
+    shows that the bridge is alive. It does not show how old the data is. That is why this uses a
+    timestamp from Observatory itself.
+  domain: automation
+  author: HealthSave
+  source_url: https://github.com/umutkeltek/healthsave-observatory/blob/main/integrations/home-assistant/pack/blueprints/observatory_low_data_warning.yaml
+  homeassistant:
+    min_version: "2024.10.0"
+  input:
+    notify_device:
+      name: Phone to notify
+      description: A phone with the Home Assistant Companion app.
+      selector:
+        device:
+          filter:
+            - integration: mobile_app
+    bridge_entity:
+      name: Bridge entity
+      description: >-
+        Any entity on the HealthSave Observatory device. The default always has a value while the
+        bridge is online, so it only becomes unavailable when the bridge or the broker is gone.
+      default: sensor.healthsave_observatory_source_model
+      selector:
+        entity:
+          filter:
+            - integration: mqtt
+              domain: sensor
+    offline_minutes:
+      name: Offline for (minutes)
+      description: Warn after the bridge has been unavailable this long. Short restarts stay quiet.
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 240
+          step: 1
+          unit_of_measurement: min
+          mode: box
+    sync_timestamp_sensor:
+      name: Data freshness sensor
+      description: >-
+        A timestamp sensor that moves when Observatory receives new data. The default is the time
+        of the last step sync from your phone ("Steps Synced At" on the Observatory device).
+      default: sensor.healthsave_observatory_steps_synced_at
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+              device_class: timestamp
+    max_sync_age_hours:
+      name: No new data for (hours)
+      description: >-
+        Warn once when the freshness sensor gets older than this. Pick a limit longer than the
+        longest normal gap, for example overnight.
+      default: 12
+      selector:
+        number:
+          min: 1
+          max: 168
+          step: 1
+          unit_of_measurement: h
+          mode: box
+    also_persistent_notification:
+      name: Also show it in Home Assistant
+      description: When on, the warning also appears in Home Assistant's notifications.
+      default: true
+      selector:
+        boolean: {}
+
+mode: single
+max_exceeded: silent
+
+trigger_variables:
+  sync_entity: !input sync_timestamp_sensor
+  max_age_hours: !input max_sync_age_hours
+
+triggers:
+  - trigger: state
+    id: offline
+    entity_id: !input bridge_entity
+    to: unavailable
+    for:
+      minutes: !input offline_minutes
+  - trigger: template
+    id: stale
+    value_template: >-
+      {%- set ts = as_timestamp(states(sync_entity), none) -%}
+      {{ ts is not none and (as_timestamp(now()) - ts) > max_age_hours * 3600 }}
+
+variables:
+  offline_minutes: !input offline_minutes
+  also_persistent: !input also_persistent_notification
+  data_age_hours: >-
+    {%- set ts = as_timestamp(states(sync_entity), none) -%}
+    {{ ((as_timestamp(now()) - ts) / 3600) | round(0) | int if ts is not none else none }}
+  title: HealthSave Observatory
+  message: >-
+    {%- if trigger.id == 'offline' -%}
+    The Observatory MQTT bridge has been offline for {{ offline_minutes | int }} minutes. Home
+    Assistant shows its entities as unavailable until it reconnects. Check the homeassistant-mqtt
+    container and your MQTT broker.
+    {%- else -%}
+    Observatory last received data {{ data_age_hours }} hours ago (your limit is
+    {{ max_age_hours | int }} h). Check that the HealthSave app is syncing and that the Observatory
+    host is up.
+    {%- endif -%}
+
+actions:
+  - alias: Warn on the phone
+    domain: mobile_app
+    type: notify
+    device_id: !input notify_device
+    title: "{{ title }}"
+    message: "{{ message }}"
+  - alias: Warn in Home Assistant
+    if:
+      - condition: template
+        value_template: "{{ also_persistent }}"
+    then:
+      - action: persistent_notification.create
+        data:
+          notification_id: healthsave_observatory_low_data
+          title: "{{ title }}"
+          message: "{{ message }}"
