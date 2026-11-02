@@ -770,6 +770,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/labs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Labs
+         * @description Every marker with its results, newest marker first, plus the labs.
+         */
+        get: operations["list_labs_api_v2_labs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/labs/{loinc}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Lab Marker
+         * @description One marker's results, oldest first, each with its lab and the lab's range.
+         */
+        get: operations["get_lab_marker_api_v2_labs__loinc__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/meta": {
         parameters: {
             query?: never;
@@ -1551,6 +1591,139 @@ export interface components {
             /** Recent Findings */
             recent_findings?: components["schemas"]["FindingResponse"][];
             weekly_summary?: components["schemas"]["WeeklySummaryResponse"] | null;
+        };
+        /** LabMarkerDetail */
+        LabMarkerDetail: {
+            /** Display Unit */
+            display_unit: string;
+            /**
+             * First Specimen At
+             * Format: date-time
+             */
+            first_specimen_at: string;
+            /** Lab Count */
+            lab_count: number;
+            /**
+             * Last Specimen At
+             * Format: date-time
+             */
+            last_specimen_at: string;
+            /** Loinc */
+            loinc: string;
+            /** Metric Id */
+            metric_id: string;
+            /** Name */
+            name: string;
+            /** Result Count */
+            result_count: number;
+            /** Results */
+            results: components["schemas"]["LabResultView"][];
+            /** Unit */
+            unit: string;
+        };
+        /** LabMarkerView */
+        LabMarkerView: {
+            /** Display Unit */
+            display_unit: string;
+            /**
+             * First Specimen At
+             * Format: date-time
+             */
+            first_specimen_at: string;
+            /** Lab Count */
+            lab_count: number;
+            /**
+             * Last Specimen At
+             * Format: date-time
+             */
+            last_specimen_at: string;
+            /** Loinc */
+            loinc: string;
+            /** Metric Id */
+            metric_id: string;
+            /** Name */
+            name: string;
+            /** Result Count */
+            result_count: number;
+            /** Results */
+            results: components["schemas"]["LabResultView"][];
+            /** Unit */
+            unit: string;
+        };
+        /** LabResultView */
+        LabResultView: {
+            /** Comparator */
+            comparator: string | null;
+            /** Date Only */
+            date_only: boolean;
+            /** Display Unit */
+            display_unit: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Lab */
+            lab: string;
+            /** Panel */
+            panel: string | null;
+            /** Quality Flags */
+            quality_flags: string[];
+            /** Reference High */
+            reference_high: number | null;
+            /** Reference Low */
+            reference_low: number | null;
+            /** Source Plugin Id */
+            source_plugin_id: string;
+            /**
+             * Specimen At
+             * Format: date-time
+             */
+            specimen_at: string;
+            /**
+             * Stream Id
+             * Format: uuid
+             */
+            stream_id: string;
+            /** Unit */
+            unit: string;
+            /** Value */
+            value: number;
+        };
+        /** LabSourceView */
+        LabSourceView: {
+            /**
+             * First Specimen At
+             * Format: date-time
+             */
+            first_specimen_at: string;
+            /** Lab */
+            lab: string;
+            /**
+             * Last Specimen At
+             * Format: date-time
+             */
+            last_specimen_at: string;
+            /** Result Count */
+            result_count: number;
+            /** Source Plugin Id */
+            source_plugin_id: string;
+            /**
+             * Stream Id
+             * Format: uuid
+             */
+            stream_id: string;
+        };
+        /** LabsOverview */
+        LabsOverview: {
+            /** Count */
+            count: number;
+            /** Labs */
+            labs: components["schemas"]["LabSourceView"][];
+            /** Markers */
+            markers: components["schemas"]["LabMarkerView"][];
+            /** Result Count */
+            result_count: number;
         };
         /** MomentListResponse */
         MomentListResponse: {
@@ -3186,6 +3359,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_labs_api_v2_labs_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabsOverview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_lab_marker_api_v2_labs__loinc__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                loinc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabMarkerDetail"];
                 };
             };
             /** @description Validation Error */

@@ -48,6 +48,18 @@ Findings are computed by a deterministic statistical engine; the local LLM only 
 
 A *stream* is the join of "this device, via this integration" — the same band over HealthKit versus a direct poll is two streams. Stream UUIDs are stable, so Home Assistant and other consumers can key entities on them without fragmenting when you add devices.
 
+## Labs
+
+Blood test results imported with `healthsave labs import` (see
+[Blood test results (CSV)](../capture/labs-csv.md)). Every result keeps the
+reference range its lab printed and the lab stream it came from; results from
+different labs are never averaged.
+
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `GET /api/v2/labs` | key | Every marker (LOINC) with its results, plus the labs that sent them |
+| `GET /api/v2/labs/{loinc}` | key | One marker's results, oldest first (`422` malformed LOINC, `404` none) |
+
 ## Experiments and agents
 
 | Endpoint | Auth | Purpose |

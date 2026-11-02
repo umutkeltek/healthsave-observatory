@@ -248,6 +248,26 @@ Personal-context moments: illness, travel, lifestyle events that may explain or 
 ### `PUT /api/v2/moments/{id}` · `DELETE /api/v2/moments/{id}` — keyed
 Update or delete one personal-context moment by id.
 
+### `GET /api/v2/labs` — keyed
+Blood test results imported with `healthsave labs import` (docs/capture/labs-csv.md). One entry per marker (LOINC code), newest first, each result with the reference range its lab printed and the lab stream it came from. Results from different labs are separate rows, never averaged. Host-local — raw lab rows never egress.
+```json
+{ "markers": [{ "loinc": "2276-4", "metric_id": "loinc:2276-4", "name": "Ferritin",
+  "unit": "ng/mL", "display_unit": "ng/mL", "result_count": 1, "lab_count": 1,
+  "first_specimen_at": "2026-09-08T05:50:00Z", "last_specimen_at": "2026-09-08T05:50:00Z",
+  "results": [{ "id": "…", "specimen_at": "2026-09-08T05:50:00Z", "date_only": false,
+    "value": 24.0, "comparator": null, "unit": "ng/mL", "display_unit": "ng/mL",
+    "reference_low": 30.0, "reference_high": 400.0, "lab": "Northfield Diagnostics",
+    "stream_id": "…", "source_plugin_id": "labs-csv", "panel": "Iron studies",
+    "quality_flags": [] }] }],
+  "labs": [{ "stream_id": "…", "lab": "Northfield Diagnostics", "source_plugin_id": "labs-csv",
+    "result_count": 1, "first_specimen_at": "2026-09-08T05:50:00Z",
+    "last_specimen_at": "2026-09-08T05:50:00Z" }],
+  "count": 1, "result_count": 1 }
+```
+
+### `GET /api/v2/labs/{loinc}` — keyed
+One marker's results, oldest first, in the same shape as one `markers[]` entry above. `422` when `{loinc}` is not a valid LOINC code (the check digit must match), `404` when there are no results for it.
+
 ### `GET /api/v2/intelligence` · `PUT /api/v2/intelligence` — keyed
 The LLM-narrator ("Intelligence") settings. `GET` returns the current posture with **no secrets** (only `key_last4`); `managed_by_env` is true when deploy-time env config is still the effective source. `PUT` applies `mode` (off/local/cloud) + the primary provider/model (+ optional write-only `api_key`) + the fallback chain. The server classifies each route's trust zone; `PUT` does **not** grant cloud egress (see `/consent`).
 ```json

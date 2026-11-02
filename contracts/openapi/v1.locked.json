@@ -921,6 +921,324 @@
         "title": "InsightsLatestResponse",
         "type": "object"
       },
+      "LabMarkerDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "display_unit": {
+            "title": "Display Unit",
+            "type": "string"
+          },
+          "first_specimen_at": {
+            "format": "date-time",
+            "title": "First Specimen At",
+            "type": "string"
+          },
+          "lab_count": {
+            "title": "Lab Count",
+            "type": "integer"
+          },
+          "last_specimen_at": {
+            "format": "date-time",
+            "title": "Last Specimen At",
+            "type": "string"
+          },
+          "loinc": {
+            "title": "Loinc",
+            "type": "string"
+          },
+          "metric_id": {
+            "title": "Metric Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "result_count": {
+            "title": "Result Count",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/LabResultView"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loinc",
+          "metric_id",
+          "name",
+          "unit",
+          "display_unit",
+          "result_count",
+          "lab_count",
+          "first_specimen_at",
+          "last_specimen_at",
+          "results"
+        ],
+        "title": "LabMarkerDetail",
+        "type": "object"
+      },
+      "LabMarkerView": {
+        "additionalProperties": false,
+        "properties": {
+          "display_unit": {
+            "title": "Display Unit",
+            "type": "string"
+          },
+          "first_specimen_at": {
+            "format": "date-time",
+            "title": "First Specimen At",
+            "type": "string"
+          },
+          "lab_count": {
+            "title": "Lab Count",
+            "type": "integer"
+          },
+          "last_specimen_at": {
+            "format": "date-time",
+            "title": "Last Specimen At",
+            "type": "string"
+          },
+          "loinc": {
+            "title": "Loinc",
+            "type": "string"
+          },
+          "metric_id": {
+            "title": "Metric Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "result_count": {
+            "title": "Result Count",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/LabResultView"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loinc",
+          "metric_id",
+          "name",
+          "unit",
+          "display_unit",
+          "result_count",
+          "lab_count",
+          "first_specimen_at",
+          "last_specimen_at",
+          "results"
+        ],
+        "title": "LabMarkerView",
+        "type": "object"
+      },
+      "LabResultView": {
+        "additionalProperties": false,
+        "properties": {
+          "comparator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparator"
+          },
+          "date_only": {
+            "title": "Date Only",
+            "type": "boolean"
+          },
+          "display_unit": {
+            "title": "Display Unit",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lab": {
+            "title": "Lab",
+            "type": "string"
+          },
+          "panel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Panel"
+          },
+          "quality_flags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Quality Flags",
+            "type": "array"
+          },
+          "reference_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference High"
+          },
+          "reference_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Low"
+          },
+          "source_plugin_id": {
+            "title": "Source Plugin Id",
+            "type": "string"
+          },
+          "specimen_at": {
+            "format": "date-time",
+            "title": "Specimen At",
+            "type": "string"
+          },
+          "stream_id": {
+            "format": "uuid",
+            "title": "Stream Id",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "specimen_at",
+          "date_only",
+          "value",
+          "comparator",
+          "unit",
+          "display_unit",
+          "reference_low",
+          "reference_high",
+          "lab",
+          "stream_id",
+          "source_plugin_id",
+          "panel",
+          "quality_flags"
+        ],
+        "title": "LabResultView",
+        "type": "object"
+      },
+      "LabSourceView": {
+        "additionalProperties": false,
+        "properties": {
+          "first_specimen_at": {
+            "format": "date-time",
+            "title": "First Specimen At",
+            "type": "string"
+          },
+          "lab": {
+            "title": "Lab",
+            "type": "string"
+          },
+          "last_specimen_at": {
+            "format": "date-time",
+            "title": "Last Specimen At",
+            "type": "string"
+          },
+          "result_count": {
+            "title": "Result Count",
+            "type": "integer"
+          },
+          "source_plugin_id": {
+            "title": "Source Plugin Id",
+            "type": "string"
+          },
+          "stream_id": {
+            "format": "uuid",
+            "title": "Stream Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stream_id",
+          "lab",
+          "source_plugin_id",
+          "result_count",
+          "first_specimen_at",
+          "last_specimen_at"
+        ],
+        "title": "LabSourceView",
+        "type": "object"
+      },
+      "LabsOverview": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "labs": {
+            "items": {
+              "$ref": "#/components/schemas/LabSourceView"
+            },
+            "title": "Labs",
+            "type": "array"
+          },
+          "markers": {
+            "items": {
+              "$ref": "#/components/schemas/LabMarkerView"
+            },
+            "title": "Markers",
+            "type": "array"
+          },
+          "result_count": {
+            "title": "Result Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "markers",
+          "labs",
+          "count",
+          "result_count"
+        ],
+        "title": "LabsOverview",
+        "type": "object"
+      },
       "MomentListResponse": {
         "additionalProperties": false,
         "properties": {
@@ -4225,6 +4543,97 @@
           }
         },
         "summary": "Test Connection"
+      }
+    },
+    "/api/v2/labs": {
+      "get": {
+        "description": "Every marker with its results, newest marker first, plus the labs.",
+        "operationId": "list_labs_api_v2_labs_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabsOverview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Labs"
+      }
+    },
+    "/api/v2/labs/{loinc}": {
+      "get": {
+        "description": "One marker's results, oldest first, each with its lab and the lab's range.",
+        "operationId": "get_lab_marker_api_v2_labs__loinc__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loinc",
+            "required": true,
+            "schema": {
+              "title": "Loinc",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabMarkerDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Lab Marker"
       }
     },
     "/api/v2/meta": {

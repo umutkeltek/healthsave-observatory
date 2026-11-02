@@ -10,6 +10,8 @@ the identity registry. Each run uses its own owner id and removes its rows.
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 from datetime import UTC, datetime
 from uuid import uuid4, uuid5
 
@@ -124,5 +126,54 @@ async def test_lab_results_upsert_is_idempotent_and_registers_identity() -> None
                 await session.execute(
                     text(f"DELETE FROM {table} WHERE {column} = :owner"), {"owner": str(owner)}
                 )
+            await session.commit()
+        await engine.dispose()
+
+
+BASE_URL = os.getenv("E2E_BASE_URL")
+SAMPLE = os.path.join(os.path.dirname(__file__), "..", "fixtures", "labs", "sample_labs.csv")
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(not BASE_URL, reason="set E2E_BASE_URL + E2E_DATABASE_URL (see `make e2e`)")
+async def test_imported_sample_reads_back_through_the_v2_labs_routes() -> None:
+    """Import the synthetic sample with the real CLI module, then read it over HTTP."""
+    import httpx
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    url = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+    env = {**os.environ, "DATABASE_URL": url, "PYTHONPATH": os.pathsep.join(sys.path)}
+    headers = {"X-API-Key": os.environ["E2E_API_KEY"]} if os.getenv("E2E_API_KEY") else {}
+    engine = create_async_engine(url)
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "scripts.import_labs", SAMPLE],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert "12 result(s)" in proc.stdout
+
+        async with httpx.AsyncClient(base_url=BASE_URL, headers=headers, timeout=10) as client:
+            overview = (await client.get("/api/v2/labs")).json()
+            ferritin = (await client.get("/api/v2/labs/2276-4")).json()
+            bad = await client.get("/api/v2/labs/2276-5")
+
+        assert overview["result_count"] >= 12
+        assert {"Northfield Diagnostics", "Harbor Clinical Lab"} <= {
+            lab["lab"] for lab in overview["labs"]
+        }
+        labs_in_series = [r["lab"] for r in ferritin["results"]]
+        assert labs_in_series.count("Northfield Diagnostics") >= 3
+        assert "Harbor Clinical Lab" in labs_in_series
+        assert bad.status_code == 422
+    finally:
+        async with AsyncSession(engine) as session:
+            await session.execute(
+                text("DELETE FROM lab_results WHERE provenance->>'file_name' = 'sample_labs.csv'")
+            )
             await session.commit()
         await engine.dispose()
