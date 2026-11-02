@@ -27,6 +27,8 @@ You can also back up the TimescaleDB Docker volume (`db_data`) directly. It hold
 - If you run on a VM or NAS, point the volume at a disk that's already in your backup rotation (a ZFS dataset you snapshot, a backed-up directory, etc.).
 - For a logical backup, `pg_dump` against the database also works and is portable across TimescaleDB versions.
 
+[Observatory Care](observatory-care.md) adds encrypted backups, off-site copies through rclone, scheduled backups, and restore drills that prove a backup restores. Restoring an encrypted backup never needs a licence.
+
 ## Updating existing installs
 
 Fresh installs load `db/schema.sql` automatically. Existing Docker volumes keep their original schema, so the Compose stack runs the migration service **before** the API, worker, agents, or Home Assistant bridge start:

@@ -53,6 +53,7 @@ New here? Start with [Zero To Ready](zero-to-ready.md), then [Connect HealthSave
 - [Reverse proxy & HTTPS](operations/reverse-proxy.md) - expose API surfaces safely behind HTTPS.
 - [Security model](operations/security.md) - API keys, fail-closed auth, network exposure, secret storage, egress limits, and backup security.
 - [Backup & migrations](operations/backup-and-migrations.md) - back up TimescaleDB and apply migrations safely.
+- [Observatory Care](operations/observatory-care.md) - the optional licence: encrypted off-site and scheduled backups, restore drills, update rollback; checked offline.
 - [Metrics](operations/metrics.md) - scrape Prometheus metrics for ingest throughput, latency, and briefing health.
 - [Multi-user / household](operations/multi-user.md) - use `owner_id` to separate multiple residents on one backend.
 - [Troubleshooting](operations/troubleshooting.md) - diagnose first-run sync, service, AI, network, and dashboard failures.
