@@ -746,7 +746,7 @@ as its own owner; a `read` key reaches GETs on that surface and the owner-scoped
 own owner; anything else is 403. The owner-scoped reads (`/metrics/{metric_id}/series`, `/series`,
 `/export/metrics`, `/export`, `/sources`, `/devices`, `/streams`, `/streams/{stream_id}`, `/readiness`)
 take an optional `owner=<uuid>`: the admin key may name any owner (default: the default owner); a
-read key may name only its own.
+read key may name only its own. See [Participants](docs/operations/participants.md).
 
 | Endpoint | Method | Auth | Purpose |
 |----------|--------|------|---------|

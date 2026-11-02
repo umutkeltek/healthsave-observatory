@@ -65,6 +65,7 @@ Key facts for assistants:
 - [Backup & migrations](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/backup-and-migrations.md): Backing up the TimescaleDB volume and applying additive schema migrations.
 - [Metrics](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/metrics.md): Prometheus counters at `/metrics`, scrape config, and how to protect the endpoint.
 - [Multi-user / household](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/multi-user.md): Separating residents on one install with `X-User-Id` and `owner_id`.
+- [Participants](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/participants.md): One Observatory for a coach or clinic: `healthsave participants add`, one key per participant, the Viewing switcher, revoke and re-pair.
 - [Troubleshooting](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/troubleshooting.md): First-run failures: Docker not running or short on memory, failing services, wrong phone URL.
 - [Upgrading](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/UPGRADING.md): Updating an existing install safely, with per-release version notes.
 

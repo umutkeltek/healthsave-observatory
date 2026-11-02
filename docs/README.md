@@ -55,6 +55,7 @@ New here? Start with [Zero To Ready](zero-to-ready.md), then [Connect HealthSave
 - [Backup & migrations](operations/backup-and-migrations.md) - back up TimescaleDB and apply migrations safely.
 - [Metrics](operations/metrics.md) - scrape Prometheus metrics for ingest throughput, latency, and briefing health.
 - [Multi-user / household](operations/multi-user.md) - use `owner_id` to separate multiple residents on one backend.
+- [Participants](operations/participants.md) - one Observatory for a coach or clinic: one key per participant, a Viewing switcher, revoke and re-pair.
 - [Troubleshooting](operations/troubleshooting.md) - diagnose first-run sync, service, AI, network, and dashboard failures.
 
 ## Development
