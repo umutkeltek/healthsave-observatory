@@ -356,30 +356,61 @@ async def hrv_summary(session, start: datetime, end: datetime) -> dict[str, Any]
 # ──────────────────────────────────────────────────────────────────
 
 
-async def fetch_hr_observations(
-    session, start: datetime, end: datetime
-) -> list[tuple[datetime, float]]:
-    """Return ``(bucket, avg_bpm)`` pairs from ``hr_hourly`` with a raw fallback.
+async def _heart_rate_is_single_owner(session, owner_id: UUID) -> bool:
+    """True when every ``heart_rate`` row belongs to ``owner_id``.
 
-    Falls back to bucketed raw ``heart_rate`` rows when ``hr_hourly``
-    is empty (mirrors the aggregator's fallback so the detector stays
-    usable on fresh installs).
+    ``hr_hourly`` groups by ``(bucket, device_id)`` only and ``devices`` is
+    global, so once a second person (a participant key, or an
+    ``ALLOW_MULTI_USER`` household) has heart-rate rows the aggregate mixes
+    them. Readers use it only while this holds; otherwise they bucket the raw
+    table filtered by owner. Two index range probes on migration 025's
+    ``(owner_id, time DESC)`` index — no scan of a single-owner table.
     """
     result = await session.execute(
         text(
             """
-            SELECT bucket, avg_bpm::float AS value
-            FROM hr_hourly
-            WHERE bucket >= :start AND bucket < :end
-              AND avg_bpm IS NOT NULL
-            ORDER BY bucket ASC
+            SELECT NOT (
+                EXISTS (SELECT 1 FROM heart_rate WHERE owner_id < CAST(:owner_id AS UUID))
+                OR EXISTS (SELECT 1 FROM heart_rate WHERE owner_id > CAST(:owner_id AS UUID))
+            ) AS single_owner
             """
         ),
-        {"start": start, "end": end},
+        {"owner_id": str(owner_id)},
     )
-    rows = _fetchall(result)
-    if rows:
-        return [(row.bucket, float(row.value)) for row in rows if row.value is not None]
+    row = result.fetchone()
+    return bool(row.single_owner) if row is not None else True
+
+
+async def fetch_hr_observations(
+    session,
+    start: datetime,
+    end: datetime,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+) -> list[tuple[datetime, float]]:
+    """Return ``(bucket, avg_bpm)`` pairs for one owner.
+
+    Reads ``hr_hourly`` while it holds only this owner's rows, with a raw
+    fallback when it is empty (keeps the detector usable on fresh installs).
+    With more than one owner the hourly aggregate would mix people, so the
+    owner-filtered raw buckets are the only source.
+    """
+    if await _heart_rate_is_single_owner(session, owner_id):
+        result = await session.execute(
+            text(
+                """
+                SELECT bucket, avg_bpm::float AS value
+                FROM hr_hourly
+                WHERE bucket >= :start AND bucket < :end
+                  AND avg_bpm IS NOT NULL
+                ORDER BY bucket ASC
+                """
+            ),
+            {"start": start, "end": end},
+        )
+        rows = _fetchall(result)
+        if rows:
+            return [(row.bucket, float(row.value)) for row in rows if row.value is not None]
 
     result = await session.execute(
         text(
@@ -389,20 +420,25 @@ async def fetch_hr_observations(
             FROM heart_rate
             WHERE time >= :start AND time < :end
               AND status = 'active'
+              AND owner_id = CAST(:owner_id AS UUID)
             GROUP BY bucket
             ORDER BY bucket ASC
             """
         ),
-        {"start": start, "end": end},
+        {"start": start, "end": end, "owner_id": str(owner_id)},
     )
     rows = _fetchall(result)
     return [(row.bucket, float(row.value)) for row in rows if row.value is not None]
 
 
 async def fetch_hrv_observations(
-    session, start: datetime, end: datetime
+    session,
+    start: datetime,
+    end: datetime,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
 ) -> list[tuple[datetime, float]]:
-    """Return ``(time, value_ms)`` pairs from the raw ``hrv`` hypertable."""
+    """Return ``(time, value_ms)`` pairs from the raw ``hrv`` hypertable for one owner."""
     result = await session.execute(
         text(
             """
@@ -410,27 +446,35 @@ async def fetch_hrv_observations(
             FROM hrv
             WHERE time >= :start AND time < :end
               AND status = 'active'
+              AND owner_id = CAST(:owner_id AS UUID)
             ORDER BY time ASC
             """
         ),
-        {"start": start, "end": end},
+        {"start": start, "end": end, "owner_id": str(owner_id)},
     )
     rows = _fetchall(result)
     return [(row.time, float(row.value)) for row in rows if row.value is not None]
 
 
-async def fetch_workouts(session, start: datetime, end: datetime) -> list[dict[str, Any]]:
-    """Return ``[{start, end}, ...]`` for workouts overlapping the window."""
+async def fetch_workouts(
+    session,
+    start: datetime,
+    end: datetime,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+) -> list[dict[str, Any]]:
+    """Return ``[{start, end}, ...]`` for one owner's workouts overlapping the window."""
     result = await session.execute(
         text(
             """
             SELECT start_time, end_time
             FROM workouts
             WHERE start_time <= :end AND end_time >= :start
+              AND owner_id = CAST(:owner_id AS UUID)
             ORDER BY start_time ASC
             """
         ),
-        {"start": start, "end": end},
+        {"start": start, "end": end, "owner_id": str(owner_id)},
     )
     rows = _fetchall(result)
     return [
@@ -440,12 +484,26 @@ async def fetch_workouts(session, start: datetime, end: datetime) -> list[dict[s
     ]
 
 
-# ──────────────────────────────────────────────────────────────────
-#  Trend daily-value fetches  (was: analysis.statistical.trends)
-# ──────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────
+# Trend daily-value fetches (was: analysis.statistical.trends)
+# ──────────────────────────────────────────────────────────────────────
 
 
-async def fetch_heart_rate_daily_from_hourly(session, start: datetime, end: datetime) -> list[Any]:
+async def fetch_heart_rate_daily_from_hourly(
+    session,
+    start: datetime,
+    end: datetime,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+) -> list[Any]:
+    """Daily heart rate from ``hr_hourly`` — empty once it would mix owners.
+
+    The caller already falls back to :func:`fetch_heart_rate_daily_from_raw`
+    on an empty answer, so returning nothing is how a multi-owner install
+    reaches the owner-filtered path.
+    """
+    if not await _heart_rate_is_single_owner(session, owner_id):
+        return []
     result = await session.execute(
         text(
             """
@@ -464,7 +522,13 @@ async def fetch_heart_rate_daily_from_hourly(session, start: datetime, end: date
     return _fetchall(result)
 
 
-async def fetch_heart_rate_daily_from_raw(session, start: datetime, end: datetime) -> list[Any]:
+async def fetch_heart_rate_daily_from_raw(
+    session,
+    start: datetime,
+    end: datetime,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+) -> list[Any]:
     result = await session.execute(
         text(
             """
@@ -474,16 +538,23 @@ async def fetch_heart_rate_daily_from_raw(session, start: datetime, end: datetim
             FROM heart_rate
             WHERE time >= :start AND time < :end
               AND status = 'active'
+              AND owner_id = CAST(:owner_id AS UUID)
             GROUP BY day
             ORDER BY day ASC
             """
         ),
-        {"start": start, "end": end},
+        {"start": start, "end": end, "owner_id": str(owner_id)},
     )
     return _fetchall(result)
 
 
-async def fetch_hrv_daily(session, start: datetime, end: datetime) -> list[Any]:
+async def fetch_hrv_daily(
+    session,
+    start: datetime,
+    end: datetime,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+) -> list[Any]:
     result = await session.execute(
         text(
             """
@@ -493,11 +564,12 @@ async def fetch_hrv_daily(session, start: datetime, end: datetime) -> list[Any]:
             FROM hrv
             WHERE time >= :start AND time < :end
               AND status = 'active'
+              AND owner_id = CAST(:owner_id AS UUID)
             GROUP BY day
             ORDER BY day ASC
             """
         ),
-        {"start": start, "end": end},
+        {"start": start, "end": end, "owner_id": str(owner_id)},
     )
     return _fetchall(result)
 

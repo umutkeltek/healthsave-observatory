@@ -68,6 +68,7 @@ Key facts for assistants:
 - [Observatory Care](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/observatory-care.md): The optional licence: what stays free, encrypted off-site and scheduled backups, restore drills, update rollback, and an offline-checked licence file with no phone-home.
 - [Metrics](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/metrics.md): Prometheus counters at `/metrics`, scrape config, and how to protect the endpoint.
 - [Multi-user / household](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/multi-user.md): Separating residents on one install with `X-User-Id` and `owner_id`.
+- [Participants](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/participants.md): One Observatory for a coach or clinic: `healthsave participants add`, one key per participant, the Viewing switcher, revoke and re-pair.
 - [Troubleshooting](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/operations/troubleshooting.md): First-run failures: Docker not running or short on memory, failing services, wrong phone URL.
 - [Upgrading](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/UPGRADING.md): Updating an existing install safely, with per-release version notes.
 

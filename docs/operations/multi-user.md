@@ -28,6 +28,10 @@ Nothing to configure. When the `X-User-Id` header is absent, ingest writes under
 
 The unique indexes on every metric table include `owner_id`, so two residents can have a sample at the same `(time, device_id)` without collisions, and re-syncing from one client stays idempotent. If you skip step 2, existing single-user installs keep working unchanged.
 
+## Coaches and clinics
+
+For people who each sync from their own phone, use [participant keys](participants.md) instead of `X-User-Id`: the key itself decides whose data a phone writes, so nothing depends on a trusted network or a header the client sets.
+
 ## See also
 
 - [Deployment](deployment.md) — pointing each client at the server

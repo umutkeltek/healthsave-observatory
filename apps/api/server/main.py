@@ -55,6 +55,7 @@ from .api import (
     v2_meta,
     v2_metrics,
     v2_moments,
+    v2_owners,
     v2_privacy,
     v2_readiness,
     v2_receipts,
@@ -217,6 +218,7 @@ app.include_router(v2_labs.router)
 app.include_router(v2_meta.router)
 app.include_router(v2_metrics.router)
 app.include_router(v2_moments.router)
+app.include_router(v2_owners.router)
 app.include_router(v2_privacy.router)
 app.include_router(v2_readiness.router)
 app.include_router(v2_receipts.router)

@@ -910,6 +910,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/owners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Owners
+         * @description The default owner first (``label`` null), then one entry per participant.
+         *
+         *     A participant whose keys are all revoked stays listed with
+         *     ``active: false``: revoking a key stops new data, it does not delete the
+         *     person's history.
+         */
+        get: operations["owners_api_v2_owners_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/privacy": {
         parameters: {
             query?: never;
@@ -2004,6 +2028,30 @@ export interface components {
             /** Prose */
             prose: string;
         };
+        /** OwnerView */
+        OwnerView: {
+            /** Active */
+            active: boolean;
+            /** Created At */
+            created_at: string | null;
+            /** Id */
+            id: string;
+            /** Is Default */
+            is_default: boolean;
+            /** Label */
+            label: string | null;
+            /** Last Ingest At */
+            last_ingest_at: string | null;
+            /** Scopes */
+            scopes: string[];
+        };
+        /** OwnersResponse */
+        OwnersResponse: {
+            /** Count */
+            count: number;
+            /** Owners */
+            owners: components["schemas"]["OwnerView"][];
+        };
         /** PhaseView */
         PhaseView: {
             /**
@@ -3010,6 +3058,8 @@ export interface operations {
             query?: {
                 limit?: number | null;
                 offset?: number;
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
             };
             header?: {
                 "x-api-key"?: string;
@@ -3246,6 +3296,8 @@ export interface operations {
                 to?: string | null;
                 days?: number | null;
                 limit?: number | null;
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
             };
             header?: {
                 "x-api-key"?: string;
@@ -3277,7 +3329,10 @@ export interface operations {
     };
     list_export_metrics_api_v2_export_metrics_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
+            };
             header?: {
                 "x-api-key"?: string;
             };
@@ -3753,6 +3808,8 @@ export interface operations {
             query?: {
                 range?: string;
                 stream_id?: string | null;
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
             };
             header?: {
                 "x-api-key"?: string;
@@ -3922,6 +3979,37 @@ export interface operations {
             };
         };
     };
+    owners_api_v2_owners_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     privacy_api_v2_privacy_get: {
         parameters: {
             query?: never;
@@ -3955,7 +4043,10 @@ export interface operations {
     };
     readiness_api_v2_readiness_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
+            };
             header?: {
                 "x-api-key"?: string;
             };
@@ -4023,6 +4114,8 @@ export interface operations {
                 ids: string;
                 range?: string;
                 stream_id?: string | null;
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
             };
             header?: {
                 "x-api-key"?: string;
@@ -4143,6 +4236,8 @@ export interface operations {
             query?: {
                 limit?: number | null;
                 offset?: number;
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
             };
             header?: {
                 "x-api-key"?: string;
@@ -4197,6 +4292,8 @@ export interface operations {
             query?: {
                 limit?: number | null;
                 offset?: number;
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
             };
             header?: {
                 "x-api-key"?: string;
@@ -4228,7 +4325,10 @@ export interface operations {
     };
     get_stream_api_v2_streams__stream_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
+            };
             header?: {
                 "x-api-key"?: string;
             };

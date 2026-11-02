@@ -313,6 +313,30 @@ a {
   margin-top: 4px;
 }
 
+/* Participant switcher (coach / clinic Observatory, migration 029). Shown only
+   when the server holds more than one person; reuses .filter-label and
+   .filter-select for the control itself. */
+.participant-switcher {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 8px 16px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.participant-select {
+  width: 100%;
+  max-width: none;
+}
+
+.participant-note {
+  margin: 0;
+  font-size: var(--fs-2xs);
+  line-height: 1.4;
+  color: var(--muted);
+}
+
 .app-main {
   flex: 1 1 auto;
   min-width: 0;

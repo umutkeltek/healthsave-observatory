@@ -2181,6 +2181,96 @@
         "title": "NextQuestion",
         "type": "object"
       },
+      "OwnerView": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "last_ingest_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Ingest At"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "is_default",
+          "active",
+          "scopes",
+          "created_at",
+          "last_ingest_at"
+        ],
+        "title": "OwnerView",
+        "type": "object"
+      },
+      "OwnersResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "owners": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerView"
+            },
+            "title": "Owners",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "owners"
+        ],
+        "title": "OwnersResponse",
+        "type": "object"
+      },
       "PhaseView": {
         "additionalProperties": false,
         "properties": {
@@ -4398,6 +4488,25 @@
             }
           },
           {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
+            }
+          },
+          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -4824,6 +4933,25 @@
             }
           },
           {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
+            }
+          },
+          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -4861,6 +4989,25 @@
       "get": {
         "operationId": "list_export_metrics_api_v2_export_metrics_get",
         "parameters": [
+          {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
+            }
+          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -5632,6 +5779,25 @@
             }
           },
           {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
+            }
+          },
+          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -5875,6 +6041,47 @@
         "summary": "Update Moment"
       }
     },
+    "/api/v2/owners": {
+      "get": {
+        "description": "The default owner first (``label`` null), then one entry per participant.\n\nA participant whose keys are all revoked stays listed with\n``active: false``: revoking a key stops new data, it does not delete the\nperson's history.",
+        "operationId": "owners_api_v2_owners_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Owners"
+      }
+    },
     "/api/v2/privacy": {
       "get": {
         "description": "The host's egress posture: provider, local-vs-cloud, and what may leave.\n\n``raw_observations_leave_host`` is always ``false`` \u2014 the privacy promise is\nan invariant, enforced unconditionally by the policy regardless of opt-in.",
@@ -5922,6 +6129,25 @@
         "description": "Per-metric coverage + analyzability, plus source attribution and freshness.",
         "operationId": "readiness_api_v2_readiness_get",
         "parameters": [
+          {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
+            }
+          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -6052,6 +6278,25 @@
                 }
               ],
               "title": "Stream Id"
+            }
+          },
+          {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
             }
           },
           {
@@ -6233,6 +6478,25 @@
             }
           },
           {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
+            }
+          },
+          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -6321,6 +6585,25 @@
             }
           },
           {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
+            }
+          },
+          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -6368,6 +6651,25 @@
               "format": "uuid",
               "title": "Stream Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
             }
           },
           {

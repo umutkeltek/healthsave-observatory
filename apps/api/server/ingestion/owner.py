@@ -9,6 +9,7 @@ keeps backward compatibility with v1.0 deployments untouched.
 from __future__ import annotations
 
 import os
+from typing import Any
 from uuid import UUID
 
 # Sentinel used when no X-User-Id header is supplied. Matches the
@@ -45,3 +46,40 @@ def resolve_owner_id(raw: str | None) -> UUID:
     if not cleaned:
         return DEFAULT_OWNER_ID
     return UUID(cleaned)
+
+
+# Where the auth dependency (``server.api.deps.verify_api_key``) leaves the
+# resolved caller on ``request.state``. See ``server.api.access.Principal``.
+PRINCIPAL_STATE_KEY: str = "api_principal"
+
+
+def participant_owner_id(request: Any) -> UUID | None:
+    """The owner a participant key is bound to, else None.
+
+    A participant key (migration 029) is the authenticated seam SECURITY-002
+    asked for: its rows belong to the key's owner and X-User-Id is ignored.
+    None for every other caller -- the legacy ``API_KEY``, open mode, an
+    admin key, or a test double without ``request.state`` -- which then
+    resolves exactly as before via :func:`resolve_owner_id`.
+    """
+    state = getattr(request, "state", None)
+    principal = getattr(state, PRINCIPAL_STATE_KEY, None) if state is not None else None
+    if getattr(principal, "bound", False) is True:
+        owner_id = getattr(principal, "owner_id", None)
+        if isinstance(owner_id, UUID):
+            return owner_id
+    return None
+
+
+def resolve_request_owner_id(request: Any) -> UUID:
+    """Owner for a request on the phone surface (ingest, status, coverage, sync runs).
+
+    :func:`participant_owner_id` when the caller is a participant key, else
+    :func:`resolve_owner_id` on the X-User-Id header (including its
+    ``ValueError`` on a malformed header under ``ALLOW_MULTI_USER``).
+    """
+    bound = participant_owner_id(request)
+    if bound is not None:
+        return bound
+    headers = getattr(request, "headers", None) or {}
+    return resolve_owner_id(headers.get(OWNER_HEADER))

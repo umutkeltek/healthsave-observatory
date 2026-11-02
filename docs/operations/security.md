@@ -34,6 +34,13 @@ The PHI surface (`/api/apple/*` and the v2 read API) is gated by an API key:
   every start. `healthsave doctor` flags it too. Leave authentication on for any
   deployment that holds real data.
 
+- **Participant keys.** `healthsave participants add NAME` mints one key per
+  participant for a coach or clinic Observatory ([Participants](participants.md)).
+  Only its SHA-256 is stored. A participant key reaches only the phone routes
+  (or, with `--read`, that person's own reads), always as its own person, so a
+  phone can neither read the dashboard nor write into someone else's data.
+  `healthsave participants revoke NAME` answers that key `401` from then on.
+
 The **Observatory web dashboard** asks for a password when one is set. Set,
 change or turn it off in **Settings -> Web sign-in** (changing it or turning it
 off asks for the current password). That choice is stored as a salted scrypt

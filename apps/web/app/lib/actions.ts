@@ -18,6 +18,7 @@ import {
   createMoment,
   type DetectCandidate,
   fetchDetectLocal,
+  fetchOwners,
   postConsent,
   postInsightsTrigger,
   postTestConnection,
@@ -50,6 +51,7 @@ import {
   type TemplateId,
   TEMPLATES,
 } from "./prefs";
+import { PARTICIPANT_COOKIE, parseOwnerCookie } from "./participants";
 import { assertWebSession } from "./webSession.server";
 
 export type ActionResult = { ok: boolean; error?: string };
@@ -223,6 +225,29 @@ export async function setDensityAction(mode: Density): Promise<ActionResult> {
     return { ok: true };
   } catch (error) {
     return failure(error, "Could not switch the view mode.");
+  }
+}
+
+// Participant view (migration 029). The choice is a session cookie, so a closed
+// browser comes back to the primary person. Only an owner the server actually
+// lists can be chosen; anything else (or the primary person) clears it.
+export async function setParticipantAction(ownerId: string): Promise<ActionResult> {
+  await assertWebSession();
+  try {
+    const jar = await cookies();
+    const owner = parseOwnerCookie(ownerId);
+    if (owner === null) {
+      jar.delete(PARTICIPANT_COOKIE);
+      return { ok: true };
+    }
+    const { owners } = await fetchOwners();
+    if (!owners.some((entry) => entry.id.toLowerCase() === owner && !entry.is_default)) {
+      return { ok: false, error: "That person is not on this Observatory." };
+    }
+    jar.set(PARTICIPANT_COOKIE, owner, { path: "/", sameSite: "lax", httpOnly: true });
+    return { ok: true };
+  } catch (error) {
+    return failure(error, "Could not switch the person you are viewing.");
   }
 }
 

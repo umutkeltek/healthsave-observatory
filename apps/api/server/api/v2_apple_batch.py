@@ -93,7 +93,7 @@ from storage.timescale.measurements import (
 # real header set and is the gate for it (audit 2026-09-05).
 from storage.timescale.sync_receipts import complete_receipt_idempotency
 
-from ..ingestion.owner import OWNER_HEADER, resolve_owner_id
+from ..ingestion.owner import OWNER_HEADER, participant_owner_id, resolve_owner_id
 from .deps import get_session, verify_api_key
 from .ingest import (
     INGEST_BATCHES,
@@ -118,7 +118,7 @@ from .ingest import (
     _trusted_payload_hash,
     _write_canonical_observations,
 )
-from .swr import v2_read_cache
+from .swr import owner_cache_key, v2_read_cache
 
 _log = logging.getLogger("healthsave.api.v2_apple_batch")
 
@@ -559,7 +559,9 @@ async def v2_apple_batch(
         )
 
     try:
-        owner_id = resolve_owner_id(request.headers.get(OWNER_HEADER))
+        owner_id = participant_owner_id(request) or resolve_owner_id(
+            request.headers.get(OWNER_HEADER)
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"invalid {OWNER_HEADER}: {exc}") from exc
 
@@ -772,7 +774,7 @@ async def v2_apple_batch(
             await audit.mark_processed(db_session, raw_log_id)
         await db_session.commit()
         for key in ("canonical_coverage", "canonical_sources"):
-            v2_read_cache.drop(key)
+            v2_read_cache.drop(owner_cache_key(key, owner_id))
     except Exception as exc:
         try:
             RAW_LOG_ORPHANED.labels(metric=metric).inc()

@@ -193,11 +193,13 @@ function NavIcon({ name }: { name: string }) {
 
 export function Sidebar({
   status,
+  participantSwitcher,
   density,
   onDensityChange,
   onNavigate,
 }: {
   status: ReactNode;
+  participantSwitcher?: ReactNode;
   density: Density;
   onDensityChange: (mode: Density) => void;
   onNavigate?: () => void;
@@ -230,6 +232,7 @@ export function Sidebar({
         <span className="brand-sub">Observatory</span>
       </div>
 
+      {participantSwitcher}
       <nav className="nav">
         {groups.map((g) => (
           <div className="nav-group" key={g.id}>

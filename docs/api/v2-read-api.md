@@ -12,6 +12,20 @@ Most v2 endpoints are **keyed** — send the `X-API-Key` header when `API_KEY` i
 
 Check `GET /api/v2/meta` first — it reports the running backend's version axes (`api_contract`, `ontology`, `normalizer`, `fusion_policy`) so a client can detect contract drift before relying on a shape.
 
+## People (participant keys)
+
+An Observatory can hold several people: the primary person plus one owner per participant key
+(`healthsave participants add`, see [Participants](../operations/participants.md)).
+
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `GET /api/v2/owners` | admin key | The default owner first (`label: null`), then each participant: `label`, `active`, live `scopes`, `last_ingest_at` |
+
+The series, export, identity (`/sources`, `/devices`, `/streams`, `/streams/{stream_id}`) and
+`/readiness` reads take an optional `owner=<uuid>`. The admin key may name any owner and defaults to the
+default owner; a participant `read` key may name only its own (`403` otherwise); a malformed value is
+`422`. Every other route answers for the primary person and is admin-only (`403` for participant keys).
+
 ## Metrics and time series
 
 | Endpoint | Auth | Purpose |

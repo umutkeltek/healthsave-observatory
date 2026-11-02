@@ -41,7 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from storage.defaults import readiness_repository
 from storage.ports import ReadinessRepository
 
-from ..ingestion.owner import OWNER_HEADER, resolve_owner_id
+from ..ingestion.owner import OWNER_HEADER, participant_owner_id, resolve_owner_id
 from .deps import get_session, verify_api_key
 from .metrics import STATUS_QUERY_FAILURES
 
@@ -109,7 +109,7 @@ def wire_timestamp(value: Any) -> str | None:
 @router.get("/api/apple/coverage", dependencies=[Depends(verify_api_key)])
 async def apple_coverage(request: Request, session: AsyncSession = Depends(get_session)):
     """Per-metric latest sample timestamp, for iOS backfill-recovery reconciliation."""
-    owner_id = resolve_owner_id(request.headers.get(OWNER_HEADER))
+    owner_id = participant_owner_id(request) or resolve_owner_id(request.headers.get(OWNER_HEADER))
     params = {"owner_id": str(owner_id)}
     coverage: dict[str, Any] = {}
     latest_raw: dict[str, Any] = {}

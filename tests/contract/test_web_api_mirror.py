@@ -70,6 +70,7 @@ TYPE_TO_MODULES: dict[str, list[str]] = {
     # The cross-match card's nested FindingCard fields live in the contract
     # models (contracts.findings), like FindingsList.
     "LabMarkerDetail": ["server.api.v2_labs", "contracts.findings"],
+    "OwnersResponse": ["server.api.v2_owners"],
 }
 
 
