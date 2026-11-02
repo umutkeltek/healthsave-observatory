@@ -29,6 +29,7 @@ Examples:
   healthsave setup advanced
   healthsave doctor
   healthsave pair
+  healthsave participants add "Alice Smith"
   healthsave backup
   healthsave --json doctor
   healthsave layers
@@ -52,6 +53,7 @@ Commands:
   layers                    Explain API, DB, worker, web, Grafana, AI layers
   doctor                    Check platform, config, services, and URLs
   pair [--new-key]          Show the server URL, API key and pairing QR for the app
+  participants add|list|revoke  One key per participant (coach or clinic, one Observatory)
   update [--to TAG] [--yes] Move to the newest release (takes a backup first)
   web-password reset        Forget the Settings password; WEB_PASSWORD in .env applies again
   backup [--out DIR]        Save the database, .env and config.yaml to one file
@@ -192,6 +194,30 @@ Options:
   -h, --help      Show this help
 
 The key and password are printed in full. Treat this output like a password.
+EOF
+}
+
+print_participants_usage() {
+    cat <<'EOF'
+HealthSave participants
+
+One Observatory for a coach or clinic. Each participant gets their own key,
+and the phone that holds it writes that person's data. The HealthSave app
+needs nothing new: the participant scans the QR exactly as with 'pair'.
+
+Usage:
+  healthsave participants add NAME [--url URL] [--read]
+  healthsave participants list
+  healthsave participants revoke NAME
+
+Options:
+  --url URL   Address the phone should use (default: http://<this machine's LAN IP>:8000)
+  --read      Mint a read-only key for the participant's own tools instead of a phone key
+  -h, --help  Show this help
+
+The key is printed once and only its SHA-256 is stored. Treat the output like
+a password. 'revoke' stops new data from that key; the person's history stays.
+Adding a revoked NAME again gives a new key for the same person.
 EOF
 }
 
@@ -1352,6 +1378,140 @@ cmd_pair() {
     print_pairing_block "$server_url" "$(read_env_value API_KEY)"
 }
 
+participants_exec() {
+    # participants_exec <args...> - the key is minted, hashed and stored inside
+    # the API container, so the plaintext never sits on a command line.
+    docker compose exec -T api python -m scripts.participants "$@"
+}
+
+require_api_running() {
+    require_docker
+    if ! running_services | grep -qx api; then
+        log_error "The API is not running. Start the stack with 'healthsave up' first."
+        exit 1
+    fi
+}
+
+cmd_participants_add() {
+    local label=""
+    local server_url=""
+    local scope="ingest"
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help|help)
+                print_participants_usage
+                return 0
+                ;;
+            --url)
+                shift
+                if [ "$#" -eq 0 ] || [ -z "$1" ]; then
+                    log_error "--url needs a value."
+                    exit 2
+                fi
+                server_url="$1"
+                ;;
+            --read) scope="read" ;;
+            -*)
+                log_error "Unknown participants add argument: $1"
+                print_participants_usage
+                exit 2
+                ;;
+            *)
+                if [ -n "$label" ]; then
+                    log_error "Give one NAME (quote a name with spaces)."
+                    exit 2
+                fi
+                label="$1"
+                ;;
+        esac
+        shift
+    done
+    if [ -z "$label" ]; then
+        log_error "participants add needs a NAME."
+        print_participants_usage
+        exit 2
+    fi
+    if [ ! -f "$ENV_FILE" ]; then
+        log_error "$ENV_FILE is missing - run 'healthsave setup basic' first."
+        exit 1
+    fi
+    require_api_running
+
+    local output=""
+    local rc=0
+    output="$(participants_exec add "$label" --scope "$scope")" || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        exit "$rc"
+    fi
+    local key=""
+    local owner_id=""
+    local stored_label="$label"
+    local field value
+    while IFS='=' read -r field value; do
+        case "$field" in
+            key) key="$value" ;;
+            owner_id) owner_id="$value" ;;
+            label) stored_label="$value" ;;
+        esac
+    done <<<"$output"
+    if [ -z "$key" ]; then
+        log_error "The API container did not return a key."
+        exit 1
+    fi
+    if [ -z "$server_url" ]; then
+        server_url="$(default_server_url)"
+    fi
+
+    log_ok "Added ${stored_label} (owner ${owner_id})."
+    echo
+    if [ "$scope" = "ingest" ]; then
+        echo "  For ${stored_label}'s phone. Shown once; only its hash is stored."
+        print_pairing_block "$server_url" "$key"
+    else
+        echo "  Read-only key for ${stored_label}'s own tools. Shown once; only its hash is stored."
+        echo "    Server URL:  ${server_url}"
+        echo "    API key:     ${key}"
+    fi
+}
+
+cmd_participants() {
+    local sub="${1:-}"
+    if [ "$#" -gt 0 ]; then
+        shift
+    fi
+    case "$sub" in
+        add)
+            cmd_participants_add "$@"
+            ;;
+        list|ls)
+            require_api_running
+            participants_exec list
+            ;;
+        revoke)
+            if [ "$#" -ne 1 ] || [ -z "$1" ]; then
+                log_error "participants revoke needs one NAME (quote a name with spaces)."
+                exit 2
+            fi
+            require_api_running
+            local output=""
+            local rc=0
+            output="$(participants_exec revoke "$1")" || rc=$?
+            if [ "$rc" -ne 0 ]; then
+                exit "$rc"
+            fi
+            log_ok "Revoked ${output#revoked=} key(s) for $1. That phone stops syncing; the data already sent stays."
+            ;;
+        ""|-h|--help|help)
+            print_participants_usage
+            ;;
+        *)
+            log_error "Unknown participants command: $sub"
+            print_participants_usage
+            exit 2
+            ;;
+    esac
+}
+
 newest_release_tag() {
     git -C "$CLI_DIR" tag --list 'v[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1
 }
@@ -2300,6 +2460,13 @@ case "$cmd" in
         # The checkout just replaced this file on disk; exit before bash reads
         # any more of it.
         exit 0
+        ;;
+    participants)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for participants."
+            exit 2
+        fi
+        cmd_participants "$@"
         ;;
     web-password)
         if [ "$json_mode" = "1" ]; then
