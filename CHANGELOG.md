@@ -90,6 +90,10 @@ docker compose up -d
   (wind-down from sleep length, a recovery-aware morning in plain words, a
   low-data warning) and a plain-cards Body dashboard, built on the bridge's own
   `sensor.healthsave_observatory_*` entities.
+- The Home Assistant / MQTT bridge publishes one person only. It reads the
+  default owner (the person behind the `.env` API key) unless
+  `HEALTHSAVE_BRIDGE_OWNER` names another participant's id; a second person's
+  rows never reach a published payload.
 - Observatory Care, an optional licence for people who want their install
   looked after ([docs](docs/operations/observatory-care.md)):
   `healthsave backup --encrypt`, `--offsite REMOTE` (through rclone, to storage
@@ -170,10 +174,10 @@ docker compose up -d
   deployed commit, with the same ports and image names as before.
 
 ### Known limits
-- The Home Assistant / MQTT bridge and the bundled Grafana dashboards still read
-  across every person on an Observatory that holds participants; leave the
-  bridge off on such an install until it is scoped. Findings and the weekly
-  Body Brief are produced for the primary person only.
+- The bundled Grafana dashboards still read across every person on an
+  Observatory that holds participants; filter them per panel or keep Grafana
+  off such an install. Findings and the weekly Body Brief are produced for the
+  primary person only.
 
 ## [1.1.0] - 2026-10-04
 
