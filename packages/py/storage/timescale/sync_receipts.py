@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from contracts._base import DEFAULT_OWNER_ID
 from normalization.mappers import DAILY_ACTIVITY_QUANTITY_FIELDS
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -689,6 +690,7 @@ async def record_sync_run_summary(
                 client_started_at = EXCLUDED.client_started_at,
                 client_completed_at = EXCLUDED.client_completed_at,
                 updated_at = NOW()
+            WHERE healthsave_sync_run_summaries.owner_id = EXCLUDED.owner_id
             RETURNING received_at, updated_at
             """
         ),
@@ -714,10 +716,31 @@ async def record_sync_run_summary(
     return {
         "status": "ok",
         "sync_run_id": sync_run_id,
-        "recorded": True,
+        # False only when the run id already belongs to another owner: a
+        # participant key never overwrites someone else's run summary.
+        "recorded": row is not None,
         "received_at": stamped.get("received_at"),
         "updated_at": stamped.get("updated_at"),
     }
+
+
+def _owner_filter(owner_id: UUID | None) -> tuple[str, dict[str, str]]:
+    """``AND`` clause scoping receipt/summary reads to one owner.
+
+    ``None`` keeps the pre-029 unscoped SQL byte for byte. Receipts written
+    before migration 024 carry a NULL owner; they were all the default
+    owner's, so the default owner's scope includes them and a single-owner
+    install answers exactly as before.
+    """
+
+    if owner_id is None:
+        return "", {}
+    if owner_id == DEFAULT_OWNER_ID:
+        return (
+            " AND (owner_id = CAST(:owner_id AS UUID) OR owner_id IS NULL)",
+            {"owner_id": str(owner_id)},
+        )
+    return " AND owner_id = CAST(:owner_id AS UUID)", {"owner_id": str(owner_id)}
 
 
 def _format_run_summary(row: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -741,16 +764,25 @@ def _format_run_summary(row: dict[str, Any] | None) -> dict[str, Any] | None:
     }
 
 
-async def _latest_run_summary(session: AsyncSession) -> dict[str, Any] | None:
-    result = await session.execute(text(_RUN_SUMMARY_SELECT + " ORDER BY received_at DESC LIMIT 1"))
+async def _latest_run_summary(
+    session: AsyncSession, owner_id: UUID | None = None
+) -> dict[str, Any] | None:
+    clause, params = _owner_filter(owner_id)
+    sql = _RUN_SUMMARY_SELECT
+    if clause:
+        sql += " WHERE TRUE" + clause
+    result = await session.execute(text(sql + " ORDER BY received_at DESC LIMIT 1"), params)
     row = result.mappings().first()
     return dict(row) if row is not None else None
 
 
-async def _run_summary(session: AsyncSession, sync_run_id: str) -> dict[str, Any] | None:
+async def _run_summary(
+    session: AsyncSession, sync_run_id: str, owner_id: UUID | None = None
+) -> dict[str, Any] | None:
+    clause, params = _owner_filter(owner_id)
     result = await session.execute(
-        text(_RUN_SUMMARY_SELECT + " WHERE sync_run_id = :sync_run_id"),
-        {"sync_run_id": sync_run_id},
+        text(_RUN_SUMMARY_SELECT + " WHERE sync_run_id = :sync_run_id" + clause),
+        {"sync_run_id": sync_run_id, **params},
     )
     row = result.mappings().first()
     return dict(row) if row is not None else None
@@ -773,7 +805,7 @@ def _newer(left: Any, right: Any) -> bool:
     return _compare_time_values(left, right) > 0
 
 
-async def latest_sync_run(session: AsyncSession) -> dict[str, Any]:
+async def latest_sync_run(session: AsyncSession, owner_id: UUID | None = None) -> dict[str, Any]:
     """Summarize the most recently observed HealthSave sync run.
 
     "Observed" means EITHER the server received batches for it (receipts) OR the
@@ -788,24 +820,26 @@ async def latest_sync_run(session: AsyncSession) -> dict[str, Any]:
     alias, dict literal or item assignment) — ``test_ios_v2_surface.py`` pins
     them here. Keep the SQL and the zero-delivery literal inline.
     """
+    owner_clause, owner_params = _owner_filter(owner_id)
 
     result = await session.execute(
         text(
-            """
+            f"""
             SELECT sync_run_id
             FROM healthsave_sync_receipts
-            WHERE sync_run_id IS NOT NULL
+            WHERE sync_run_id IS NOT NULL{owner_clause}
             ORDER BY received_at DESC, id DESC
             LIMIT 1
             """
-        )
+        ),
+        owner_params,
     )
     row = result.mappings().first()
     receipt_run: dict[str, Any] | None = None
     if row is not None:
         summary_result = await session.execute(
             text(
-                """
+                f"""
                 SELECT
                     sync_run_id,
                     min(received_at) AS started_at,
@@ -829,16 +863,16 @@ async def latest_sync_run(session: AsyncSession) -> dict[str, Any]:
                     max(sample_max_at) AS sample_max_at,
                     array_agg(DISTINCT metric ORDER BY metric) AS metrics
                 FROM healthsave_sync_receipts
-                WHERE sync_run_id = :sync_run_id
+                WHERE sync_run_id = :sync_run_id{owner_clause}
                 GROUP BY sync_run_id
                 """
             ),
-            {"sync_run_id": row["sync_run_id"]},
+            {"sync_run_id": row["sync_run_id"], **owner_params},
         )
         summary_row = summary_result.mappings().first()
         receipt_run = dict(summary_row) if summary_row is not None else None
 
-    latest_summary = await _latest_run_summary(session)
+    latest_summary = await _latest_run_summary(session, owner_id)
 
     if receipt_run is None and latest_summary is None:
         return {"status": "empty", "message": "No HealthSave sync receipts recorded yet."}
@@ -861,7 +895,7 @@ async def latest_sync_run(session: AsyncSession) -> dict[str, Any]:
         if same_run:
             run_summary = latest_summary
         else:
-            run_summary = await _run_summary(session, receipt_run["sync_run_id"])
+            run_summary = await _run_summary(session, receipt_run["sync_run_id"], owner_id)
         summary["evidence"] = _evidence_label(True, run_summary is not None)
     else:
         assert latest_summary is not None
@@ -899,16 +933,19 @@ async def latest_sync_run(session: AsyncSession) -> dict[str, Any]:
     return summary
 
 
-async def sync_run(session: AsyncSession, sync_run_id: str) -> dict[str, Any]:
+async def sync_run(
+    session: AsyncSession, sync_run_id: str, owner_id: UUID | None = None
+) -> dict[str, Any]:
     """Return a receipt-level summary for one HealthSave sync run.
 
     This is a delivery receipt summary: it proves Data Hub saw and accepted
     batches for the run. It does not claim manifest-level sample verification.
     """
+    owner_clause, owner_params = _owner_filter(owner_id)
 
     result = await session.execute(
         text(
-            """
+            f"""
             SELECT
                 metric,
                 min(received_at) AS started_at,
@@ -932,15 +969,15 @@ async def sync_run(session: AsyncSession, sync_run_id: str) -> dict[str, Any]:
                 max(sample_max_at) AS sample_max_at,
                 max(sample_max_at) AS latest_sample_at
             FROM healthsave_sync_receipts
-            WHERE sync_run_id = :sync_run_id
+            WHERE sync_run_id = :sync_run_id{owner_clause}
             GROUP BY metric
             ORDER BY metric
             """
         ),
-        {"sync_run_id": sync_run_id},
+        {"sync_run_id": sync_run_id, **owner_params},
     )
     rows = [dict(row) for row in result.mappings().all()]
-    run_summary = await _run_summary(session, sync_run_id)
+    run_summary = await _run_summary(session, sync_run_id, owner_id)
     if not rows:
         if run_summary is None:
             return {
@@ -1213,11 +1250,15 @@ async def sync_anomalies(session: AsyncSession, lookback_minutes: int = 15) -> d
 class TimescaleSyncReceiptRepository:
     """Timescale-backed :class:`storage.ports.SyncReceiptRepository`."""
 
-    async def latest_sync_run(self, session: AsyncSession) -> dict[str, Any]:
-        return await latest_sync_run(session)
+    async def latest_sync_run(
+        self, session: AsyncSession, owner_id: UUID | None = None
+    ) -> dict[str, Any]:
+        return await latest_sync_run(session, owner_id)
 
-    async def sync_run(self, session: AsyncSession, sync_run_id: str) -> dict[str, Any]:
-        return await sync_run(session, sync_run_id)
+    async def sync_run(
+        self, session: AsyncSession, sync_run_id: str, owner_id: UUID | None = None
+    ) -> dict[str, Any]:
+        return await sync_run(session, sync_run_id, owner_id)
 
     async def record_sync_run_summary(self, session: AsyncSession, **fields: Any) -> dict[str, Any]:
         return await record_sync_run_summary(session, **fields)

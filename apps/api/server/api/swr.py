@@ -40,6 +40,18 @@ log = logging.getLogger("healthsave.api.swr")
 DEFAULT_TTL_SECONDS = float(os.environ.get("V2_READ_CACHE_TTL_SECONDS", "60"))
 
 
+def owner_cache_key(key: str, owner_id: object) -> str:
+    """Per-owner variant of a cache key (participant keys, migration 029).
+
+    The default owner keeps the bare key, so existing keys and the ingest
+    drops that target them are unchanged.
+    """
+
+    from contracts._base import DEFAULT_OWNER_ID
+
+    return key if owner_id == DEFAULT_OWNER_ID else f"{key}:{owner_id}"
+
+
 @dataclass
 class _Entry:
     value: Any

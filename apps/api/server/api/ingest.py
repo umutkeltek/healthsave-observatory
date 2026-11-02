@@ -60,7 +60,7 @@ from .metrics import (
     RAW_LOG_ORPHANED,
     SYNC_RECEIPT_WRITE_FAILURES,
 )
-from .swr import v2_read_cache
+from .swr import owner_cache_key, v2_read_cache
 
 # v2 canonical write (Decision C). Stable source id for the Apple Health /
 # HealthSave source; production adapter selection lives behind storage.defaults.
@@ -413,7 +413,7 @@ async def apple_batch(
         # after every fresh deploy). Drop only the affected keys so unrelated
         # read-page SWR entries stay warm.
         for key in ("canonical_coverage", "canonical_sources"):
-            v2_read_cache.drop(key)
+            v2_read_cache.drop(owner_cache_key(key, owner_id))
     except Exception as exc:
         try:
             RAW_LOG_ORPHANED.labels(metric=metric).inc()

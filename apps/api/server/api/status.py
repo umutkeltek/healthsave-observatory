@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..ingestion.owner import OWNER_HEADER, resolve_owner_id
+from ..ingestion.owner import OWNER_HEADER, participant_owner_id, resolve_owner_id
 from .deps import get_session, verify_api_key
 from .metrics import STATUS_QUERY_FAILURES
 
@@ -41,7 +41,7 @@ async def apple_status(request: Request, session: AsyncSession = Depends(get_ses
     # another owner's data. The wire shape (and OpenAPI description) is unchanged,
     # and a single-user install (all rows under DEFAULT_OWNER_ID) returns exactly
     # the same numbers. `request: Request` is excluded from the OpenAPI schema.
-    owner_id = resolve_owner_id(request.headers.get(OWNER_HEADER))
+    owner_id = participant_owner_id(request) or resolve_owner_id(request.headers.get(OWNER_HEADER))
     queries = {
         "heart_rate": (
             "SELECT count(*), min(time), max(time) FROM heart_rate WHERE status = 'active'"

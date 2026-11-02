@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from storage.timescale import registry
 from storage.timescale.fusion import default_repository as fusion_repository
 
+from .access import ReadOwner
 from .deps import get_session, verify_api_key
 
 router = APIRouter(prefix="/api/v2", dependencies=[Depends(verify_api_key)])
@@ -109,10 +110,11 @@ async def list_sources(
     limit: _Limit = None,
     offset: _Offset = 0,
     session: AsyncSession = Depends(get_session),
+    owner_id: ReadOwner = DEFAULT_OWNER_ID,
 ) -> SourcesResponse:
-    rows = await registry.list_sources(session, DEFAULT_OWNER_ID, limit=limit, offset=offset)
+    rows = await registry.list_sources(session, owner_id, limit=limit, offset=offset)
     paged = limit is not None or offset > 0
-    total = await registry.count_sources(session, DEFAULT_OWNER_ID) if paged else len(rows)
+    total = await registry.count_sources(session, owner_id) if paged else len(rows)
     return SourcesResponse(count=len(rows), total=total, sources=rows)
 
 
@@ -121,10 +123,11 @@ async def list_devices(
     limit: _Limit = None,
     offset: _Offset = 0,
     session: AsyncSession = Depends(get_session),
+    owner_id: ReadOwner = DEFAULT_OWNER_ID,
 ) -> DevicesResponse:
-    rows = await registry.list_devices(session, DEFAULT_OWNER_ID, limit=limit, offset=offset)
+    rows = await registry.list_devices(session, owner_id, limit=limit, offset=offset)
     paged = limit is not None or offset > 0
-    total = await registry.count_devices(session, DEFAULT_OWNER_ID) if paged else len(rows)
+    total = await registry.count_devices(session, owner_id) if paged else len(rows)
     return DevicesResponse(count=len(rows), total=total, devices=rows)
 
 
@@ -133,16 +136,21 @@ async def list_streams(
     limit: _Limit = None,
     offset: _Offset = 0,
     session: AsyncSession = Depends(get_session),
+    owner_id: ReadOwner = DEFAULT_OWNER_ID,
 ) -> StreamsResponse:
-    rows = await registry.list_streams(session, DEFAULT_OWNER_ID, limit=limit, offset=offset)
+    rows = await registry.list_streams(session, owner_id, limit=limit, offset=offset)
     paged = limit is not None or offset > 0
-    total = await registry.count_streams(session, DEFAULT_OWNER_ID) if paged else len(rows)
+    total = await registry.count_streams(session, owner_id) if paged else len(rows)
     return StreamsResponse(count=len(rows), total=total, streams=rows)
 
 
 @router.get("/streams/{stream_id}", response_model=StreamView)
-async def get_stream(stream_id: UUID, session: AsyncSession = Depends(get_session)) -> StreamView:
-    row = await registry.get_stream(session, DEFAULT_OWNER_ID, stream_id)
+async def get_stream(
+    stream_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    owner_id: ReadOwner = DEFAULT_OWNER_ID,
+) -> StreamView:
+    row = await registry.get_stream(session, owner_id, stream_id)
     if row is None:
         raise HTTPException(status_code=404, detail="stream not found")
     return StreamView(**row)

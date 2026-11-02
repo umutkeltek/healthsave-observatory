@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from storage.defaults import time_series_query_service
 from storage.ports import TimeSeriesQueryService
 
+from .access import ReadOwner
 from .deps import get_session, verify_api_key
 
 router = APIRouter(prefix="/api/v2")
@@ -60,11 +61,12 @@ async def _query_metric_points(
     start: datetime,
     end: datetime,
     stream_id: UUID | None,
+    owner_id: UUID = DEFAULT_OWNER_ID,
 ):
     query = _REPO.query_series if stream_id is not None else _REPO.query_fused_series
     return await query(
         session,
-        owner_id=DEFAULT_OWNER_ID,
+        owner_id=owner_id,
         workspace_id=DEFAULT_WORKSPACE_ID,
         metric_id=metric_id,
         start=start,
@@ -88,6 +90,7 @@ async def metric_series(
     # been bitten by deterministic 500s before — clients retry them forever).
     stream_id: UUID | None = None,
     session: AsyncSession = Depends(get_session),
+    owner_id: ReadOwner = DEFAULT_OWNER_ID,
 ) -> dict:
     """One metric's time-series over a multi-timescale window.
 
@@ -113,6 +116,7 @@ async def metric_series(
         start=start,
         end=end,
         stream_id=stream_id,
+        owner_id=owner_id,
     )
     return {
         "metric": _metric_summary(metric),
@@ -153,6 +157,7 @@ async def _batch_series_fused(
     *,
     start: datetime,
     end: datetime,
+    owner_id: UUID = DEFAULT_OWNER_ID,
 ) -> list[dict]:
     """Assemble the batch route's ``series`` list via one fused multi-metric read.
 
@@ -171,7 +176,7 @@ async def _batch_series_fused(
 
     points_by_metric = await _REPO.query_fused_series_many(
         session,
-        owner_id=DEFAULT_OWNER_ID,
+        owner_id=owner_id,
         workspace_id=DEFAULT_WORKSPACE_ID,
         metric_ids=list(known),
         start=start,
@@ -195,6 +200,7 @@ async def metric_series_batch(
     range: str = "7d",
     stream_id: UUID | None = None,
     session: AsyncSession = Depends(get_session),
+    owner_id: ReadOwner = DEFAULT_OWNER_ID,
 ) -> dict:
     """Many metrics' time-series in one request (the dashboard's grid fetch).
 
@@ -223,7 +229,9 @@ async def metric_series_batch(
     start = end - window
     if stream_id is None:
         # Dashboard path: one fused multi-metric query instead of N serialized awaits.
-        series = await _batch_series_fused(session, metric_ids, start=start, end=end)
+        series = await _batch_series_fused(
+            session, metric_ids, start=start, end=end, owner_id=owner_id
+        )
     else:
         # Single-stream narrowing is rare and uses the non-fused per-id query path;
         # out of scope for the batch fusion above.
@@ -239,6 +247,7 @@ async def metric_series_batch(
                 start=start,
                 end=end,
                 stream_id=stream_id,
+                owner_id=owner_id,
             )
             series.append({"metric": _metric_summary(metric), "points": _point_dicts(points)})
     return {

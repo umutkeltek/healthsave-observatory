@@ -283,6 +283,20 @@ Probe the known local Ollama endpoints (the bundled sidecar / host) so the UI ca
                   { "url": "http://host.docker.internal:11434", "reachable": false, "models": [] } ] }
 ```
 
+### `GET /api/v2/owners` — admin key
+Who this Observatory holds data for: the default owner first (`label: null`), then one entry per participant (migration 029). `active` is false once every key of that person is revoked; their data stays. Participant keys get 403. The web shell shows its participant switcher only when `count` is above 1.
+
+```json
+{ "count": 2,
+  "owners": [ { "id": "00000000-0000-0000-0000-000000000001", "label": null, "is_default": true,
+                "active": true, "scopes": [], "created_at": null, "last_ingest_at": "2026-11-02T08:10:00Z" },
+              { "id": "7d0c4f8e-2b6a-4a51-9a7e-0d6a3c2b1f00", "label": "Alice", "is_default": false,
+                "active": true, "scopes": ["ingest"], "created_at": "2026-11-01T09:00:00Z",
+                "last_ingest_at": "2026-11-02T07:55:00Z" } ] }
+```
+
+The owner-scoped reads (`/api/v2/metrics/{metric_id}/series`, `/api/v2/series`, `/api/v2/export/metrics`, `/api/v2/export`, `/api/v2/sources`, `/api/v2/devices`, `/api/v2/streams`, `/api/v2/streams/{stream_id}`, `/api/v2/readiness`) take an optional `owner=<uuid>` query parameter: the admin key may name any owner (default: the default owner), a participant `read` key only its own (403 otherwise), and a malformed value is 422.
+
 ### `GET /api/v2/readiness` — keyed
 Per-metric data sufficiency (is there enough history to run anomaly/trend analysis). Drives the dashboard "what can I analyze yet" view.
 ```json

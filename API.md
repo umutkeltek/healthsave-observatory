@@ -739,6 +739,15 @@ Example response:
 > unauthenticated; the Whoop webhook authenticates via its HMAC signature, not
 > `X-API-Key`.
 
+**Participant keys (migration 029):** `X-API-Key` may also be a participant key minted by
+`healthsave participants add`. An `ingest` key reaches only the phone surface (`/api/apple/batch`,
+`/api/apple/status`, `/api/apple/coverage`, `/api/v2/apple/batch`, `/api/v2/sync/runs/*`) and always
+as its own owner; a `read` key reaches GETs on that surface and the owner-scoped reads below, as its
+own owner; anything else is 403. The owner-scoped reads (`/metrics/{metric_id}/series`, `/series`,
+`/export/metrics`, `/export`, `/sources`, `/devices`, `/streams`, `/streams/{stream_id}`, `/readiness`)
+take an optional `owner=<uuid>`: the admin key may name any owner (default: the default owner); a
+read key may name only its own.
+
 | Endpoint | Method | Auth | Purpose |
 |----------|--------|------|---------|
 | `/api/v2/meta` | GET | open | v2 version axes (api_contract / ontology / normalizer / fusion_policy) |
@@ -781,6 +790,7 @@ Example response:
 | `/api/v2/moments/{moment_id}` | PUT, DELETE | key | update / delete one moment |
 | `/api/v2/export/metrics` | GET | key | list exportable metrics with counts + date ranges |
 | `/api/v2/export` | GET | key | export one metric (or `all`) as JSON or CSV |
+| `/api/v2/owners` | GET | admin key | people this Observatory holds data for: the default owner plus one entry per participant key (label, live scopes, last ingest); drives the web participant switcher |
 | `/api/v2/sources/whoop/webhook` | POST | HMAC | Whoop push webhook; authenticity via `X-WHOOP-Signature` |
 
 ## Compatibility Notes
