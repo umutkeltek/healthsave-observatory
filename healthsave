@@ -59,7 +59,8 @@ Commands:
   backup [--out DIR]        Save the database, .env and config.yaml to one file
   backup --encrypt|--offsite R|--schedule daily|weekly  Care: encrypted, off-site, scheduled
   restore FILE [--yes]      Replace the database with a backup (takes a safety backup first)
-  license activate FILE     Install an Observatory Care licence (checked offline)
+  license activate FILE|CODE  Install an Observatory Care licence (checked offline)
+  license fetch CODE        Download the licence for a purchase code, then activate it
   license status            Show the installed licence
   verify                    Run lint, tests, TS/web checks, Docker E2E
   status                    Show layer-aware Docker Compose service status
@@ -346,10 +347,19 @@ server, and nothing about you or your data is sent anywhere.
 
 Usage:
   healthsave license activate FILE   Check FILE and install it next to config.yaml
+  healthsave license activate CODE   Same as 'license fetch CODE'
+  healthsave license fetch CODE [--url BASE]
+                                     Download the licence file for the 24-character
+                                     code from your purchase, then activate it
   healthsave license status          Show the installed licence
 
-Renewing means activating the new file. After a licence expires, Care
-features keep working for 14 more days. Everything free works without one.
+'license fetch' is the only licence command that uses the network, and only
+when you run it: one HTTPS request to BASE/license/CODE (default
+https://billing.healthsave.app) that sends nothing but the code. Checking the
+licence afterwards happens on this machine.
+
+Renewing means fetching or activating the new file. After a licence expires,
+Care features keep working for 14 more days. Everything free works without one.
 EOF
 }
 
@@ -2163,6 +2173,9 @@ cmd_restore() {
 }
 
 LICENSE_FILE_NAME="healthsave.license"
+# Where 'healthsave license fetch' downloads licence files (the billing worker).
+LICENSE_FETCH_URL_DEFAULT="https://billing.healthsave.app"
+LICENSE_CODE_PATTERN='^[A-Za-z0-9]{24}$'
 
 resolve_user_path() {
     # resolve_user_path <path> - a path the user typed, read from where they ran
@@ -2212,37 +2225,9 @@ licensing_run() {
     return 2
 }
 
-cmd_license_activate() {
-    local file=""
-    while [ "$#" -gt 0 ]; do
-        case "$1" in
-            -h|--help|help)
-                print_license_usage
-                return 0
-                ;;
-            -*)
-                log_error "Unknown license activate argument: $1"
-                exit 2
-                ;;
-            *)
-                if [ -n "$file" ]; then
-                    log_error "license activate takes one file."
-                    exit 2
-                fi
-                file="$1"
-                ;;
-        esac
-        shift
-    done
-    if [ -z "$file" ]; then
-        log_error "Name the licence file: healthsave license activate FILE"
-        exit 2
-    fi
-    file="$(resolve_user_path "$file")"
-    if [ ! -f "$file" ]; then
-        log_error "No such file: $file"
-        exit 1
-    fi
+install_license_file() {
+    # install_license_file <file> - verify, then install next to config.yaml.
+    local file="$1"
     if ! licensing_run show --file - <"$file"; then
         log_error "Not activated. Any licence already installed is unchanged."
         exit 1
@@ -2255,6 +2240,138 @@ cmd_license_activate() {
     mv -f "$tmp" "$dest"
     log_ok "Licence activated: ${dest}"
     log_info "It is checked on this machine only; nothing is sent anywhere."
+}
+
+is_license_code() {
+    printf '%s' "$1" | grep -Eq "$LICENSE_CODE_PATTERN"
+}
+
+cmd_license_fetch() {
+    local code=""
+    local base="$LICENSE_FETCH_URL_DEFAULT"
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help|help)
+                print_license_usage
+                return 0
+                ;;
+            --url)
+                shift
+                if [ "$#" -eq 0 ] || [ -z "$1" ]; then
+                    log_error "--url needs a base URL, e.g. https://billing.healthsave.app"
+                    exit 2
+                fi
+                base="$1"
+                ;;
+            -*)
+                log_error "Unknown license fetch argument: $1"
+                exit 2
+                ;;
+            *)
+                if [ -n "$code" ]; then
+                    log_error "license fetch takes one code."
+                    exit 2
+                fi
+                code="$1"
+                ;;
+        esac
+        shift
+    done
+    if ! is_license_code "$code"; then
+        log_error "A licence code is 24 letters and digits, as shown after your purchase."
+        exit 2
+    fi
+    base="${base%/}"
+    case "$base" in
+        https://*|http://localhost|http://localhost:*|http://127.0.0.1|http://127.0.0.1:*) ;;
+        *)
+            log_error "The licence server URL must use https://."
+            exit 2
+            ;;
+    esac
+    if ! command -v curl >/dev/null 2>&1; then
+        log_error "Fetching a licence needs curl. Download the file from your purchase page and run: healthsave license activate FILE"
+        exit 1
+    fi
+
+    local work status
+    work="$(mktemp -d)"
+    log_info "Downloading the licence for this code from ${base} (nothing else is sent)..."
+    status="$(curl -sS --max-time 30 --max-filesize 65536 -o "$work/license" -w '%{http_code}' \
+        "${base}/license/${code}")" || status="000"
+    case "$status" in
+        200) ;;
+        404)
+            rm -rf "$work"
+            log_error "No licence for that code. Check the code; right after a purchase it can take a minute to appear."
+            exit 1
+            ;;
+        429)
+            rm -rf "$work"
+            log_error "Too many tries from this address. Wait a minute and try again."
+            exit 1
+            ;;
+        000)
+            rm -rf "$work"
+            log_error "Could not reach ${base}. Check the connection, or download the file from your purchase page and run: healthsave license activate FILE"
+            exit 1
+            ;;
+        *)
+            rm -rf "$work"
+            log_error "The licence server answered HTTP ${status}. Try again later, or download the file from your purchase page."
+            exit 1
+            ;;
+    esac
+    install_license_file "$work/license"
+    rm -rf "$work"
+}
+
+cmd_license_activate() {
+    local file=""
+    local url_args=()
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help|help)
+                print_license_usage
+                return 0
+                ;;
+            --url)
+                shift
+                if [ "$#" -eq 0 ] || [ -z "$1" ]; then
+                    log_error "--url needs a base URL."
+                    exit 2
+                fi
+                url_args=(--url "$1")
+                ;;
+            -*)
+                log_error "Unknown license activate argument: $1"
+                exit 2
+                ;;
+            *)
+                if [ -n "$file" ]; then
+                    log_error "license activate takes one file or code."
+                    exit 2
+                fi
+                file="$1"
+                ;;
+        esac
+        shift
+    done
+    if [ -z "$file" ]; then
+        log_error "Name the licence file or code: healthsave license activate FILE|CODE"
+        exit 2
+    fi
+    local path
+    path="$(resolve_user_path "$file")"
+    if [ ! -f "$path" ] && is_license_code "$file"; then
+        cmd_license_fetch "$file" ${url_args[@]+"${url_args[@]}"}
+        return 0
+    fi
+    if [ ! -f "$path" ]; then
+        log_error "No such file: $path"
+        exit 1
+    fi
+    install_license_file "$path"
 }
 
 cmd_license_status() {
@@ -2291,6 +2408,7 @@ cmd_license() {
     case "$sub" in
         -h|--help|help) print_license_usage ;;
         activate) cmd_license_activate "$@" ;;
+        fetch) cmd_license_fetch "$@" ;;
         status) cmd_license_status "$@" ;;
         *)
             log_error "Unknown license command: ${sub}"

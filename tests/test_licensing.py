@@ -341,3 +341,42 @@ def test_licensing_is_packaged_for_the_image_and_the_wheel():
     # Failure mode 10: a package that passes pytest but is missing from the image.
     assert "COPY packages/py/licensing/ ./licensing/" in (ROOT / "Dockerfile").read_text()
     assert '"licensing*"' in (ROOT / "pyproject.toml").read_text()
+
+
+# --- cross-implementation golden file ----------------------------------------
+
+REFERENCE = ROOT / "tests" / "fixtures" / "licensing" / "reference-care-expired.license"
+
+
+def test_billing_worker_licence_verifies_with_the_embedded_key():
+    # Signed 2026-11-02 by the billing worker's own signLicense() with the real
+    # production key. It expired 2026-01-02, so committing it unlocks nothing.
+    text = REFERENCE.read_text()
+    lic = parse_license(text)
+    assert lic.tier == "care"
+    assert lic.sub == "reference-fixture-not-a-customer"
+    assert lic.features == ("care.backup.offsite", "care.restore.drill", "care.update.rollback")
+    assert lic.issued_at == datetime(2026, 1, 1, tzinfo=UTC)
+    assert lic.expires_at == datetime(2026, 1, 2, tzinfo=UTC)
+    assert lic.state() is LicenseState.EXPIRED
+    with pytest.raises(LicenseExpired):
+        licensing.check_feature(lic, "care.backup.offsite")
+
+    # Both sides serialise the payload identically (sorted keys, no whitespace,
+    # unpadded base64url), so a licence minted here is byte-compatible too.
+    payload_part, signature_part = text.strip().split(".")
+    assert "=" not in payload_part + signature_part
+    payload_bytes, _ = _segments(text.strip())
+    assert canonical_payload(json.loads(payload_bytes)) == payload_bytes
+
+
+def test_billing_worker_licence_survives_pasting_with_whitespace_and_padding():
+    payload_bytes, signature = _segments(REFERENCE.read_text().strip())
+    pasted = (
+        "\n  "
+        + base64.urlsafe_b64encode(payload_bytes).decode()
+        + "."
+        + base64.urlsafe_b64encode(signature).decode()
+        + "  \r\n"
+    )
+    assert parse_license(pasted).sub == "reference-fixture-not-a-customer"

@@ -13,6 +13,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from tests.licence_testkit import ROOT, TestKey, expired, make_key, mint, python_shim
 
 FAKE_DOCKER = r"""#!/usr/bin/env bash
@@ -153,3 +155,101 @@ def test_unknown_license_subcommand_is_a_usage_error(tmp_path):
     proc = _cli(checkout, bin_dir, shim, "license", "renew")
     assert proc.returncode == 2
     assert "Unknown license command" in proc.stderr
+
+
+# --- license fetch ----------------------------------------------------------
+
+CODE = "Ab3dEf6hIj9kLm2nOp5qRs8t"
+
+FAKE_CURL = r"""#!/usr/bin/env bash
+printf 'curl %s\n' "$*" >> "__LOG__"
+out=""
+url=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) shift; out="$1" ;;
+    -w|--max-time|--max-filesize) shift ;;
+    -*) ;;
+    *) url="$1" ;;
+  esac
+  shift
+done
+[ -n "$out" ] && cp "__BODY__" "$out"
+printf '%s' "__STATUS__"
+"""
+
+
+def _fake_curl(bin_dir: Path, log: Path, body: str, status: int = 200) -> None:
+    body_file = bin_dir.parent / "curl-body"
+    body_file.write_text(body)
+    curl = bin_dir / "curl"
+    curl.write_text(
+        FAKE_CURL.replace("__LOG__", str(log))
+        .replace("__BODY__", str(body_file))
+        .replace("__STATUS__", str(status)),
+        encoding="utf-8",
+    )
+    curl.chmod(0o755)
+
+
+def test_fetch_downloads_verifies_and_installs(tmp_path):
+    checkout, bin_dir, log, key, shim = _with_test_key(tmp_path)
+    _fake_curl(bin_dir, log, mint(key))
+    proc = _cli(checkout, bin_dir, shim, "license", "fetch", CODE)
+    assert proc.returncode == 0, proc.stderr
+    assert f"https://billing.healthsave.app/license/{CODE}" in log.read_text()
+    assert "Licence activated" in proc.stdout
+    assert (checkout / "healthsave.license").stat().st_mode & 0o777 == 0o600
+
+
+def test_activate_with_a_code_fetches_from_the_given_url(tmp_path):
+    checkout, bin_dir, log, key, shim = _with_test_key(tmp_path)
+    _fake_curl(bin_dir, log, mint(key))
+    proc = _cli(
+        checkout,
+        bin_dir,
+        shim,
+        "license",
+        "activate",
+        CODE,
+        "--url",
+        "https://healthsave-billing.example.workers.dev/",
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert f"https://healthsave-billing.example.workers.dev/license/{CODE}" in log.read_text()
+    assert (checkout / "healthsave.license").is_file()
+
+
+def test_fetch_of_an_unknown_code_installs_nothing(tmp_path):
+    checkout, bin_dir, log, _, shim = _with_test_key(tmp_path)
+    _fake_curl(bin_dir, log, "not found", status=404)
+    proc = _cli(checkout, bin_dir, shim, "license", "fetch", CODE)
+    assert proc.returncode == 1
+    assert "No licence for that code" in proc.stderr
+    assert not (checkout / "healthsave.license").exists()
+
+
+def test_fetch_refuses_a_file_that_does_not_verify(tmp_path):
+    checkout, bin_dir, log, _, shim = _with_test_key(tmp_path)
+    _fake_curl(bin_dir, log, mint(make_key()))  # signed by a key the build does not trust
+    proc = _cli(checkout, bin_dir, shim, "license", "fetch", CODE)
+    assert proc.returncode == 1
+    assert "Not activated" in proc.stderr
+    assert not (checkout / "healthsave.license").exists()
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ("fetch", "short"),
+        ("fetch", CODE + "x"),
+        ("fetch", CODE, "--url", "http://billing.example.com"),
+        ("fetch", CODE, "--url", "ftp://billing.example.com"),
+    ],
+)
+def test_fetch_rejects_bad_codes_and_plain_http_without_a_request(tmp_path, args):
+    checkout, bin_dir, log, key, shim = _with_test_key(tmp_path)
+    _fake_curl(bin_dir, log, mint(key))
+    proc = _cli(checkout, bin_dir, shim, "license", *args)
+    assert proc.returncode == 2
+    assert not log.exists() or "curl" not in log.read_text()
