@@ -1,9 +1,10 @@
 """Release gate for HealthSave Observatory tags.
 
-One version, stated in three places that must agree before a tag ships:
+One version, stated in the places that must agree before a tag ships:
 ``pyproject.toml``, the FastAPI app in ``apps/api/server/main.py`` (which
-``contracts/openapi/v1.locked.json`` snapshots), and a ``## [X.Y.Z]`` section
-in ``CHANGELOG.md`` that becomes the GitHub Release notes.
+``contracts/openapi/v1.locked.json`` snapshots), the release image tag
+``docker-compose.yml`` pulls by default, and a ``## [X.Y.Z]`` section in
+``CHANGELOG.md`` that becomes the GitHub Release notes.
 
 Usage:
     python scripts/release_notes.py 1.1.0          # check, then print the notes
@@ -26,6 +27,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 APP_VERSION = re.compile(r'FastAPI\([^)]*\bversion="([^"]+)"')
+COMPOSE_IMAGE_TAG = re.compile(r"image: ghcr\.io/\S+:\$\{HEALTHSAVE_VERSION:-v([^}]+)\}")
 
 
 def pyproject_version(root: Path = REPO_ROOT) -> str:
@@ -43,6 +45,15 @@ def app_version(root: Path = REPO_ROOT) -> str:
 def lock_version(root: Path = REPO_ROOT) -> str:
     lock = json.loads((root / "contracts/openapi/v1.locked.json").read_text())
     return lock["info"]["version"]
+
+
+def compose_image_versions(root: Path = REPO_ROOT) -> set[str]:
+    """Release versions whose images docker-compose.yml pulls by default.
+
+    Exactly one, the release itself: a checkout of tag vX.Y.Z must run vX.Y.Z's
+    images, or `healthsave update` would move the code and keep the old images.
+    """
+    return set(COMPOSE_IMAGE_TAG.findall((root / "docker-compose.yml").read_text()))
 
 
 def changelog_section(version: str, root: Path = REPO_ROOT) -> str | None:
@@ -79,6 +90,10 @@ def problems(version: str, root: Path = REPO_ROOT) -> list[str]:
     for where, value in stated.items():
         if value != version:
             found.append(f"{where} says {value}, release is {version}")
+    pulled = compose_image_versions(root)
+    if pulled != {version}:
+        names = ", ".join(sorted(pulled)) or "no ghcr.io release image"
+        found.append(f"docker-compose.yml pulls {names}, release is {version}")
     if changelog_section(version, root) is None:
         found.append(f"CHANGELOG.md has no non-empty '## [{version}]' section")
     return found

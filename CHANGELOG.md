@@ -9,8 +9,44 @@ Plugins carry their own versions.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-02
+
+A new install is locked down from the first start: it gets an API key, a
+dashboard password and a QR code to pair the app. Releases now ship as
+pre-built images, and `healthsave update`, `backup` and `restore` handle
+upgrades and backups. Observatory Care, an optional licence, adds encrypted
+off-site backups, restore drills and update rollback. Everything that was free
+stays free.
+
+### Upgrade
+
+```bash
+git fetch --tags
+git checkout v1.2.0
+docker compose up -d
+```
+
+- From this release on, `docker compose up -d` pulls pre-built images for
+  `linux/amd64` and `linux/arm64` instead of building them on your machine.
+  To keep building from source, add the build override:
+  `docker compose -f docker-compose.yml -f docker-compose.build.override.yml up -d --build`.
+- This release has no new database migrations. The upgrade leaves your data
+  as it is.
+- Your `.env` is not changed. An install without an API key, dashboard
+  password or broker login keeps working as before, and `healthsave doctor`
+  says what is open. `healthsave pair --new-key` adds a key; then pair the
+  phone again.
+- For later releases, `healthsave update` does all of this for you, and takes
+  a backup first.
+
 ### Security
 
+- `healthsave setup basic` now generates an API key. A fresh install no longer
+  accepts unauthenticated reads and writes from everyone on your network.
+  Existing installs keep their `.env` untouched.
+- New `healthsave pair` shows the server URL, the API key and, when `qrencode`
+  is installed, a QR code for the HealthSave app. `healthsave pair --new-key`
+  rotates the key and restarts the API and web.
 - The Observatory web dashboard asks for a password when `WEB_PASSWORD` is set.
   Setup generates one for new installs, and `healthsave pair` shows it. Without
   a session, pages redirect to `/login` and every data route (including the
@@ -21,15 +57,8 @@ Plugins carry their own versions.
   generated `WEB_SESSION_SECRET`; server actions check the session themselves;
   ten wrong passwords in a minute pause sign-in; sign-in and sign-out refuse
   cross-site posts.
-- `healthsave setup basic` now generates an API key. A fresh install no longer
-  accepts unauthenticated reads and writes from everyone on your network.
-  Existing installs keep their `.env` untouched.
-- New `healthsave pair` shows the server URL, the API key and, when `qrencode`
-  is installed, a QR code for the HealthSave app. `healthsave pair --new-key`
-  rotates the key and restarts the API and web.
 - `healthsave doctor` warns when no API key is set.
 - Advanced setup suggests a generated key instead of open access.
-
 - `SECURITY.md` says how to report a vulnerability privately.
 - The reverse-proxy example no longer carries the maintainer's hostnames and
   LAN address: `server_name _`, and `generate-self-signed.sh` takes
@@ -37,15 +66,34 @@ Plugins carry their own versions.
 
 ### Added
 
+- Pre-built images for `linux/amd64` and `linux/arm64`, signed with cosign:
+  `ghcr.io/umutkeltek/healthsave-observatory` (API, migrations, worker, agents
+  and the Home Assistant bridge) and `ghcr.io/umutkeltek/healthsave-observatory-web`.
+  `docker-compose.yml` pulls the images of the release you checked out;
+  `docker-compose.build.override.yml` builds them from source instead.
+- Observatory Care, an optional licence for people who want their install
+  looked after ([docs](docs/operations/observatory-care.md)):
+  `healthsave backup --encrypt`, `--offsite REMOTE` (through rclone, to storage
+  you own) and `--schedule daily|weekly`; `healthsave restore --drill FILE`,
+  which restores a backup into a throwaway database and compares every table's
+  row count; and `healthsave update --rollback`. `healthsave license` installs
+  and shows the licence file, which is checked on your machine against a
+  built-in public key and never phones home. Encrypted backups still restore
+  without a licence.
+- Remote access without opening ports: an optional `tailscale` Compose profile
+  serves the web app and the API on your tailnet over HTTPS, with no router
+  port opened and Funnel off. See
+  [Remote access](docs/operations/remote-access.md).
 - Settings -> Web sign-in sets, changes or turns off the dashboard password
   (changes need the current password; this browser stays signed in, others are
   signed out). It is stored as a salted scrypt hash in the new `web_data`
   volume and takes over from `WEB_PASSWORD`. `healthsave web-password reset`
   removes it when the password is lost.
 - `healthsave update [--to TAG]` moves a git install to the newest release:
-  backup first, then checkout of the tag, then a rebuild of exactly the
-  services that were running. It refuses local edits to tracked files and
-  prints the way back if the new release does not start.
+  backup first, then checkout of the tag, then a restart of exactly the
+  services that were running, on the new release's images. It refuses local
+  edits to tracked files and prints the way back if the new release does not
+  start.
 - `healthsave backup` writes the database (`pg_dump`), `.env` and
   `config.yaml` to one owner-only `.tar` file. `healthsave restore FILE`
   saves the current database first, then restores with TimescaleDB's
@@ -65,19 +113,42 @@ Plugins carry their own versions.
   Findings fill in without any AI setup. Advanced setup now keeps them on when
   you skip Ollama. Existing `config.yaml` files and `config.yaml.example` are
   unchanged.
-
 - The AI narrator no longer downloads LiteLLM's model price list from GitHub
   each time LiteLLM loads (it uses the bundled copy), and LiteLLM telemetry is
   off. Bundled Grafana no longer sends usage reports or checks for updates.
   Neither request carried health data, but neither went through the egress
   gate.
+- The web app runs on Node.js 22. Node.js 20 no longer gets security fixes.
+- Today shows compact readings, links each reading and finding to its
+  evidence, and has larger touch targets on phones.
 
 ### Fixed
 
-- The installers check out the newest `vX.Y.Z` release instead of `main`.
+- A fresh install no longer starts with every analysis job off. Compose passes
+  an empty `ANALYSIS_*_ENABLED` value when `.env` does not set one, and an
+  empty value counted as "off", overriding `config.yaml`. Empty now means "not
+  set". The same applies to `LLM_REDACT_CLOUD_PROMPTS`, so an empty value
+  keeps cloud-prompt redaction on.
+- The installers install the newest published release instead of `main`.
   `npx healthsave` defaulted to a `v0.1.5` tag that never existed, so a fresh
-  `npx` install failed. Set `HEALTHSAVE_OBSERVATORY_REF` (or `--ref`) to pick a
+  `npx` install failed. "Newest published" means the GitHub Release, which
+  exists only once that release's images are published; without it, the
+  newest `vX.Y.Z` tag. Set `HEALTHSAVE_OBSERVATORY_REF` (or `--ref`) to pick a
   tag, branch or commit. The npm bootstrapper is now 0.2.0.
+- Activity summaries keep every field when a batch arrives, stand hours
+  included.
+- Replaying an old batch no longer makes sync readiness report a metric as
+  behind when newer data is already stored.
+- Testing the AI connection from Settings accepts the same local model hosts
+  the server already trusts.
+
+### Compatibility
+
+- The routes the App Store app depends on are unchanged: `POST /api/apple/batch`,
+  `GET /api/apple/status` and `GET /api/health`. The OpenAPI lock changed only
+  in its version number.
+- The remote VM deploy (`deploy/remote-vm/deploy.sh`) still builds from the
+  deployed commit, with the same ports and image names as before.
 
 ## [1.1.0] - 2026-10-04
 

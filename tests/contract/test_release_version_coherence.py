@@ -25,7 +25,15 @@ def test_main_is_releasable_at_its_stated_version() -> None:
     assert problems(version) == []
 
 
-def _fake_repo(tmp_path: Path, *, pyproject: str, app: str, lock: str, changelog: str) -> Path:
+def _fake_repo(
+    tmp_path: Path,
+    *,
+    pyproject: str,
+    app: str,
+    lock: str,
+    changelog: str,
+    compose: str | None = None,
+) -> Path:
     (tmp_path / "apps/api/server").mkdir(parents=True)
     (tmp_path / "contracts/openapi").mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text(f'[project]\nname = "x"\nversion = "{pyproject}"\n')
@@ -36,6 +44,14 @@ def _fake_repo(tmp_path: Path, *, pyproject: str, app: str, lock: str, changelog
         json.dumps({"info": {"version": lock}})
     )
     (tmp_path / "CHANGELOG.md").write_text(changelog)
+    tag = compose if compose is not None else pyproject
+    (tmp_path / "docker-compose.yml").write_text(
+        "services:\n"
+        "  api:\n"
+        f"    image: ghcr.io/o/observatory:${{HEALTHSAVE_VERSION:-v{tag}}}\n"
+        "  web:\n"
+        f"    image: ghcr.io/o/observatory-web:${{HEALTHSAVE_VERSION:-v{tag}}}\n"
+    )
     return tmp_path
 
 
@@ -92,3 +108,31 @@ def test_release_page_links_point_at_the_tagged_files() -> None:
         f"See [UPGRADING.md]({base}UPGRADING.md), [docs]({base}docs/a.md#b), "
         "[#45](https://github.com/o/r/issues/45), [here](#upgrade), [mail](mailto:x@y.z)."
     )
+
+
+def test_compose_must_pull_the_release_images(tmp_path: Path) -> None:
+    root = _fake_repo(
+        tmp_path,
+        pyproject="1.2.0",
+        app="1.2.0",
+        lock="1.2.0",
+        changelog="## [1.2.0] - 2026-11-02\n\n- notes\n",
+        compose="1.1.0",
+    )
+    assert problems("1.2.0", root) == [
+        "docker-compose.yml pulls 1.1.0, release is 1.2.0",
+    ]
+
+
+def test_compose_without_release_images_is_named(tmp_path: Path) -> None:
+    root = _fake_repo(
+        tmp_path,
+        pyproject="1.2.0",
+        app="1.2.0",
+        lock="1.2.0",
+        changelog="## [1.2.0] - 2026-11-02\n\n- notes\n",
+    )
+    (root / "docker-compose.yml").write_text("services:\n  api:\n    build: .\n")
+    assert problems("1.2.0", root) == [
+        "docker-compose.yml pulls no ghcr.io release image, release is 1.2.0",
+    ]

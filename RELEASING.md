@@ -7,8 +7,10 @@ reaches them only once it ships in a tagged release, so every such fix gets one.
 
 Tags are `vX.Y.Z` ([semantic versioning](https://semver.org)). The version is
 stated in `pyproject.toml` and in the FastAPI app (`apps/api/server/main.py`),
-and the OpenAPI lock snapshots it. `tests/contract/test_release_version_coherence.py`
-fails CI when they disagree.
+and the OpenAPI lock snapshots it. `docker-compose.yml` pulls that release's
+images by default (`${HEALTHSAVE_VERSION:-vX.Y.Z}`), so a checkout of a tag runs
+the images built from it. `tests/contract/test_release_version_coherence.py`
+fails CI when any of them disagree.
 
 - **Patch** (`1.1.0` → `1.1.1`): fixes and docs only. No new route, field,
   migration or setting.
@@ -32,9 +34,10 @@ Plugins carry their own versions, independent of the server.
 
 ## Cutting a release
 
-1. Bump the version in `pyproject.toml` and `apps/api/server/main.py`, then run
-   `make regen-lock` (Docker, pinned environment). The lock diff should be the
-   `info.version` line plus any surface change you meant to make.
+1. Bump the version in `pyproject.toml`, `apps/api/server/main.py` and the
+   image tags in `docker-compose.yml`, then run `make regen-lock` (Docker,
+   pinned environment). The lock diff should be the `info.version` line plus
+   any surface change you meant to make.
 2. Add a `## [X.Y.Z] - YYYY-MM-DD` section to the top of `CHANGELOG.md`. Write
    it for the person running the server: how to upgrade, what was fixed, what
    was added, and what stays compatible.
