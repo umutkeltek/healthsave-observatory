@@ -87,8 +87,11 @@ def python_shim(directory: Path, key: TestKey) -> Path:
     The CLI runs ``$HEALTHSAVE_PYTHON -m licensing ARGS``; the shim drops
     ``-m licensing`` and runs the same entry point with the test key embedded.
     """
+    # The child sees the test interpreter's own sys.path, so a dependency that
+    # lives in the user site (which moves when the test swaps HOME) still imports.
     code = (
         "import sys; "
+        f"sys.path[:0] = {[p for p in sys.path if p]!r}; "
         f"sys.path.insert(0, {str(ROOT / 'packages' / 'py')!r}); "
         "import licensing.keys as k; "
         f"k.PUBLIC_KEY_B64URL = {key.public_b64url!r}; "
