@@ -97,6 +97,7 @@ include = [
     "db*",
     "runtime*",
     "homeassistant_mqtt*",
+    "licensing*",
     "storage*",
     "normalization*",
     "replay*",

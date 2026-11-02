@@ -7,6 +7,8 @@ set -euo pipefail
 
 VERSION="0.3.0"
 CLI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Where the command was run from, for file arguments given as relative paths.
+CALLER_DIR="$PWD"
 cd "$CLI_DIR"
 
 # Reuse existing setup functions without running setup.sh dispatch.
@@ -56,6 +58,8 @@ Commands:
   web-password reset        Forget the Settings password; WEB_PASSWORD in .env applies again
   backup [--out DIR]        Save the database, .env and config.yaml to one file
   restore FILE [--yes]      Replace the database with a backup (takes a safety backup first)
+  license activate FILE     Install an Observatory Care licence (checked offline)
+  license status            Show the installed licence
   verify                    Run lint, tests, TS/web checks, Docker E2E
   status                    Show layer-aware Docker Compose service status
   logs [layer|service]      Show recent Docker Compose logs
@@ -303,6 +307,23 @@ Options:
 The services that read the database stop during the restore and start again
 after. .env and config.yaml are not changed: the copies inside the backup are
 for moving to a new machine (tar -xf FILE env config.yaml).
+EOF
+}
+
+print_license_usage() {
+    cat <<'EOF'
+HealthSave licence
+
+An Observatory Care licence is a small signed file. Observatory checks it on
+this machine against a public key built into the code. It never contacts a
+server, and nothing about you or your data is sent anywhere.
+
+Usage:
+  healthsave license activate FILE   Check FILE and install it next to config.yaml
+  healthsave license status          Show the installed licence
+
+Renewing means activating the new file. After a licence expires, Care
+features keep working for 14 more days. Everything free works without one.
 EOF
 }
 
@@ -1697,6 +1718,144 @@ cmd_restore() {
     log_info "Previous database kept in ${safety}"
 }
 
+LICENSE_FILE_NAME="healthsave.license"
+
+resolve_user_path() {
+    # resolve_user_path <path> - a path the user typed, read from where they ran
+    # the command (the CLI itself runs from the checkout).
+    case "$1" in
+        /*) printf '%s' "$1" ;;
+        *)
+            if [ -e "$CALLER_DIR/$1" ]; then
+                printf '%s' "$CALLER_DIR/$1"
+            else
+                printf '%s' "$1"
+            fi
+            ;;
+    esac
+}
+
+license_file() {
+    # The installed licence sits next to config.yaml unless HEALTHSAVE_LICENSE_FILE moves it.
+    printf '%s' "${HEALTHSAVE_LICENSE_FILE:-$CLI_DIR/$LICENSE_FILE_NAME}"
+}
+
+licensing_python() {
+    # Prints a host Python that can check licences (3.11+ with cryptography), or fails.
+    if [ -n "${HEALTHSAVE_PYTHON:-}" ]; then
+        printf '%s' "$HEALTHSAVE_PYTHON"
+        return 0
+    fi
+    command -v python3 >/dev/null 2>&1 || return 1
+    python3 -c 'import sys; from cryptography.hazmat.primitives.asymmetric import ed25519; sys.exit(sys.version_info < (3, 11))' >/dev/null 2>&1 || return 1
+    printf '%s' python3
+}
+
+licensing_run() {
+    # licensing_run <args> - `python -m licensing <args>` with the licence on stdin.
+    # Host Python when it can check licences, else the Observatory api image.
+    # Either way the check is local: packages/py/licensing opens no connection.
+    local py
+    if py="$(licensing_python)"; then
+        PYTHONPATH="$CLI_DIR/packages/py${PYTHONPATH:+:$PYTHONPATH}" "$py" -m licensing "$@"
+        return
+    fi
+    if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+        docker compose run --rm --no-deps -T api python -m licensing "$@"
+        return
+    fi
+    log_error "Checking a licence needs Docker (it uses the Observatory api image) or Python 3.11+ with the cryptography package."
+    return 2
+}
+
+cmd_license_activate() {
+    local file=""
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help|help)
+                print_license_usage
+                return 0
+                ;;
+            -*)
+                log_error "Unknown license activate argument: $1"
+                exit 2
+                ;;
+            *)
+                if [ -n "$file" ]; then
+                    log_error "license activate takes one file."
+                    exit 2
+                fi
+                file="$1"
+                ;;
+        esac
+        shift
+    done
+    if [ -z "$file" ]; then
+        log_error "Name the licence file: healthsave license activate FILE"
+        exit 2
+    fi
+    file="$(resolve_user_path "$file")"
+    if [ ! -f "$file" ]; then
+        log_error "No such file: $file"
+        exit 1
+    fi
+    if ! licensing_run show --file - <"$file"; then
+        log_error "Not activated. Any licence already installed is unchanged."
+        exit 1
+    fi
+    local dest tmp
+    dest="$(license_file)"
+    tmp="${dest}.tmp.$$"
+    (umask 077 && cp "$file" "$tmp")
+    chmod 600 "$tmp"
+    mv -f "$tmp" "$dest"
+    log_ok "Licence activated: ${dest}"
+    log_info "It is checked on this machine only; nothing is sent anywhere."
+}
+
+cmd_license_status() {
+    case "${1:-}" in
+        "") ;;
+        -h|--help|help)
+            print_license_usage
+            return 0
+            ;;
+        *)
+            log_error "Unknown license status argument: $1"
+            exit 2
+            ;;
+    esac
+    local file
+    file="$(license_file)"
+    if [ ! -f "$file" ]; then
+        log_info "No licence installed. This is Observatory Community: every free feature works."
+        log_info "Observatory Care adds encrypted off-site and scheduled backups, restore drills and update rollback."
+        log_info "Activate a licence with: healthsave license activate FILE"
+        return 0
+    fi
+    log_info "Licence file: ${file}"
+    if ! licensing_run show --file - <"$file"; then
+        exit 1
+    fi
+}
+
+cmd_license() {
+    local sub="${1:-status}"
+    if [ "$#" -gt 0 ]; then
+        shift
+    fi
+    case "$sub" in
+        -h|--help|help) print_license_usage ;;
+        activate) cmd_license_activate "$@" ;;
+        status) cmd_license_status "$@" ;;
+        *)
+            log_error "Unknown license command: ${sub}"
+            print_license_usage
+            exit 2
+            ;;
+    esac
+}
+
 cmd_down() {
     require_docker
     docker compose down
@@ -2321,6 +2480,13 @@ case "$cmd" in
             exit 2
         fi
         cmd_restore "$@"
+        ;;
+    license|licence)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for license."
+            exit 2
+        fi
+        cmd_license "$@"
         ;;
     verify)
         if [ "$json_mode" = "1" ]; then

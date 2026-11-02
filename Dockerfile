@@ -14,6 +14,7 @@ COPY apps/worker/worker/ ./worker/
 COPY apps/agents/agents/ ./agents/
 COPY packages/py/analysis/ ./analysis/
 COPY packages/py/auth/ ./auth/
+COPY packages/py/licensing/ ./licensing/
 COPY packages/py/compat_v1/ ./compat_v1/
 COPY packages/py/contracts/ ./contracts/
 COPY contracts/parity.json ./contracts/parity.json
