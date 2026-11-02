@@ -59,6 +59,7 @@ Commands:
   backup [--out DIR]        Save the database, .env and config.yaml to one file
   backup --encrypt|--offsite R|--schedule daily|weekly  Care: encrypted, off-site, scheduled
   restore FILE [--yes]      Replace the database with a backup (takes a safety backup first)
+  restore --drill FILE      Care: test-restore a backup into a throwaway database
   license activate FILE|CODE  Install an Observatory Care licence (checked offline)
   license fetch CODE        Download the licence for a purchase code, then activate it
   license status            Show the installed licence
@@ -326,9 +327,16 @@ never needs a licence.
 Usage:
   healthsave restore backups/healthsave-backup-20261027-120000Z.tar
   healthsave restore FILE --yes
+  healthsave restore --drill FILE
 
 Options:
   --yes           Skip the confirmation (for scripts)
+  --drill         Prove FILE restores, without touching this Observatory (Care):
+                  restore it into a throwaway TimescaleDB container with no
+                  network, compare every table's row count with the counts the
+                  backup recorded, print PASS or FAIL, and delete the container
+  --image IMAGE   With --drill: the TimescaleDB image to use (default:
+                  TIMESCALE_IMAGE from .env, else the one docker-compose.yml uses)
   -h, --help      Show this help
 
 The services that read the database stop during the restore and start again
@@ -1535,6 +1543,17 @@ BACKUP_FORMAT="healthsave-backup-1"
 # alike. The parameters are part of the file format; never change them.
 BACKUP_CIPHER_ARGS=(-aes-256-cbc -pbkdf2 -iter 600000 -md sha256)
 BACKUP_SCHEDULE_MARKER="# healthsave-scheduled-backup"
+# One line per table: schema.table=row count. Hypertable parents count their
+# chunks; TimescaleDB's own schemas are left out.
+TABLE_COUNT_SQL="SELECT format('%I.%I', table_schema, table_name) || '=' ||
+    (xpath('/row/n/text()', query_to_xml(format('SELECT count(*) AS n FROM %I.%I',
+        table_schema, table_name), false, true, '')))[1]::text
+FROM information_schema.tables
+WHERE table_type = 'BASE TABLE'
+  AND table_schema NOT IN ('pg_catalog', 'information_schema')
+  AND table_schema NOT LIKE '\_timescaledb%'
+  AND table_schema NOT LIKE 'timescaledb\_%'
+ORDER BY 1"
 BACKUP_LAUNCHD_LABEL="com.healthsave.observatory.backup"
 # Services that hold database connections; a restore stops the running ones.
 DB_CLIENT_SERVICES="api worker web grafana homeassistant-mqtt agents"
@@ -1560,6 +1579,21 @@ sha256_of() {
     elif command -v shasum >/dev/null 2>&1; then
         shasum -a 256 "$1" | cut -d' ' -f1
     fi
+}
+
+merge_row_counts() {
+    # merge_row_counts <counts before dump> <counts after dump> - MANIFEST rows.* lines.
+    # Equal counts give rows.T=N; a table that changed gives rows.T=LOW..HIGH.
+    [ -n "$1" ] && [ -n "$2" ] || return 0
+    awk -F= '
+        NR == FNR { before[$1] = $2; next }
+        NF == 2 {
+            lo = ($1 in before) ? before[$1] + 0 : 0
+            hi = $2 + 0
+            if (lo > hi) { t = lo; lo = hi; hi = t }
+            if (lo == hi) printf "rows.%s=%.0f\n", $1, hi
+            else printf "rows.%s=%.0f..%.0f\n", $1, lo, hi
+        }' <(printf '%s\n' "$1") <(printf '%s\n' "$2")
 }
 
 backup_dump_intact() {
@@ -1588,11 +1622,16 @@ write_backup() {
     mkdir -p "$out_dir"
     file="${out_dir%/}/healthsave-${label}-${stamp}.tar"
 
+    # Row counts just before and after the dump bracket what it holds, for
+    # 'restore --drill'. A table that changed while pg_dump ran gets a range.
+    local rows_before rows_after
+    rows_before="$(db_query healthsave "$TABLE_COUNT_SQL" 2>/dev/null || true)"
     if ! (umask 077 && docker compose exec -T db pg_dump -U healthsave -d healthsave -Fc >"$work/db.dump"); then
         rm -rf "$work"
         log_error "pg_dump failed; no backup was written."
         return 1
     fi
+    rows_after="$(db_query healthsave "$TABLE_COUNT_SQL" 2>/dev/null || true)"
     ts_version="$(db_query healthsave "SELECT extversion FROM pg_extension WHERE extname = 'timescaledb'")"
     migrations="$(db_query healthsave "SELECT CASE WHEN to_regclass('schema_migrations') IS NULL THEN 0 ELSE (SELECT count(*) FROM schema_migrations) END")"
     [ -f "$ENV_FILE" ] && cp "$ENV_FILE" "$work/env"
@@ -1604,6 +1643,7 @@ write_backup() {
         echo "timescaledb=${ts_version}"
         echo "migrations=${migrations}"
         echo "db_sha256=$(sha256_of "$work/db.dump")"
+        merge_row_counts "$rows_before" "$rows_after"
     } >"$work/MANIFEST"
 
     local members=(MANIFEST db.dump)
@@ -2037,6 +2077,8 @@ cmd_backup() {
 cmd_restore() {
     local file=""
     local assume_yes=0
+    local drill=0
+    local image=""
     while [ "$#" -gt 0 ]; do
         case "$1" in
             -h|--help|help)
@@ -2044,6 +2086,15 @@ cmd_restore() {
                 return 0
                 ;;
             --yes|-y) assume_yes=1 ;;
+            --drill) drill=1 ;;
+            --image)
+                shift
+                if [ "$#" -eq 0 ] || [ -z "$1" ]; then
+                    log_error "--image needs a TimescaleDB image, e.g. timescale/timescaledb:2.17.2-pg16"
+                    exit 2
+                fi
+                image="$1"
+                ;;
             -*)
                 log_error "Unknown restore argument: $1"
                 print_restore_usage
@@ -2068,6 +2119,14 @@ cmd_restore() {
     if [ ! -f "$file" ]; then
         log_error "No such file: $file"
         exit 1
+    fi
+    if [ "$drill" = "1" ]; then
+        cmd_restore_drill "$file" "$image"
+        return
+    fi
+    if [ -n "$image" ]; then
+        log_error "--image only applies to --drill."
+        exit 2
     fi
 
     local work archive
@@ -2416,6 +2475,194 @@ cmd_license() {
             exit 2
             ;;
     esac
+}
+
+FEATURE_RESTORE_DRILL="care.restore.drill"
+DRILL_CONTAINER=""
+DRILL_WORK=""
+
+drill_image() {
+    local image
+    image="$(env_file_value TIMESCALE_IMAGE)"
+    if [ -z "$image" ] && [ -f docker-compose.yml ]; then
+        # shellcheck disable=SC2016 # matches the literal ${TIMESCALE_IMAGE:-...} in the file
+        image="$(sed -n 's/.*image: \${TIMESCALE_IMAGE:-\([^}]*\)}.*/\1/p' docker-compose.yml | head -n 1)"
+    fi
+    printf '%s' "${image:-timescale/timescaledb:2.17.2-pg16}"
+}
+
+drill_cleanup() {
+    if [ -n "$DRILL_CONTAINER" ]; then
+        # -v: the image keeps its data in an anonymous volume, which holds a copy
+        # of the restored health data; it must go with the container.
+        docker rm -f -v "$DRILL_CONTAINER" >/dev/null 2>&1 || true
+        DRILL_CONTAINER=""
+    fi
+    if [ -n "$DRILL_WORK" ]; then
+        rm -rf "$DRILL_WORK"
+        DRILL_WORK=""
+    fi
+}
+
+drill_query() {
+    # drill_query <database> <sql> - inside the throwaway container only.
+    docker exec -i "$DRILL_CONTAINER" psql -U healthsave -d "$1" -v ON_ERROR_STOP=1 -Atc "$2"
+}
+
+drill_compare() {
+    # drill_compare <MANIFEST> <restored counts> - the per-table report, then
+    # "SUMMARY <tables checked> <mismatches> <rows restored>".
+    awk -F= '
+        NR == FNR { if (NF == 2) restored[$1] = $2; next }
+        $1 ~ /^rows\./ && NF == 2 {
+            table = substr($1, 6)
+            want = $2
+            lo = want
+            hi = want
+            if (index(want, "..")) {
+                lo = substr(want, 1, index(want, "..") - 1)
+                hi = substr(want, index(want, "..") + 2)
+            }
+            checked++
+            seen[table] = 1
+            if (!(table in restored)) {
+                have = "-"
+                status = "MISSING"
+                bad++
+            } else {
+                have = restored[table]
+                rows += have
+                if (have + 0 >= lo + 0 && have + 0 <= hi + 0) {
+                    status = "ok"
+                } else {
+                    status = "MISMATCH"
+                    bad++
+                }
+            }
+            printf "  %-46s %16s %12s  %s\n", table, want, have, status
+        }
+        END {
+            for (table in restored) {
+                if (!(table in seen)) {
+                    printf "  %-46s %16s %12s  %s\n", table, "-", restored[table], "not in backup"
+                }
+            }
+            printf "SUMMARY %d %d %.0f\n", checked, bad, rows
+        }' "$2" "$1"
+}
+
+drill_fail() {
+    # drill_fail <reason> - print the FAIL verdict and exit 1 (the EXIT trap cleans up).
+    printf '\nRESULT: FAIL - %s\n' "$1"
+    exit 1
+}
+
+cmd_restore_drill() {
+    local file="$1"
+    local image="$2"
+    require_care_feature "$FEATURE_RESTORE_DRILL" "restore --drill"
+    require_docker
+
+    DRILL_WORK="$(mktemp -d)"
+    trap drill_cleanup EXIT
+    trap 'drill_cleanup; exit 130' INT TERM
+
+    local archive
+    archive="$(open_backup_archive "$file" "$DRILL_WORK")" || exit 1
+    if ! tar -C "$DRILL_WORK" -xf "$archive" MANIFEST db.dump 2>/dev/null; then
+        log_error "$file is not a healthsave backup (MANIFEST or db.dump missing)."
+        exit 1
+    fi
+    local manifest="$DRILL_WORK/MANIFEST"
+    if [ "$(manifest_value "$manifest" format)" != "$BACKUP_FORMAT" ]; then
+        log_error "$file was made by an unsupported backup format."
+        exit 1
+    fi
+    [ -n "$image" ] || image="$(drill_image)"
+    local want_ts want_migrations
+    want_ts="$(manifest_value "$manifest" timescaledb)"
+    want_migrations="$(manifest_value "$manifest" migrations)"
+
+    printf 'Restore drill: %s\n' "$file"
+    printf '  Backup made %s, TimescaleDB %s, %s migrations\n' \
+        "$(manifest_value "$manifest" created_at)" "${want_ts:-unknown}" "${want_migrations:-?}"
+    printf '  Throwaway database: %s, no network. This Observatory is not touched.\n\n' "$image"
+
+    if ! backup_dump_intact "$DRILL_WORK"; then
+        drill_fail "the database dump does not match the checksum in the backup's MANIFEST."
+    fi
+    if ! grep -q '^rows\.' "$manifest"; then
+        drill_fail "this backup records no row counts to check against (it was made before restore drills existed). Make a new backup and drill that one."
+    fi
+
+    local password
+    password="$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')"
+    DRILL_CONTAINER="healthsave-drill-$(date -u +%Y%m%d%H%M%S)-$$"
+    if ! docker run -d --rm --name "$DRILL_CONTAINER" --network none \
+        --label com.healthsave.restore-drill=1 \
+        -e POSTGRES_USER=healthsave -e POSTGRES_PASSWORD="$password" -e POSTGRES_DB=postgres \
+        -e TIMESCALEDB_TELEMETRY=off \
+        "$image" -c timescaledb.telemetry_level=off >/dev/null; then
+        drill_fail "could not start ${image}."
+    fi
+
+    # The image's init runs a temporary server on the Unix socket only, so
+    # wait for TCP on loopback: that is the real server.
+    local tries=0
+    until docker exec "$DRILL_CONTAINER" pg_isready -h 127.0.0.1 -U healthsave -q >/dev/null 2>&1; do
+        tries=$((tries + 1))
+        if [ "$tries" -ge 120 ]; then
+            drill_fail "the throwaway database did not start within two minutes."
+        fi
+        sleep 1
+    done
+
+    local create_ext="CREATE EXTENSION timescaledb"
+    [ -n "$want_ts" ] && create_ext="CREATE EXTENSION timescaledb VERSION '${want_ts}'"
+    drill_query postgres "CREATE DATABASE healthsave TEMPLATE template0" >/dev/null \
+        || drill_fail "could not create the scratch database."
+    if ! drill_query healthsave "$create_ext" >/dev/null 2>"$DRILL_WORK/extension.log"; then
+        drill_fail "${image} cannot run TimescaleDB ${want_ts:-?}, the version this backup was made with. Pass --image with a matching timescale/timescaledb tag."
+    fi
+    drill_query healthsave "SELECT timescaledb_pre_restore()" >/dev/null \
+        || drill_fail "timescaledb_pre_restore() failed."
+    local started=$SECONDS
+    # Same flags as a real restore. TimescaleDB dumps restore with harmless
+    # warnings, so the verdict comes from the counts, not pg_restore's exit code.
+    docker exec -i "$DRILL_CONTAINER" pg_restore -U healthsave -d healthsave --no-owner \
+        <"$DRILL_WORK/db.dump" 2>"$DRILL_WORK/pg_restore.log" || true
+    drill_query healthsave "SELECT timescaledb_post_restore()" >/dev/null \
+        || drill_fail "timescaledb_post_restore() failed."
+    local took=$((SECONDS - started))
+
+    drill_query healthsave "$TABLE_COUNT_SQL" >"$DRILL_WORK/restored" 2>/dev/null || true
+    local have_migrations
+    have_migrations="$(drill_query healthsave "SELECT CASE WHEN to_regclass('schema_migrations') IS NULL THEN 0 ELSE (SELECT count(*) FROM schema_migrations) END" 2>/dev/null || true)"
+
+    printf '  %-46s %16s %12s\n' "TABLE" "IN BACKUP" "RESTORED"
+    local report summary
+    report="$(drill_compare "$manifest" "$DRILL_WORK/restored")"
+    printf '%s\n' "$report" | grep -v '^SUMMARY '
+    summary="$(printf '%s\n' "$report" | grep '^SUMMARY ' | tail -n 1)"
+    local checked bad rows
+    read -r _ checked bad rows <<<"$summary"
+
+    local problems=""
+    if [ "${bad:-1}" != "0" ]; then
+        problems="${bad} of ${checked} tables do not match the counts recorded in the backup."
+    fi
+    if [ -n "$want_migrations" ] && [ "$have_migrations" != "$want_migrations" ]; then
+        problems="${problems:+$problems }schema_migrations: expected ${want_migrations}, found ${have_migrations:-none}."
+    fi
+    if [ -n "$problems" ]; then
+        if [ -s "$DRILL_WORK/pg_restore.log" ]; then
+            printf '\nLast pg_restore messages:\n'
+            tail -n 15 "$DRILL_WORK/pg_restore.log" | sed 's/^/  /'
+        fi
+        drill_fail "$problems"
+    fi
+    printf '\nRESULT: PASS - %s tables and %s rows restored in %ss, matching the backup; %s migrations.\n' \
+        "$checked" "$rows" "$took" "${have_migrations:-0}"
 }
 
 cmd_down() {
