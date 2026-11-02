@@ -138,7 +138,9 @@ Use this only if you deliberately want Home Assistant to connect to TimescaleDB.
 
 ## Dashboards And Automations
 
-Example files:
+For a ready-made set built on the MQTT bridge, see the [Home Assistant pack](home-assistant-pack.md): three automation blueprints and a Body dashboard that use plain Home Assistant cards.
+
+Older example files:
 
 - `integrations/home-assistant/README.md`
 - `integrations/home-assistant/nervous-system-core-package.yaml`

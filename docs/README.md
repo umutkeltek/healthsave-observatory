@@ -44,6 +44,7 @@ New here? Start with [Zero To Ready](zero-to-ready.md), then [Connect HealthSave
 ## Integrations
 
 - [Home Assistant & MQTT](integrations/home-assistant.md) - publish HealthSave signals through MQTT discovery/state topics.
+- [Home Assistant pack](integrations/home-assistant-pack.md) - blueprints and a Body dashboard built on the MQTT bridge's entities.
 
 ## Operations
 
