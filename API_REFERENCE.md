@@ -250,6 +250,8 @@ Update or delete one personal-context moment by id.
 
 ### `GET /api/v2/labs` — keyed
 Blood test results imported with `healthsave labs import` (docs/capture/labs-csv.md). One entry per marker (LOINC code), newest first, each result with the reference range its lab printed and the lab stream it came from. Results from different labs are separate rows, never averaged. Host-local — raw lab rows never egress.
+
+Every reading is computed by the statistical engine (`analysis/statistical/labs.py`): `band` places each result against **its own lab's** range (`below` / `within` / `above` / `no_range` / `censored`; `band_fraction` is 0 at the low bound, 1 at the high bound); `assessment` compares the latest result with the previous one (withheld, with a reason, when a value is a `<`/`>` limit or the units differ) and with the person's earlier range; `gap_count` counts pairs of results from different labs within 14 days.
 ```json
 { "markers": [{ "loinc": "2276-4", "metric_id": "loinc:2276-4", "name": "Ferritin",
   "unit": "ng/mL", "display_unit": "ng/mL", "result_count": 1, "lab_count": 1,
@@ -258,7 +260,12 @@ Blood test results imported with `healthsave labs import` (docs/capture/labs-csv
     "value": 24.0, "comparator": null, "unit": "ng/mL", "display_unit": "ng/mL",
     "reference_low": 30.0, "reference_high": 400.0, "lab": "Northfield Diagnostics",
     "stream_id": "…", "source_plugin_id": "labs-csv", "panel": "Iron studies",
-    "quality_flags": [] }] }],
+    "quality_flags": [], "band": "below", "band_fraction": -0.0162 }],
+  "assessment": { "latest_band": "below", "previous_specimen_at": null,
+    "previous_from_other_lab": false, "change": null, "change_pct": null, "direction": null,
+    "change_withheld": "first result", "prior_count": 0, "prior_min": null, "prior_max": null,
+    "versus_history": null, "outside_streak": 1 },
+  "gap_count": 0, "related_metric_id": "vital.resting_heart_rate" }],
   "labs": [{ "stream_id": "…", "lab": "Northfield Diagnostics", "source_plugin_id": "labs-csv",
     "result_count": 1, "first_specimen_at": "2026-09-08T05:50:00Z",
     "last_specimen_at": "2026-09-08T05:50:00Z" }],
@@ -266,7 +273,12 @@ Blood test results imported with `healthsave labs import` (docs/capture/labs-csv
 ```
 
 ### `GET /api/v2/labs/{loinc}` — keyed
-One marker's results, oldest first, in the same shape as one `markers[]` entry above. `422` when `{loinc}` is not a valid LOINC code (the check digit must match), `404` when there are no results for it.
+One marker's results, oldest first, in the same shape as one `markers[]` entry above, plus:
+
+- `gaps[]` — two labs that measured the marker within 14 days: both values, both band verdicts, the difference (`difference`, `difference_pct`, relative to the earlier result). Never a mean.
+- `cross_match` — for markers with a paired wearable signal (ferritin → resting heart rate, hemoglobin → HRV SDNN): a Finding Card (`finding_type: "lab_wearable_cross_match"`) comparing the 30 days of that signal before each draw on **one** wearable stream, with coverage (21 of 30 days needed), effect size (Spearman ρ across 4+ draws, otherwise Cohen's d between the last two windows), confidence and limitations. When coverage is missing, `card` is `null` and `reason` says what is missing. `null` for markers without a pairing.
+
+`422` when `{loinc}` is not a valid LOINC code (the check digit must match), `404` when there are no results for it.
 
 ### `GET /api/v2/intelligence` · `PUT /api/v2/intelligence` — keyed
 The LLM-narrator ("Intelligence") settings. `GET` returns the current posture with **no secrets** (only `key_last4`); `managed_by_env` is true when deploy-time env config is still the effective source. `PUT` applies `mode` (off/local/cloud) + the primary provider/model (+ optional write-only `api_key`) + the fallback chain. The server classifies each route's trust zone; `PUT` does **not** grant cloud egress (see `/consent`).

@@ -6,7 +6,7 @@ routes are exercised on the same shapes an import writes.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
@@ -17,6 +17,7 @@ from normalization.labs import parse_lab_csv
 from server.api import deps, v2_labs
 from server.api.deps import get_session
 from storage.timescale.labs import LabResultRow
+from storage.timescale.observations import SeriesPoint
 
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLE = ROOT / "tests" / "fixtures" / "labs" / "sample_labs.csv"
@@ -60,8 +61,58 @@ class _Repo:
         return [r for r in self.rows if loinc_code is None or r.loinc_code == loinc_code]
 
 
+WATCH = "7c1f0c52-4c1b-5d0e-9a43-2a7f7d1b9e01"
+
+
+class _Observations:
+    """Resting HR: 30 days before each draw, 60 bpm early on, 64 bpm before Sep."""
+
+    def __init__(self, enabled=True):
+        self.enabled = enabled
+        self.calls: list[tuple[str, datetime, datetime]] = []
+
+    async def query_series(self, session, *, metric_id, start, end, **_kwargs):
+        self.calls.append((metric_id, start, end))
+        if not self.enabled or metric_id != "vital.resting_heart_rate":
+            return []
+        value = 64.0 if end.year == 2026 and end.month >= 9 else 60.0
+        days = int((end - start).days)
+        return [
+            SeriesPoint(
+                t=start + timedelta(days=offset, hours=6),
+                interval_end=start + timedelta(days=offset, hours=6),
+                value=value + (offset % 2),
+                code=None,
+                unit="bpm",
+                source_id="s",
+                confidence=None,
+                stream_id=WATCH,
+            )
+            for offset in range(days)
+        ]
+
+
+async def _list_streams(_session, _owner, **_kwargs):
+    return [
+        {
+            "id": UUID(WATCH),
+            "source_plugin_id": "apple-healthkit-ios",
+            "origin_key": "apple watch",
+            "device_label": "Apple Watch",
+        }
+    ]
+
+
 @pytest.fixture
-def repo(monkeypatch):
+def observations(monkeypatch):
+    fake = _Observations()
+    monkeypatch.setattr(v2_labs, "observation_repository", fake)
+    monkeypatch.setattr(v2_labs.registry, "list_streams", _list_streams)
+    return fake
+
+
+@pytest.fixture
+def repo(monkeypatch, observations):
     fake = _Repo(_sample_rows())
     monkeypatch.setattr(v2_labs, "lab_repository", fake)
     return fake
@@ -155,3 +206,67 @@ def test_labs_routes_require_the_api_key(monkeypatch, repo) -> None:
             assert c.get("/api/v2/labs", headers={"X-API-Key": "secret-key"}).status_code == 200
     finally:
         server.app.dependency_overrides.clear()
+
+
+def test_each_result_is_placed_against_its_own_lab_range(client) -> None:
+    body = client.get("/api/v2/labs/2276-4").json()
+    bands = [(r["lab"], r["value"], r["band"]) for r in body["results"]]
+    assert bands == [
+        ("Northfield Diagnostics", 64.0, "within"),
+        ("Northfield Diagnostics", 41.0, "within"),
+        ("Northfield Diagnostics", 24.0, "below"),
+        ("Harbor Clinical Lab", 19.0, "within"),  # Harbor prints 15-300
+    ]
+    assert body["results"][0]["band_fraction"] == pytest.approx((64 - 30) / 370, abs=1e-4)
+
+
+def test_assessment_and_gap_between_labs_are_served(client) -> None:
+    body = client.get("/api/v2/labs/2276-4").json()
+    assessment = body["assessment"]
+    assert assessment["latest_band"] == "within"
+    assert assessment["previous_from_other_lab"] is True
+    assert assessment["change"] == pytest.approx(-5.0)
+    assert assessment["direction"] == "down"
+    assert assessment["versus_history"] == "below_prior_range"
+    assert body["gap_count"] == 1
+    (gap,) = body["gaps"]
+    assert (gap["earlier_lab"], gap["later_lab"]) == (
+        "Northfield Diagnostics",
+        "Harbor Clinical Lab",
+    )
+    assert (gap["earlier_value"], gap["later_value"]) == (24.0, 19.0)
+    assert (gap["earlier_band"], gap["later_band"], gap["bands_disagree"]) == (
+        "below",
+        "within",
+        True,
+    )
+
+
+def test_cross_match_card_reads_one_wearable_stream_before_each_draw(client, observations) -> None:
+    body = client.get("/api/v2/labs/2276-4").json()
+    match = body["cross_match"]
+    assert match["related_metric_id"] == "vital.resting_heart_rate"
+    assert match["stream_label"] == "Apple Watch"
+    card = match["card"]
+    assert card["finding_type"] == "lab_wearable_cross_match"
+    assert card["metric"] == "loinc:2276-4"
+    assert card["effect_size"]["kind"] == "spearman_rho"  # four covered draws
+    assert card["effect_size"]["p_value"] > 0.05
+    assert card["confidence"] == "low"  # four draws are too few for this to be significant
+    assert card["coverage"]["days_with_data"] == 30
+    assert card["sources"][1] == {"source_plugin_id": "apple-healthkit-ios", "label": "Apple Watch"}
+    assert {call[0] for call in observations.calls} == {"vital.resting_heart_rate"}
+    assert len(observations.calls) == 4  # one bounded window per draw
+
+
+def test_no_wearable_data_gives_a_reason_not_a_card(client, observations) -> None:
+    observations.enabled = False
+    match = client.get("/api/v2/labs/718-7").json()["cross_match"]
+    assert match["card"] is None
+    assert match["reason"].startswith("No heart rate variability (SDNN) data")
+
+
+def test_unpaired_markers_have_no_cross_match(client) -> None:
+    body = client.get("/api/v2/labs/4548-4").json()
+    assert body["cross_match"] is None
+    assert body["related_metric_id"] is None

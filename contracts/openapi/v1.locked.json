@@ -191,6 +191,37 @@
         "title": "ApplyIntelligenceRequest",
         "type": "object"
       },
+      "Confounder": {
+        "additionalProperties": false,
+        "description": "A competing explanation the engine already accounts for or flags.\n\nMirrors the context-suppression rules in the detectors (workout-window HR\nspikes, post-workout HRV drops, the sleep window) so a card can say *why* a\nreading might not mean what it looks like.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "metric": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric"
+          }
+        },
+        "required": [
+          "kind",
+          "description"
+        ],
+        "title": "Confounder",
+        "type": "object"
+      },
       "ConnectionInput": {
         "additionalProperties": false,
         "properties": {
@@ -286,6 +317,69 @@
           "granted"
         ],
         "title": "ConsentRequest",
+        "type": "object"
+      },
+      "Coverage": {
+        "additionalProperties": false,
+        "description": "Data sufficiency behind the finding \u2014 the ``gates.py`` verdict, surfaced.\n\nA finding is only emitted once its producer's sufficiency gate passed, so\n``is_sufficient`` is typically ``True``; ``note`` records the threshold that\nwas cleared (e.g. \"\u226514 observations over \u22657 days\"). ``days_until_sufficient``\nis only meaningful on the not-yet-analyzable path a future producer might\nsurface.",
+        "properties": {
+          "days_until_sufficient": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Until Sufficient"
+          },
+          "days_with_data": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days With Data"
+          },
+          "is_sufficient": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Sufficient"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "observation_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observation Count"
+          }
+        },
+        "title": "Coverage",
         "type": "object"
       },
       "CreateExperimentRequest": {
@@ -538,6 +632,63 @@
         "title": "DecideResponse",
         "type": "object"
       },
+      "Delta": {
+        "additionalProperties": false,
+        "description": "The change: current vs baseline.",
+        "properties": {
+          "absolute": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Absolute"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "enum": [
+                  "up",
+                  "down",
+                  "flat"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "title": "Delta",
+        "type": "object"
+      },
       "DeviceIdentityLinkCreate": {
         "properties": {
           "confidence": {
@@ -686,6 +837,133 @@
         "title": "DevicesResponse",
         "type": "object"
       },
+      "EffectSize": {
+        "additionalProperties": false,
+        "description": "How big the effect is, method-tagged so the UI can label it honestly.\n\n``kind`` names the statistic (``z_score`` / ``spearman_rho`` /\n``slope_per_day`` / ``cohens_d`` \u2026) so a reader never confuses a correlation\ncoefficient with a standardized mean difference. ``p_value`` rides alongside\nthe magnitude (significance \u2260 size) rather than being a separate top-level\ncard field.",
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "p_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Value"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "title": "EffectSize",
+        "type": "object"
+      },
+      "ExperimentCandidateRef": {
+        "additionalProperties": false,
+        "description": "Machine hook linking ``next_question`` to the experiments surface.\n\nDeliberately speaks the ``/api/v2/experiments/candidates`` vocabulary\n(metric pair + lever/outcome/verdict/protocol from the readiness classifier)\n\u2014 the candidate shape the experiment engine already ranks, so nothing new is\ninvented here. The ``POST /api/v2/experiments`` create body renames the pair\nto ``lever_metric_id`` / ``outcome_metric_id``: the values are identical, only\nthe field names differ, so the client maps ``lever`` \u2192 ``lever_metric_id`` and\n``outcome`` \u2192 ``outcome_metric_id`` when promoting a candidate.",
+        "properties": {
+          "lever": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lever"
+          },
+          "metric_a": {
+            "title": "Metric A",
+            "type": "string"
+          },
+          "metric_b": {
+            "title": "Metric B",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "required_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Days"
+          },
+          "suggested_protocol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Protocol"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          }
+        },
+        "required": [
+          "metric_a",
+          "metric_b"
+        ],
+        "title": "ExperimentCandidateRef",
+        "type": "object"
+      },
       "ExperimentListResponse": {
         "additionalProperties": false,
         "properties": {
@@ -800,6 +1078,139 @@
           "results"
         ],
         "title": "ExperimentView",
+        "type": "object"
+      },
+      "FindingCard": {
+        "additionalProperties": false,
+        "description": "The versioned content model for one evidence-linked finding.\n\n``claim`` / ``metric`` / ``schema_version`` are required; everything else is\noptional so legacy or thin findings are represented without fabrication.",
+        "properties": {
+          "baseline_window": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WindowRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "claim": {
+            "title": "Claim",
+            "type": "string"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "confounders": {
+            "items": {
+              "$ref": "#/components/schemas/Confounder"
+            },
+            "title": "Confounders",
+            "type": "array"
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Coverage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_window": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WindowRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Delta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effect_size": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EffectSize"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finding_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finding Type"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Limitations",
+            "type": "array"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "next_question": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NextQuestion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schema_version": {
+            "default": 1,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceRef"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "claim",
+          "metric"
+        ],
+        "title": "FindingCard",
         "type": "object"
       },
       "FindingResponse": {
@@ -921,9 +1332,328 @@
         "title": "InsightsLatestResponse",
         "type": "object"
       },
+      "LabAssessmentView": {
+        "additionalProperties": false,
+        "properties": {
+          "change": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change"
+          },
+          "change_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Pct"
+          },
+          "change_withheld": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Withheld"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "latest_band": {
+            "title": "Latest Band",
+            "type": "string"
+          },
+          "outside_streak": {
+            "title": "Outside Streak",
+            "type": "integer"
+          },
+          "previous_from_other_lab": {
+            "title": "Previous From Other Lab",
+            "type": "boolean"
+          },
+          "previous_specimen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Specimen At"
+          },
+          "prior_count": {
+            "title": "Prior Count",
+            "type": "integer"
+          },
+          "prior_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior Max"
+          },
+          "prior_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior Min"
+          },
+          "versus_history": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versus History"
+          }
+        },
+        "required": [
+          "latest_band",
+          "previous_specimen_at",
+          "previous_from_other_lab",
+          "change",
+          "change_pct",
+          "direction",
+          "change_withheld",
+          "prior_count",
+          "prior_min",
+          "prior_max",
+          "versus_history",
+          "outside_streak"
+        ],
+        "title": "LabAssessmentView",
+        "type": "object"
+      },
+      "LabCrossMatchView": {
+        "additionalProperties": false,
+        "properties": {
+          "card": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FindingCard"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "related_label": {
+            "title": "Related Label",
+            "type": "string"
+          },
+          "related_metric_id": {
+            "title": "Related Metric Id",
+            "type": "string"
+          },
+          "related_unit": {
+            "title": "Related Unit",
+            "type": "string"
+          },
+          "stream_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stream Id"
+          },
+          "stream_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stream Label"
+          }
+        },
+        "required": [
+          "related_metric_id",
+          "related_label",
+          "related_unit",
+          "stream_id",
+          "stream_label",
+          "card",
+          "reason"
+        ],
+        "title": "LabCrossMatchView",
+        "type": "object"
+      },
+      "LabGapView": {
+        "additionalProperties": false,
+        "properties": {
+          "bands_disagree": {
+            "title": "Bands Disagree",
+            "type": "boolean"
+          },
+          "days_apart": {
+            "title": "Days Apart",
+            "type": "number"
+          },
+          "difference": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difference"
+          },
+          "difference_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difference Pct"
+          },
+          "earlier_band": {
+            "title": "Earlier Band",
+            "type": "string"
+          },
+          "earlier_id": {
+            "format": "uuid",
+            "title": "Earlier Id",
+            "type": "string"
+          },
+          "earlier_lab": {
+            "title": "Earlier Lab",
+            "type": "string"
+          },
+          "earlier_specimen_at": {
+            "format": "date-time",
+            "title": "Earlier Specimen At",
+            "type": "string"
+          },
+          "earlier_value": {
+            "title": "Earlier Value",
+            "type": "number"
+          },
+          "later_band": {
+            "title": "Later Band",
+            "type": "string"
+          },
+          "later_id": {
+            "format": "uuid",
+            "title": "Later Id",
+            "type": "string"
+          },
+          "later_lab": {
+            "title": "Later Lab",
+            "type": "string"
+          },
+          "later_specimen_at": {
+            "format": "date-time",
+            "title": "Later Specimen At",
+            "type": "string"
+          },
+          "later_value": {
+            "title": "Later Value",
+            "type": "number"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "earlier_id",
+          "later_id",
+          "earlier_lab",
+          "later_lab",
+          "earlier_specimen_at",
+          "later_specimen_at",
+          "earlier_value",
+          "later_value",
+          "unit",
+          "days_apart",
+          "difference",
+          "difference_pct",
+          "earlier_band",
+          "later_band",
+          "bands_disagree"
+        ],
+        "title": "LabGapView",
+        "type": "object"
+      },
       "LabMarkerDetail": {
         "additionalProperties": false,
         "properties": {
+          "assessment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LabAssessmentView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cross_match": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LabCrossMatchView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "display_unit": {
             "title": "Display Unit",
             "type": "string"
@@ -932,6 +1662,17 @@
             "format": "date-time",
             "title": "First Specimen At",
             "type": "string"
+          },
+          "gap_count": {
+            "title": "Gap Count",
+            "type": "integer"
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/LabGapView"
+            },
+            "title": "Gaps",
+            "type": "array"
           },
           "lab_count": {
             "title": "Lab Count",
@@ -953,6 +1694,17 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "related_metric_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Metric Id"
           },
           "result_count": {
             "title": "Result Count",
@@ -980,7 +1732,12 @@
           "lab_count",
           "first_specimen_at",
           "last_specimen_at",
-          "results"
+          "results",
+          "assessment",
+          "gap_count",
+          "related_metric_id",
+          "gaps",
+          "cross_match"
         ],
         "title": "LabMarkerDetail",
         "type": "object"
@@ -988,6 +1745,16 @@
       "LabMarkerView": {
         "additionalProperties": false,
         "properties": {
+          "assessment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LabAssessmentView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "display_unit": {
             "title": "Display Unit",
             "type": "string"
@@ -996,6 +1763,10 @@
             "format": "date-time",
             "title": "First Specimen At",
             "type": "string"
+          },
+          "gap_count": {
+            "title": "Gap Count",
+            "type": "integer"
           },
           "lab_count": {
             "title": "Lab Count",
@@ -1017,6 +1788,17 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "related_metric_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Metric Id"
           },
           "result_count": {
             "title": "Result Count",
@@ -1044,7 +1826,10 @@
           "lab_count",
           "first_specimen_at",
           "last_specimen_at",
-          "results"
+          "results",
+          "assessment",
+          "gap_count",
+          "related_metric_id"
         ],
         "title": "LabMarkerView",
         "type": "object"
@@ -1052,6 +1837,21 @@
       "LabResultView": {
         "additionalProperties": false,
         "properties": {
+          "band": {
+            "title": "Band",
+            "type": "string"
+          },
+          "band_fraction": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Band Fraction"
+          },
           "comparator": {
             "anyOf": [
               {
@@ -1157,7 +1957,9 @@
           "stream_id",
           "source_plugin_id",
           "panel",
-          "quality_flags"
+          "quality_flags",
+          "band",
+          "band_fraction"
         ],
         "title": "LabResultView",
         "type": "object"
@@ -1352,6 +2154,31 @@
           "updated_at"
         ],
         "title": "MomentView",
+        "type": "object"
+      },
+      "NextQuestion": {
+        "additionalProperties": false,
+        "description": "The flywheel field: prose + an optional promotable experiment candidate.",
+        "properties": {
+          "experiment_candidate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExperimentCandidateRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prose": {
+            "title": "Prose",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prose"
+        ],
+        "title": "NextQuestion",
         "type": "object"
       },
       "PhaseView": {
@@ -1893,6 +2720,36 @@
           "rejected"
         ],
         "title": "SessionFusionReconciliationResponse",
+        "type": "object"
+      },
+      "SourceRef": {
+        "additionalProperties": false,
+        "description": "Where the underlying data came from (provenance, at card granularity).",
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "source_plugin_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Plugin Id"
+          }
+        },
+        "title": "SourceRef",
         "type": "object"
       },
       "SourceView": {
@@ -2606,6 +3463,60 @@
           }
         },
         "title": "WeeklySummaryResponse",
+        "type": "object"
+      },
+      "WindowRef": {
+        "additionalProperties": false,
+        "description": "A time window a finding is measured over (current or baseline).",
+        "properties": {
+          "end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          }
+        },
+        "title": "WindowRef",
         "type": "object"
       }
     }

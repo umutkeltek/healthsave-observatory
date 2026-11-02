@@ -1325,6 +1325,22 @@ export interface components {
             /** Redact Cloud Prompts */
             redact_cloud_prompts?: boolean | null;
         };
+        /**
+         * Confounder
+         * @description A competing explanation the engine already accounts for or flags.
+         *
+         *     Mirrors the context-suppression rules in the detectors (workout-window HR
+         *     spikes, post-workout HRV drops, the sleep window) so a card can say *why* a
+         *     reading might not mean what it looks like.
+         */
+        Confounder: {
+            /** Description */
+            description: string;
+            /** Kind */
+            kind: string;
+            /** Metric */
+            metric?: string | null;
+        };
         /** ConnectionInput */
         ConnectionInput: {
             /** Api Key */
@@ -1346,6 +1362,28 @@ export interface components {
             consent_version?: string | null;
             /** Granted */
             granted: boolean;
+        };
+        /**
+         * Coverage
+         * @description Data sufficiency behind the finding — the ``gates.py`` verdict, surfaced.
+         *
+         *     A finding is only emitted once its producer's sufficiency gate passed, so
+         *     ``is_sufficient`` is typically ``True``; ``note`` records the threshold that
+         *     was cleared (e.g. "≥14 observations over ≥7 days"). ``days_until_sufficient``
+         *     is only meaningful on the not-yet-analyzable path a future producer might
+         *     surface.
+         */
+        Coverage: {
+            /** Days Until Sufficient */
+            days_until_sufficient?: number | null;
+            /** Days With Data */
+            days_with_data?: number | null;
+            /** Is Sufficient */
+            is_sufficient?: boolean | null;
+            /** Note */
+            note?: string | null;
+            /** Observation Count */
+            observation_count?: number | null;
         };
         /** CreateExperimentRequest */
         CreateExperimentRequest: {
@@ -1439,6 +1477,20 @@ export interface components {
              */
             proposal_id: string;
         };
+        /**
+         * Delta
+         * @description The change: current vs baseline.
+         */
+        Delta: {
+            /** Absolute */
+            absolute?: number | null;
+            /** Direction */
+            direction?: ("up" | "down" | "flat") | null;
+            /** Pct */
+            pct?: number | null;
+            /** Unit */
+            unit?: string | null;
+        };
         /** DeviceIdentityLinkCreate */
         DeviceIdentityLinkCreate: {
             /**
@@ -1517,6 +1569,54 @@ export interface components {
             /** Total */
             total?: number | null;
         };
+        /**
+         * EffectSize
+         * @description How big the effect is, method-tagged so the UI can label it honestly.
+         *
+         *     ``kind`` names the statistic (``z_score`` / ``spearman_rho`` /
+         *     ``slope_per_day`` / ``cohens_d`` …) so a reader never confuses a correlation
+         *     coefficient with a standardized mean difference. ``p_value`` rides alongside
+         *     the magnitude (significance ≠ size) rather than being a separate top-level
+         *     card field.
+         */
+        EffectSize: {
+            /** Kind */
+            kind?: string | null;
+            /** Label */
+            label?: string | null;
+            /** P Value */
+            p_value?: number | null;
+            /** Value */
+            value?: number | null;
+        };
+        /**
+         * ExperimentCandidateRef
+         * @description Machine hook linking ``next_question`` to the experiments surface.
+         *
+         *     Deliberately speaks the ``/api/v2/experiments/candidates`` vocabulary
+         *     (metric pair + lever/outcome/verdict/protocol from the readiness classifier)
+         *     — the candidate shape the experiment engine already ranks, so nothing new is
+         *     invented here. The ``POST /api/v2/experiments`` create body renames the pair
+         *     to ``lever_metric_id`` / ``outcome_metric_id``: the values are identical, only
+         *     the field names differ, so the client maps ``lever`` → ``lever_metric_id`` and
+         *     ``outcome`` → ``outcome_metric_id`` when promoting a candidate.
+         */
+        ExperimentCandidateRef: {
+            /** Lever */
+            lever?: string | null;
+            /** Metric A */
+            metric_a: string;
+            /** Metric B */
+            metric_b: string;
+            /** Outcome */
+            outcome?: string | null;
+            /** Required Days */
+            required_days?: number | null;
+            /** Suggested Protocol */
+            suggested_protocol?: string | null;
+            /** Verdict */
+            verdict?: string | null;
+        };
         /** ExperimentListResponse */
         ExperimentListResponse: {
             /** Count */
@@ -1565,6 +1665,40 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * FindingCard
+         * @description The versioned content model for one evidence-linked finding.
+         *
+         *     ``claim`` / ``metric`` / ``schema_version`` are required; everything else is
+         *     optional so legacy or thin findings are represented without fabrication.
+         */
+        FindingCard: {
+            baseline_window?: components["schemas"]["WindowRef"] | null;
+            /** Claim */
+            claim: string;
+            /** Confidence */
+            confidence?: ("low" | "medium" | "high") | null;
+            /** Confounders */
+            confounders?: components["schemas"]["Confounder"][];
+            coverage?: components["schemas"]["Coverage"] | null;
+            current_window?: components["schemas"]["WindowRef"] | null;
+            delta?: components["schemas"]["Delta"] | null;
+            effect_size?: components["schemas"]["EffectSize"] | null;
+            /** Finding Type */
+            finding_type?: string | null;
+            /** Limitations */
+            limitations?: string[];
+            /** Metric */
+            metric: string;
+            next_question?: components["schemas"]["NextQuestion"] | null;
+            /**
+             * Schema Version
+             * @default 1
+             */
+            schema_version: number;
+            /** Sources */
+            sources?: components["schemas"]["SourceRef"][];
+        };
         /** FindingResponse */
         FindingResponse: {
             /** Created At */
@@ -1592,8 +1726,98 @@ export interface components {
             recent_findings?: components["schemas"]["FindingResponse"][];
             weekly_summary?: components["schemas"]["WeeklySummaryResponse"] | null;
         };
+        /** LabAssessmentView */
+        LabAssessmentView: {
+            /** Change */
+            change: number | null;
+            /** Change Pct */
+            change_pct: number | null;
+            /** Change Withheld */
+            change_withheld: string | null;
+            /** Direction */
+            direction: string | null;
+            /** Latest Band */
+            latest_band: string;
+            /** Outside Streak */
+            outside_streak: number;
+            /** Previous From Other Lab */
+            previous_from_other_lab: boolean;
+            /** Previous Specimen At */
+            previous_specimen_at: string | null;
+            /** Prior Count */
+            prior_count: number;
+            /** Prior Max */
+            prior_max: number | null;
+            /** Prior Min */
+            prior_min: number | null;
+            /** Versus History */
+            versus_history: string | null;
+        };
+        /** LabCrossMatchView */
+        LabCrossMatchView: {
+            card: components["schemas"]["FindingCard"] | null;
+            /** Reason */
+            reason: string | null;
+            /** Related Label */
+            related_label: string;
+            /** Related Metric Id */
+            related_metric_id: string;
+            /** Related Unit */
+            related_unit: string;
+            /** Stream Id */
+            stream_id: string | null;
+            /** Stream Label */
+            stream_label: string | null;
+        };
+        /** LabGapView */
+        LabGapView: {
+            /** Bands Disagree */
+            bands_disagree: boolean;
+            /** Days Apart */
+            days_apart: number;
+            /** Difference */
+            difference: number | null;
+            /** Difference Pct */
+            difference_pct: number | null;
+            /** Earlier Band */
+            earlier_band: string;
+            /**
+             * Earlier Id
+             * Format: uuid
+             */
+            earlier_id: string;
+            /** Earlier Lab */
+            earlier_lab: string;
+            /**
+             * Earlier Specimen At
+             * Format: date-time
+             */
+            earlier_specimen_at: string;
+            /** Earlier Value */
+            earlier_value: number;
+            /** Later Band */
+            later_band: string;
+            /**
+             * Later Id
+             * Format: uuid
+             */
+            later_id: string;
+            /** Later Lab */
+            later_lab: string;
+            /**
+             * Later Specimen At
+             * Format: date-time
+             */
+            later_specimen_at: string;
+            /** Later Value */
+            later_value: number;
+            /** Unit */
+            unit: string;
+        };
         /** LabMarkerDetail */
         LabMarkerDetail: {
+            assessment: components["schemas"]["LabAssessmentView"] | null;
+            cross_match: components["schemas"]["LabCrossMatchView"] | null;
             /** Display Unit */
             display_unit: string;
             /**
@@ -1601,6 +1825,10 @@ export interface components {
              * Format: date-time
              */
             first_specimen_at: string;
+            /** Gap Count */
+            gap_count: number;
+            /** Gaps */
+            gaps: components["schemas"]["LabGapView"][];
             /** Lab Count */
             lab_count: number;
             /**
@@ -1614,6 +1842,8 @@ export interface components {
             metric_id: string;
             /** Name */
             name: string;
+            /** Related Metric Id */
+            related_metric_id: string | null;
             /** Result Count */
             result_count: number;
             /** Results */
@@ -1623,6 +1853,7 @@ export interface components {
         };
         /** LabMarkerView */
         LabMarkerView: {
+            assessment: components["schemas"]["LabAssessmentView"] | null;
             /** Display Unit */
             display_unit: string;
             /**
@@ -1630,6 +1861,8 @@ export interface components {
              * Format: date-time
              */
             first_specimen_at: string;
+            /** Gap Count */
+            gap_count: number;
             /** Lab Count */
             lab_count: number;
             /**
@@ -1643,6 +1876,8 @@ export interface components {
             metric_id: string;
             /** Name */
             name: string;
+            /** Related Metric Id */
+            related_metric_id: string | null;
             /** Result Count */
             result_count: number;
             /** Results */
@@ -1652,6 +1887,10 @@ export interface components {
         };
         /** LabResultView */
         LabResultView: {
+            /** Band */
+            band: string;
+            /** Band Fraction */
+            band_fraction: number | null;
             /** Comparator */
             comparator: string | null;
             /** Date Only */
@@ -1755,6 +1994,15 @@ export interface components {
             title: string;
             /** Updated At */
             updated_at: string | null;
+        };
+        /**
+         * NextQuestion
+         * @description The flywheel field: prose + an optional promotable experiment candidate.
+         */
+        NextQuestion: {
+            experiment_candidate?: components["schemas"]["ExperimentCandidateRef"] | null;
+            /** Prose */
+            prose: string;
         };
         /** PhaseView */
         PhaseView: {
@@ -1935,6 +2183,16 @@ export interface components {
             matched_pairs: number;
             /** Rejected */
             rejected: number;
+        };
+        /**
+         * SourceRef
+         * @description Where the underlying data came from (provenance, at card granularity).
+         */
+        SourceRef: {
+            /** Label */
+            label?: string | null;
+            /** Source Plugin Id */
+            source_plugin_id?: string | null;
         };
         /** SourceView */
         SourceView: {
@@ -2175,6 +2433,20 @@ export interface components {
             week_end?: string | null;
             /** Week Start */
             week_start?: string | null;
+        };
+        /**
+         * WindowRef
+         * @description A time window a finding is measured over (current or baseline).
+         */
+        WindowRef: {
+            /** End */
+            end?: string | null;
+            /** Label */
+            label?: string | null;
+            /** N */
+            n?: number | null;
+            /** Start */
+            start?: string | null;
         };
     };
     responses: never;
