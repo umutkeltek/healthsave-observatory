@@ -122,3 +122,4 @@ A rollback undoes one update, once. If the checkout has moved since that update,
 
 - [Backups & migrations](backup-and-migrations.md) for the free backup and restore.
 - [Security model](security.md) for where secrets live.
+- [Remote access without opening ports](remote-access.md) to keep syncing away from home.

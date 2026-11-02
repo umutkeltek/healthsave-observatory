@@ -369,6 +369,38 @@ services:
     ports:
       - "${WEB_BIND:-127.0.0.1}:4173:4173"
 
+  # Tailscale sidecar, opt-in via the `tailscale` profile: the web app and the
+  # API on your tailnet, over HTTPS, without opening a port on your router.
+  #   https://<TAILSCALE_HOSTNAME>.<tailnet>.ts.net        -> web (4173)
+  #   https://<TAILSCALE_HOSTNAME>.<tailnet>.ts.net:8443   -> API (8000)
+  # Only devices on your tailnet can connect: Funnel stays off
+  # (deploy/tailscale/serve.json) and no host port is published. Userspace
+  # networking, so no /dev/net/tun or extra capabilities. --no-logs-no-support
+  # keeps tailscaled from uploading its own logs to Tailscale. The auth key is
+  # used once, at first login; the node identity lives in tailscale_state.
+  # See docs/operations/remote-access.md.
+  tailscale:
+    image: ${TAILSCALE_IMAGE:-tailscale/tailscale:stable}
+    restart: unless-stopped
+    profiles: ["tailscale"]
+    hostname: ${TAILSCALE_HOSTNAME:-healthsave-observatory}
+    depends_on:
+      api:
+        condition: service_started
+      web:
+        condition: service_started
+    environment:
+      TS_AUTHKEY: ${TAILSCALE_AUTHKEY:-}
+      TS_HOSTNAME: ${TAILSCALE_HOSTNAME:-healthsave-observatory}
+      TS_AUTH_ONCE: "true"
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_USERSPACE: "true"
+      TS_TAILSCALED_EXTRA_ARGS: --no-logs-no-support
+    volumes:
+      - tailscale_state:/var/lib/tailscale
+      - ./deploy/tailscale/serve.json:/config/serve.json:ro
+
 volumes:
   db_data:
   web_data:
@@ -376,3 +408,4 @@ volumes:
   mqtt_data:
   mqtt_log:
   ollama_models:
+  tailscale_state:

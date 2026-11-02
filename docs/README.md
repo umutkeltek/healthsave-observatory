@@ -51,6 +51,7 @@ New here? Start with [Zero To Ready](zero-to-ready.md), then [Connect HealthSave
 - [CLI distribution](operations/cli-distribution.md) - installer, npm/npx path, repo-local fallback, and Homebrew release shape.
 - [Local LLM](operations/local-llm.md) - choose and operate the optional Ollama narration model.
 - [Reverse proxy & HTTPS](operations/reverse-proxy.md) - expose API surfaces safely behind HTTPS.
+- [Remote access without opening ports](operations/remote-access.md) - sync and use the dashboard away from home over Tailscale, with no router port opened.
 - [Security model](operations/security.md) - API keys, fail-closed auth, network exposure, secret storage, egress limits, and backup security.
 - [Backup & migrations](operations/backup-and-migrations.md) - back up TimescaleDB and apply migrations safely.
 - [Observatory Care](operations/observatory-care.md) - the optional licence: encrypted off-site and scheduled backups, restore drills, update rollback; checked offline.
