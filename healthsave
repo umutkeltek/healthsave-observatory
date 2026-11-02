@@ -1892,7 +1892,7 @@ require_care_feature() {
     file="$(license_file)"
     if [ ! -f "$file" ]; then
         log_error "'healthsave ${what}' is part of Observatory Care, and no licence is installed."
-        log_error "Activate one with: healthsave license activate FILE. Everything free keeps working without one."
+        log_error "Activate one with: healthsave license activate CODE (or the licence FILE). Everything free keeps working without one."
         exit 1
     fi
     if ! licensing_run check "$feature" --file - <"$file"; then
@@ -2570,7 +2570,7 @@ cmd_license_status() {
     if [ ! -f "$file" ]; then
         log_info "No licence installed. This is Observatory Community: every free feature works."
         log_info "Observatory Care adds encrypted off-site and scheduled backups, restore drills and update rollback."
-        log_info "Activate a licence with: healthsave license activate FILE"
+        log_info "Activate a licence with: healthsave license activate CODE (or the licence FILE)"
         return 0
     fi
     log_info "Licence file: ${file}"
