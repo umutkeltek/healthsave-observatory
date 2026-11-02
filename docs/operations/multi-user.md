@@ -24,6 +24,11 @@ Nothing to configure. When the `X-User-Id` header is absent, ingest writes under
 
    then drop `WHERE owner_id = '$owner'` into each panel query.
 
+4. **Point Home Assistant at one person.** The Home Assistant / MQTT bridge reads and publishes a
+   single owner, never everyone. By default that is the sentinel owner above (the person your `.env`
+   `API_KEY` maps to). To publish someone else, set `HEALTHSAVE_BRIDGE_OWNER=<owner uuid>` in `.env`
+   and recreate the `homeassistant-mqtt` service. A malformed value stops the bridge at start.
+
 ## How isolation holds
 
 The unique indexes on every metric table include `owner_id`, so two residents can have a sample at the same `(time, device_id)` without collisions, and re-syncing from one client stays idempotent. If you skip step 2, existing single-user installs keep working unchanged.

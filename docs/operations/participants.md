@@ -83,9 +83,12 @@ Anything else answers `403`. A revoked key answers `401`. The admin lists people
 - Findings, Body Briefs and experiments are computed for the primary person only.
 - A participant view groups days by the default calendar (UTC midnight); the analytical-time
   setting in Settings is the primary person's.
-- The bundled Grafana dashboards and the Home Assistant / MQTT bridge read every row on the machine,
-  across people. On an Observatory that holds participants, leave the bridge off, or filter Grafana
-  panels by `owner_id` yourself ([Multi-user / household](multi-user.md)).
+- The Home Assistant / MQTT bridge publishes one person: the primary person (the owner your `.env`
+  admin key maps to), or the one named in `HEALTHSAVE_BRIDGE_OWNER`. It never publishes a
+  participant's rows to your Home Assistant ([Home Assistant and MQTT](../integrations/home-assistant.md)).
+- The bundled Grafana dashboards read every row on the machine, across people. On an Observatory
+  that holds participants, filter the panels by `owner_id` yourself
+  ([Multi-user / household](multi-user.md)).
 
 ## See also
 
