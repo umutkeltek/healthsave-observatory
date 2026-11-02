@@ -55,6 +55,7 @@ Commands:
   doctor                    Check platform, config, services, and URLs
   pair [--new-key]          Show the server URL, API key and pairing QR for the app
   update [--to TAG] [--yes] Move to the newest release (takes a backup first)
+  update --rollback [--yes] Care: go back to the release before the last update
   web-password reset        Forget the Settings password; WEB_PASSWORD in .env applies again
   backup [--out DIR]        Save the database, .env and config.yaml to one file
   backup --encrypt|--offsite R|--schedule daily|weekly  Care: encrypted, off-site, scheduled
@@ -257,15 +258,23 @@ Usage:
   healthsave update
   healthsave update --to v1.2.0
   healthsave update --yes
+  healthsave update --rollback
 
 Options:
   --to TAG        Release tag to move to (default: the newest vX.Y.Z tag)
   --yes           Skip the confirmation (for scripts)
+  --rollback      Undo the last update (Care): check out the release it came
+                  from and restart the services that were running then
   -h, --help      Show this help
 
 Migrations run automatically when the API starts; they only add tables and
 columns, so going back to the previous release keeps working. Read the
 release notes in CHANGELOG.md before a major version jump.
+
+Each update records the release it came from, the services that were running
+and its pre-update backup (in .git/healthsave-last-update). A rollback uses
+that record; it leaves the database as it is, and tells you which backup to
+restore if the data itself needs to go back too.
 EOF
 }
 
@@ -1424,6 +1433,7 @@ newest_release_tag() {
 cmd_update() {
     local target=""
     local assume_yes=0
+    local rollback=0
     while [ "$#" -gt 0 ]; do
         case "$1" in
             -h|--help|help)
@@ -1431,6 +1441,7 @@ cmd_update() {
                 return 0
                 ;;
             --yes|-y) assume_yes=1 ;;
+            --rollback) rollback=1 ;;
             --to)
                 shift
                 if [ "$#" -eq 0 ] || [ -z "$1" ]; then
@@ -1455,6 +1466,14 @@ cmd_update() {
     if [ -n "$(git -C "$CLI_DIR" status --porcelain --untracked-files=no)" ]; then
         log_error "This checkout has local changes to tracked files. Commit or undo them first (git status shows them); .env, config.yaml and backups/ are not affected."
         exit 1
+    fi
+    if [ "$rollback" = "1" ]; then
+        if [ -n "$target" ]; then
+            log_error "--rollback goes back to the release before the last update; it takes no --to."
+            exit 2
+        fi
+        cmd_update_rollback "$assume_yes"
+        return 0
     fi
 
     log_info "Checking for releases..."
@@ -1507,6 +1526,7 @@ cmd_update() {
         fi
     fi
 
+    write_update_record "$current_commit" "$current_label" "$target" "$target_commit" "$running" "$safety"
     git -C "$CLI_DIR" -c advice.detachedHead=false checkout --quiet "$target"
     log_ok "Checked out ${target}."
 
@@ -1521,6 +1541,7 @@ cmd_update() {
     if ! docker compose up -d --build $running; then
         log_error "The new release did not start. To go back:"
         log_error "  git checkout ${current_label} && healthsave up"
+        log_error "  (with Observatory Care, 'healthsave update --rollback' does this for you)"
         [ -n "$safety" ] && log_error "  and, only if data looks wrong: healthsave restore ${safety} --yes"
         exit 1
     fi
@@ -1536,6 +1557,105 @@ cmd_update() {
         log_ok "Updated to ${target}."
     fi
     [ -n "$safety" ] && log_info "Pre-update backup kept in ${safety}"
+}
+
+UPDATE_RECORD_FORMAT="healthsave-update-1"
+FEATURE_UPDATE_ROLLBACK="care.update.rollback"
+
+update_record_file() {
+    # Inside the git directory: never tracked, and kept across checkouts.
+    local path
+    path="$(git -C "$CLI_DIR" rev-parse --git-path healthsave-last-update)"
+    case "$path" in
+        /*) printf '%s' "$path" ;;
+        *) printf '%s' "$CLI_DIR/$path" ;;
+    esac
+}
+
+write_update_record() {
+    # write_update_record <from commit> <from label> <to tag> <to commit> <services> <backup>
+    local record
+    record="$(update_record_file)"
+    {
+        echo "format=${UPDATE_RECORD_FORMAT}"
+        echo "updated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "from_commit=$1"
+        echo "from_label=$2"
+        echo "to_tag=$3"
+        echo "to_commit=$4"
+        echo "services=$(printf '%s' "$5" | tr -s ' ' ' ' | sed 's/^ //; s/ $//')"
+        echo "backup=$6"
+    } >"$record"
+}
+
+cmd_update_rollback() {
+    local assume_yes="$1"
+    require_care_feature "$FEATURE_UPDATE_ROLLBACK" "update --rollback"
+
+    local record
+    record="$(update_record_file)"
+    if [ ! -f "$record" ] || [ "$(manifest_value "$record" format)" != "$UPDATE_RECORD_FORMAT" ]; then
+        log_error "There is no update to roll back: 'healthsave update' has not moved this checkout yet (or the last one was already rolled back)."
+        exit 1
+    fi
+    local from_commit from_label to_tag to_commit services backup head
+    from_commit="$(manifest_value "$record" from_commit)"
+    from_label="$(manifest_value "$record" from_label)"
+    to_tag="$(manifest_value "$record" to_tag)"
+    to_commit="$(manifest_value "$record" to_commit)"
+    services="$(manifest_value "$record" services)"
+    backup="$(manifest_value "$record" backup)"
+    head="$(git -C "$CLI_DIR" rev-parse HEAD)"
+    if [ "$head" != "$to_commit" ]; then
+        log_error "This checkout is no longer on ${to_tag}, which the last update installed, so the rollback record does not apply."
+        log_error "Go back by hand if you need to: git checkout ${from_label} && healthsave up"
+        exit 1
+    fi
+    if ! git -C "$CLI_DIR" cat-file -e "${from_commit}^{commit}" 2>/dev/null; then
+        log_error "The release before the update (${from_label}) is not in this checkout any more."
+        exit 1
+    fi
+    if [ -n "$services" ]; then
+        require_docker
+    fi
+
+    log_info "Roll back ${to_tag} -> ${from_label} (updated $(manifest_value "$record" updated_at))."
+    if [ "$assume_yes" != "1" ]; then
+        if [ ! -t 0 ]; then
+            log_error "Re-run with --yes to roll back without a prompt."
+            exit 2
+        fi
+        if ! prompt_yes_no "Roll back now?" "N"; then
+            log_info "Nothing changed."
+            return 0
+        fi
+    fi
+
+    git -C "$CLI_DIR" -c advice.detachedHead=false checkout --quiet "$from_commit"
+    mv -f "$record" "${record}.rolled-back"
+    log_ok "Checked out ${from_label}."
+
+    if [ -z "$services" ]; then
+        log_info "The stack was not running before the update. Start it with 'healthsave up'."
+        return 0
+    fi
+    # shellcheck disable=SC2086
+    if ! docker compose up -d --build $services; then
+        log_error "${from_label} did not start. Check 'healthsave logs'."
+        exit 1
+    fi
+    if printf ' %s ' "$services" | grep -q ' api '; then
+        log_info "Waiting for API readiness on ${API_URL_DEFAULT}/ready..."
+        if ! wait_for_api_ready; then
+            log_warn "The API is not ready yet. Check 'healthsave logs api'."
+            exit 1
+        fi
+    fi
+    log_ok "Rolled back to ${from_label}."
+    log_info "Data written since the update stays: migrations only add tables and columns, so ${from_label} reads it."
+    if [ -n "$backup" ]; then
+        log_info "If the data itself has to go back too: healthsave restore ${backup} --yes"
+    fi
 }
 
 BACKUP_FORMAT="healthsave-backup-1"
