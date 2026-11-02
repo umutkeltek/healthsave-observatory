@@ -93,7 +93,7 @@ from storage.timescale.measurements import (
 # real header set and is the gate for it (audit 2026-09-05).
 from storage.timescale.sync_receipts import complete_receipt_idempotency
 
-from ..ingestion.owner import OWNER_HEADER, resolve_owner_id
+from ..ingestion.owner import OWNER_HEADER, participant_owner_id, resolve_owner_id
 from .deps import get_session, verify_api_key
 from .ingest import (
     INGEST_BATCHES,
@@ -559,7 +559,9 @@ async def v2_apple_batch(
         )
 
     try:
-        owner_id = resolve_owner_id(request.headers.get(OWNER_HEADER))
+        owner_id = participant_owner_id(request) or resolve_owner_id(
+            request.headers.get(OWNER_HEADER)
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"invalid {OWNER_HEADER}: {exc}") from exc
 

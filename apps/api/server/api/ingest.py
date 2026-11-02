@@ -41,7 +41,7 @@ from storage.timescale.sync_receipts import (
     record_sync_receipt,
 )
 
-from ..ingestion.owner import OWNER_HEADER, resolve_owner_id
+from ..ingestion.owner import OWNER_HEADER, participant_owner_id, resolve_owner_id
 from ..ingestion.parsers import group_samples_by_device
 from ..ingestion.storage import (
     AuditLog,
@@ -226,7 +226,9 @@ async def apple_batch(
         )
 
     try:
-        owner_id = resolve_owner_id(request.headers.get(OWNER_HEADER))
+        owner_id = participant_owner_id(request) or resolve_owner_id(
+            request.headers.get(OWNER_HEADER)
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"invalid {OWNER_HEADER}: {exc}") from exc
 
