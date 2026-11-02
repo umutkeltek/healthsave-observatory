@@ -72,6 +72,14 @@ Start the stack after secrets are set:
 docker compose up -d
 ```
 
+Compose pulls the release's pre-built images for `linux/amd64` and `linux/arm64` from GitHub Container Registry: `ghcr.io/umutkeltek/healthsave-observatory` (API, migrations, worker) and `ghcr.io/umutkeltek/healthsave-observatory-web`. Their tag follows the release you checked out, so `git checkout vX.Y.Z` and then `docker compose up -d` moves you to that release's images. To build from your checkout instead (development, an unreleased branch, or a host that cannot reach `ghcr.io`):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.override.yml up -d --build
+```
+
+To make building the default for this checkout, `healthsave` commands included, add `COMPOSE_FILE=docker-compose.yml:docker-compose.build.override.yml` to `.env`.
+
 Database, Grafana, and Observatory web bind to loopback by default where applicable. To reach web or Grafana from another device on your LAN, set bind addresses deliberately:
 
 ```bash

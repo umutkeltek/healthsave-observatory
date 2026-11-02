@@ -5,17 +5,26 @@
 # ordinary installs, while letting operators point API, worker,
 # migrations, Grafana, and the optional Home Assistant bridge at the
 # same external database.
+#
+# Like the compose-mode override deploy.sh writes, it builds every service
+# that runs Observatory code from the deployed source (docker-compose.yml
+# alone pulls the published release images), under the image names Compose
+# gave those builds before: <project>-<service>.
 
 x-external-database-url: &external-database-url
   DATABASE_URL: postgresql+asyncpg://${HEALTH_DATA_HUB_DB_USER:-healthsave}:${DB_PASSWORD:-changeme}@${HEALTH_DATA_HUB_DB_HOST:-postgres.example.internal}:${HEALTH_DATA_HUB_DB_PORT:-5432}/${HEALTH_DATA_HUB_DB_NAME:-healthsave}
 
 services:
   migrate:
+    build: .
+    image: ${COMPOSE_PROJECT_NAME}-migrate
     depends_on: !override []
     environment:
       <<: *external-database-url
 
   api:
+    build: .
+    image: ${COMPOSE_PROJECT_NAME}-api
     depends_on: !override
       migrate:
         condition: service_completed_successfully
@@ -25,13 +34,21 @@ services:
       - "${HEALTH_DATA_HUB_API_PORT:-18080}:8000"
 
   worker:
+    build: .
+    image: ${COMPOSE_PROJECT_NAME}-worker
     depends_on: !override
       migrate:
         condition: service_completed_successfully
     environment:
       <<: *external-database-url
 
+  agents:
+    build: .
+    image: ${COMPOSE_PROJECT_NAME}-agents
+
   homeassistant-mqtt:
+    build: .
+    image: ${COMPOSE_PROJECT_NAME}-homeassistant-mqtt
     depends_on: !override
       migrate:
         condition: service_completed_successfully
@@ -49,5 +66,7 @@ services:
   # Observatory web reads the API (not the DB), so no external-DB rewiring — just
   # publish it on the LAN like Grafana (the deploy is a single-host appliance).
   web:
+    build: ./apps/web
+    image: ${COMPOSE_PROJECT_NAME}-web
     ports: !override
       - "${HEALTH_DATA_HUB_WEB_PORT:-18090}:4173"

@@ -72,6 +72,9 @@ jobs:
       # here such as grafana/homeassistant-mqtt).
       DB_PASSWORD: ci-e2e-password
       GRAFANA_PASSWORD: ci-e2e-password
+      # docker-compose.yml pulls the published release images; e2e must test
+      # this commit, so every compose call here builds from the checkout.
+      COMPOSE_FILE: docker-compose.yml:docker-compose.build.override.yml
     steps:
       - uses: actions/checkout@v6
 

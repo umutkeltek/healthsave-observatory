@@ -3,7 +3,7 @@ TEST_DATABASE_PASSWORD ?= healthsave-e2e
 E2E_GRAFANA_PASSWORD ?= healthsave-e2e
 E2E_API_PORT ?= 18000
 E2E_DB_HOST_PORT ?= 25434
-E2E_COMPOSE_ENV = COMPOSE_FILE=docker-compose.yml DB_PASSWORD=$(TEST_DATABASE_PASSWORD) GRAFANA_PASSWORD=$(E2E_GRAFANA_PASSWORD) API_HOST_PORT=$(E2E_API_PORT) DB_HOST_PORT=$(E2E_DB_HOST_PORT)
+E2E_COMPOSE_ENV = COMPOSE_FILE=docker-compose.yml:docker-compose.build.override.yml DB_PASSWORD=$(TEST_DATABASE_PASSWORD) GRAFANA_PASSWORD=$(E2E_GRAFANA_PASSWORD) API_HOST_PORT=$(E2E_API_PORT) DB_HOST_PORT=$(E2E_DB_HOST_PORT)
 
 .PHONY: help release setup install-cli regen-lock check-lock regen-v2-schemas check-v2-schemas regen-ts-client check-ts-client typecheck-ts web-test web-typecheck regen-response-corpus check-response-corpus test e2e lint format verify-local doctor compose-up compose-down
 
@@ -87,6 +87,8 @@ test:
 	@$(PYTHON) -m pytest -q
 
 # Black-box end-to-end: boot an isolated compose stack (own project + volume),
+# built from this checkout (the build override; docker-compose.yml alone pulls
+# the published release images),
 # replay the golden iOS batches through it, assert v1 + v2 read surfaces, then
 # tear it down. Self-cleaning; preserves the pytest exit code.
 e2e:

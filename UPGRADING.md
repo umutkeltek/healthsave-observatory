@@ -8,8 +8,9 @@ healthsave update --to v1.2.0
 ```
 
 It backs up the database to `backups/healthsave-pre-update-<time>.tar` first,
-checks out the release tag, and rebuilds and restarts exactly the services that
-were running. It refuses to run over local edits to tracked files (`.env`,
+checks out the release tag, and restarts exactly the services that were running
+on that release's images (pulled from `ghcr.io`, or built from your checkout if
+you use `docker-compose.build.override.yml`). It refuses to run over local edits to tracked files (`.env`,
 `config.yaml` and `backups/` are never touched). If the new release does not
 start, it prints the commands to go back.
 
@@ -18,13 +19,19 @@ By hand, the same thing is:
 ```bash
 git fetch --tags
 git checkout vX.Y.Z                 # self-hosters install releases, not main
-docker compose up -d --build        # the `migrate` service applies additive
-                                    # schema migrations before `api` starts
+docker compose up -d                # pulls vX.Y.Z's images; the `migrate` service
+                                    # applies additive schema migrations before
+                                    # `api` starts
 ```
+
+From 1.2.0 on, `docker-compose.yml` names the release's pre-built images, so
+`up -d` pulls them and `--build` changes nothing. To build from your checkout
+instead, add `docker-compose.build.override.yml`
+(see [Deployment](docs/operations/deployment.md)).
 
 Migrations are **always additive** (no table is renamed or dropped), and the
 `migrate` service runs them automatically on every boot before the API comes up,
-so a plain `up -d --build` is the safe upgrade path.
+so a plain `up -d` is the safe upgrade path.
 
 ---
 
