@@ -250,9 +250,11 @@ def test_cross_match_card_reads_one_wearable_stream_before_each_draw(client, obs
     card = match["card"]
     assert card["finding_type"] == "lab_wearable_cross_match"
     assert card["metric"] == "loinc:2276-4"
-    assert card["effect_size"]["kind"] == "spearman_rho"  # four covered draws
-    assert card["effect_size"]["p_value"] > 0.05
-    assert card["confidence"] == "low"  # four draws are too few for this to be significant
+    # Sep 8 and Sep 17 windows overlap, so three independent draws remain.
+    assert card["effect_size"]["kind"] == "cohens_d"
+    assert card["confidence"] == "low"
+    assert "from 41 to 19 ng/mL" in card["claim"]
+    assert any("counted twice" in item for item in card["limitations"])
     assert card["coverage"]["days_with_data"] == 30
     assert card["sources"][1] == {"source_plugin_id": "apple-healthkit-ios", "label": "Apple Watch"}
     assert {call[0] for call in observations.calls} == {"vital.resting_heart_rate"}

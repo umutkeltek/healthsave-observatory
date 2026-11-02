@@ -294,4 +294,42 @@ def test_engine_imports_no_db_http_or_llm() -> None:
         "contracts",
         "warnings",
         "scipy",
+        "itertools",
     }
+
+
+def test_four_draws_in_perfect_order_are_not_significant() -> None:
+    # Exact two-sided p for a perfect rank order of 4 draws is 2/24, not 0.
+    draws = [
+        _p(day, value)
+        for day, value in (
+            ("2025-06-01", 80),
+            ("2025-09-01", 60),
+            ("2025-12-01", 45),
+            ("2026-03-01", 30),
+        )
+    ]
+    match = cross_match_card(
+        loinc="2276-4",
+        marker_name="Ferritin",
+        points=draws,
+        pairing=RHR,
+        wearable={WATCH: _rhr_for_draws(draws, [55, 57, 59, 61])},
+    )
+    card = match.card
+    assert card is not None and card.effect_size is not None
+    assert card.effect_size.value == pytest.approx(-1.0)
+    assert card.effect_size.p_value == pytest.approx(2 / 24, abs=1e-4)
+    assert card.confidence == "low"
+
+
+def test_draws_with_overlapping_windows_are_not_counted_twice() -> None:
+    draws = [_p("2026-03-10", 41), _p("2026-09-08", 24), _p("2026-09-17", 19, lab=HARBOR, low=15)]
+    samples = _daily("2026-09-17", 260, lambda offset: 60.0 + offset % 2)
+    match = cross_match_card(
+        loinc="2276-4", marker_name="Ferritin", points=draws, pairing=RHR, wearable={WATCH: samples}
+    )
+    card = match.card
+    assert card is not None
+    assert "from 41 to 19" in card.claim  # Sep 8 overlaps Sep 17 and is left out
+    assert any("left out, so no wearable day is counted twice" in item for item in card.limitations)

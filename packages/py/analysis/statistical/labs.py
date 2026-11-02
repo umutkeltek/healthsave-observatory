@@ -22,6 +22,7 @@ baseline rule); other streams are named in the limitations, never averaged in.
 
 from __future__ import annotations
 
+import itertools
 import math
 import statistics
 from collections import defaultdict
@@ -50,6 +51,7 @@ WINDOW_DAYS = 30
 MIN_WINDOW_DAYS = 21
 SPEARMAN_MIN_DRAWS = 4
 UNCAPPED_CONFIDENCE_DRAWS = 8
+EXACT_P_MAX_DRAWS = 8
 FINDING_TYPE = "lab_wearable_cross_match"
 
 
@@ -388,7 +390,51 @@ def _cohens_d(earlier: Sequence[float], later: Sequence[float]) -> float | None:
     return (statistics.fmean(later) - statistics.fmean(earlier)) / math.sqrt(pooled)
 
 
+def _ranks(values: Sequence[float]) -> list[float]:
+    """Average ranks (ties share the mean of their positions)."""
+    order = sorted(range(len(values)), key=lambda i: values[i])
+    ranks = [0.0] * len(values)
+    i = 0
+    while i < len(order):
+        j = i
+        while j + 1 < len(order) and values[order[j + 1]] == values[order[i]]:
+            j += 1
+        for k in range(i, j + 1):
+            ranks[order[k]] = (i + j) / 2 + 1
+        i = j + 1
+    return ranks
+
+
+def _pearson(xs: Sequence[float], ys: Sequence[float]) -> float | None:
+    mx, my = statistics.fmean(xs), statistics.fmean(ys)
+    sxx = sum((x - mx) ** 2 for x in xs)
+    syy = sum((y - my) ** 2 for y in ys)
+    if sxx == 0 or syy == 0:
+        return None
+    return sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=True)) / math.sqrt(sxx * syy)
+
+
 def _spearman(xs: Sequence[float], ys: Sequence[float]) -> tuple[float, float] | None:
+    """Spearman rho with a two-sided p-value.
+
+    Blood draws are few, and the usual t-approximation is badly wrong there (it
+    gives p = 0 for a perfect rank order of 4 draws, where the exact answer is
+    2/24). Up to ``EXACT_P_MAX_DRAWS`` the p-value is exact: the share of all
+    orderings whose |rho| is at least the observed one. Beyond that, scipy.
+    """
+    rx, ry = _ranks(xs), _ranks(ys)
+    rho = _pearson(rx, ry)
+    if rho is None:
+        return None
+    if len(xs) <= EXACT_P_MAX_DRAWS:
+        observed = abs(rho) - 1e-12
+        hits = total = 0
+        for perm in itertools.permutations(ry):
+            total += 1
+            value = _pearson(rx, perm)
+            if value is not None and abs(value) >= observed:
+                hits += 1
+        return rho, hits / total
     import warnings
 
     from scipy.stats import spearmanr
@@ -396,10 +442,7 @@ def _spearman(xs: Sequence[float], ys: Sequence[float]) -> tuple[float, float] |
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         result = spearmanr(xs, ys)
-    rho, p_value = float(result.statistic), float(result.pvalue)
-    if math.isnan(rho):
-        return None
-    return rho, p_value
+    return rho, float(result.pvalue)
 
 
 def cross_match_card(
@@ -469,7 +512,18 @@ def cross_match_card(
         for point in ordered
         if not point.censored and point.unit == latest.unit
     )
-    paired = [window for window in windows if window.sufficient]
+    # Independent windows only: walking back from the latest draw, a draw whose
+    # 30-day window overlaps the one already kept is left out, so no wearable
+    # day is counted twice.
+    paired: list[WindowSummary] = []
+    overlapping = 0
+    for window in reversed(windows):
+        if not window.sufficient:
+            continue
+        if paired and window.end > paired[0].start:
+            overlapping += 1
+            continue
+        paired.insert(0, window)
     k = len(paired)
     current = paired[-1]
     previous = paired[-2] if k >= 2 else None
@@ -528,8 +582,8 @@ def cross_match_card(
 
     limitations = [
         "Read together, not cause and effect: two measurements are placed side by side.",
-        f"Blood draws are sparse: {k} of {len(ordered)} have {MIN_WINDOW_DAYS}+ days of "
-        f"{pairing.label} before them.",
+        f"Blood draws are sparse: {k} of {len(ordered)} have their own {WINDOW_DAYS}-day "
+        f"window with {MIN_WINDOW_DAYS}+ days of {pairing.label}.",
         f"A draw is one moment; the {pairing.label} value is the average of the "
         f"{WINDOW_DAYS} days before it.",
     ]
@@ -542,6 +596,11 @@ def cross_match_card(
         limitations.append(
             f"Only {stream_label} was used. {', '.join(others)} also recorded "
             f"{pairing.label}; it was not averaged in."
+        )
+    if overlapping:
+        limitations.append(
+            f"{overlapping} draw(s) less than {WINDOW_DAYS} days before a later one were left "
+            "out, so no wearable day is counted twice."
         )
     if len({w.draw.stream_id for w in paired}) > 1:
         limitations.append(
@@ -576,7 +635,8 @@ def cross_match_card(
             days_with_data=current.days_with_data,
             note=(
                 f"{current.days_with_data} of {WINDOW_DAYS} days before the latest draw, on one "
-                f"source ({MIN_WINDOW_DAYS} needed); {k} of {len(ordered)} draws have coverage."
+                f"source ({MIN_WINDOW_DAYS} needed); {k} of {len(ordered)} draws have their "
+                "own window with coverage."
             ),
         ),
         sources=[
