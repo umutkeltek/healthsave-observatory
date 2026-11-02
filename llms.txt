@@ -33,6 +33,7 @@ Key facts for assistants:
 - [Apple Health](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/capture/apple-health.md): HealthKit coverage through the HealthSave iOS app and the `/api/apple/batch` route.
 - [Whoop & Amazfit plugins](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/capture/plugins-whoop-amazfit.md): Poll-based vendor-cloud plugins: credentials, encrypted storage, emitted metrics, operator commands.
 - [Garmin & Samsung importers](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/capture/importers-garmin-samsung.md): CLI importers for Garmin Connect and Samsung/Huawei Health exports through the normal ingest path.
+- [Blood test results (CSV)](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/capture/labs-csv.md): Import lab results from a CSV: LOINC codes, UCUM units, the lab's own reference ranges, `healthsave labs import`.
 - [Android & webhooks roadmap](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/capture/roadmap-android-webhooks.md): Planned universal ingest: a signed, idempotent batch endpoint for any registered source.
 
 ## API

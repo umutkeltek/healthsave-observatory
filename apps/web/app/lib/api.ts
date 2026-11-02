@@ -892,3 +892,107 @@ export function fetchStreams(): Promise<StreamsResponse> {
 export function fetchDevices(): Promise<DevicesResponse> {
   return getJson<DevicesResponse>("/api/v2/devices");
 }
+
+// Labs - blood test results (GET /api/v2/labs*). Mirrors server/api/v2_labs.py.
+// Every result carries its own lab's printed range; results from different
+// labs are separate rows and the server never averages them.
+export type LabBand = "below" | "within" | "above" | "no_range" | "censored";
+
+export type LabResult = {
+  id: string;
+  specimen_at: string;
+  date_only: boolean;
+  value: number;
+  comparator: string | null;
+  unit: string;
+  display_unit: string;
+  reference_low: number | null;
+  reference_high: number | null;
+  lab: string;
+  stream_id: string;
+  source_plugin_id: string;
+  panel: string | null;
+  quality_flags: string[];
+  band: LabBand;
+  band_fraction: number | null;
+};
+
+export type LabAssessment = {
+  latest_band: LabBand;
+  previous_specimen_at: string | null;
+  previous_from_other_lab: boolean;
+  change: number | null;
+  change_pct: number | null;
+  direction: "up" | "down" | "flat" | null;
+  change_withheld: string | null;
+  prior_count: number;
+  prior_min: number | null;
+  prior_max: number | null;
+  versus_history: "below_prior_range" | "within_prior_range" | "above_prior_range" | null;
+  outside_streak: number;
+};
+
+export type LabMarker = {
+  loinc: string;
+  metric_id: string;
+  name: string;
+  unit: string;
+  display_unit: string;
+  result_count: number;
+  lab_count: number;
+  first_specimen_at: string;
+  last_specimen_at: string;
+  results: LabResult[];
+  assessment: LabAssessment | null;
+  gap_count: number;
+  related_metric_id: string | null;
+};
+
+export type LabSource = {
+  stream_id: string;
+  lab: string;
+  source_plugin_id: string;
+  result_count: number;
+  first_specimen_at: string;
+  last_specimen_at: string;
+};
+
+export type LabsOverview = { markers: LabMarker[]; labs: LabSource[]; count: number; result_count: number };
+
+export type LabGap = {
+  earlier_id: string;
+  later_id: string;
+  earlier_lab: string;
+  later_lab: string;
+  earlier_specimen_at: string;
+  later_specimen_at: string;
+  earlier_value: number;
+  later_value: number;
+  unit: string;
+  days_apart: number;
+  difference: number | null;
+  difference_pct: number | null;
+  earlier_band: LabBand;
+  later_band: LabBand;
+  bands_disagree: boolean;
+};
+
+export type LabCrossMatch = {
+  related_metric_id: string;
+  related_label: string;
+  related_unit: string;
+  stream_id: string | null;
+  stream_label: string | null;
+  card: FindingCard | null;
+  reason: string | null;
+};
+
+export type LabMarkerDetail = LabMarker & { gaps: LabGap[]; cross_match: LabCrossMatch | null };
+
+export function fetchLabs(): Promise<LabsOverview> {
+  return getJson<LabsOverview>("/api/v2/labs");
+}
+
+export function fetchLabMarker(loinc: string): Promise<LabMarkerDetail> {
+  return getJson<LabMarkerDetail>(`/api/v2/labs/${encodeURIComponent(loinc)}`);
+}

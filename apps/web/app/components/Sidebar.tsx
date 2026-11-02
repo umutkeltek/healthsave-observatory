@@ -25,6 +25,13 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M2.5 13.5 5.5 7l2.5 5 3-9 2.5 6.5" />
     </>
   ),
+  labs: (
+    <>
+      <path d="M6 2.5h4" />
+      <path d="M6.8 2.5v8.7a1.2 1.2 0 0 0 2.4 0V2.5" />
+      <path d="M6.8 8h2.4" />
+    </>
+  ),
   overview: (
     <>
       <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" />
@@ -122,6 +129,7 @@ type NavKey =
   | "today"
   | "sleep"
   | "activity"
+  | "labs"
   | "findings"
   | "data"
   | "sources"
@@ -141,6 +149,7 @@ const NAV: readonly NavItem[] = [
   { href: "/", labelKey: "today", icon: "overview", group: "essentials" },
   { href: "/sleep", labelKey: "sleep", icon: "sleep", group: "essentials" },
   { href: "/activity", labelKey: "activity", icon: "activity", group: "essentials" },
+  { href: "/labs", labelKey: "labs", icon: "labs", group: "essentials" },
   { href: "/findings", labelKey: "findings", icon: "findings", group: "essentials" },
   { href: "/data", labelKey: "data", icon: "data", group: "essentials" },
   { href: "/sources", labelKey: "sources", icon: "sources", group: "essentials" },

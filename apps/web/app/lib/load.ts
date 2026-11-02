@@ -23,6 +23,8 @@ import {
   fetchExportMetrics,
   fetchFindings,
   fetchIntelligence,
+  fetchLabMarker,
+  fetchLabs,
   fetchLatest,
   fetchMetrics,
   fetchMoments,
@@ -37,6 +39,8 @@ import {
   isNarratorOff,
   type Finding,
   type IntelligenceView,
+  type LabMarkerDetail,
+  type LabsOverview,
   type InsightsLatest,
   type MetricSeries,
   type MetricSummary,
@@ -310,6 +314,24 @@ export async function safeMoments(limit = 50): Promise<Moment[]> {
     return result.moments;
   } catch (error) {
     return swallow("moments", error) ?? [];
+  }
+}
+
+// Labs: null means "backend unreachable" (the page says so); an empty record
+// is a real LabsOverview with no markers.
+export async function safeLabs(): Promise<LabsOverview | null> {
+  try {
+    return await fetchLabs();
+  } catch (error) {
+    return swallow("labs", error);
+  }
+}
+
+export async function safeLabMarker(loinc: string): Promise<LabMarkerDetail | null> {
+  try {
+    return await fetchLabMarker(loinc);
+  } catch (error) {
+    return swallow("labs", error);
   }
 }
 

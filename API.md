@@ -779,6 +779,8 @@ Example response:
 | `/api/v2/settings/analytical-time` | GET, PUT | key | person-local time zone and physiological-day boundary for reproducible calendar analyses |
 | `/api/v2/moments` | GET, POST | key | list / create personal-context moments (illness, travel, lifestyle events) |
 | `/api/v2/moments/{moment_id}` | PUT, DELETE | key | update / delete one moment |
+| `/api/v2/labs` | GET | key | blood test results per marker (LOINC), each with the lab's own reference range and its lab stream; the labs that sent them |
+| `/api/v2/labs/{loinc}` | GET | key | one marker's results, oldest first (`422` for a malformed LOINC code, `404` when there are none) |
 | `/api/v2/export/metrics` | GET | key | list exportable metrics with counts + date ranges |
 | `/api/v2/export` | GET | key | export one metric (or `all`) as JSON or CSV |
 | `/api/v2/sources/whoop/webhook` | POST | HMAC | Whoop push webhook; authenticity via `X-WHOOP-Signature` |
