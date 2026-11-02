@@ -7295,3 +7295,354 @@ font-size: 17px;
     gap: 8px;
   }
 }
+
+/* ─── Labs (blood tests) ──────────────────────────────────────────────
+   Each result is drawn against ITS OWN lab's range (a band); labs keep their
+   own series colour and line. Tokens only; reuses the ribbon band tokens. */
+.labs-intro {
+  margin-bottom: var(--s5);
+}
+.labs-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 5fr) minmax(0, 7fr);
+  gap: var(--s5);
+  align-items: start;
+}
+.labs-index-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin-bottom: var(--s3);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.labs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+.labs-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "name value"
+    "spark verdict";
+  gap: var(--s1) var(--s3);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  color: var(--ink);
+  text-decoration: none;
+  transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+}
+.labs-row:hover {
+  background: var(--hover);
+}
+.labs-row.is-selected {
+  border-color: var(--accent-line);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.labs-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.labs-row-name {
+  grid-area: name;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.labs-row-title {
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.labs-row-sub {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.labs-row-value {
+  grid-area: value;
+  justify-self: end;
+  font-size: var(--fs-md);
+  font-variant-numeric: tabular-nums;
+}
+.labs-row .labs-verdict {
+  grid-area: verdict;
+  justify-self: end;
+  align-self: center;
+}
+.labs-row-spark {
+  grid-area: spark;
+  min-width: 0;
+}
+.labs-verdict {
+  display: inline-block;
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.labs-verdict-ok {
+  color: var(--muted);
+  background: var(--surface-3);
+}
+.labs-verdict-out {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--warn) 22%, transparent);
+}
+.labs-verdict-none {
+  color: var(--faint);
+  background: var(--surface-3);
+}
+
+/* Chart */
+.labs-chart {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: var(--s2);
+  margin: var(--s3) 0 var(--s2);
+}
+.labs-chart.is-compact {
+  display: block;
+  margin: 0;
+}
+.labs-chart-yaxis {
+  position: relative;
+}
+.labs-chart-unit {
+  top: -14px;
+  right: 0;
+}
+.labs-chart-tick {
+  right: 0;
+  transform: translateY(-50%);
+}
+.labs-chart-plot {
+  position: relative;
+}
+.labs-chart-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.labs-band {
+  fill: var(--baseline-fill);
+}
+.labs-band-edge line {
+  stroke: var(--baseline-line);
+  stroke-width: 1;
+}
+.labs-line {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.labs-dot {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--surface);
+  box-sizing: content-box;
+}
+.labs-chart.is-compact .labs-dot {
+  width: 6px;
+  height: 6px;
+  border-width: 1.5px;
+}
+.labs-dot.is-out {
+  box-shadow: 0 0 0 2px var(--warn);
+}
+.labs-chart-xaxis {
+  grid-column: 2;
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--faint);
+}
+/* Lab identity colours: the non-semantic hues first (blue, purple, cyan), so
+   the first three labs never look like the orange "outside the range" ring. */
+.labs-s0 { --lab-color: var(--series-1); }
+.labs-s1 { --lab-color: var(--series-3); }
+.labs-s2 { --lab-color: var(--series-6); }
+.labs-s3 { --lab-color: var(--series-2); }
+.labs-s4 { --lab-color: var(--series-4); }
+.labs-s5 { --lab-color: var(--series-5); }
+.labs-line.labs-s0,
+.labs-line.labs-s1,
+.labs-line.labs-s2,
+.labs-line.labs-s3,
+.labs-line.labs-s4,
+.labs-line.labs-s5 {
+  stroke: var(--lab-color);
+}
+.labs-dot,
+.labs-swatch {
+  background: var(--lab-color, var(--series-1));
+}
+
+/* Legend */
+.labs-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s4);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.labs-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.labs-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+.labs-legend-count {
+  color: var(--faint);
+}
+
+/* Detail */
+.labs-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+  min-width: 0;
+}
+.labs-detail-card {
+  padding: var(--s5);
+}
+.labs-detail-title {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.labs-detail-latest {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin: var(--s2) 0 0;
+}
+.labs-detail-value {
+  font-size: var(--fs-2xl);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.labs-detail-meta {
+  margin: var(--s1) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.labs-notes {
+  margin: var(--s4) 0 0;
+  padding-left: 18px;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  color: var(--ink);
+}
+.labs-subhead {
+  margin: 0 0 var(--s2);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.labs-gaps {
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line-soft);
+}
+.labs-gaps-intro {
+  margin: 0 0 var(--s3);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.labs-gap-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+.labs-gap-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s5);
+  font-size: var(--fs-sm);
+}
+.labs-gap-lab {
+  font-weight: 600;
+}
+.labs-gap-note {
+  margin: var(--s1) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.labs-table-drill {
+  margin-top: var(--s5);
+  font-size: var(--fs-sm);
+}
+.labs-table-drill summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+.labs-table {
+  width: 100%;
+  margin-top: var(--s3);
+  border-collapse: collapse;
+  font-size: var(--fs-xs);
+}
+.labs-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.labs-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line-soft);
+  font-variant-numeric: tabular-nums;
+}
+.labs-code {
+  margin: var(--s3) 0 0;
+  font-size: var(--fs-2xs);
+  color: var(--faint);
+}
+.labs-cross-empty,
+.labs-empty {
+  padding: var(--s4) var(--s5);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.labs-empty h3 {
+  margin: 0 0 var(--s2);
+  font-size: var(--fs-md);
+  color: var(--ink);
+}
+.labs-empty p {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .labs-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
