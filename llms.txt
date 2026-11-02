@@ -54,6 +54,7 @@ Key facts for assistants:
 ## Integrations
 
 - [Home Assistant & MQTT](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/integrations/home-assistant.md): Publishing health signals to Home Assistant through MQTT discovery and state topics.
+- [Home Assistant pack](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/integrations/home-assistant-pack.md): Automation blueprints and a Body dashboard built on the MQTT bridge's entities.
 
 ## Operations
 

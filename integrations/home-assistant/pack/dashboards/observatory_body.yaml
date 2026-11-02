@@ -1,0 +1,116 @@
+# HealthSave Observatory "Body" dashboard.
+#
+# Plain Home Assistant cards only: no HACS, no custom cards. Needs Home Assistant 2024.10 or later
+# (sections view and heading card).
+#
+# Install: Settings > Dashboards > Add dashboard > New dashboard from scratch. Open it, then
+# Edit dashboard > three-dot menu > Raw configuration editor, and paste this whole file.
+#
+# Every entity id below is one the Observatory MQTT bridge publishes with its default device name
+# ("HealthSave Observatory"). If you renamed the device, search and replace
+# "healthsave_observatory_" with your prefix.
+title: Body
+views:
+  - title: Body
+    path: body
+    icon: mdi:heart-pulse
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Today
+            icon: mdi:weather-sunset-up
+          - type: tile
+            entity: sensor.healthsave_observatory_last_sleep_hours
+            name: Last sleep
+          - type: tile
+            entity: sensor.healthsave_observatory_resting_heart_rate
+            name: Resting heart rate
+          - type: tile
+            entity: sensor.healthsave_observatory_hrv
+            name: HRV
+          - type: tile
+            entity: sensor.healthsave_observatory_hrv_7d_avg
+            name: HRV 7-day average
+          - type: markdown
+            content: >-
+              {%- set hrv = states('sensor.healthsave_observatory_hrv') | float(none) -%}
+              {%- set base = states('sensor.healthsave_observatory_hrv_7d_avg') | float(none) -%}
+              {%- if hrv is number and base is number and base > 0 -%}
+              {%- set pct = ((hrv - base) / base * 100) | round(0) | int -%}
+              HRV is **{{ hrv | round(0) | int }} ms**,
+              {% if pct | abs < 5 -%}about the same as
+              {%- elif pct > 0 -%}{{ pct }}% above
+              {%- else -%}{{ pct | abs }}% below
+              {%- endif %} your 7-day average ({{ base | round(0) | int }} ms).
+              {%- else -%}
+              No HRV reading from Observatory yet.
+              {%- endif %}
+      - type: grid
+        cards:
+          - type: heading
+            heading: Last 7 days
+            icon: mdi:chart-line
+          - type: history-graph
+            title: Last sleep (hours)
+            hours_to_show: 168
+            entities:
+              - entity: sensor.healthsave_observatory_last_sleep_hours
+                name: Last sleep
+          - type: history-graph
+            title: HRV and its 7-day average
+            hours_to_show: 168
+            entities:
+              - entity: sensor.healthsave_observatory_hrv
+                name: HRV
+              - entity: sensor.healthsave_observatory_hrv_7d_avg
+                name: 7-day average
+          - type: statistics-graph
+            title: HRV per day (low, average, high)
+            chart_type: line
+            period: day
+            days_to_show: 7
+            stat_types:
+              - min
+              - mean
+              - max
+            entities:
+              - entity: sensor.healthsave_observatory_hrv
+                name: HRV
+          - type: history-graph
+            title: Resting heart rate
+            hours_to_show: 168
+            entities:
+              - entity: sensor.healthsave_observatory_resting_heart_rate
+                name: Resting heart rate
+      - type: grid
+        cards:
+          - type: heading
+            heading: Sources and freshness
+            icon: mdi:database-clock
+          - type: tile
+            entity: sensor.healthsave_observatory_source_model
+            name: Recent sources
+          - type: tile
+            entity: sensor.healthsave_observatory_steps_synced_at
+            name: Last step sync
+          - type: markdown
+            content: >-
+              {%- set ts = as_timestamp(states('sensor.healthsave_observatory_steps_synced_at'),
+              none) -%}
+              {%- if states('sensor.healthsave_observatory_source_model') in ['unavailable',
+              'unknown'] -%}
+              **The Observatory bridge is offline.** Values on this page are not live until it
+              reconnects.
+              {%- elif ts is none -%}
+              Observatory has not reported a sync time yet.
+              {%- else -%}
+              Observatory last received step data
+              **{{ ((as_timestamp(now()) - ts) / 3600) | round(1) }} h ago**.
+              {%- endif %}
+
+
+              The bridge republishes every value about once a minute, so "last updated" only
+              shows the bridge is alive. Use the sync time above to judge how old the data is.
