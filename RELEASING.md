@@ -45,9 +45,15 @@ Plugins carry their own versions, independent of the server.
    (`scripts/release_notes.py`), and the tag is unused. It then pushes an
    annotated tag.
 5. The tag push runs `.github/workflows/release.yml`. It checks the version
-   again, publishes the `ghcr.io/umutkeltek/healthsave-observatory:vX.Y.Z`
-   image, and creates the GitHub Release from the changelog section. Confirm
-   both exist before you announce the release.
+   again, publishes two images for `linux/amd64` and `linux/arm64`, each
+   tagged `vX.Y.Z` and `latest` and signed with cosign (keyless):
+   `ghcr.io/umutkeltek/healthsave-observatory` (the API image; `migrate`,
+   `worker`, `agents` and `homeassistant-mqtt` run it too) and
+   `ghcr.io/umutkeltek/healthsave-observatory-web`. Then it creates the
+   GitHub Release from the changelog section. Confirm the images and the
+   Release exist, and that both packages are public, before you announce the
+   release: `docker-compose.yml` pulls these images, so a missing or private
+   one breaks every fresh install.
 
 ## Never
 
