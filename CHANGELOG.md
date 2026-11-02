@@ -9,7 +9,7 @@ Plugins carry their own versions.
 
 ## [Unreleased]
 
-## [1.2.0] - 2026-11-02
+## [1.2.0] - 2026-11-03
 
 A new install is locked down from the first start: it gets an API key, a
 dashboard password and a QR code to pair the app. Releases now ship as
@@ -30,8 +30,10 @@ docker compose up -d
   `linux/amd64` and `linux/arm64` instead of building them on your machine.
   To keep building from source, add the build override:
   `docker compose -f docker-compose.yml -f docker-compose.build.override.yml up -d --build`.
-- This release has no new database migrations. The upgrade leaves your data
-  as it is.
+- Two additive migrations run on the first `docker compose up -d`: `028_lab_results`
+  (blood test results) and `029_api_keys` (participant keys). They add tables and
+  change nothing you already have; the `migrate` service applies them before the
+  API starts, as always.
 - Your `.env` is not changed. An install without an API key, dashboard
   password or broker login keeps working as before, and `healthsave doctor`
   says what is open. `healthsave pair --new-key` adds a key; then pair the
@@ -71,6 +73,23 @@ docker compose up -d
   and the Home Assistant bridge) and `ghcr.io/umutkeltek/healthsave-observatory-web`.
   `docker-compose.yml` pulls the images of the release you checked out;
   `docker-compose.build.override.yml` builds them from source instead.
+- Lab results. `healthsave labs import FILE.csv` loads blood test results with
+  LOINC ids; `GET /api/v2/labs` and `GET /api/v2/labs/{loinc}` return each marker
+  against the lab's own printed range and your own history. Results from two labs
+  stay separate rows and are never averaged. A Labs page shows the trend per
+  marker and one cross-match card (ferritin against resting heart rate) with its
+  coverage and limits. (migration `028_lab_results`)
+- Participants. One Observatory can hold several people. `healthsave participants
+  add NAME` prints a pairing code for the free app; the data lands under that
+  person's own key. The `.env` API key stays the admin key and sees everyone;
+  `GET /api/v2/owners` lists people, nine `/api/v2/*` reads take `?owner=`, and the
+  web dashboard gets a participant switcher. `healthsave participants revoke`
+  refuses a key everywhere. The phone routes are unchanged. (migration
+  `029_api_keys`)
+- Home Assistant pack under `integrations/home-assistant/pack/`: three blueprints
+  (wind-down from sleep length, a recovery-aware morning in plain words, a
+  low-data warning) and a plain-cards Body dashboard, built on the bridge's own
+  `sensor.healthsave_observatory_*` entities.
 - Observatory Care, an optional licence for people who want their install
   looked after ([docs](docs/operations/observatory-care.md)):
   `healthsave backup --encrypt`, `--offsite REMOTE` (through rclone, to storage
@@ -149,6 +168,12 @@ docker compose up -d
   in its version number.
 - The remote VM deploy (`deploy/remote-vm/deploy.sh`) still builds from the
   deployed commit, with the same ports and image names as before.
+
+### Known limits
+- The Home Assistant / MQTT bridge and the bundled Grafana dashboards still read
+  across every person on an Observatory that holds participants; leave the
+  bridge off on such an install until it is scoped. Findings and the weekly
+  Body Brief are produced for the primary person only.
 
 ## [1.1.0] - 2026-10-04
 
