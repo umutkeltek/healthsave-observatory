@@ -402,8 +402,7 @@ async def test_fetch_snapshot_requires_recent_aggregate_heart_rate() -> None:
     # The aggregate HR freshness gate is preserved but now parameterized (env-configurable
     # HA_MQTT_HR_FRESH_HOURS, default 6h) so stale rows are never relabeled as live.
     assert any(
-        "time > now() - make_interval(hours => :hrs)" in query
-        for query in session.executed_queries
+        "time > now() - make_interval(hours => :hrs)" in query for query in session.executed_queries
     )
 
 
