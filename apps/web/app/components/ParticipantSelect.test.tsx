@@ -1,13 +1,25 @@
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { renderToStaticMarkup } from "react-dom/server";
 
-// The select refreshes the router after its server action; no app router is
-// mounted outside Next, and rendering never invokes it.
-mock.module("next/navigation", () => ({ useRouter: () => ({ refresh() {} }) }));
+import { DEFAULT_OWNER_ID } from "../lib/participants";
+import { I18nProvider } from "./I18nProvider";
+import { ParticipantSelect } from "./ParticipantSelect";
 
-const { I18nProvider } = await import("./I18nProvider");
-const { ParticipantSelect } = await import("./ParticipantSelect");
-const { DEFAULT_OWNER_ID } = await import("../lib/participants");
+// The select calls useRouter(), which needs an app router in context; outside
+// Next none is mounted, so the test provides a stub. Nothing is mocked at the
+// module level: bun applies a module mock to every test file that runs after
+// it, and other files import useSearchParams from next/navigation.
+const noop = () => {};
+const router = {
+  refresh: noop,
+  push: noop,
+  replace: noop,
+  back: noop,
+  forward: noop,
+  prefetch: noop,
+} as unknown as AppRouterInstance;
 
 const ALICE = "7d0c4f8e-2b6a-4a51-9a7e-0d6a3c2b1f00";
 const BOB = "2f4a9c1e-6d3b-4e8f-8a2c-5b7d9e0f1a2b";
@@ -19,9 +31,11 @@ const OWNERS = [
 
 function render(current: string): string {
   return renderToStaticMarkup(
-    <I18nProvider locale="en" availableLocales={["en"]}>
-      <ParticipantSelect owners={OWNERS} current={current} />
-    </I18nProvider>,
+    <AppRouterContext.Provider value={router}>
+      <I18nProvider locale="en" availableLocales={["en"]}>
+        <ParticipantSelect owners={OWNERS} current={current} />
+      </I18nProvider>
+    </AppRouterContext.Provider>,
   );
 }
 
