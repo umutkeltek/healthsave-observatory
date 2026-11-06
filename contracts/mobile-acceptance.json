@@ -245,7 +245,7 @@
     "journey.widgets": {
       "expected": "Equivalent home-screen health snapshot, units, privacy and user actions.",
       "ios_source": "Sources/HealthSync/WidgetStateStore.swift",
-      "android_source": null,
+      "android_source": "app/src/main/kotlin/app/healthsave/android/widget/HealthWidgets.kt",
       "required_evidence": [
         "behavior",
         "visual",
@@ -255,9 +255,9 @@
   },
   "open_gaps": [
     {
-      "id": "full-history-ui",
-      "acceptance_id": "backfill_full_export",
-      "detail": "Android export offers 7/30/90-day controls; iOS has custom dates and a full-archive preset. Health Connect history permission alone does not close this UI gap."
+      "id": "export-record-semantics",
+      "acceptance_id": "export_json",
+      "detail": "Android now has iOS-reference Quick CSV, Doctor PDF, Full archive and Custom presets, inclusive calendar dates and streamed exports (Android commit 7d7d0d3; docs/release/2026-11-07-export-parity). Equivalent cumulative/day-total record semantics and full paired PDF content still require validation; a matching selection UI does not prove equivalent exported data."
     },
     {
       "id": "insight-engine",
@@ -267,7 +267,7 @@
     {
       "id": "android-widgets",
       "acceptance_id": "journey.widgets",
-      "detail": "No Android home-screen widget implementation was found in the current app sources; iOS has widget state and actions."
+      "detail": "Android now implements native snapshot/glance, combined health and sync, sync status, sync, Home Assistant, export and configurable action widgets, with dated readings, the hourly steps band and receipt-backed status. See Android docs/release/2026-11-07-widget-parity for emulator evidence. Physical-device background actions, real launcher/lock-screen support and full paired visual equivalence remain unverified or incomplete."
     },
     {
       "id": "appointment-medications",
