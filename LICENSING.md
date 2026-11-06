@@ -1,10 +1,10 @@
 # Licensing — HealthSave Observatory
 
-> **One-line summary:** the **protocol is open** (Apache-2.0) so anyone — and any agent — can speak
-> the HealthSave observation format; the **product core is source-available** (Elastic License 2.0)
+> **One-line summary:** the **protocol is Apache-2.0** so anyone — and any agent — can speak
+> the HealthSave observation format; the **product core is under the Elastic License 2.0**
 > so you can self-host it freely, while offering it to third parties as a managed service is not
-> permitted; the **premium/managed features are commercial** and reserved. The split maximizes
-> adoption of the open *standard* while keeping the project sustainable.
+> permitted; the **premium/managed features are commercial** and reserved. The split lets
+> other software speak the format while keeping the project sustainable.
 
 This file is the authoritative map of which license governs which path. Where a directory carries
 its own `LICENSE` file, that file governs that directory and everything under it. Everything not
@@ -17,16 +17,16 @@ covered by a directory-level `LICENSE` is governed by the root [`LICENSE`](./LIC
 
 | Layer | Paths | License | Why this license |
 |---|---|---|---|
-| **Protocol & client surface** (the open standard) | `contracts/` · `packages/py/contracts/` · `packages/ts/api-client/` · `packages/py/plugin_sdk/` · *(future)* `cli/`, SDKs | **Apache-2.0** | We *want* other apps, devices, backends, and especially your own agents to speak the HealthSave observation format without fear. Apache (not MIT) because of its explicit **patent grant** — defensive for us and for adopters. This layer spreading is pure upside: every client built on it points back at HealthSave. |
-| **Product core** (the self-hostable server) | repo root + everything else: `apps/api`, `apps/worker`, `apps/agents`, `packages/py/storage`, `packages/py/analysis`, `apps/web`, `db/`, `deploy/`, `integrations/`, … | **Elastic License 2.0** (source-available) | ELv2 lets anyone read, run, modify, and self-host the core — but **does not permit offering it to third parties as a hosted or managed service**. That keeps a managed/hosted tier available to sustain the project. |
-| **Premium / managed** (the paid value) | *not in this repo* — advanced Body Briefs, report packs, backup/restore, managed updater, signed builds, managed single-tenant hosting | **Proprietary / commercial** | The premium/managed features live outside the source tree — a commercial product that funds ongoing development. The open core stays fully usable without them. |
+| **Protocol & client surface** (the shared format) | `contracts/` · `packages/py/contracts/` · `packages/ts/api-client/` · `packages/py/plugin_sdk/` · *(future)* `cli/`, SDKs | **Apache-2.0** | We *want* other apps, devices, backends, and especially your own agents to speak the HealthSave observation format without fear. Apache (not MIT) because of its explicit **patent grant** — defensive for us and for adopters. This layer spreading is pure upside: every client built on it points back at HealthSave. |
+| **Product core** (the self-hostable server) | repo root + everything else: `apps/api`, `apps/worker`, `apps/agents`, `packages/py/storage`, `packages/py/analysis`, `apps/web`, `db/`, `deploy/`, `integrations/`, … | **Elastic License 2.0** | ELv2 lets anyone read, run, modify, and self-host the core — but **does not permit offering it to third parties as a hosted or managed service**. That keeps a managed/hosted tier available to sustain the project. |
+| **Premium / managed** (the paid value) | *not in this repo* — advanced Body Briefs, report packs, backup/restore, managed updater, signed builds, managed single-tenant hosting | **Proprietary / commercial** | The premium/managed features live outside the source tree — a commercial product that funds ongoing development. The self-hosted core stays fully usable without them. |
 
 ## How to describe it publicly (precise wording matters)
 
-- The **protocol/SDK/CLI** layer **is open source** (Apache-2.0, OSI-approved). Say so freely.
-- The **core server** is **source-available / self-hostable under the Elastic License 2.0**.
-  **Do NOT call the core "open source"** — ELv2 is not OSI-approved (it restricts hosted-as-a-service).
-  Correct phrasings: *"source-available,"* *"self-hostable,"* *"open-core."*
+- The **protocol, contracts, and plugin SDK** are licensed under the **Apache License 2.0**.
+- The **core server** is licensed under the **Elastic License 2.0**. You can read, run, modify,
+  and self-host it. Offering it to third parties as a hosted or managed service is not permitted.
+  Say "Licensed under the Elastic License 2.0."
 - The **premium/managed** layer is a **commercial product**.
 
 ## Why the split
@@ -34,8 +34,8 @@ covered by a directory-level `LICENSE` is governed by the root [`LICENSE`](./LIC
 Three goals, balanced:
 
 1. **Interoperability (Apache protocol).** The more clients, devices, and agents speak the
-   observation format, the more useful the standard becomes — so the protocol/SDK layer is fully
-   open and permissively licensed.
+   observation format, the more useful that format becomes — so the protocol and SDK stay under
+   Apache-2.0.
 2. **Sustainable self-hosting (ELv2 core).** Anyone can self-host the core for free; what ELv2
    withholds is *reselling it as a managed service*, which keeps a hosted/managed tier available to
    fund continued development.
@@ -45,7 +45,7 @@ Three goals, balanced:
 
 We deliberately don't permissively license the whole thing (that would allow a hosted clone with no
 way to fund the project) and don't restrict the protocol (that would discourage the
-developer/agent ecosystem we want). The split keeps the standard open and the project viable.
+developer/agent ecosystem we want). The split keeps the format usable by other software and the project viable.
 
 ## Contributor terms
 
@@ -58,7 +58,7 @@ the core (a CLA is what would let us sell commercial exceptions). Until then, DC
 ## Deferred decisions (revisit, don't pre-commit)
 
 - **Core license: ELv2 vs AGPL-3.0 + commercial.** Staying ELv2 for now (protective, simple).
-  Revisit if/when a genuine contributor community forms and OSI-"open source" legitimacy becomes
+  Revisit if/when a genuine contributor community forms and an OSI-approved license becomes
   worth more than the absolute anti-SaaS protection. Switching ELv2 → AGPL is possible later;
   going the other way is not — so ELv2-now keeps options open. A CLA would need to land *before*
   that switch.

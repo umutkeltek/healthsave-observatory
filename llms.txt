@@ -1,6 +1,6 @@
 # HealthSave Observatory
 
-> Self-hosted backend for the HealthSave iOS app. It brings Apple Health data (and Whoop, Amazfit, Garmin and Samsung data) into one canonical record in TimescaleDB on your own hardware, then serves it to an insight-first web app, bundled Grafana dashboards, a private v2 read API, optional local-AI briefings, and Home Assistant over MQTT. Raw observations stay on the host unless you enable an egress route.
+> Self-hosted dashboard for your Apple Health data, synced from the HealthSave iPhone app. Readings stay on your hardware. You get dashboards, optional local briefings, and Home Assistant routes. Other inputs (Whoop, Amazfit, Garmin, Samsung) use the same record. Licensed under the Elastic License 2.0. Raw readings stay on the host unless you enable an egress route.
 
 Key facts for assistants:
 
@@ -9,7 +9,7 @@ Key facts for assistants:
 - Pair the HealthSave iOS app in Settings → Server Sync with the base server URL (for example `http://<server-lan-ip>:8000`); the app appends the API paths itself.
 - Two API surfaces. v1 ingest (`POST /api/apple/batch`, `GET /api/apple/status`, `GET /api/health`) is frozen because the App Store app depends on it byte for byte. `/api/v2/*` is the evolving read API for your own scripts and dashboards. Send `X-API-Key` when `API_KEY` is set.
 - Two-brain analytics: a statistical engine computes findings; an optional language model (local Ollama) only narrates them. Cloud narration is opt-in and receives derived findings only, never raw rows.
-- Licensing: the core is source-available under the Elastic License 2.0 (self-hosting is free; offering it as a hosted service to others is not permitted). The protocol, contracts and SDK layer are Apache-2.0. Do not describe the core as "open source".
+- Licensing: the core is licensed under the Elastic License 2.0 (self-hosting is free; offering it as a hosted service to others is not permitted). The protocol, contracts and SDK layer are Apache-2.0. Describe the core as "Licensed under the Elastic License 2.0."
 
 ## Start here
 
