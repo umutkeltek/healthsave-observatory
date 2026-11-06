@@ -148,5 +148,49 @@
       "seconds_since_first_pack": -1,
       "expected": true
     }
+  ],
+  "theme": [
+    {
+      "id": "light",
+      "palette": {
+        "background": "#F6F5F2",
+        "background_elevated": "#FFFFFF",
+        "surface": "#FFFFFF",
+        "surface_muted": "#EFEEEA",
+        "border": "#E2E0DA",
+        "primary_text": "#1C1E1B",
+        "secondary_text": "#6B6A64",
+        "success": "#15803D",
+        "warning": "#B45309",
+        "destructive": "#BE123C"
+      },
+      "layout": {
+        "content_padding": 20,
+        "section_spacing": 20,
+        "card_padding": 16,
+        "card_corner_radius": 26
+      }
+    },
+    {
+      "id": "dark",
+      "palette": {
+        "background": "#0A0E14",
+        "background_elevated": "#111620",
+        "surface": "#141922",
+        "surface_muted": "#1A2029",
+        "border": "#28303B",
+        "primary_text": "#F4F6F8",
+        "secondary_text": "#9AA3AD",
+        "success": "#4ADE80",
+        "warning": "#FBBF24",
+        "destructive": "#FB7185"
+      },
+      "layout": {
+        "content_padding": 20,
+        "section_spacing": 20,
+        "card_padding": 16,
+        "card_corner_radius": 26
+      }
+    }
   ]
 }

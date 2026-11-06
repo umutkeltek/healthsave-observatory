@@ -112,8 +112,10 @@ test bundle as release evidence, and never store real health data in these repor
 
 ## Present limits
 
-The initial shared executable cases cover CSV escaping, exact mass conversion and
-the Doctor Visit free-remake window. They do not cover the full app. The acceptance
+The shared executable cases cover CSV escaping, exact mass conversion, the Doctor
+Visit free-remake window, base light/dark colors, spacing and card radius. Android
+cards consume the tested radius through their actual Material shape. These checks
+do not cover the full app. The acceptance
 matrix records the remaining export, insight, widget, pairing, medication, visual
 and device gaps. Run `report` for current details rather than treating this document
 as a completion claim. Full parity requires closing those gaps with actual code

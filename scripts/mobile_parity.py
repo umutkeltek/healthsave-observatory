@@ -18,7 +18,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 PLATFORMS = {"ios": "ios_app", "android": "android_app"}
-SUITES = {"csv_escape", "mass_conversion", "doctor_access"}
+SUITES = {"csv_escape", "mass_conversion", "doctor_access", "theme"}
 JOURNEYS = {
     "journey.onboarding",
     "journey.purchase_restore",
@@ -97,6 +97,8 @@ def contract_issues(matrix: dict, cases: dict, parity: dict) -> list[str]:
             issues.append(f"{suite}: cases must be objects")
             continue
         ids = [row.get("id") for row in rows]
+        if suite == "theme" and not same_members(ids, {"light", "dark"}):
+            issues.append("Theme cases must cover both light and dark appearances")
         if (
             not rows
             or not all(isinstance(key, str) and key.strip() for key in ids)
@@ -111,6 +113,21 @@ def contract_issues(matrix: dict, cases: dict, parity: dict) -> list[str]:
                     row.get("unit") in ("kg", "lb", "st")
                     and all(number(row.get(key)) for key in ("kilograms", "expected", "tolerance"))
                     and row["tolerance"] > 0
+                )
+            elif suite == "theme":
+                colors = row.get("palette", {})
+                layout = row.get("layout", {})
+                valid = (
+                    row.get("id") in ("light", "dark")
+                    and isinstance(colors, dict)
+                    and isinstance(layout, dict)
+                    and bool(colors)
+                    and bool(layout)
+                    and all(
+                        isinstance(value, str) and re.fullmatch(r"#[0-9A-F]{6}", value)
+                        for value in colors.values()
+                    )
+                    and all(number(value) and value > 0 for value in layout.values())
                 )
             else:
                 valid = all(type(row.get(key)) is bool for key in ("is_pro", "expected")) and (
