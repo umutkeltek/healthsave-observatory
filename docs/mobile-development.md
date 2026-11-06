@@ -128,3 +128,16 @@ matrix records the remaining export, insight, widget, pairing, medication, visua
 and device gaps. Run `report` for current details rather than treating this document
 as a completion claim. Full parity requires closing those gaps with actual code
 and evidence.
+
+## Personal baseline and recovery cases
+
+The `baselines` suite checks daily median/MAD (including IQR fallback), movement
+floors, early/established coverage, consecutive-day anomalies and the separate
+7-day versus prior-56-day comparison. `recovery` checks the compatible RHR,
+respiratory-rate and sleep signals, direction, magnitude, floors and opposition.
+The 26 baseline and 13 recovery goldens use independently calculated Python
+standard-library statistics; both native consumers call production engines.
+Day offsets are relative to a fixed UTC calendar date; missing days are absent,
+not zero. Source selection, incomplete activity days and RMSSD exclusion have
+additional Android regression tests. This validates calculations on identical
+inputs, not identical HealthKit/Health Connect input or complete card selection.

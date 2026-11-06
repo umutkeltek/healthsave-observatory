@@ -25,6 +25,8 @@ SUITES = {
     "theme",
     "relationships",
     "relationship_posture",
+    "baselines",
+    "recovery",
 }
 JOURNEYS = {
     "journey.onboarding",
@@ -72,6 +74,104 @@ def digest(path: Path) -> str:
 
 def number(value: object) -> bool:
     return type(value) in (int, float) and math.isfinite(value)
+
+
+BASELINE_METRICS = {
+    "resting_heart_rate",
+    "respiratory_rate",
+    "sleep_duration",
+    "steps",
+    "active_energy_burned",
+    "body_mass",
+    "vo2_max",
+}
+
+
+def valid_daily_series(value: object) -> bool:
+    return (
+        isinstance(value, list)
+        and all(
+            isinstance(row, list) and len(row) == 2 and type(row[0]) is int and number(row[1])
+            for row in value
+        )
+        and len({row[0] for row in value}) == len(value)
+    )
+
+
+def valid_baseline_case(row: dict) -> bool:
+    expected = row.get("expected")
+    if not (
+        row.get("metric") in BASELINE_METRICS
+        and valid_daily_series(row.get("days"))
+        and isinstance(expected, dict)
+        and type(expected.get("anomaly")) is bool
+        and "baseline" in expected
+    ):
+        return False
+    baseline, week = expected["baseline"], expected.get("week")
+    valid_baseline = baseline is None or (
+        isinstance(baseline, dict)
+        and all(number(baseline.get(k)) for k in ("value", "median", "robust_sd", "z"))
+        and baseline["robust_sd"] >= 0
+        and "percent_delta" in baseline
+        and (baseline["percent_delta"] is None or number(baseline["percent_delta"]))
+        and type(baseline.get("valid_days")) is int
+        and 0 <= baseline["valid_days"] <= 60
+        and all(
+            type(baseline.get(k)) is bool for k in ("early", "spread_suppressed", "passes_floor")
+        )
+        and baseline.get("posture") in {"descriptive", "insufficientData"}
+        and baseline.get("label")
+        in {"usual", "aBitOutside", "notablyOutside", "unusualForYou", "veryUnusualForYou"}
+    )
+    return valid_baseline and (
+        isinstance(week, dict)
+        and all(
+            number(week.get(k))
+            for k in ("current_median", "baseline_median", "robust_sd", "d_robust")
+        )
+        and week["robust_sd"] >= 0
+        and type(week.get("current_valid_days")) is int
+        and 0 <= week["current_valid_days"] <= 7
+        and type(week.get("baseline_valid_days")) is int
+        and 0 <= week["baseline_valid_days"] <= 56
+        and week.get("posture") in {"descriptive", "insufficientData"}
+        and week.get("label") in {"none", "small", "modest", "notable", "largeForYou"}
+    )
+
+
+def valid_recovery_case(row: dict) -> bool:
+    series, expected = row.get("series"), row.get("expected")
+    if not (isinstance(series, list) and isinstance(expected, dict)):
+        return False
+    metrics = {"resting_heart_rate", "respiratory_rate", "sleep_duration"}
+    if not all(
+        isinstance(s, dict) and s.get("metric") in metrics and valid_daily_series(s.get("days"))
+        for s in series
+    ):
+        return False
+    if len({s["metric"] for s in series}) != len(series):
+        return False
+    contributions = expected.get("contributions")
+    return (
+        isinstance(contributions, list)
+        and all(
+            isinstance(c, dict)
+            and c.get("metric") in metrics
+            and all(number(c.get(k)) for k in ("raw_z", "strain_z"))
+            and type(c.get("passes_floor")) is bool
+            for c in contributions
+        )
+        and len({c["metric"] for c in contributions}) == len(contributions)
+        and number(expected.get("strain_score"))
+        and 0 <= expected["strain_score"] <= 1
+        and type(expected.get("signal_count")) is int
+        and expected["signal_count"] == len(contributions)
+        and type(expected.get("aligned_count")) is int
+        and 0 <= expected["aligned_count"] <= expected["signal_count"]
+        and all(type(expected.get(k)) is bool for k in ("toward_strain", "qualifies"))
+        and expected.get("posture") in {"descriptive", "noFinding", "insufficientData"}
+    )
 
 
 def valid_relationship_ci(value: object) -> bool:
@@ -173,6 +273,10 @@ def contract_issues(matrix: dict, cases: dict, parity: dict) -> list[str]:
                     and "expected" in row
                     and (expected is None or valid_relationship_result(expected))
                 )
+            elif suite == "baselines":
+                valid = valid_baseline_case(row)
+            elif suite == "recovery":
+                valid = valid_recovery_case(row)
             elif suite == "theme":
                 colors = row.get("palette", {})
                 layout = row.get("layout", {})
