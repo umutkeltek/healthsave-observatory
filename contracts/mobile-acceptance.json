@@ -1,0 +1,293 @@
+{
+  "schema_version": 1,
+  "reference_platform": "ios",
+  "required_locales": [
+    "en",
+    "de",
+    "es",
+    "it",
+    "fr",
+    "ja",
+    "ko",
+    "zh-Hans",
+    "zh-Hant",
+    "ar",
+    "tr",
+    "nl",
+    "pt-BR",
+    "pl",
+    "id",
+    "th"
+  ],
+  "visual_profiles": [
+    "phone-light",
+    "phone-dark",
+    "phone-large-text",
+    "phone-arabic-rtl",
+    "tablet-portrait",
+    "tablet-landscape"
+  ],
+  "acceptance": {
+    "server_sync": {
+      "expected": "Same manual sync, progress, retry, cancellation and destination receipt outcomes.",
+      "ios_source": "Sources/HealthSync/SyncEngine.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/home/SyncRow.kt",
+      "required_evidence": [
+        "behavior",
+        "visual",
+        "device"
+      ]
+    },
+    "export_csv": {
+      "expected": "Same selectable dates, groups and sources; safe CSV and identical canonical units.",
+      "ios_source": "Sources/HealthSync/ExportView.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/ExportScreen.kt",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
+    "export_json": {
+      "expected": "Same export selections, time zone policy and machine-readable record semantics.",
+      "ios_source": "Sources/HealthSync/ExportEngine.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/ExportScreen.kt",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
+    "export_pdf": {
+      "expected": "Same report content, grouping, missing-data treatment, units and sharing result.",
+      "ios_source": "Sources/HealthSync/ExportEngine.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/export/ExportShare.kt",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
+    "trends_7day": {
+      "expected": "Same seven-day metric selection, source provenance, missing data and chart statistics.",
+      "ios_source": "Sources/HealthSync/TrendsView.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/TrendsScreen.kt",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
+    "trends_30_90day": {
+      "expected": "Same Pro range access, data coverage and chart behavior for 30 and 90 days.",
+      "ios_source": "Sources/HealthSync/TrendsView.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/TrendsScreen.kt",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
+    "home_assistant_integration": {
+      "expected": "Same explicitly configured destinations, transport choices, units and result feedback.",
+      "ios_source": "Sources/HealthSync/HomeAssistantTransport.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/HomeAssistantScreen.kt",
+      "required_evidence": [
+        "behavior",
+        "visual",
+        "device"
+      ]
+    },
+    "background_auto_sync": {
+      "expected": "Platform scheduling honors permissions, Pro and destination; interruption never loses unacknowledged data.",
+      "ios_source": "Sources/HealthSync/SyncEngine.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/settings/SettingsScreen.kt",
+      "required_evidence": [
+        "behavior",
+        "visual",
+        "device"
+      ]
+    },
+    "data_scope_selection": {
+      "expected": "Same user intent for essentials, complete archive and custom data groups; unsupported types are explained.",
+      "ios_source": "Sources/HealthSync/SettingsView.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/DataScopeScreen.kt",
+      "required_evidence": [
+        "behavior",
+        "visual",
+        "device"
+      ]
+    },
+    "backfill_full_export": {
+      "expected": "User can export and backfill all authorized historical data, with equivalent range controls and coverage disclosure.",
+      "ios_source": "Sources/HealthSync/ExportView.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/ExportScreen.kt",
+      "required_evidence": [
+        "behavior",
+        "visual",
+        "device"
+      ]
+    },
+    "export_time_zone_choice": {
+      "expected": "Device and UTC choices produce the same instant and matching date/time columns.",
+      "ios_source": "Sources/HealthSync/ExportEngine.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/ExportScreen.kt",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
+    "export_split_date_time_columns": {
+      "expected": "CSV and JSON expose the agreed date/time columns without losing offset or precision.",
+      "ios_source": "Sources/HealthSync/ExportEngine.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/ExportScreen.kt",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
+    "sync_run_summary_receipt": {
+      "expected": "Zero-record and populated runs both close with accurate destination receipts.",
+      "ios_source": "Sources/HealthSync/SyncEngine.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/home/SyncRow.kt",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
+    "cumulative_raw_samples_per_metric": {
+      "expected": "Preserve platform record semantics; Android raw components must never pretend to be HealthKit deduplicated totals.",
+      "ios_source": "Sources/HealthSync/CumulativeComponentSettingsView.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/DataScopeScreen.kt",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
+    "overview_morning_read": {
+      "expected": "Same personal-range gates, detail interaction, hierarchy and source conflict treatment; SDNN and RMSSD stay distinct.",
+      "ios_source": "Sources/HealthSync/MorningReadViews.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/MorningReadSection.kt",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
+    "personal_records": {
+      "expected": "Same personal-record eligibility, date windows and presentation for supported data.",
+      "ios_source": "Sources/HealthSync/MorningReadRecords.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/RecordCard.kt",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
+    "observatory_qr_pairing": {
+      "expected": "Same scan-to-confirm destination setup, credential privacy and one-shot connection result.",
+      "ios_source": "Sources/HealthSync/ObservatoryPairing.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/ObservatoryPairingDialog.kt",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
+    "doctor_visit_pack": {
+      "expected": "Same appointment types, 90-day summaries, two-page content, drafts, paper sizes, free correction window and Pro gate.",
+      "ios_source": "Sources/HealthSync/DoctorVisitPackView.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/DoctorVisitPackScreen.kt",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
+    "journey.onboarding": {
+      "expected": "Same welcome, permission, first-export and post-value purchase/restore journey.",
+      "ios_source": "Sources/HealthSync/OnboardingView.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/OnboardingScreen.kt",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
+    "journey.purchase_restore": {
+      "expected": "Real store purchase, cancellation, pending payment, restore and reinstall keep entitlements consistent.",
+      "ios_source": "Sources/HealthSync/ProManager.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/PaywallScreen.kt",
+      "required_evidence": [
+        "behavior",
+        "visual",
+        "device"
+      ]
+    },
+    "journey.permission_states": {
+      "expected": "Denied, partial, revoked, history and background access states recover without data loss or misleading claims.",
+      "ios_source": "Sources/HealthSync/HealthKitManager.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/HealthConnectPermissionAsk.kt",
+      "required_evidence": [
+        "behavior",
+        "visual",
+        "device"
+      ]
+    },
+    "journey.visual_system": {
+      "expected": "Same information hierarchy, tokens, navigation, loading/empty/error states and responsive phone/tablet layouts.",
+      "ios_source": "Sources/HealthSync/Theme.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/HealthTheme.kt",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
+    "journey.insights": {
+      "expected": "Equivalent insight and relationship engine with matching quality gates and truthful deterministic fallback.",
+      "ios_source": "Sources/HealthSync/Insight/RelationshipEngine.swift",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/BodyBriefCard.kt",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
+    "journey.widgets": {
+      "expected": "Equivalent home-screen health snapshot, units, privacy and user actions.",
+      "ios_source": "Sources/HealthSync/WidgetStateStore.swift",
+      "android_source": null,
+      "required_evidence": [
+        "behavior",
+        "visual",
+        "device"
+      ]
+    }
+  },
+  "open_gaps": [
+    {
+      "id": "full-history-ui",
+      "acceptance_id": "backfill_full_export",
+      "detail": "Android export offers 7/30/90-day controls; iOS has custom dates and a full-archive preset. Health Connect history permission alone does not close this UI gap."
+    },
+    {
+      "id": "insight-engine",
+      "acceptance_id": "journey.insights",
+      "detail": "Android Morning Read bands and Weekly Brief are not the full iOS insight/relationship engine or generated narrative."
+    },
+    {
+      "id": "android-widgets",
+      "acceptance_id": "journey.widgets",
+      "detail": "No Android home-screen widget implementation was found in the current app sources; iOS has widget state and actions."
+    },
+    {
+      "id": "appointment-medications",
+      "acceptance_id": "doctor_visit_pack",
+      "detail": "Android uses manual medication drafts; iOS can read medication data. The platform gap needs an explicit product decision and corresponding UI evidence."
+    },
+    {
+      "id": "pairing-http",
+      "acceptance_id": "observatory_qr_pairing",
+      "detail": "Android pairing requires HTTPS; iOS permits a local HTTP destination after confirmation. Decide and test the same supported setup policy."
+    },
+    {
+      "id": "visual-audit",
+      "acceptance_id": "journey.visual_system",
+      "detail": "Changed surfaces have emulator screenshots, but a full paired phone/tablet, state, RTL and accessibility comparison has not been completed."
+    },
+    {
+      "id": "store-device-validation",
+      "acceptance_id": "journey.purchase_restore",
+      "detail": "Real Play-installed purchase/restore and physical-device lifecycle verification remain unproven."
+    }
+  ]
+}

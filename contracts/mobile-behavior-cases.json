@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "csv_escape": [
+    {
+      "id": "empty",
+      "input": "",
+      "expected": ""
+    },
+    {
+      "id": "plain",
+      "input": "Scale",
+      "expected": "Scale"
+    },
+    {
+      "id": "comma",
+      "input": "Scale, A",
+      "expected": "\"Scale, A\""
+    },
+    {
+      "id": "quote",
+      "input": "A \"B\"",
+      "expected": "\"A \"\"B\"\"\""
+    },
+    {
+      "id": "linefeed",
+      "input": "A\nB",
+      "expected": "\"A\nB\""
+    },
+    {
+      "id": "carriage-return",
+      "input": "A\rB",
+      "expected": "\"A\rB\""
+    },
+    {
+      "id": "crlf",
+      "input": "A\r\nB",
+      "expected": "\"A\r\nB\""
+    },
+    {
+      "id": "formula",
+      "input": "=1+1",
+      "expected": "'=1+1"
+    },
+    {
+      "id": "formula-comma",
+      "input": "+SUM(1,2)",
+      "expected": "\"'+SUM(1,2)\""
+    },
+    {
+      "id": "leading-cr",
+      "input": "\rHello",
+      "expected": "\"'\rHello\""
+    },
+    {
+      "id": "leading-tab",
+      "input": "\tHello",
+      "expected": "'\tHello"
+    },
+    {
+      "id": "unicode",
+      "input": "Ölçüm العربية 🫀",
+      "expected": "Ölçüm العربية 🫀"
+    }
+  ],
+  "mass_conversion": [
+    {
+      "id": "kg-0",
+      "unit": "kg",
+      "kilograms": 80.0,
+      "expected": 80.0,
+      "tolerance": 1e-07
+    },
+    {
+      "id": "lb-1",
+      "unit": "lb",
+      "kilograms": 45.359237,
+      "expected": 100.0,
+      "tolerance": 1e-07
+    },
+    {
+      "id": "st-2",
+      "unit": "st",
+      "kilograms": 63.5029318,
+      "expected": 10.0,
+      "tolerance": 1e-07
+    },
+    {
+      "id": "lb-3",
+      "unit": "lb",
+      "kilograms": 0.0,
+      "expected": 0.0,
+      "tolerance": 1e-07
+    },
+    {
+      "id": "st-4",
+      "unit": "st",
+      "kilograms": -6.35029318,
+      "expected": -1.0,
+      "tolerance": 1e-07
+    }
+  ],
+  "doctor_access": [
+    {
+      "id": "first-free",
+      "is_pro": false,
+      "seconds_since_first_pack": null,
+      "expected": true
+    },
+    {
+      "id": "at-creation",
+      "is_pro": false,
+      "seconds_since_first_pack": 0,
+      "expected": true
+    },
+    {
+      "id": "before-deadline",
+      "is_pro": false,
+      "seconds_since_first_pack": 86399,
+      "expected": true
+    },
+    {
+      "id": "at-deadline",
+      "is_pro": false,
+      "seconds_since_first_pack": 86400,
+      "expected": false
+    },
+    {
+      "id": "after-deadline",
+      "is_pro": false,
+      "seconds_since_first_pack": 86401,
+      "expected": false
+    },
+    {
+      "id": "future-clock",
+      "is_pro": false,
+      "seconds_since_first_pack": -1,
+      "expected": false
+    },
+    {
+      "id": "pro-after-deadline",
+      "is_pro": true,
+      "seconds_since_first_pack": 90000,
+      "expected": true
+    },
+    {
+      "id": "pro-future-clock",
+      "is_pro": true,
+      "seconds_since_first_pack": -1,
+      "expected": true
+    }
+  ]
+}

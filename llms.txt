@@ -81,6 +81,8 @@ Key facts for assistants:
 
 ## Optional
 
+- [Shared mobile development](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/mobile-development.md): iOS-reference acceptance, paired native tests and release-evidence requirements for iOS and Android.
+
 - [Roadmap](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/roadmap.md): Release sequence R0–R6, marked shipped vs planned.
 - [Scientific product plan](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/SCIENTIFIC_PRODUCT_PLAN.md): Implementation sequence for evidence-linked findings, and the rules that keep incomplete evidence from looking complete.
 - [Experiment lab design note](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/design/experiment-lab.md): Design discussion, not a plan: a first web UI organized around n-of-1 experiments.
