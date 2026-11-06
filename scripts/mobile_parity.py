@@ -18,7 +18,14 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 PLATFORMS = {"ios": "ios_app", "android": "android_app"}
-SUITES = {"csv_escape", "mass_conversion", "doctor_access", "theme"}
+SUITES = {
+    "csv_escape",
+    "mass_conversion",
+    "doctor_access",
+    "theme",
+    "relationships",
+    "relationship_posture",
+}
 JOURNEYS = {
     "journey.onboarding",
     "journey.purchase_restore",
@@ -67,6 +74,30 @@ def number(value: object) -> bool:
     return type(value) in (int, float) and math.isfinite(value)
 
 
+def valid_relationship_ci(value: object) -> bool:
+    return (
+        isinstance(value, list)
+        and len(value) == 2
+        and all(number(bound) for bound in value)
+        and -1 <= value[0] <= value[1] <= 1
+    )
+
+
+def valid_relationship_result(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and all(number(value.get(key)) for key in ("rho", "effective_n", "p", "sign_probability"))
+        and -1 <= value["rho"] <= 1
+        and value["effective_n"] >= 0
+        and 0 <= value["p"] <= 1
+        and 0 <= value["sign_probability"] <= 1
+        and "ci" in value
+        and (value["ci"] is None or valid_relationship_ci(value["ci"]))
+        and value.get("posture")
+        in {"personalPattern", "earlyHint", "noFinding", "insufficientData"}
+    )
+
+
 def same_members(value: object, expected) -> bool:
     return (
         isinstance(value, list)
@@ -113,6 +144,34 @@ def contract_issues(matrix: dict, cases: dict, parity: dict) -> list[str]:
                     row.get("unit") in ("kg", "lb", "st")
                     and all(number(row.get(key)) for key in ("kilograms", "expected", "tolerance"))
                     and row["tolerance"] > 0
+                )
+            elif suite == "relationship_posture":
+                ci = row.get("ci")
+                valid = (
+                    all(number(row.get(key)) for key in ("rho", "effective_n", "sign_probability"))
+                    and -1 <= row["rho"] <= 1
+                    and row["effective_n"] >= 0
+                    and 0 <= row["sign_probability"] <= 1
+                    and "ci" in row
+                    and (ci is None or valid_relationship_ci(ci))
+                    and "q" in row
+                    and (row["q"] is None or (number(row["q"]) and 0 <= row["q"] <= 1))
+                    and type(row.get("direction_matches")) is bool
+                    and row.get("expected") in {"personalPattern", "earlyHint", "noFinding"}
+                )
+            elif suite == "relationships":
+                xs, ys, expected = row.get("xs"), row.get("ys"), row.get("expected")
+                valid = (
+                    isinstance(xs, list)
+                    and isinstance(ys, list)
+                    and bool(xs)
+                    and len(xs) == len(ys)
+                    and all(number(value) for value in xs + ys)
+                    and type(row.get("expected_positive")) is bool
+                    and type(row.get("seed")) is int
+                    and 0 <= row["seed"] < 2**63
+                    and "expected" in row
+                    and (expected is None or valid_relationship_result(expected))
                 )
             elif suite == "theme":
                 colors = row.get("palette", {})

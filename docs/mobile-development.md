@@ -113,8 +113,16 @@ test bundle as release evidence, and never store real health data in these repor
 ## Present limits
 
 The shared executable cases cover CSV escaping, exact mass conversion, the Doctor
-Visit free-remake window, base light/dark colors, spacing and card radius. Android
-cards consume the tested radius through their actual Material shape. These checks
+Visit free-remake window, base light/dark colors, spacing and card radius. They also
+exercise both production relationship engines against identical synthetic series
+and evidence thresholds: ties, short histories, serial dependence,
+unexpected direction, deterministic block bootstrap and exact claim boundaries.
+The statistical expected values were independently calculated using SciPy ranks,
+Spearman correlation and type-7 quantiles, with the specified SplitMix64 block
+indices. Normal-CDF comparisons allow 1e-6 for the native A&S approximation;
+correlations, effective N and confidence intervals allow 1e-10. Changing these
+cases requires reviewing both native engines, not regenerating from a failing one.
+Android cards consume the tested radius through their actual Material shape. These checks
 do not cover the full app. The acceptance
 matrix records the remaining export, insight, widget, pairing, medication, visual
 and device gaps. Run `report` for current details rather than treating this document

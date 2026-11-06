@@ -236,7 +236,7 @@
     "journey.insights": {
       "expected": "Equivalent insight and relationship engine with matching quality gates and truthful deterministic fallback.",
       "ios_source": "Sources/HealthSync/Insight/RelationshipEngine.swift",
-      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/BodyBriefCard.kt",
+      "android_source": "app/src/main/kotlin/app/healthsave/android/ui/BodySignalCard.kt",
       "required_evidence": [
         "behavior",
         "visual"
@@ -262,7 +262,7 @@
     {
       "id": "insight-engine",
       "acceptance_id": "journey.insights",
-      "detail": "Android Morning Read bands and Weekly Brief are not the full iOS insight/relationship engine or generated narrative."
+      "detail": "Android now implements iOS-reference relationship statistics and a localized Body Signal card for same-morning sleep/resting-heart-rate and next-day sleep/steps, with shared native statistics and threshold cases. Full parity remains open: iOS multi-signal recovery, personal baseline anomalies, trends, streaks, history/rotation and generated narration are not ported; remaining curated inputs are unavailable to this reader. Android uses 60 source-separated days; the current iOS Overview supplies a year store and its relationship evaluator does not apply the declared per-spec window. Paired visual and real Health Connect input validation remain required. RMSSD never substitutes for SDNN."
     },
     {
       "id": "android-widgets",
