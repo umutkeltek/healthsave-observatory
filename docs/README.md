@@ -70,4 +70,4 @@ New here? Start with [Zero To Ready](zero-to-ready.md), then [Connect HealthSave
 ## Project
 
 - [Roadmap](roadmap.md) - release sequence: web app, Body Briefs, CLI/MCP, universal ingest, hosted options.
-- [Licensing](licensing.md) - open-core map: Apache-2.0 protocol/SDK, ELv2 core, reserved managed layer.
+- [Licensing](licensing.md) - Apache-2.0 for the protocol and SDK, Elastic License 2.0 for the core, commercial terms for the reserved managed layer.
