@@ -1,7 +1,7 @@
 # Contributing to HealthSave Observatory
 
-Thanks for your interest. This project is **open-core**: the protocol/client layer is open source
-(Apache-2.0) and the product core is source-available (Elastic License 2.0). Before contributing,
+Thanks for your interest. The protocol and client libraries are licensed under Apache-2.0.
+The product core is licensed under the Elastic License 2.0. Before contributing,
 skim [`LICENSING.md`](./LICENSING.md) so you know which license your change falls under — it's
 determined by the path you touch.
 
