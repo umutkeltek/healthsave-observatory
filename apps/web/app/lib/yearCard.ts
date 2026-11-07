@@ -302,7 +302,7 @@ export function renderYearCard(summary: YearInHealth, options: CardOptions = DEF
 
 /** Accessible description; follows the same opt-ins as the picture. */
 export function cardLabel(summary: YearInHealth, options: CardOptions): string {
-  const base = `${summary.year} in health: one mark per day, longer where more kinds of data were recorded, a dot where nothing was`;
+  const base = `${summary.year} in health: one mark per day, longer where more kinds of data were recorded, a short grey mark where nothing was`;
   if (!options.numbers) return `${base}.`;
   return `${base}. ${summary.days_with_data} days with data, longest gap ${summary.longest_inside_gap} days.`;
 }

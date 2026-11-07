@@ -9,6 +9,23 @@ Plugins carry their own versions.
 
 ## [Unreleased]
 
+### Added
+
+- Year in Health. `/year` in the dashboard shows one calendar year of your
+  record: a month-by-month strip of small calendars, one strip per kind of data
+  (heart, sleep, activity, body, ...) with every day without data drawn and
+  listed, the devices that sent data and when each one started or stopped, and
+  a few numbers for each device on its own (two devices are never averaged into
+  one number). Low coverage is marked, and a block says what the view cannot
+  tell you. `GET /api/v2/year/{year}` returns the same facts for scripts and
+  takes `?owner=` like the other person-scoped reads. Days follow your
+  analytical time setting (time zone and day start).
+- A share card for the year: a 1080 x 1350 SVG drawn on your server (the PNG
+  download is made from it in your browser). By default it shows only the shape of the year (which days have data,
+  where the gaps are) and the year itself: no counts, no dates, no device
+  names. Tick "Show my numbers" or "Show device names" on the page to add them.
+  Nothing leaves your server unless you post the file yourself.
+
 ## [1.2.0] - 2026-11-03
 
 A new install is locked down from the first start: it gets an API key, a

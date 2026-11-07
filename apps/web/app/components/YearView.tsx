@@ -375,8 +375,8 @@ export function YearView({
               />
               <div className="yr-share-controls">
                 <p>
-                  By default the card shows only the shape of your year: one mark per day and a dot where nothing
-                  was recorded. No counts, no dates, no device names. Add them only if you want them on it.
+                  By default the card shows only the shape of your year: one line per day, a short grey mark where
+                  nothing was recorded. No counts, no dates, no device names. Add them only if you want them on it.
                 </p>
                 <form method="get" action={`/year/${year}#yr-share-title`} className="yr-share-form">
                   <label>
