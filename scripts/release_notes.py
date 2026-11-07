@@ -47,6 +47,29 @@ def lock_version(root: Path = REPO_ROOT) -> str:
     return lock["info"]["version"]
 
 
+MCP_VERSION = re.compile(r'^__version__ = "([^"]+)"', re.M)
+
+
+def mcp_versions(root: Path = REPO_ROOT) -> dict[str, str]:
+    """The MCP read server's stated versions (packages/mcp), when it exists.
+
+    ``uvx --from git+...@vX.Y.Z#subdirectory=packages/mcp`` installs it from
+    the release tag, so it must say the release it ships in.
+    """
+
+    found: dict[str, str] = {}
+    pyproject = root / "packages/mcp/pyproject.toml"
+    if pyproject.exists():
+        found["packages/mcp/pyproject.toml"] = tomllib.loads(pyproject.read_text())["project"][
+            "version"
+        ]
+    init = root / "packages/mcp/healthsave_mcp/__init__.py"
+    if init.exists():
+        match = MCP_VERSION.search(init.read_text())
+        found["packages/mcp/healthsave_mcp/__init__.py"] = match.group(1) if match else "nothing"
+    return found
+
+
 def compose_image_versions(root: Path = REPO_ROOT) -> set[str]:
     """Release versions whose images docker-compose.yml pulls by default.
 
@@ -86,6 +109,7 @@ def problems(version: str, root: Path = REPO_ROOT) -> list[str]:
         "pyproject.toml": pyproject_version(root),
         "apps/api/server/main.py": app_version(root),
         "contracts/openapi/v1.locked.json": lock_version(root),
+        **mcp_versions(root),
     }
     for where, value in stated.items():
         if value != version:

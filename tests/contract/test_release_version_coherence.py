@@ -136,3 +136,17 @@ def test_compose_without_release_images_is_named(tmp_path: Path) -> None:
     assert problems("1.2.0", root) == [
         "docker-compose.yml pulls no ghcr.io release image, release is 1.2.0",
     ]
+
+
+def test_the_mcp_server_must_say_the_release_it_ships_in(tmp_path: Path) -> None:
+    root = _fake_repo(
+        tmp_path,
+        pyproject="1.4.0",
+        app="1.4.0",
+        lock="1.4.0",
+        changelog="## [1.4.0] - 2026-11-07\n\n### Added\n- MCP\n",
+    )
+    (root / "packages/mcp/healthsave_mcp").mkdir(parents=True)
+    (root / "packages/mcp/pyproject.toml").write_text('[project]\nname = "m"\nversion = "1.3.0"\n')
+    (root / "packages/mcp/healthsave_mcp/__init__.py").write_text('__version__ = "1.4.0"\n')
+    assert problems("1.4.0", root) == ["packages/mcp/pyproject.toml says 1.3.0, release is 1.4.0"]

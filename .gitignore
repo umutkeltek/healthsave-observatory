@@ -25,3 +25,6 @@ AGENTS.md
 
 # Observatory Care licence installed by `healthsave license activate`
 /healthsave.license
+
+# MCP server package build output (uvx/pip from packages/mcp)
+packages/mcp/build/
