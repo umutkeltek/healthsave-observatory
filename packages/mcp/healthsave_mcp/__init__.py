@@ -5,4 +5,4 @@ read summaries of their health record from their own Observatory. Read-only;
 it talks to one address and nothing else.
 """
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"

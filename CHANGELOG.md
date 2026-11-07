@@ -9,6 +9,8 @@ Plugins carry their own versions.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-07
+
 Give your AI a body: your own Claude can read your record. `healthsave mcp`
 prints one line that connects Claude Code or Claude Desktop to this server,
 read-only.

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "healthsave-observatory"
-version = "1.3.0"
+version = "1.4.0"
 description = "Self-hosted dashboard for your Apple Health data, synced from the HealthSave iPhone app."
 requires-python = ">=3.12,<3.14"
 license = { text = "Elastic-2.0" }
