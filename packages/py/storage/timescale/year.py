@@ -4,7 +4,12 @@ All SQL for the view lives here (storage zone). Two reads, both owner-scoped:
 
 * which metrics and which device streams have at least one active observation
   on each analytical day of the window (one row per metric, stream, scope and
-  day — never per observation);
+  day — never per observation). A reading belongs to the analytical day of
+  its interval's midpoint. A daily total (any ``*_day_total`` scope) is stored
+  as the instant of its local midnight, so it is read at midnight + 12 h: it
+  stays on its own day instead of falling before the 04:00 boundary, whatever
+  the phone's UTC offset. The query reads one extra day on each side; rows
+  whose day falls outside the window are dropped by the engine;
 * each stream's all-time first and last OBSERVATION time. The registry's own
   ``first_seen_at`` / ``last_seen_at`` are ingest times (a backfill moves
   them), so device changes are read from the observations instead. The
@@ -17,12 +22,14 @@ The reading of these rows (months, gaps, device changes) is pure and lives in
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from contracts._base import DEFAULT_WORKSPACE_ID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+_MARGIN = timedelta(days=1)
 
 _PRESENCE_SQL = text(
     """
@@ -31,7 +38,10 @@ _PRESENCE_SQL = text(
            aggregation_scope,
            date_trunc(
                'day',
-               (interval_start AT TIME ZONE :time_zone)
+               ((interval_start + CASE
+                   WHEN aggregation_scope <> 'interval_component' THEN interval '12 hours'
+                   ELSE (GREATEST(interval_end, interval_start) - interval_start) / 2
+                 END) AT TIME ZONE :time_zone)
                - make_interval(mins => :day_boundary_minutes)
            )::date AS day,
            count(*) AS observation_count
@@ -106,14 +116,18 @@ class TimescaleYearRepository:
         day_boundary_minutes: int,
         workspace_id: UUID = DEFAULT_WORKSPACE_ID,
     ) -> list[PresenceRow]:
-        """Per metric, stream, scope and analytical day in ``[start, end)``."""
+        """Per metric, stream, scope and analytical day around ``[start, end)``.
+
+        Reads one extra day on each side (a daily total sits up to a day away
+        from the window's instants); the engine keeps only days in the window.
+        """
         result = await session.execute(
             _PRESENCE_SQL,
             {
                 "owner_id": str(owner_id),
                 "workspace_id": str(workspace_id),
-                "start": start,
-                "end": end,
+                "start": start - _MARGIN,
+                "end": end + _MARGIN,
                 "time_zone": time_zone,
                 "day_boundary_minutes": day_boundary_minutes,
             },

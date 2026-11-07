@@ -360,10 +360,12 @@ export async function safeLabMarker(loinc: string): Promise<LabMarkerDetail | nu
 }
 
 // Year in Health: null means "backend unreachable or failed" (the page says
-// so); a year with no data is a real YearInHealth with zero days.
+// so); a year with no data is a real YearInHealth with zero days. Not cached
+// here: the API caches the year under the owner's last ingest time, so a sync
+// shows on the next page view instead of after a web-side TTL.
 export async function safeYear(year: number): Promise<YearInHealth | null> {
   try {
-    return await ownerSwr(`year:${year}`, 300_000, () => fetchYear(year));
+    return await fetchYear(year);
   } catch (error) {
     return swallow("year", error);
   }

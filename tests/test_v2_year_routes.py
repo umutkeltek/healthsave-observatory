@@ -141,7 +141,15 @@ def fakes(monkeypatch):
     monkeypatch.setattr(v2_year, "observation_repository", observations)
     monkeypatch.setattr(v2_year, "settings_repository", settings)
     monkeypatch.setattr(v2_year, "async_session", lambda: _Ctx())
-    return SimpleNamespace(repo=repo, observations=observations, settings=settings)
+    stamp = SimpleNamespace(value="2025-12-31T23:00:00+00:00", asked=[])
+
+    async def _stamp(session, owner_id):
+        stamp.asked.append(owner_id)
+        return stamp.value
+
+    monkeypatch.setattr(v2_year, "_ingest_stamp", _stamp)
+    monkeypatch.setattr(v2_year, "_LAST_KEYS", {})
+    return SimpleNamespace(repo=repo, observations=observations, settings=settings, stamp=stamp)
 
 
 # ── auth session: answers the api_keys lookup for participant keys ───────
@@ -337,3 +345,32 @@ async def test_the_current_year_stops_at_today(fakes) -> None:
     assert view.days_in_window == 244
     assert view.months[11].confidence == "future"
     assert "partial_year" in {item.code for item in view.limitations}
+
+
+# ── cache follows new data ───────────────────────────────────────────────
+
+
+def test_a_new_sync_is_visible_on_the_next_read(keyed, monkeypatch) -> None:
+    from server.api import swr
+
+    monkeypatch.setattr(v2_year, "YEAR_CACHE_TTL_SECONDS", 600.0)
+    client = _client(LEGACY)
+    assert client.get("/api/v2/year/2025").status_code == 200
+    assert client.get("/api/v2/year/2025").status_code == 200
+    assert len(keyed.repo.presence_calls) == 1  # second read served from cache
+
+    keyed.stamp.value = "2026-01-02T08:00:00+00:00"  # the phone synced
+    assert client.get("/api/v2/year/2025").status_code == 200
+    assert len(keyed.repo.presence_calls) == 2
+    # The superseded entry is dropped, so the cache does not grow per sync.
+    year_keys = [k for k in swr.v2_read_cache._entries if k.startswith("year:2025")]
+    assert year_keys == ["year:2025:2026-01-02T08:00:00+00:00"]
+    assert keyed.stamp.asked[-1] == DEFAULT_OWNER_ID
+
+
+def test_each_owner_has_its_own_cached_year(keyed, monkeypatch) -> None:
+    monkeypatch.setattr(v2_year, "YEAR_CACHE_TTL_SECONDS", 600.0)
+    client = _client(LEGACY)
+    client.get("/api/v2/year/2025")
+    client.get(f"/api/v2/year/2025?owner={ALICE}")
+    assert [call["owner_id"] for call in keyed.repo.presence_calls] == [DEFAULT_OWNER_ID, ALICE]

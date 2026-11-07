@@ -17,7 +17,11 @@ Days are the person's analytical days (``/api/v2/analytical-time``: time zone
 plus day boundary). The SQL lives in ``storage.timescale.year`` (and the
 headline series in ``storage.timescale.observations``). The aggregate walks a
 year of the canonical store, so it rides the process-level SWR cache like the
-readiness aggregates.
+readiness aggregates. The cache key carries the owner's last ingest time, so
+a sync is visible on the next read (no stale year after new data), and the
+superseded key is dropped so the cache does not grow with every sync. A change
+that does not move the last ingest time (a deletion of older rows) shows once
+the TTL runs out.
 """
 
 from __future__ import annotations
@@ -38,19 +42,21 @@ from contracts.analytical_time import (
 )
 from contracts.ontology import get_metric
 from fastapi import APIRouter, Depends, HTTPException, Path
+from storage.defaults import readiness_repository
 from storage.timescale.observations import default_repository as observation_repository
 from storage.timescale.observatory_settings import default_repository as settings_repository
 from storage.timescale.year import default_repository as year_repository
 
 from ..db.session import async_session
 from .access import ReadOwner
-from .deps import verify_api_key
+from .deps import get_session, verify_api_key
 from .swr import DEFAULT_TTL_SECONDS, owner_cache_key, v2_read_cache
 
 router = APIRouter(prefix="/api/v2", dependencies=[Depends(verify_api_key)])
 
-# A year view does not need minute freshness; a day only changes once.
-YEAR_CACHE_TTL_SECONDS = max(DEFAULT_TTL_SECONDS, 300.0) if DEFAULT_TTL_SECONDS > 0 else 0.0
+# New data changes the cache key (see ``_ingest_stamp``); the TTL only has to
+# follow the calendar (today's analytical day moving on).
+YEAR_CACHE_TTL_SECONDS = max(DEFAULT_TTL_SECONDS, 600.0) if DEFAULT_TTL_SECONDS > 0 else 0.0
 # One year of daily values per source stays far under this.
 HEADLINE_SERIES_LIMIT = 20_000
 ALL_SOURCES_DAY_TOTAL = "owner_all_source_day_total"
@@ -403,14 +409,31 @@ async def _load_year(owner_id: UUID, year: int) -> YearInHealth:
         return await build_year(session, owner_id=owner_id, year=year)
 
 
+_READINESS = readiness_repository()
+# (owner, year) -> the cache key last used, so a newer ingest drops the old one.
+_LAST_KEYS: dict[tuple[UUID, int], str] = {}
+
+
+async def _ingest_stamp(session, owner_id: UUID) -> str:
+    """The owner's last ingest time: one index-assisted scalar (migration 018)."""
+    stamp = await _READINESS.fetch_last_ingested_at(session, owner_id=owner_id)
+    return stamp.isoformat() if stamp else "none"
+
+
 @router.get("/year/{year}", response_model=YearInHealth)
 async def year_in_health(
     year: Annotated[int, Path(ge=1970, le=2200, description="Calendar year, like 2026")],
+    session=Depends(get_session),
     owner_id: ReadOwner = DEFAULT_OWNER_ID,
 ) -> YearInHealth:
     """One year of the record: months, sources, device changes, every gap."""
+    key = owner_cache_key(f"year:{year}:{await _ingest_stamp(session, owner_id)}", owner_id)
+    previous = _LAST_KEYS.get((owner_id, year))
+    if previous is not None and previous != key:
+        v2_read_cache.drop(previous)
+    _LAST_KEYS[(owner_id, year)] = key
     return await v2_read_cache.get(
-        owner_cache_key(f"year:{year}", owner_id),
+        key,
         lambda: _load_year(owner_id, year),
         ttl_seconds=YEAR_CACHE_TTL_SECONDS,
     )
