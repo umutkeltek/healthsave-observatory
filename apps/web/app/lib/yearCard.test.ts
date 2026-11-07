@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { daysInYear } from "./year";
-import { CARD_HEIGHT, CARD_WIDTH, cardTexts, parseCardOptions, renderYearCard } from "./yearCard";
+import { CARD_HEIGHT, CARD_WIDTH, cardTexts, deviceLines, parseCardOptions, renderYearCard } from "./yearCard";
 import { yearFixture } from "./yearFixture";
 
 const count = (svg: string, needle: RegExp) => (svg.match(needle) ?? []).length;
@@ -95,4 +95,32 @@ test("card is a 1080 x 1350 SVG with twelve month marks", () => {
   expect(svg).toContain(`width="${CARD_WIDTH}" height="${CARD_HEIGHT}"`);
   expect(count(svg, /class="month"/g)).toBe(12);
   expect(count(svg, /class="change"/g)).toBe(1);
+});
+
+test("device names wrap into at most two lines and never print a count", () => {
+  const base = yearFixture();
+  const change = (label: string, day: string, kind: "first_seen" | "last_seen" = "first_seen") => ({
+    day,
+    kind,
+    stream_id: label,
+    label,
+  });
+  const many = {
+    ...base,
+    device_changes: [
+      change("Withings Body+", "2025-01-01"),
+      change("Oura Ring", "2025-04-10"),
+      change("Apple Watch Series 11", "2025-09-13"),
+      change("Apple Watch Series 9", "2025-09-14", "last_seen"),
+      change("Polar H10", "2025-10-02"),
+      change("Garmin Forerunner 965", "2025-11-20"),
+    ],
+  };
+  const lines = deviceLines(many);
+  expect(lines.length).toBe(2);
+  expect(lines[0]).toBe("Withings Body+ from January · Oura Ring from April");
+  expect(lines[1].endsWith("· and more")).toBe(true);
+  // Names may hold digits ("Series 11"); the overflow itself is never counted.
+  expect(lines[1]).toBe("Apple Watch Series 11 from September · and more");
+  expect(deviceLines({ ...base, device_changes: [] })).toEqual([]);
 });

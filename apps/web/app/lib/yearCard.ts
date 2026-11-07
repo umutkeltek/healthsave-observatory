@@ -53,11 +53,14 @@ const FONT = `-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text'
 
 // Dial geometry.
 const CX = 540;
-const CY = 628;
-const R_IN = 250; // where every day starts
-const RAY = 168; // longest ray
-const R_MONTH = 470; // month initials
-const R_CHANGE = R_IN + RAY + 24; // device change marks
+// The dial sits a little higher when the stats row needs the space below it.
+const CY_PLAIN = 636;
+const CY_WITH_STATS = 600;
+const R_IN = 240; // where every day starts
+const RAY = 162; // longest ray
+const GAP_STUB = 16; // a day with nothing: a short grey mark, never left out
+const R_MONTH = 466; // month initials
+const R_CHANGE = R_IN + RAY + 20; // device change marks
 
 const LEVEL_OPACITY = [0, 0.38, 0.58, 0.8, 1];
 
@@ -69,8 +72,8 @@ function num(value: number): string {
   return Number(value.toFixed(2)).toString();
 }
 
-function polar(r: number, angle: number): [number, number] {
-  return [CX + r * Math.cos(angle), CY + r * Math.sin(angle)];
+function polar(r: number, angle: number, cy: number): [number, number] {
+  return [CX + r * Math.cos(angle), cy + r * Math.sin(angle)];
 }
 
 // Day i of the calendar year sits at this angle; Jan 1 at twelve o'clock,
@@ -102,25 +105,25 @@ function text(
   return `<text ${parts.join(" ")}>${esc(content)}</text>`;
 }
 
-function dial(summary: YearInHealth): string[] {
+function dial(summary: YearInHealth, cy: number): string[] {
   const total = daysInYear(summary.year);
   const maxCount = Math.max(1, ...summary.day_family_counts);
   const out: string[] = [];
 
   // Faint track under the whole year, so the circle reads complete even
   // where the year has not happened yet.
-  out.push(`<circle cx="${CX}" cy="${CY}" r="${R_IN - 22}" fill="none" stroke="${C.secondary}" stroke-width="2"/>`);
+  out.push(`<circle cx="${CX}" cy="${cy}" r="${R_IN - 22}" fill="none" stroke="${C.secondary}" stroke-width="2"/>`);
 
   // Month boundaries and initials.
   for (let m = 0; m < 12; m++) {
     const start = dayOfYear(summary.year, `${summary.year}-${String(m + 1).padStart(2, "0")}-01`);
     const a0 = angleOf(start - 0.5, total);
-    const [x1, y1] = polar(R_IN - 34, a0);
-    const [x2, y2] = polar(R_IN - 12, a0);
+    const [x1, y1] = polar(R_IN - 34, a0, cy);
+    const [x2, y2] = polar(R_IN - 12, a0, cy);
     out.push(`<line x1="${num(x1)}" y1="${num(y1)}" x2="${num(x2)}" y2="${num(y2)}" stroke="${C.tertiary}" stroke-width="2" stroke-linecap="round"/>`);
     const nextStart = m === 11 ? total : dayOfYear(summary.year, `${summary.year}-${String(m + 2).padStart(2, "0")}-01`);
     const mid = angleOf((start + nextStart - 1) / 2, total);
-    const [tx, ty] = polar(R_MONTH, mid);
+    const [tx, ty] = polar(R_MONTH, mid, cy);
     out.push(
       text(tx, ty + 9, MONTH_INITIALS[m], { size: 26, weight: 600, fill: C.muted, anchor: "middle", className: "month" }),
     );
@@ -133,22 +136,25 @@ function dial(summary: YearInHealth): string[] {
     const angle = angleOf(d, total);
     if (i < 0) {
       // Not yet (the current year): a hairline dot on the track.
-      const [x, y] = polar(R_IN + 4, angle);
+      const [x, y] = polar(R_IN + 4, angle, cy);
       out.push(`<circle class="future" cx="${num(x)}" cy="${num(y)}" r="1.4" fill="${C.elevated}"/>`);
       continue;
     }
     const count = summary.day_family_counts[i] ?? 0;
     if (summary.mask[i] !== "1" || count === 0) {
       // A day with nothing recorded: always drawn, never skipped.
-      const [x, y] = polar(R_IN + 4, angle);
-      out.push(`<circle class="gap" cx="${num(x)}" cy="${num(y)}" r="2.2" fill="${C.ghost}"/>`);
+      const [x1, y1] = polar(R_IN, angle, cy);
+      const [x2, y2] = polar(R_IN + GAP_STUB, angle, cy);
+      out.push(
+        `<line class="gap" x1="${num(x1)}" y1="${num(y1)}" x2="${num(x2)}" y2="${num(y2)}" stroke="${C.ghost}" stroke-width="2.6" stroke-linecap="round"/>`,
+      );
       continue;
     }
     const share = Math.min(1, count / maxCount);
     const level = share > 0.75 ? 4 : share > 0.5 ? 3 : share > 0.25 ? 2 : 1;
     const length = 26 + (RAY - 26) * share;
-    const [x1, y1] = polar(R_IN, angle);
-    const [x2, y2] = polar(R_IN + length, angle);
+    const [x1, y1] = polar(R_IN, angle, cy);
+    const [x2, y2] = polar(R_IN + length, angle, cy);
     out.push(
       `<line class="day" x1="${num(x1)}" y1="${num(y1)}" x2="${num(x2)}" y2="${num(y2)}" stroke="${C.accent}" stroke-opacity="${LEVEL_OPACITY[level]}" stroke-width="2.6" stroke-linecap="round"/>`,
     );
@@ -159,7 +165,7 @@ function dial(summary: YearInHealth): string[] {
   for (const change of summary.device_changes) {
     const d = dayOfYear(summary.year, change.day);
     if (d < 0 || d >= total) continue;
-    const [x, y] = polar(R_CHANGE, angleOf(d, total));
+    const [x, y] = polar(R_CHANGE, angleOf(d, total), cy);
     out.push(
       change.kind === "first_seen"
         ? `<circle class="change" cx="${num(x)}" cy="${num(y)}" r="8" fill="${C.warn}"/>`
@@ -169,35 +175,46 @@ function dial(summary: YearInHealth): string[] {
 
   // The year in the middle: the only number the card always carries.
   out.push(
-    text(CX, CY + 40, String(summary.year), { size: 150, weight: 700, anchor: "middle", tracking: -5, className: "year" }),
+    text(CX, cy + 40, String(summary.year), { size: 150, weight: 700, anchor: "middle", tracking: -5, className: "year" }),
   );
   out.push(
-    text(CX, CY + 100, "YEAR IN HEALTH", { size: 24, weight: 600, fill: C.muted, anchor: "middle", tracking: 4.5 }),
+    text(CX, cy + 100, "YEAR IN HEALTH", { size: 24, weight: 600, fill: C.muted, anchor: "middle", tracking: 4.5 }),
   );
   return out;
 }
 
 function stat(x: number, value: string, label: string): string[] {
   return [
-    text(x, 1176, value, { size: 64, weight: 700, anchor: "middle", tracking: -1.5, className: "stat" }),
-    text(x, 1214, label, { size: 24, weight: 500, fill: C.muted, anchor: "middle" }),
+    text(x, 1160, value, { size: 64, weight: 700, anchor: "middle", tracking: -1.5, className: "stat" }),
+    text(x, 1196, label, { size: 24, weight: 500, fill: C.muted, anchor: "middle" }),
   ];
 }
 
-function legend(y: number, withChanges: boolean): string[] {
+function legend(y: number, summary: YearInHealth): string[] {
   const out: string[] = [];
   const items: Array<{ mark: string; label: string; width: number }> = [
     {
       mark: `<line x1="0" y1="7" x2="0" y2="-11" stroke="${C.accent}" stroke-width="3" stroke-linecap="round"/>`,
       label: "data that day",
-      width: 176,
+      width: 150,
     },
-    { mark: `<circle cx="0" cy="-2" r="3.2" fill="${C.ghost}"/>`, label: "nothing recorded", width: 214 },
+    {
+      mark: `<line x1="0" y1="7" x2="0" y2="-3" stroke="${C.ghost}" stroke-width="3" stroke-linecap="round"/>`,
+      label: "nothing recorded",
+      width: 186,
+    },
   ];
-  if (withChanges) {
-    items.push({ mark: `<circle cx="0" cy="-2" r="7" fill="${C.warn}"/>`, label: "new device", width: 156 });
+  if (summary.device_changes.some((c) => c.kind === "first_seen")) {
+    items.push({ mark: `<circle cx="0" cy="-2" r="7" fill="${C.warn}"/>`, label: "new device", width: 136 });
   }
-  const gap = 36;
+  if (summary.device_changes.some((c) => c.kind === "last_seen")) {
+    items.push({
+      mark: `<circle cx="0" cy="-2" r="6" fill="none" stroke="${C.warn}" stroke-width="2.5"/>`,
+      label: "device stopped",
+      width: 170,
+    });
+  }
+  const gap = 28;
   const total = items.reduce((sum, item) => sum + item.width, 0) + gap * (items.length - 1);
   let x = CX - total / 2;
   for (const item of items) {
@@ -208,14 +225,31 @@ function legend(y: number, withChanges: boolean): string[] {
   return out;
 }
 
-function deviceLine(summary: YearInHealth): string | null {
+const DEVICE_LINE_CHARS = 58;
+
+/** Device changes by month, wrapped into at most two lines; the rest counted. */
+export function deviceLines(summary: YearInHealth): string[] {
   const parts = summary.device_changes.map((change) => {
     const month = MONTH_NAMES[Number(change.day.slice(5, 7)) - 1];
-    return change.kind === "first_seen" ? `${change.label} from ${month}` : `${change.label} until ${month}`;
+    const label = change.label.length > 28 ? `${change.label.slice(0, 27)}…` : change.label;
+    return change.kind === "first_seen" ? `${label} from ${month}` : `${label} until ${month}`;
   });
-  if (parts.length === 0) return null;
-  const line = parts.join("  ·  ");
-  return line.length > 72 ? `${line.slice(0, 71)}…` : line;
+  const lines: string[] = [];
+  let used = 0;
+  for (const part of parts) {
+    const last = lines.length - 1;
+    if (last >= 0 && `${lines[last]} · ${part}`.length <= DEVICE_LINE_CHARS) {
+      lines[last] = `${lines[last]} · ${part}`;
+    } else if (lines.length < 2) {
+      lines.push(part);
+    } else {
+      break;
+    }
+    used++;
+  }
+  const rest = parts.length - used;
+  if (rest > 0) lines[lines.length - 1] += ` · and ${rest === 1 ? "one more" : "more"}`;
+  return lines;
 }
 
 /** The card as an SVG document. */
@@ -223,12 +257,14 @@ export function renderYearCard(summary: YearInHealth, options: CardOptions = DEF
   const body: string[] = [];
   body.push(`<rect width="${CARD_WIDTH}" height="${CARD_HEIGHT}" fill="${C.canvas}"/>`);
   body.push(text(72, 104, "HealthSave Observatory", { size: 26, weight: 600, fill: C.muted, tracking: 0.4 }));
-  if (options.synthetic) {
+  if (!options.synthetic) {
+    body.push(text(CARD_WIDTH - 72, 104, "healthsave.app", { size: 24, weight: 500, fill: C.ghost, anchor: "end" }));
+  } else {
     body.push(
-      `<rect x="${CARD_WIDTH - 72 - 404}" y="70" width="404" height="50" rx="25" fill="none" stroke="${C.warn}" stroke-width="2"/>`,
+      `<rect x="${CARD_WIDTH - 72 - 476}" y="70" width="476" height="50" rx="25" fill="none" stroke="${C.warn}" stroke-width="2"/>`,
     );
     body.push(
-      text(CARD_WIDTH - 72 - 202, 104, "SYNTHETIC DATA · NOT A PERSON", {
+      text(CARD_WIDTH - 72 - 238, 104, "SYNTHETIC DATA · NOT A REAL PERSON", {
         size: 20,
         weight: 700,
         fill: C.warn,
@@ -239,9 +275,8 @@ export function renderYearCard(summary: YearInHealth, options: CardOptions = DEF
     );
   }
 
-  body.push(...dial(summary));
+  body.push(...dial(summary, options.numbers ? CY_WITH_STATS : CY_PLAIN));
 
-  const hasChanges = summary.device_changes.length > 0;
   if (options.numbers) {
     const days = summary.headlines.find((h) => h.id === "days_recorded");
     const sources = summary.headlines.find((h) => h.id === "sources");
@@ -249,11 +284,13 @@ export function renderYearCard(summary: YearInHealth, options: CardOptions = DEF
     body.push(...stat(540, String(sources?.value ?? summary.sources.length), sources?.value === 1 ? "source" : "sources"));
     body.push(...stat(860, String(summary.longest_inside_gap), "longest gap, days"));
   }
-  const devices = options.devices ? deviceLine(summary) : null;
-  if (devices) {
-    body.push(text(CX, options.numbers ? 1262 : 1196, devices, { size: 24, weight: 500, fill: C.ink, anchor: "middle", className: "devices" }));
-  }
-  body.push(...legend(options.numbers ? 1302 : 1262, hasChanges));
+  const devices = options.devices ? deviceLines(summary) : [];
+  const deviceTop = options.numbers ? 1242 : 1196;
+  devices.forEach((line, i) => {
+    body.push(text(CX, deviceTop + i * 32, line, { size: 24, weight: 500, fill: C.ink, anchor: "middle", className: "devices" }));
+  });
+  const legendY = devices.length ? deviceTop + devices.length * 32 + 18 : options.numbers ? 1262 : 1270;
+  body.push(...legend(Math.min(legendY, 1314), summary));
 
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_WIDTH}" height="${CARD_HEIGHT}" viewBox="0 0 ${CARD_WIDTH} ${CARD_HEIGHT}" font-family="${FONT}" role="img" aria-label="${esc(cardLabel(summary, options))}">`,

@@ -82,12 +82,12 @@ function MonthTile({
       {(month.first_seen_ids.length > 0 || month.last_seen_ids.length > 0) && (
         <ul className="yr-month-changes">
           {month.first_seen_ids.map((id) => (
-            <li key={`f-${id}`} className="yr-change-new">
+            <li key={`f-${id}`} className="yr-change-new" title={`New: ${byId.get(id)?.label ?? "a source"}`}>
               New: {byId.get(id)?.label ?? "a source"}
             </li>
           ))}
           {month.last_seen_ids.map((id) => (
-            <li key={`l-${id}`} className="yr-change-stop">
+            <li key={`l-${id}`} className="yr-change-stop" title={`Last reading: ${byId.get(id)?.label ?? "a source"}`}>
               Last: {byId.get(id)?.label ?? "a source"}
             </li>
           ))}
@@ -378,7 +378,7 @@ export function YearView({
                   By default the card shows only the shape of your year: one mark per day and a dot where nothing
                   was recorded. No counts, no dates, no device names. Add them only if you want them on it.
                 </p>
-                <form method="get" action={`/year/${year}`} className="yr-share-form">
+                <form method="get" action={`/year/${year}#yr-share-title`} className="yr-share-form">
                   <label>
                     <input type="checkbox" name="numbers" value="1" defaultChecked={options.numbers} /> Show my
                     numbers (days with data, sources, longest gap)

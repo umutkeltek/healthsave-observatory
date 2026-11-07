@@ -7862,6 +7862,11 @@ font-size: 17px;
   background: var(--neutral);
   flex: none;
 }
+.yr-source-month {
+  height: 10px;
+  border-radius: 2px;
+  background: var(--raise);
+}
 .yr-s1 {
   background: var(--series-1);
 }
@@ -7887,7 +7892,11 @@ font-size: 17px;
   font-size: var(--fs-2xs);
   line-height: 1.35;
   color: var(--ink);
-  overflow-wrap: anywhere;
+}
+.yr-month-changes li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .yr-change-stop {
   color: var(--muted);
@@ -8005,11 +8014,6 @@ font-size: 17px;
   display: grid;
   grid-template-columns: repeat(12, 10px);
   gap: 2px;
-}
-.yr-source-month {
-  height: 10px;
-  border-radius: 2px;
-  background: var(--raise);
 }
 .yr-source-tags {
   display: flex;
