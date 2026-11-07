@@ -280,6 +280,45 @@ One marker's results, oldest first, in the same shape as one `markers[]` entry a
 
 `422` when `{loinc}` is not a valid LOINC code (the check digit must match), `404` when there are no results for it.
 
+### `GET /api/v2/year/{year}` — keyed
+Year in Health: one calendar year of the record read as coverage, for one owner (`?owner=`, like the other person-scoped reads). Days are the person's analytical days (`/api/v2/settings/analytical-time`: time zone and day start); a daily total stamped at local midnight stays on its own day. The current year runs to today; `422` for a year that has not started, and for a year outside 1970-2200.
+
+Every value comes from the statistical engine (`analysis/statistical/year.py`); nothing is narrated:
+
+- `mask` and each `families[].mask` hold one character per day of the window (`1` data, `0` none). `gaps[]` (overall) and `families[].gaps[]` partition every `0` into runs, none filtered by length: `kind` is `before_first` (the record had not started), `inside`, `after_last` or `no_data`. `day_family_counts[]` counts the kinds of data recorded each day.
+- `months[]` — twelve entries: days in the window, days with data, `coverage`, the families and `source_ids` seen that month, the sources first or last seen that month, and `confidence` (`ok`, `low` under half the days, `none`, `future`).
+- `sources[]` — device streams with readings this year (all-source daily totals count as data but are not a device), each with its first and last day this year and its all-time first and last observation; `device_changes[]` lists `first_seen` / `last_seen` (a source silent for 14+ days before the end of the window).
+- `headlines[]` — record counts (`days_recorded`, `sources`, `longest_gap`), then per-source medians (`basis: "median_one_source"`: `value` is p50, `low`/`high` p10/p90) for resting heart rate and daily steps. Two sources are never averaged; fewer than 7 days moves a source to `withheld[]`, under 30 days is `confidence: "low"`.
+- `limitations[]` — codes with their facts (`time_basis`, `day_presence_only`, `partial_year`, `record_starts_late`, `no_data`, `device_labels`, `unattributed`, `derived_excluded`, `headline_thin`); the web view words them.
+
+Cached per owner and year under the owner's last ingest time, so a sync shows on the next read.
+```json
+{ "year": 2026, "owner_id": "00000000-0000-0000-0000-000000000001", "time_zone": "UTC",
+  "day_boundary": "04:00", "window_start": "2026-01-01", "window_end": "2026-11-06",
+  "days_in_window": 310, "days_with_data": 303, "mask": "1111…", "day_family_counts": [3, 4, 3, …],
+  "gaps": [{ "start": "2026-08-04", "end": "2026-08-10", "days": 7, "kind": "inside" }],
+  "longest_inside_gap": 7,
+  "months": [{ "month": 4, "days": 30, "days_with_data": 30, "coverage": 1.0,
+               "families": ["heart", "sleep", "activity", "body"], "source_ids": ["…"],
+               "first_seen_ids": ["…"], "last_seen_ids": [], "confidence": "ok" }],
+  "families": [{ "id": "heart", "label": "Heart and vitals", "metric_ids": ["vital.heart_rate"],
+                 "days_with_data": 301, "days_without_data": 9, "first_day": "2026-01-01",
+                 "last_day": "2026-11-06", "mask": "1111…", "longest_inside_gap": 8,
+                 "gaps": [{ "start": "2026-08-03", "end": "2026-08-10", "days": 8, "kind": "inside" }],
+                 "confidence": "ok" }],
+  "sources": [{ "stream_id": "…", "label": "Oura Ring", "source_plugin_id": "apple_health",
+                "first_day": "2026-04-10", "last_day": "2026-11-06", "days_with_data": 202,
+                "months": [4, 5, 6, 7, 8, 9, 10, 11], "families": ["heart"],
+                "first_seen_at": "2026-04-10T06:30:00Z", "last_seen_at": "2026-11-06T06:30:00Z",
+                "new_this_year": true, "stopped_this_year": false }],
+  "device_changes": [{ "day": "2026-04-10", "kind": "first_seen", "stream_id": "…", "label": "Oura Ring" }],
+  "headlines": [{ "id": "resting_heart_rate", "label": "Resting heart rate", "value": 54.0, "unit": "bpm",
+                  "stream_id": "…", "source_label": "Oura Ring", "low": 52.0, "high": 56.0, "days": 202,
+                  "of_days": null, "basis": "median_one_source", "confidence": "ok" }],
+  "withheld": [], "limitations": [{ "code": "partial_year", "day": "2026-11-06", "count": null }],
+  "confidence": "ok", "generated_at": "2026-11-07T02:00:00Z" }
+```
+
 ### `GET /api/v2/intelligence` · `PUT /api/v2/intelligence` — keyed
 The LLM-narrator ("Intelligence") settings. `GET` returns the current posture with **no secrets** (only `key_last4`); `managed_by_env` is true when deploy-time env config is still the effective source. `PUT` applies `mode` (off/local/cloud) + the primary provider/model (+ optional write-only `api_key`) + the fallback chain. The server classifies each route's trust zone; `PUT` does **not** grant cloud egress (see `/consent`).
 ```json
