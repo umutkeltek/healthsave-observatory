@@ -790,6 +790,7 @@ read key may name only its own. See [Participants](docs/operations/participants.
 | `/api/v2/moments/{moment_id}` | PUT, DELETE | key | update / delete one moment |
 | `/api/v2/labs` | GET | key | blood test results per marker (LOINC), each with the lab's own reference range and its lab stream; the labs that sent them |
 | `/api/v2/labs/{loinc}` | GET | key | one marker's results, oldest first (`422` for a malformed LOINC code, `404` when there are none) |
+| `/api/v2/year/{year}` | GET | key | Year in Health: one calendar year read as coverage, in the person's analytical days (months covered, sources per month, each source's first/last observation, every run of days with no data per kind of data, headline numbers computed per source and never averaged across sources, limitation codes; `?owner=`; `422` for a year that has not started) |
 | `/api/v2/export/metrics` | GET | key | list exportable metrics with counts + date ranges |
 | `/api/v2/export` | GET | key | export one metric (or `all`) as JSON or CSV |
 | `/api/v2/owners` | GET | admin key | people this Observatory holds data for: the default owner plus one entry per participant key (label, live scopes, last ingest); drives the web participant switcher |

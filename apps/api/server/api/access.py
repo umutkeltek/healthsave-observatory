@@ -51,6 +51,7 @@ OWNER_READ_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/api/v2/streams"),
         ("GET", "/api/v2/streams/{stream_id}"),
         ("GET", "/api/v2/readiness"),
+        ("GET", "/api/v2/year/{year}"),
     }
 )
 

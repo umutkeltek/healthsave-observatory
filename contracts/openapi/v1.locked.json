@@ -3608,6 +3608,741 @@
         },
         "title": "WindowRef",
         "type": "object"
+      },
+      "YearDeviceChangeView": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "first_seen",
+              "last_seen"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "stream_id": {
+            "format": "uuid",
+            "title": "Stream Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "kind",
+          "stream_id",
+          "label"
+        ],
+        "title": "YearDeviceChangeView",
+        "type": "object"
+      },
+      "YearFamilyView": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "enum": [
+              "ok",
+              "low",
+              "none",
+              "future"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "days_with_data": {
+            "title": "Days With Data",
+            "type": "integer"
+          },
+          "days_without_data": {
+            "title": "Days Without Data",
+            "type": "integer"
+          },
+          "first_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Day"
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/YearGapView"
+            },
+            "title": "Gaps",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "last_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Day"
+          },
+          "longest_inside_gap": {
+            "title": "Longest Inside Gap",
+            "type": "integer"
+          },
+          "mask": {
+            "title": "Mask",
+            "type": "string"
+          },
+          "metric_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Metric Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "metric_ids",
+          "days_with_data",
+          "days_without_data",
+          "first_day",
+          "last_day",
+          "mask",
+          "gaps",
+          "longest_inside_gap",
+          "confidence"
+        ],
+        "title": "YearFamilyView",
+        "type": "object"
+      },
+      "YearGapView": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "before_first",
+              "inside",
+              "after_last",
+              "no_data"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "days",
+          "kind"
+        ],
+        "title": "YearGapView",
+        "type": "object"
+      },
+      "YearHeadlineView": {
+        "additionalProperties": false,
+        "properties": {
+          "basis": {
+            "title": "Basis",
+            "type": "string"
+          },
+          "confidence": {
+            "enum": [
+              "ok",
+              "low",
+              "none",
+              "future"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days"
+          },
+          "high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "High"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low"
+          },
+          "of_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Of Days"
+          },
+          "source_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Label"
+          },
+          "stream_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stream Id"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "value",
+          "unit",
+          "stream_id",
+          "source_label",
+          "low",
+          "high",
+          "days",
+          "of_days",
+          "basis",
+          "confidence"
+        ],
+        "title": "YearHeadlineView",
+        "type": "object"
+      },
+      "YearInHealth": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "enum": [
+              "ok",
+              "low",
+              "none",
+              "future"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "day_boundary": {
+            "title": "Day Boundary",
+            "type": "string"
+          },
+          "day_family_counts": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Day Family Counts",
+            "type": "array"
+          },
+          "days_in_window": {
+            "title": "Days In Window",
+            "type": "integer"
+          },
+          "days_with_data": {
+            "title": "Days With Data",
+            "type": "integer"
+          },
+          "device_changes": {
+            "items": {
+              "$ref": "#/components/schemas/YearDeviceChangeView"
+            },
+            "title": "Device Changes",
+            "type": "array"
+          },
+          "families": {
+            "items": {
+              "$ref": "#/components/schemas/YearFamilyView"
+            },
+            "title": "Families",
+            "type": "array"
+          },
+          "first_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Day"
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/YearGapView"
+            },
+            "title": "Gaps",
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "headlines": {
+            "items": {
+              "$ref": "#/components/schemas/YearHeadlineView"
+            },
+            "title": "Headlines",
+            "type": "array"
+          },
+          "last_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Day"
+          },
+          "limitations": {
+            "items": {
+              "$ref": "#/components/schemas/YearLimitationView"
+            },
+            "title": "Limitations",
+            "type": "array"
+          },
+          "longest_inside_gap": {
+            "title": "Longest Inside Gap",
+            "type": "integer"
+          },
+          "mask": {
+            "title": "Mask",
+            "type": "string"
+          },
+          "months": {
+            "items": {
+              "$ref": "#/components/schemas/YearMonthView"
+            },
+            "title": "Months",
+            "type": "array"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/YearSourceView"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "time_zone": {
+            "title": "Time Zone",
+            "type": "string"
+          },
+          "window_end": {
+            "format": "date",
+            "title": "Window End",
+            "type": "string"
+          },
+          "window_start": {
+            "format": "date",
+            "title": "Window Start",
+            "type": "string"
+          },
+          "withheld": {
+            "items": {
+              "$ref": "#/components/schemas/YearWithheldView"
+            },
+            "title": "Withheld",
+            "type": "array"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year",
+          "owner_id",
+          "time_zone",
+          "day_boundary",
+          "generated_at",
+          "window_start",
+          "window_end",
+          "days_in_window",
+          "days_with_data",
+          "first_day",
+          "last_day",
+          "day_family_counts",
+          "mask",
+          "gaps",
+          "longest_inside_gap",
+          "months",
+          "families",
+          "sources",
+          "device_changes",
+          "headlines",
+          "withheld",
+          "limitations",
+          "confidence"
+        ],
+        "title": "YearInHealth",
+        "type": "object"
+      },
+      "YearLimitationView": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day"
+          }
+        },
+        "required": [
+          "code",
+          "day",
+          "count"
+        ],
+        "title": "YearLimitationView",
+        "type": "object"
+      },
+      "YearMonthView": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "enum": [
+              "ok",
+              "low",
+              "none",
+              "future"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage"
+          },
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "days_with_data": {
+            "title": "Days With Data",
+            "type": "integer"
+          },
+          "families": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Families",
+            "type": "array"
+          },
+          "first_seen_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "First Seen Ids",
+            "type": "array"
+          },
+          "last_seen_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Last Seen Ids",
+            "type": "array"
+          },
+          "month": {
+            "title": "Month",
+            "type": "integer"
+          },
+          "source_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "month",
+          "days",
+          "days_with_data",
+          "coverage",
+          "families",
+          "source_ids",
+          "first_seen_ids",
+          "last_seen_ids",
+          "confidence"
+        ],
+        "title": "YearMonthView",
+        "type": "object"
+      },
+      "YearSourceView": {
+        "additionalProperties": false,
+        "properties": {
+          "days_with_data": {
+            "title": "Days With Data",
+            "type": "integer"
+          },
+          "families": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Families",
+            "type": "array"
+          },
+          "first_day": {
+            "format": "date",
+            "title": "First Day",
+            "type": "string"
+          },
+          "first_seen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Seen At"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "last_day": {
+            "format": "date",
+            "title": "Last Day",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          },
+          "months": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Months",
+            "type": "array"
+          },
+          "new_this_year": {
+            "title": "New This Year",
+            "type": "boolean"
+          },
+          "source_plugin_id": {
+            "title": "Source Plugin Id",
+            "type": "string"
+          },
+          "stopped_this_year": {
+            "title": "Stopped This Year",
+            "type": "boolean"
+          },
+          "stream_id": {
+            "format": "uuid",
+            "title": "Stream Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stream_id",
+          "label",
+          "source_plugin_id",
+          "first_day",
+          "last_day",
+          "days_with_data",
+          "months",
+          "families",
+          "first_seen_at",
+          "last_seen_at",
+          "new_this_year",
+          "stopped_this_year"
+        ],
+        "title": "YearSourceView",
+        "type": "object"
+      },
+      "YearWithheldView": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "source_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Label"
+          },
+          "stream_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stream Id"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "stream_id",
+          "source_label",
+          "days",
+          "reason"
+        ],
+        "title": "YearWithheldView",
+        "type": "object"
       }
     }
   },
@@ -6944,6 +7679,79 @@
           }
         },
         "summary": "Put Sync Run Summary"
+      }
+    },
+    "/api/v2/year/{year}": {
+      "get": {
+        "description": "One year of the record: months, sources, device changes, every gap.",
+        "operationId": "year_in_health_api_v2_year__year__get",
+        "parameters": [
+          {
+            "description": "Calendar year, like 2026",
+            "in": "path",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "description": "Calendar year, like 2026",
+              "maximum": 2200,
+              "minimum": 1970,
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YearInHealth"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Year In Health"
       }
     },
     "/health": {

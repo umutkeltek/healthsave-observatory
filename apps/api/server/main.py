@@ -61,6 +61,7 @@ from .api import (
     v2_receipts,
     v2_settings,
     v2_sources,
+    v2_year,
 )
 from .api.deps import warn_if_auth_disabled
 from .api.swr import v2_read_cache
@@ -224,3 +225,4 @@ app.include_router(v2_readiness.router)
 app.include_router(v2_receipts.router)
 app.include_router(v2_settings.router)
 app.include_router(v2_sources.router)
+app.include_router(v2_year.router)

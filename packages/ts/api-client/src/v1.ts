@@ -1238,6 +1238,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/year/{year}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Year In Health
+         * @description One year of the record: months, sources, device changes, every gap.
+         */
+        get: operations["year_in_health_api_v2_year__year__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -2495,6 +2515,252 @@ export interface components {
             n?: number | null;
             /** Start */
             start?: string | null;
+        };
+        /** YearDeviceChangeView */
+        YearDeviceChangeView: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "first_seen" | "last_seen";
+            /** Label */
+            label: string;
+            /**
+             * Stream Id
+             * Format: uuid
+             */
+            stream_id: string;
+        };
+        /** YearFamilyView */
+        YearFamilyView: {
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "ok" | "low" | "none" | "future";
+            /** Days With Data */
+            days_with_data: number;
+            /** Days Without Data */
+            days_without_data: number;
+            /** First Day */
+            first_day: string | null;
+            /** Gaps */
+            gaps: components["schemas"]["YearGapView"][];
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Last Day */
+            last_day: string | null;
+            /** Longest Inside Gap */
+            longest_inside_gap: number;
+            /** Mask */
+            mask: string;
+            /** Metric Ids */
+            metric_ids: string[];
+        };
+        /** YearGapView */
+        YearGapView: {
+            /** Days */
+            days: number;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "before_first" | "inside" | "after_last" | "no_data";
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+        };
+        /** YearHeadlineView */
+        YearHeadlineView: {
+            /** Basis */
+            basis: string;
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "ok" | "low" | "none" | "future";
+            /** Days */
+            days: number | null;
+            /** High */
+            high: number | null;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Low */
+            low: number | null;
+            /** Of Days */
+            of_days: number | null;
+            /** Source Label */
+            source_label: string | null;
+            /** Stream Id */
+            stream_id: string | null;
+            /** Unit */
+            unit: string | null;
+            /** Value */
+            value: number;
+        };
+        /** YearInHealth */
+        YearInHealth: {
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "ok" | "low" | "none" | "future";
+            /** Day Boundary */
+            day_boundary: string;
+            /** Day Family Counts */
+            day_family_counts: number[];
+            /** Days In Window */
+            days_in_window: number;
+            /** Days With Data */
+            days_with_data: number;
+            /** Device Changes */
+            device_changes: components["schemas"]["YearDeviceChangeView"][];
+            /** Families */
+            families: components["schemas"]["YearFamilyView"][];
+            /** First Day */
+            first_day: string | null;
+            /** Gaps */
+            gaps: components["schemas"]["YearGapView"][];
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Headlines */
+            headlines: components["schemas"]["YearHeadlineView"][];
+            /** Last Day */
+            last_day: string | null;
+            /** Limitations */
+            limitations: components["schemas"]["YearLimitationView"][];
+            /** Longest Inside Gap */
+            longest_inside_gap: number;
+            /** Mask */
+            mask: string;
+            /** Months */
+            months: components["schemas"]["YearMonthView"][];
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /** Sources */
+            sources: components["schemas"]["YearSourceView"][];
+            /** Time Zone */
+            time_zone: string;
+            /**
+             * Window End
+             * Format: date
+             */
+            window_end: string;
+            /**
+             * Window Start
+             * Format: date
+             */
+            window_start: string;
+            /** Withheld */
+            withheld: components["schemas"]["YearWithheldView"][];
+            /** Year */
+            year: number;
+        };
+        /** YearLimitationView */
+        YearLimitationView: {
+            /** Code */
+            code: string;
+            /** Count */
+            count: number | null;
+            /** Day */
+            day: string | null;
+        };
+        /** YearMonthView */
+        YearMonthView: {
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "ok" | "low" | "none" | "future";
+            /** Coverage */
+            coverage: number | null;
+            /** Days */
+            days: number;
+            /** Days With Data */
+            days_with_data: number;
+            /** Families */
+            families: string[];
+            /** First Seen Ids */
+            first_seen_ids: string[];
+            /** Last Seen Ids */
+            last_seen_ids: string[];
+            /** Month */
+            month: number;
+            /** Source Ids */
+            source_ids: string[];
+        };
+        /** YearSourceView */
+        YearSourceView: {
+            /** Days With Data */
+            days_with_data: number;
+            /** Families */
+            families: string[];
+            /**
+             * First Day
+             * Format: date
+             */
+            first_day: string;
+            /** First Seen At */
+            first_seen_at: string | null;
+            /** Label */
+            label: string;
+            /**
+             * Last Day
+             * Format: date
+             */
+            last_day: string;
+            /** Last Seen At */
+            last_seen_at: string | null;
+            /** Months */
+            months: number[];
+            /** New This Year */
+            new_this_year: boolean;
+            /** Source Plugin Id */
+            source_plugin_id: string;
+            /** Stopped This Year */
+            stopped_this_year: boolean;
+            /**
+             * Stream Id
+             * Format: uuid
+             */
+            stream_id: string;
+        };
+        /** YearWithheldView */
+        YearWithheldView: {
+            /** Days */
+            days: number;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Reason */
+            reason: string;
+            /** Source Label */
+            source_label: string | null;
+            /** Stream Id */
+            stream_id: string | null;
         };
     };
     responses: never;
@@ -4509,6 +4775,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    year_in_health_api_v2_year__year__get: {
+        parameters: {
+            query?: {
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                /** @description Calendar year, like 2026 */
+                year: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YearInHealth"];
                 };
             };
             /** @description Validation Error */
