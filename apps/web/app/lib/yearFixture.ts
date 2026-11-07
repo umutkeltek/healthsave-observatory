@@ -138,7 +138,7 @@ export function yearFixture(options: { windowEnd?: string } = {}): YearInHealth 
       { id: "longest_gap", label: "Longest stretch with nothing recorded", value: 9, unit: "days", stream_id: null, source_label: null, low: null, high: null, days: null, of_days: null, basis: "count", confidence: "ok" },
       { id: "resting_heart_rate", label: "Resting heart rate", value: 56, unit: "bpm", stream_id: WATCH, source_label: "Sam's Apple Watch", low: 52, high: 61, days: 341, of_days: null, basis: "median_one_source", confidence: "ok" },
       { id: "resting_heart_rate", label: "Resting heart rate", value: 50, unit: "bpm", stream_id: RING, source_label: "Oura <Ring> & Co", low: 47, high: 54, days: 22, of_days: null, basis: "median_one_source", confidence: "low" },
-      { id: "steps", label: "Daily steps", value: 8437, unit: "steps", stream_id: null, source_label: "All sources, daily total", low: 4210, high: 12880, days: 356, of_days: null, basis: "median_one_source", confidence: "ok" },
+      { id: "steps", label: "Daily steps", value: 8437, unit: "steps", stream_id: null, source_label: "All sources, daily total", low: 4210, high: 12880, days: 356, of_days: null, basis: "median_all_sources_total", confidence: "ok" },
     ],
     withheld: [{ id: "resting_heart_rate", label: "Resting heart rate", stream_id: null, source_label: "Old Scale", days: 4, reason: "too_few_days" }],
     limitations: [

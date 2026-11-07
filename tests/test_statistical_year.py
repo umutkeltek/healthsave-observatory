@@ -320,8 +320,8 @@ def test_all_source_day_total_is_its_own_labelled_series():
     )
     summary = _summary([], headline_metrics=[metric])
     steps = [h for h in summary.headlines if h.id == "steps"]
-    assert [(h.stream_id, h.source_label, h.value) for h in steps] == [
-        (None, "All sources, daily total", 8000.0)
+    assert [(h.stream_id, h.source_label, h.value, h.basis) for h in steps] == [
+        (None, "All sources, daily total", 8000.0, "median_all_sources_total")
     ]
 
 

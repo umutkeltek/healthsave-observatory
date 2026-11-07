@@ -348,7 +348,7 @@ def _headlines_for(
                 low=round(baseline.p10, 1),
                 high=round(baseline.p90, 1),
                 days=baseline.days,
-                basis="median_one_source",
+                basis="median_one_source" if stream_id is not None else "median_all_sources_total",
                 confidence="low" if baseline.days < HEADLINE_LOW_DAYS else "ok",
             )
         )

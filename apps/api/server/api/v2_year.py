@@ -17,22 +17,24 @@ Days are the person's analytical days (``/api/v2/analytical-time``: time zone
 plus day boundary). The SQL lives in ``storage.timescale.year`` (and the
 headline series in ``storage.timescale.observations``). The aggregate walks a
 year of the canonical store, so it rides the process-level SWR cache like the
-readiness aggregates. The cache key carries the owner's last ingest time, so
-a sync is visible on the next read (no stale year after new data), and the
-superseded key is dropped so the cache does not grow with every sync. A change
-that does not move the last ingest time (a deletion of older rows) shows once
-the TTL runs out.
+year of the canonical store, so the answer is cached: one entry per owner and
+year, keyed on the owner's last ingest time and time setting. A sync or a
+Settings change is visible on the next read; a change that does not move the
+last ingest time (a deletion of older rows) shows once the TTL runs out.
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import UTC, date, datetime
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, time, timedelta
+from time import monotonic
 from typing import Annotated, Literal
 from uuid import UUID
 
 from analysis.statistical import year as engine
 from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID, V2Model
+from contracts.aggregation import AggregationScope
 from contracts.analytical_time import (
     DEFAULT_DAY_BOUNDARY_MINUTES,
     DEFAULT_TIME_ZONE,
@@ -42,24 +44,25 @@ from contracts.analytical_time import (
 )
 from contracts.ontology import get_metric
 from fastapi import APIRouter, Depends, HTTPException, Path
+from normalization.fusion import preferred_read_scope
 from storage.defaults import readiness_repository
 from storage.timescale.observations import default_repository as observation_repository
 from storage.timescale.observatory_settings import default_repository as settings_repository
 from storage.timescale.year import default_repository as year_repository
 
-from ..db.session import async_session
 from .access import ReadOwner
 from .deps import get_session, verify_api_key
-from .swr import DEFAULT_TTL_SECONDS, owner_cache_key, v2_read_cache
+from .swr import DEFAULT_TTL_SECONDS
 
 router = APIRouter(prefix="/api/v2", dependencies=[Depends(verify_api_key)])
 
-# New data changes the cache key (see ``_ingest_stamp``); the TTL only has to
+# New data or a new time setting changes the cache key; the TTL only has to
 # follow the calendar (today's analytical day moving on).
 YEAR_CACHE_TTL_SECONDS = max(DEFAULT_TTL_SECONDS, 600.0) if DEFAULT_TTL_SECONDS > 0 else 0.0
 # One year of daily values per source stays far under this.
 HEADLINE_SERIES_LIMIT = 20_000
 ALL_SOURCES_DAY_TOTAL = "owner_all_source_day_total"
+_HALF_DAY = timedelta(hours=12)
 
 # (headline id, metric id, label, unit, label for an all-source day total)
 HEADLINE_METRICS: tuple[tuple[str, str, str, str, str], ...] = (
@@ -309,17 +312,43 @@ async def _analytical_time(session, owner_id: UUID) -> AnalyticalTime:
     return AnalyticalTime(DEFAULT_TIME_ZONE, DEFAULT_DAY_BOUNDARY_MINUTES)
 
 
+def _day_total_window(
+    window: tuple[date, date], config: AnalyticalTime, now: datetime
+) -> tuple[datetime, datetime]:
+    """Instants that select whole daily totals for the window's calendar days.
+
+    A daily total is stored at its local midnight, so it is matched at
+    midnight + 12 h (as the presence read does, whatever the phone's UTC
+    offset). Today's total is still growing and is left out.
+    """
+    zone = config.zone
+
+    def midnight(day: date) -> datetime:
+        return datetime.combine(day, time(0), tzinfo=zone)
+
+    last = min(window[1] + timedelta(days=1), now.astimezone(zone).date())
+    return midnight(window[0]) - _HALF_DAY, midnight(last) - _HALF_DAY
+
+
 async def build_year(
-    session, *, owner_id: UUID, year: int, now: datetime | None = None
+    session,
+    *,
+    owner_id: UUID,
+    year: int,
+    now: datetime | None = None,
+    config: AnalyticalTime | None = None,
 ) -> YearInHealth:
     """Fetch the year's rows for one owner and let the engine read them."""
-    config = await _analytical_time(session, owner_id)
-    today = analytical_day(now or datetime.now(UTC), config)
+    config = config or await _analytical_time(session, owner_id)
+    now = now or datetime.now(UTC)
+    today = analytical_day(now, config)
     window = engine.year_window(year, today)
     if window is None:
         raise HTTPException(
             status_code=422,
-            detail=f"year {year} has not started yet (today is {today.isoformat()})",
+            detail=(
+                f"year_not_started: year {year} has not started yet (today is {today.isoformat()})"
+            ),
         )
     start, _ = analytical_day_bounds(window[0], config)
     _, end = analytical_day_bounds(window[1], config)
@@ -359,13 +388,17 @@ async def build_year(
 
     headline_metrics = []
     for headline_id, metric_id, label, unit, all_label in HEADLINE_METRICS:
+        daily_total = preferred_read_scope(metric_id) != AggregationScope.INTERVAL_COMPONENT
+        series_start, series_end = (
+            _day_total_window(window, config, now) if daily_total else (start, end)
+        )
         points = await observation_repository.query_series(
             session,
             owner_id=owner_id,
             workspace_id=DEFAULT_WORKSPACE_ID,
             metric_id=metric_id,
-            start=start,
-            end=end,
+            start=series_start,
+            end=series_end,
             limit=HEADLINE_SERIES_LIMIT,
             rollup_scope_only=True,
         )
@@ -403,15 +436,19 @@ async def build_year(
     return _view(summary, owner_id=owner_id, config=config)
 
 
-async def _load_year(owner_id: UUID, year: int) -> YearInHealth:
-    """Session-owning loader, so an SWR background refresh can outlive a request."""
-    async with async_session() as session:
-        return await build_year(session, owner_id=owner_id, year=year)
-
-
 _READINESS = readiness_repository()
-# (owner, year) -> the cache key last used, so a newer ingest drops the old one.
-_LAST_KEYS: dict[tuple[UUID, int], str] = {}
+
+
+@dataclass(frozen=True, slots=True)
+class _Cached:
+    key: tuple[str, str, int]
+    value: YearInHealth
+    at: float
+
+
+# One entry per (owner, year): replaced, never added to, when new data or a
+# new time setting arrives, so the cache cannot grow with every sync.
+_YEAR_CACHE: dict[tuple[UUID, int], _Cached] = {}
 
 
 async def _ingest_stamp(session, owner_id: UUID) -> str:
@@ -427,13 +464,21 @@ async def year_in_health(
     owner_id: ReadOwner = DEFAULT_OWNER_ID,
 ) -> YearInHealth:
     """One year of the record: months, sources, device changes, every gap."""
-    key = owner_cache_key(f"year:{year}:{await _ingest_stamp(session, owner_id)}", owner_id)
-    previous = _LAST_KEYS.get((owner_id, year))
-    if previous is not None and previous != key:
-        v2_read_cache.drop(previous)
-    _LAST_KEYS[(owner_id, year)] = key
-    return await v2_read_cache.get(
-        key,
-        lambda: _load_year(owner_id, year),
-        ttl_seconds=YEAR_CACHE_TTL_SECONDS,
+    config = await _analytical_time(session, owner_id)
+    key = (
+        await _ingest_stamp(session, owner_id),
+        config.time_zone,
+        config.day_boundary_minutes,
     )
+    slot = (owner_id, year)
+    cached = _YEAR_CACHE.get(slot)
+    if (
+        cached is not None
+        and cached.key == key
+        and monotonic() - cached.at < YEAR_CACHE_TTL_SECONDS
+    ):
+        return cached.value
+    value = await build_year(session, owner_id=owner_id, year=year, config=config)
+    if YEAR_CACHE_TTL_SECONDS > 0:
+        _YEAR_CACHE[slot] = _Cached(key=key, value=value, at=monotonic())
+    return value

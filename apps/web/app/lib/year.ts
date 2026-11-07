@@ -208,6 +208,11 @@ export function isPerSource(headline: YearHeadline): boolean {
   return headline.basis === "median_one_source";
 }
 
+/** The phone's own total across every source (steps): one series, not a device. */
+export function isAllSourcesTotal(headline: YearHeadline): boolean {
+  return headline.basis === "median_all_sources_total";
+}
+
 export function withheldSentence(item: YearWithheld): string {
   const who = item.source_label ?? "One source";
   return `${item.label}, ${who}: ${plural(item.days, "day")} this year, too few for a number (needs 7).`;

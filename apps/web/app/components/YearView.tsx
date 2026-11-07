@@ -12,6 +12,7 @@ import {
   headlineRange,
   headlineValue,
   insideGaps,
+  isAllSourcesTotal,
   isPerSource,
   limitationSentence,
   maskRuns,
@@ -183,7 +184,7 @@ function HeadlineItem({ headline }: { headline: YearHeadline }) {
         {isPerSource(headline) && headline.source_label ? <span className="yr-headline-source"> · {headline.source_label}</span> : null}
       </span>
       <span className="yr-headline-value mono">{headlineValue(headline)}</span>
-      {(range || headline.days !== null) && isPerSource(headline) && (
+      {(range || headline.days !== null) && (isPerSource(headline) || isAllSourcesTotal(headline)) && (
         <span className="yr-headline-sub">
           {range}
           {range && headline.days !== null ? " · " : ""}
@@ -218,11 +219,24 @@ export function YearView({
   year,
   summary,
   options,
+  notStarted = false,
 }: {
   year: number;
   summary: YearInHealth | null;
   options: CardOptions;
+  notStarted?: boolean;
 }) {
+  if (notStarted) {
+    return (
+      <>
+        <Intro year={year} />
+        <p className="card yr-empty">
+          {year} has not started yet in your time zone. The view follows the time zone and day start in
+          Settings.
+        </p>
+      </>
+    );
+  }
   if (!summary) {
     return (
       <>
@@ -238,8 +252,9 @@ export function YearView({
   const order = summary.sources.map((s) => s.stream_id);
   const days = summary.days_in_window;
   const empty = summary.days_with_data === 0;
-  const recordHeadlines = summary.headlines.filter((h) => !isPerSource(h));
+  const recordHeadlines = summary.headlines.filter((h) => !isPerSource(h) && !isAllSourcesTotal(h));
   const sourceHeadlines = summary.headlines.filter(isPerSource);
+  const totalHeadlines = summary.headlines.filter(isAllSourcesTotal);
   const allGaps = summary.gaps;
   const query = cardQuery(options);
 
@@ -336,7 +351,7 @@ export function YearView({
             )}
           </section>
 
-          {(sourceHeadlines.length > 0 || summary.withheld.length > 0) && (
+          {(sourceHeadlines.length > 0 || totalHeadlines.length > 0 || summary.withheld.length > 0) && (
             <section className="yr-section" aria-labelledby="yr-numbers-title">
               <h3 id="yr-numbers-title" className="yr-subhead">
                 A few numbers, one source at a time
@@ -350,6 +365,19 @@ export function YearView({
                   <HeadlineItem key={`${h.id}-${h.stream_id ?? "all"}`} headline={h} />
                 ))}
               </ul>
+              {totalHeadlines.length > 0 && (
+                <>
+                  <p className="yr-section-note yr-totals-note">
+                    The phone&apos;s own daily total, which it adds up across every source. It is one series as
+                    the phone reports it, not a device.
+                  </p>
+                  <ul className="yr-headlines">
+                    {totalHeadlines.map((h) => (
+                      <HeadlineItem key={`${h.id}-total`} headline={h} />
+                    ))}
+                  </ul>
+                </>
+              )}
               {summary.withheld.length > 0 && (
                 <ul className="yr-withheld">
                   {summary.withheld.map((item) => (
@@ -376,7 +404,8 @@ export function YearView({
               <div className="yr-share-controls">
                 <p>
                   By default the card shows only the shape of your year: one line per day, a short grey mark where
-                  nothing was recorded. No counts, no dates, no device names. Add them only if you want them on it.
+                  nothing was recorded, and a dot where a device started or stopped. No counts, no dates, no device
+                  names. Add them only if you want them on it.
                 </p>
                 <form method="get" action={`/year/${year}#yr-share-title`} className="yr-share-form">
                   <label>

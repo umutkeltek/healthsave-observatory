@@ -47,6 +47,23 @@ describe("Year view content", () => {
     expect(html).toContain("Resting heart rate, Old Scale: 4 days this year, too few for a number (needs 7).");
   });
 
+  test("the phone's all-source total is shown apart from the per-source numbers", () => {
+    const html = render();
+    const perSource = html.indexOf("Two devices are never blended into one number.");
+    const totals = html.indexOf("The phone&#x27;s own daily total");
+    expect(perSource).toBeGreaterThan(0);
+    expect(totals).toBeGreaterThan(perSource);
+    expect(html.indexOf("8,440 steps")).toBeGreaterThan(totals);
+  });
+
+  test("a year that has not started in the person's time zone says so, not 'did not answer'", () => {
+    const html = renderToStaticMarkup(
+      <YearView year={2027} summary={null} notStarted options={{ numbers: false, devices: false }} />,
+    );
+    expect(html).toContain("2027 has not started yet in your time zone.");
+    expect(html).not.toContain("did not answer");
+  });
+
   test("months show coverage, sources, the new device and low confidence", () => {
     const html = render();
     expect(html).toContain("New: Oura &lt;Ring&gt; &amp; Co");

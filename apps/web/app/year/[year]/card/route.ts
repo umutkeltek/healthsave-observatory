@@ -2,7 +2,7 @@
 // API summary. Opt-ins (numbers=1, devices=1) come from the page; without them
 // the card carries the shape of the year and the year itself, nothing else.
 
-import { safeYear } from "../../../lib/load";
+import { loadYear } from "../../../lib/load";
 import { parseYearParam } from "../../../lib/year";
 import { parseCardOptions, renderYearCard } from "../../../lib/yearCard";
 
@@ -12,7 +12,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ year
   const { year: raw } = await params;
   const year = parseYearParam(raw);
   if (year === null) return Response.json({ detail: "unknown year" }, { status: 404 });
-  const summary = await safeYear(year);
+  const { summary, notStarted } = await loadYear(year);
+  if (notStarted) return Response.json({ detail: "year_not_started" }, { status: 404 });
   if (!summary) return Response.json({ detail: "year_unavailable" }, { status: 502 });
   const url = new URL(request.url);
   const headers: Record<string, string> = {

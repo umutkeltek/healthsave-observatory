@@ -359,15 +359,20 @@ export async function safeLabMarker(loinc: string): Promise<LabMarkerDetail | nu
   }
 }
 
-// Year in Health: null means "backend unreachable or failed" (the page says
-// so); a year with no data is a real YearInHealth with zero days. Not cached
-// here: the API caches the year under the owner's last ingest time, so a sync
-// shows on the next page view instead of after a web-side TTL.
-export async function safeYear(year: number): Promise<YearInHealth | null> {
+// Year in Health. `summary` null with `notStarted` false means the backend
+// failed or is unreachable (the page says so). `notStarted` means the year has
+// not begun in the person's own time zone (the API's 422), which the server's
+// clock cannot know: around New Year the page falls back to the year before.
+// Not cached here: the API caches the year under the owner's last ingest time
+// and time setting, so a sync shows on the next page view.
+export type YearLoad = { summary: YearInHealth | null; notStarted: boolean };
+
+export async function loadYear(year: number): Promise<YearLoad> {
   try {
-    return await fetchYear(year);
+    return { summary: await fetchYear(year), notStarted: false };
   } catch (error) {
-    return swallow("year", error);
+    if (error instanceof ApiError && error.status === 422) return { summary: null, notStarted: true };
+    return { summary: swallow("year", error), notStarted: false };
   }
 }
 

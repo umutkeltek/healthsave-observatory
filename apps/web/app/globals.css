@@ -8026,6 +8026,10 @@ font-size: 17px;
   font-size: var(--fs-sm);
   color: var(--ink);
 }
+.yr-totals-note {
+  margin-top: var(--s4);
+  margin-bottom: var(--s2);
+}
 .yr-withheld {
   margin: var(--s3) 0 0;
   padding-left: var(--s5);

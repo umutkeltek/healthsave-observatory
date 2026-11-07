@@ -10,10 +10,12 @@ All SQL for the view lives here (storage zone). Two reads, both owner-scoped:
   stays on its own day instead of falling before the 04:00 boundary, whatever
   the phone's UTC offset. The query reads one extra day on each side; rows
   whose day falls outside the window are dropped by the engine;
-* each stream's all-time first and last OBSERVATION time. The registry's own
-  ``first_seen_at`` / ``last_seen_at`` are ingest times (a backfill moves
-  them), so device changes are read from the observations instead. The
-  per-stream lookups ride the partial index from migration 016.
+* each stream's all-time first and last OBSERVATION time, over the scopes that
+  describe one device (a device's own daily total read at midnight + 12 h, like
+  above). The registry's own ``first_seen_at`` / ``last_seen_at`` are ingest
+  times (a backfill moves them), so device changes are read from the
+  observations instead. The per-stream lookups ride the partial index from
+  migration 016.
 
 The reading of these rows (months, gaps, device changes) is pure and lives in
 ``analysis.statistical.year``.
@@ -62,20 +64,28 @@ _STREAM_BOUNDS_SQL = text(
            s.source_plugin_id,
            s.origin_key,
            s.device_label,
-           (SELECT o.interval_start
+           (SELECT o.interval_start + CASE
+                     WHEN o.aggregation_scope = 'device_day_total' THEN interval '12 hours'
+                     ELSE interval '0 hours'
+                   END
               FROM canonical_observations o
              WHERE o.owner_id = s.owner_id
                AND o.workspace_id = :workspace_id
                AND o.stream_id = s.id
                AND o.status = 'active'
+               AND o.aggregation_scope IN ('interval_component', 'device_day_total')
              ORDER BY o.interval_start ASC
              LIMIT 1) AS first_at,
-           (SELECT o.interval_start
+           (SELECT o.interval_start + CASE
+                     WHEN o.aggregation_scope = 'device_day_total' THEN interval '12 hours'
+                     ELSE interval '0 hours'
+                   END
               FROM canonical_observations o
              WHERE o.owner_id = s.owner_id
                AND o.workspace_id = :workspace_id
                AND o.stream_id = s.id
                AND o.status = 'active'
+               AND o.aggregation_scope IN ('interval_component', 'device_day_total')
              ORDER BY o.interval_start DESC
              LIMIT 1) AS last_at
     FROM source_device_streams s

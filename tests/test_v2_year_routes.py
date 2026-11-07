@@ -126,21 +126,12 @@ class _Settings:
         return self.by_owner.get(owner_id)
 
 
-class _Ctx:
-    async def __aenter__(self):
-        return object()
-
-    async def __aexit__(self, *exc):
-        return False
-
-
 @pytest.fixture
 def fakes(monkeypatch):
     repo, observations, settings = _YearRepo(), _Observations(), _Settings()
     monkeypatch.setattr(v2_year, "year_repository", repo)
     monkeypatch.setattr(v2_year, "observation_repository", observations)
     monkeypatch.setattr(v2_year, "settings_repository", settings)
-    monkeypatch.setattr(v2_year, "async_session", lambda: _Ctx())
     stamp = SimpleNamespace(value="2025-12-31T23:00:00+00:00", asked=[])
 
     async def _stamp(session, owner_id):
@@ -148,7 +139,7 @@ def fakes(monkeypatch):
         return stamp.value
 
     monkeypatch.setattr(v2_year, "_ingest_stamp", _stamp)
-    monkeypatch.setattr(v2_year, "_LAST_KEYS", {})
+    monkeypatch.setattr(v2_year, "_YEAR_CACHE", {})
     return SimpleNamespace(repo=repo, observations=observations, settings=settings, stamp=stamp)
 
 
@@ -258,8 +249,9 @@ def test_headlines_are_one_per_source(keyed) -> None:
     ]
     assert all(h["basis"] == "median_one_source" for h in rhr)
     steps = [h for h in body["headlines"] if h["id"] == "steps"]
-    assert [(h["stream_id"], h["source_label"]) for h in steps] == [
-        (None, "All sources, daily total")
+    # The phone's all-source total is its own series, never labelled one source.
+    assert [(h["stream_id"], h["source_label"], h["basis"]) for h in steps] == [
+        (None, "All sources, daily total", "median_all_sources_total")
     ]
     # Headline reads ask for the single scope each metric rolls up over.
     assert all(call["rollup_scope_only"] for call in keyed.observations.calls)
@@ -347,12 +339,10 @@ async def test_the_current_year_stops_at_today(fakes) -> None:
     assert "partial_year" in {item.code for item in view.limitations}
 
 
-# ── cache follows new data ───────────────────────────────────────────────
+# ── cache follows new data and new settings ──────────────────────────────
 
 
 def test_a_new_sync_is_visible_on_the_next_read(keyed, monkeypatch) -> None:
-    from server.api import swr
-
     monkeypatch.setattr(v2_year, "YEAR_CACHE_TTL_SECONDS", 600.0)
     client = _client(LEGACY)
     assert client.get("/api/v2/year/2025").status_code == 200
@@ -362,10 +352,18 @@ def test_a_new_sync_is_visible_on_the_next_read(keyed, monkeypatch) -> None:
     keyed.stamp.value = "2026-01-02T08:00:00+00:00"  # the phone synced
     assert client.get("/api/v2/year/2025").status_code == 200
     assert len(keyed.repo.presence_calls) == 2
-    # The superseded entry is dropped, so the cache does not grow per sync.
-    year_keys = [k for k in swr.v2_read_cache._entries if k.startswith("year:2025")]
-    assert year_keys == ["year:2025:2026-01-02T08:00:00+00:00"]
+    # One entry per owner and year: replaced, never piled up per sync.
+    assert list(v2_year._YEAR_CACHE) == [(DEFAULT_OWNER_ID, 2025)]
     assert keyed.stamp.asked[-1] == DEFAULT_OWNER_ID
+
+
+def test_a_new_time_setting_is_visible_on_the_next_read(keyed, monkeypatch) -> None:
+    monkeypatch.setattr(v2_year, "YEAR_CACHE_TTL_SECONDS", 600.0)
+    client = _client(LEGACY)
+    assert client.get("/api/v2/year/2025").json()["time_zone"] == "UTC"
+    keyed.settings.by_owner[DEFAULT_OWNER_ID] = ObservatorySettings("Asia/Tokyo", 240, 2)
+    assert client.get("/api/v2/year/2025").json()["time_zone"] == "Asia/Tokyo"
+    assert len(keyed.repo.presence_calls) == 2
 
 
 def test_each_owner_has_its_own_cached_year(keyed, monkeypatch) -> None:
@@ -373,4 +371,29 @@ def test_each_owner_has_its_own_cached_year(keyed, monkeypatch) -> None:
     client = _client(LEGACY)
     client.get("/api/v2/year/2025")
     client.get(f"/api/v2/year/2025?owner={ALICE}")
+    client.get("/api/v2/year/2025")
     assert [call["owner_id"] for call in keyed.repo.presence_calls] == [DEFAULT_OWNER_ID, ALICE]
+
+
+# ── daily totals: whole calendar days, today's unfinished total left out ──
+
+
+async def test_daily_total_headlines_read_whole_local_days(fakes) -> None:
+    fakes.settings.by_owner[DEFAULT_OWNER_ID] = ObservatorySettings("Europe/Istanbul", 240, 1)
+    await v2_year.build_year(
+        object(), owner_id=DEFAULT_OWNER_ID, year=2025, now=datetime(2026, 3, 1, 9, tzinfo=UTC)
+    )
+    calls = {call["metric_id"]: call for call in fakes.observations.calls}
+    # Istanbul is UTC+3: Jan 1 00:00 local is Dec 31 21:00 UTC; matched at + 12 h.
+    assert calls["activity.steps"]["start"] == datetime(2024, 12, 31, 9, tzinfo=UTC)
+    assert calls["activity.steps"]["end"] == datetime(2025, 12, 31, 9, tzinfo=UTC)
+    # Readings that are not daily totals keep the analytical-day window (04:00).
+    assert calls["vital.resting_heart_rate"]["start"] == datetime(2025, 1, 1, 1, tzinfo=UTC)
+
+    fakes.observations.calls.clear()
+    await v2_year.build_year(
+        object(), owner_id=DEFAULT_OWNER_ID, year=2025, now=datetime(2025, 6, 10, 9, tzinfo=UTC)
+    )
+    steps = next(c for c in fakes.observations.calls if c["metric_id"] == "activity.steps")
+    # June 10 is still running in Istanbul: its total stops at June 10 00:00 local.
+    assert steps["end"] == datetime(2025, 6, 9, 9, tzinfo=UTC)

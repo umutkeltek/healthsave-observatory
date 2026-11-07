@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { YearView } from "../../components/YearView";
-import { safeYear } from "../../lib/load";
+import { loadYear } from "../../lib/load";
 import { parseYearParam } from "../../lib/year";
 import { parseCardOptions } from "../../lib/yearCard";
 
@@ -31,6 +31,13 @@ export default async function YearPage({
   const { year: raw } = await params;
   const year = parseYearParam(raw);
   if (year === null) notFound();
-  const [summary, sp] = await Promise.all([safeYear(year), searchParams]);
-  return <YearView year={year} summary={summary} options={parseCardOptions(toSearchParams(sp))} />;
+  const [loaded, sp] = await Promise.all([loadYear(year), searchParams]);
+  return (
+    <YearView
+      year={year}
+      summary={loaded.summary}
+      notStarted={loaded.notStarted}
+      options={parseCardOptions(toSearchParams(sp))}
+    />
+  );
 }
