@@ -18,7 +18,11 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from analysis.config import AnalysisConfig  # noqa: E402
-from analysis.engine import AnalysisEngine  # noqa: E402
+from analysis.engine import (  # noqa: E402
+    AnalysisEngine,
+    _format_period_summary,
+    _format_week_comparison,
+)
 from analysis.llm.client import InsightResult, LLMUnavailableError  # noqa: E402
 from analysis.statistical.aggregator import DataAggregator  # noqa: E402
 from analysis.statistical.finding_cards import build_card  # noqa: E402
@@ -308,10 +312,13 @@ async def test_run_daily_briefing_persists_anomaly_findings_and_includes_them_in
     insight_inserts = session.all_insert_params_for("analysis_insights")
     assert insight_inserts[0]["findings_used"] == [901, 902, 903]
 
-    # Anomalies were formatted into the LLM prompt.
+    # Anomalies were formatted into the LLM prompt. Direction and z agree:
+    # magnitude is absolute because the bullet already says "down".
     prompt_arg = llm_mock.generate_insight.await_args.args[0]
     assert "hrv: down deviation" in prompt_arg
     assert "severity=alert" in prompt_arg
+    assert "z=3.10" in prompt_arg
+    assert "z=-" not in prompt_arg
 
 
 @pytest.mark.asyncio
@@ -350,6 +357,9 @@ async def test_run_daily_briefing_persists_hrv_only_summary_and_reports_data_ava
     assert findings[0]["metric"] == "hrv"
     prompt_arg = llm_mock.generate_insight.await_args.args[0]
     assert "Data sufficiency: 1/1 days of history." in prompt_arg
+    assert "decreased by 23.0%" in prompt_arg
+    assert "delta_pct_vs_baseline" not in prompt_arg
+    assert "-23.0" not in prompt_arg
 
 
 @pytest.mark.asyncio
@@ -845,7 +855,11 @@ async def test_run_daily_briefing_folds_recent_trends_and_correlations_into_prom
 
     prompt = llm_mock.generate_insight.await_args.args[0]
     assert "heart_rate: down trend" in prompt
+    assert "slope=0.5" in prompt
+    assert "slope=-" not in prompt
     assert "vital.hrv_sdnn ~ vital.resting_heart_rate" in prompt
+    # Correlation sign is the relationship, not a percent change.
+    assert "r=-0.8" in prompt or "-0.8" in prompt
 
 
 @pytest.mark.asyncio
@@ -883,13 +897,43 @@ async def test_run_weekly_summary_success_writes_run_finding_and_insight():
     insight_inserts = session.all_insert_params_for("analysis_insights")
     assert insight_inserts[0]["insight_type"] == "weekly_summary"
     assert insight_inserts[0]["findings_used"] == [701]
-    # Week-over-baseline delta was folded into the prompt.
+    # Week-over-baseline delta was folded into the prompt as magnitude + direction.
+    # The stored finding keeps the signed number; only the narrator input is phrased.
     prompt = llm_mock.generate_insight.await_args.args[0]
-    assert "hrv: -7.7% vs 30-day baseline" in prompt
+    assert "hrv: decreased by 7.7% vs 30-day baseline" in prompt
+    assert "delta_pct_vs_baseline" not in prompt
+    assert "-7.7" not in prompt
+    finding_inserts = session.all_insert_params_for("analysis_findings")
+    assert "delta_pct_vs_baseline" in finding_inserts[0]["structured_data"]
+    assert "-7.7" in finding_inserts[0]["structured_data"]
     updates = session.all_update_statements()
     assert any(
         "status = 'completed'" in sql and params.get("tokens_in") == 60 for sql, params in updates
     )
+
+
+def test_prompt_percent_phrases_cover_negative_positive_and_zero():
+    metrics = {
+        "hrv": {"avg": 40.0, "delta_pct_vs_baseline": -1.7},
+        "steps": {"avg": 8000.0, "delta_pct_vs_baseline": 4.2},
+        "rhr": {"avg": 52.0, "delta_pct_vs_baseline": 0.0},
+        "weight": {"avg": 70.0},
+    }
+    comparison = _format_week_comparison(metrics)
+    assert "hrv: decreased by 1.7% vs 30-day baseline" in comparison
+    assert "steps: increased by 4.2% vs 30-day baseline" in comparison
+    assert "rhr: unchanged (0.0%) vs 30-day baseline" in comparison
+    assert "weight" not in comparison
+    assert "-1.7%" not in comparison
+    assert "+4.2%" not in comparison
+
+    summary = _format_period_summary(metrics)
+    assert '"change_vs_baseline": "decreased by 1.7%"' in summary
+    assert '"change_vs_baseline": "increased by 4.2%"' in summary
+    assert '"change_vs_baseline": "unchanged (0.0%)"' in summary
+    assert "delta_pct_vs_baseline" not in summary
+    # The caller's metric dict is what gets stored; phrasing must not mutate it.
+    assert metrics["hrv"]["delta_pct_vs_baseline"] == -1.7
 
 
 @pytest.mark.asyncio
@@ -1013,7 +1057,7 @@ async def test_build_summary_card_reads_real_aggregator_output_keys():
     assert card.delta is not None
     assert card.delta.pct == pytest.approx(-10.0)  # (54 − 60) / 60 × 100
     assert card.coverage.observation_count == 20  # sample_count key honored
-    assert "ran" in card.claim
+    assert "decreased by 10.0%" in card.claim
 
 
 @pytest.mark.asyncio
@@ -1051,4 +1095,6 @@ async def test_weekly_summary_injects_finding_cards_into_narrator_prompt():
 
     prompt = llm_mock.generate_insight.await_args.args[0]
     # The computed summary card's claim (via _finding_cards_for_brief) is present.
-    assert "ran -6.4% vs your recent baseline" in prompt
+    assert "decreased by 6.4% vs your recent baseline" in prompt
+    assert "ran -6.4%" not in prompt
+    assert "-6.4" not in prompt
