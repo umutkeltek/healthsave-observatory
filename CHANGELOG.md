@@ -39,14 +39,17 @@ healthsave update --to v1.4.0
   filled in. `healthsave mcp --check` starts the server the way an AI client
   does and calls one tool. `healthsave mcp key --rotate` replaces the key.
 - A read key for the primary person. Until now a read key always belonged to a
-  participant. The new key reads your readings plus findings, lab results and
-  your time setting, so your AI client never needs the admin key.
+  participant. The new key reads your readings plus findings, correlations, lab
+  results and your time setting, so your AI client never needs the admin key.
+  A participant can never be bound to the primary person's record, even with
+  the same name as that key.
 
 ### Privacy and safety
 
 - The MCP server sends only `GET` requests, to the address you give it and
-  nowhere else; it does not follow redirects or use proxy settings. It
-  returns per-day, per-night and per-month summaries, never raw readings.
+  nowhere else; it does not follow redirects or use proxy settings. It hands
+  your AI per-day, per-night and per-month summaries, not raw readings; lab
+  results are listed one by one (at most 20 per marker).
 - No read key may call any route that writes. A test now fails the build if
   one ever can.
 - What your AI reads goes to that AI's provider, like the rest of your

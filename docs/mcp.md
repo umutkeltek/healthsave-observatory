@@ -70,6 +70,10 @@ route that writes answers `403` to a read key, and a test fails the build if one
 ever does not. The key is kept in `.env` as `MCP_READ_KEY`; only its SHA-256 is in the
 database.
 
+The key itself can read your raw readings through the API (that is what a read key
+is). The MCP tools pass only summaries to the AI, but the key sits in your AI client's
+config file, so treat it like a password and rotate it if that file leaves your hands.
+
 ```bash
 healthsave mcp key            # show it
 healthsave mcp key --rotate   # replace it; the old key stops at once
@@ -87,9 +91,13 @@ the primary person, so for a participant's key the tools say `key_scope` instead
 
 - **It never writes.** All eight tools are marked read-only to the client, the
   server sends only `GET` requests, and the key cannot write.
-- **It never sends raw readings.** Tools return summaries: one value per day or per
-  night, monthly rows for long periods, findings the statistical engine already
-  computed, and lab results. A year of heart-rate readings stays on your server.
+- **It never hands your AI raw readings.** The MCP server runs on the AI's computer,
+  reads from your Observatory (up to 5,000 readings per request, over your own
+  network) and turns them into summaries: one value per day or per night, monthly
+  rows for long periods, findings the statistical engine already computed. Lab results
+  are the exception: they are listed one by one, at most 20 per marker. Away from
+  home, reach your server over HTTPS or Tailscale ([Remote access](operations/remote-access.md)),
+  never plain HTTP across the internet.
 - **It never talks to anyone else.** The server connects to `HEALTHSAVE_URL` only. It
   does not follow redirects and ignores proxy settings.
 - **It never diagnoses.** It tells your AI to describe, not to give medical advice.
@@ -130,7 +138,7 @@ rate, `today_vs_usual` and `metric_trend` use one and name the other.
 | You see | Do |
 |---|---|
 | `unreachable: Could not reach the Observatory` | The AI's computer cannot reach `HEALTHSAVE_URL`. Same network? Away from home, see [Remote access](operations/remote-access.md). |
-| `key_rejected` (401) | The key was rotated or the database restored. Run `healthsave mcp` again and paste the new line. |
+| `key_rejected` (401) | The key was rotated or the database restored. On the server: `healthsave mcp key --rotate`, then `healthsave mcp`, and paste the new line. |
 | `key_scope` on findings | You use a participant's key. On the server, `healthsave mcp` makes the primary person's key. |
 | `--check` says the image has no MCP server | Update the stack: `healthsave update` (1.4.0 or newer). |
 | `uvx: command not found` | Install uv, or use the Docker line. |

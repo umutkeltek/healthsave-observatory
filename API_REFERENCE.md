@@ -368,7 +368,7 @@ Who this Observatory holds data for: the default owner first (`label: null`), th
 
 The owner-scoped reads (`/api/v2/metrics/{metric_id}/series`, `/api/v2/series`, `/api/v2/export/metrics`, `/api/v2/export`, `/api/v2/sources`, `/api/v2/devices`, `/api/v2/streams`, `/api/v2/streams/{stream_id}`, `/api/v2/readiness`) take an optional `owner=<uuid>` query parameter: the admin key may name any owner (default: the default owner), a participant `read` key only its own (403 otherwise), and a malformed value is 422.
 
-A `read` key minted for the primary person (`healthsave mcp key`, used by the MCP server in `docs/mcp.md`) reads the same owner-scoped routes for the default owner, plus `GET /api/v2/insights/{findings,correlations,latest,narratives}`, `GET /api/v2/labs`, `GET /api/v2/labs/{loinc}` and `GET /api/v2/settings/analytical-time`. A participant's `read` key gets 403 on those, and no `read` key may call any route that writes.
+A `read` key minted for the primary person (`healthsave mcp key`, used by the MCP server in `docs/mcp.md`) reads the same owner-scoped routes for the default owner, plus `GET /api/v2/insights/findings`, `GET /api/v2/insights/correlations`, `GET /api/v2/labs`, `GET /api/v2/labs/{loinc}` and `GET /api/v2/settings/analytical-time`. A participant's `read` key gets 403 on those, and no `read` key may call any route that writes.
 
 ### `GET /api/v2/readiness` — keyed
 Per-metric data sufficiency (is there enough history to run anomaly/trend analysis). Drives the dashboard "what can I analyze yet" view.
