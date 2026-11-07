@@ -155,3 +155,41 @@ def test_the_primary_persons_own_read_key_reads_findings_and_labs() -> None:
     )
     assert overview["can_read"] == {"readings": True, "findings": True, "lab_results": True}
     assert not any(lim["code"] == "key_scope" for lim in labs["limitations"])
+
+
+def test_a_participant_named_like_the_primary_read_key_never_gets_the_primary_owner() -> None:
+    """Real SQL: the label lookup must not hand a participant the default owner."""
+
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from storage.timescale.api_keys import create_api_key, hash_api_key
+
+    label = f"MCP read key e2e {uuid.uuid4().hex[:8]}"
+
+    async def run() -> tuple[uuid.UUID, uuid.UUID]:
+        engine = create_async_engine(DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"))
+        try:
+            async with engine.connect() as conn:
+                from sqlalchemy.ext.asyncio import AsyncSession
+
+                async with AsyncSession(bind=conn) as session:
+                    primary = await create_api_key(
+                        session,
+                        label=label,
+                        scope="read",
+                        key_hash=hash_api_key(secrets.token_hex(24)),
+                        primary=True,
+                    )
+                    phone = await create_api_key(
+                        session,
+                        label=label.lower(),
+                        scope="ingest",
+                        key_hash=hash_api_key(secrets.token_hex(24)),
+                    )
+                    await session.commit()
+                    return primary.owner_id, phone.owner_id
+        finally:
+            await engine.dispose()
+
+    primary_owner, phone_owner = asyncio.run(run())
+    assert primary_owner == DEFAULT_OWNER
+    assert phone_owner != DEFAULT_OWNER

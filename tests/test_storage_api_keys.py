@@ -153,7 +153,8 @@ async def test_create_reuses_the_owner_of_an_earlier_key_with_the_same_label() -
     assert record.owner_id == OWNER
     lookup_sql, lookup_params = session.calls[0]
     assert "lower(label) = lower(:label)" in lookup_sql
-    assert lookup_params == {"label": "Alice"}
+    assert "owner_id <> CAST(:default_owner AS UUID)" in lookup_sql
+    assert lookup_params == {"label": "Alice", "default_owner": str(DEFAULT_OWNER_ID)}
     insert_sql, insert_params = session.calls[1]
     assert insert_sql.startswith("INSERT INTO api_keys")
     assert insert_params["owner_id"] == str(OWNER)
@@ -186,6 +187,17 @@ async def test_primary_read_key_acts_for_the_default_owner_without_a_label_looku
     assert insert_sql.startswith("INSERT INTO api_keys")
     assert insert_params["owner_id"] == str(DEFAULT_OWNER_ID)
     assert insert_params["scope"] == "read"
+
+
+async def test_a_participant_named_like_the_primary_read_key_gets_its_own_owner() -> None:
+    # After `healthsave mcp`, a live row ("MCP read key", read, default owner)
+    # exists. The label lookup excludes the default owner, so the database
+    # answers no row and a participant with that name starts a new owner.
+    session = _Session([_Result(), _Result(row=_key_row(label="MCP read key"))])
+    await create_api_key(session, label="MCP read key", scope="ingest", key_hash="9" * 64)
+    lookup_sql, lookup_params = session.calls[0]
+    assert "owner_id <> CAST(:default_owner AS UUID)" in lookup_sql
+    assert UUID(session.calls[1][1]["owner_id"]) != DEFAULT_OWNER_ID
 
 
 @pytest.mark.parametrize("scope", ["ingest", "admin"])

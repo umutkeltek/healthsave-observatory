@@ -299,6 +299,8 @@ async def test_participant_read_key_never_reads_the_primary_persons_findings(
     ("method", "path"),
     [
         ("GET", "/api/v2/owners"),
+        ("GET", "/api/v2/insights/latest"),  # carries raw provider error text
+        ("GET", "/api/v2/insights/narratives"),
         ("GET", "/api/v2/receipts"),
         ("GET", "/api/v2/intelligence"),
         ("GET", "/api/v2/privacy"),

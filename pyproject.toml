@@ -135,3 +135,8 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# The MCP server runs on the AI client's computer and supports Python 3.10,
+# which has no datetime.UTC.
+"packages/mcp/**" = ["UP017"]

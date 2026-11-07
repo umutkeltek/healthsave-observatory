@@ -136,3 +136,21 @@ def test_help_names_the_command(tmp_path) -> None:
     assert re.search(r"^\s+mcp \[key\|--check\]", _run(checkout, bin_dir, "--help").stdout, re.M)
     usage = _run(checkout, bin_dir, "mcp", "--help").stdout
     assert "healthsave mcp key [--rotate]" in usage and "read-only" in usage.lower()
+
+
+def test_mcp_key_fails_loudly_when_it_cannot_mint(tmp_path) -> None:
+    checkout, bin_dir, _ = _setup(tmp_path, api_running=False)
+    proc = _run(checkout, bin_dir, "mcp", "key")
+    assert proc.returncode != 0
+    assert "Read key:" not in proc.stdout  # never an empty key and exit 0
+
+
+def test_a_live_key_missing_from_env_points_at_rotate(tmp_path) -> None:
+    checkout, bin_dir = _checkout(tmp_path, "API_KEY=legacy\n")
+    log = tmp_path / "docker.log"
+    refuse = """echo "error: 'MCP read key' already has a live read key; revoke it first" >&2
+exit 2"""
+    _fake_docker(bin_dir, log, exec_body=refuse)
+    proc = _run(checkout, bin_dir, "mcp", "--url", URL)
+    assert proc.returncode == 2
+    assert "healthsave mcp key --rotate" in proc.stderr

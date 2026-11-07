@@ -10,9 +10,10 @@ findings the statistical engine already computed, and lab results.
 from __future__ import annotations
 
 import difflib
+import re
 from collections import defaultdict
 from collections.abc import Callable, Sequence
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from . import derive
@@ -61,6 +62,7 @@ TODAY_READINGS = (
     ("body.wrist_temperature", "Wrist temperature", "degC", 2),
     ("body.weight", "Body weight", "kg", 1),
 )
+LOINC = re.compile(r"^\d{1,7}-\d$")
 UNIT_LABELS = {"count/min": "bpm", "count": "count"}
 
 NOT_ADVICE = (
@@ -74,7 +76,7 @@ def _lim(code: str, detail: str) -> dict[str, str]:
 
 
 def _now(clock: Clock | None) -> datetime:
-    return (clock or (lambda: datetime.now(UTC)))()
+    return (clock or (lambda: datetime.now(timezone.utc)))()
 
 
 class Reader:
@@ -130,7 +132,14 @@ class Reader:
         return self._labels
 
     def today(self, basis: TimeBasis) -> date:
+        """The person's analytical day (for readings: day starts at the boundary)."""
+
         return derive.analytical_day(self.now, basis)
+
+    def calendar_today(self, basis: TimeBasis) -> date:
+        """The local calendar date (daily totals and nights are calendar days)."""
+
+        return self.now.astimezone(basis.tz).date()
 
     def result(self, tool: str, **payload: Any) -> dict[str, Any]:
         return {
@@ -178,6 +187,15 @@ def _cut(
         "Ask for a shorter period for full detail.",
     )
     return day
+
+
+def _note_uncovered(reader: Reader, metric_id: str, daily: derive.DailyValues) -> None:
+    if daily.uncovered_days:
+        reader.note(
+            "days_without_all_source_total",
+            f"{metric_id}: {daily.uncovered_days} day(s) have readings but no all-source day "
+            "total; they are left out rather than mixed with totals.",
+        )
 
 
 # ─── overview ──────────────────────────────────────────────────────────
@@ -263,6 +281,19 @@ async def observatory_overview(
 # ─── sleep ─────────────────────────────────────────────────────────────
 
 
+def _last_night(nights: Sequence[derive.Night], calendar_today: date) -> list[derive.Night]:
+    """The most recent finished night: one that began before today's date.
+
+    A session that began today (an afternoon nap, or tonight still running) is
+    not "last night".
+    """
+
+    done = [n for n in nights if n.night_of < calendar_today]
+    if done and done[-1].night_of >= calendar_today - timedelta(days=2):
+        return done[-1:]
+    return []
+
+
 async def sleep_summary(
     client: ObservatoryClient, period: str = "last_30_nights", *, clock: Clock | None = None
 ) -> dict[str, Any]:
@@ -274,9 +305,13 @@ async def sleep_summary(
     today = reader.today(basis)
     start, end = _window(today, days)
     cut = _cut(reader, points, "sleep", basis, start)
-    nights = [n for n in derive.sleep_nights(points, basis) if start <= n.night_of <= end]
+    nights = [
+        n
+        for n in derive.sleep_nights(points, basis)
+        if max(start, cut or start) <= n.night_of <= end
+    ]
     if period == "last_night":
-        nights = nights[-1:] if nights and nights[-1].night_of >= today - timedelta(days=2) else []
+        nights = _last_night(nights, reader.calendar_today(basis))
 
     window: dict[str, Any] = {
         "period": period,
@@ -357,7 +392,7 @@ async def activity_summary(
         for item in body.get("series") or []
         if isinstance(item, dict) and "metric" in item
     }
-    today = reader.today(basis)
+    today = reader.calendar_today(basis)  # totals are calendar days
     start, end = _window(today, days)
     window = {
         "period": period,
@@ -371,9 +406,10 @@ async def activity_summary(
     units: dict[str, str] = {}
     for metric_id, key, unit, divisor, digits in ACTIVITY:
         points = (by_id.get(metric_id) or {}).get("points") or []
-        _cut(reader, points, metric_id, basis, start)
+        cut = _cut(reader, points, metric_id, basis, start)
         daily = derive.daily_totals(points, basis)
-        values = {d: v / divisor for d, v in daily.values.items()}
+        values = {d: v / divisor for d, v in daily.values.items() if cut is None or d >= cut}
+        _note_uncovered(reader, metric_id, daily)
         per_metric[key] = values
         units[key] = f"{unit} per day"
         if daily.basis == "one_stream_total" and daily.other_streams:
@@ -539,12 +575,13 @@ async def today_vs_usual(
         readings.append(entry)
 
     totals = []
+    cal = reader.calendar_today(basis)  # totals and nights are calendar days
     for metric_id, _key, unit, divisor, digits in ACTIVITY[:3]:
         daily = derive.daily_totals(by_id.get(metric_id) or [], basis)
         values = {d: v / divisor for d, v in daily.values.items()}
         before = [
             values[d]
-            for d in derive.date_range(today - timedelta(days=28), today - timedelta(days=1))
+            for d in derive.date_range(cal - timedelta(days=28), cal - timedelta(days=1))
             if d in values
         ]
         if not values:
@@ -553,9 +590,9 @@ async def today_vs_usual(
             {
                 "metric": metric_id,
                 "unit": unit,
-                "today_so_far": derive.rnd(values.get(today), digits) if today in values else None,
-                "yesterday": derive.rnd(values.get(today - timedelta(days=1)), digits)
-                if today - timedelta(days=1) in values
+                "today_so_far": derive.rnd(values.get(cal), digits) if cal in values else None,
+                "yesterday": derive.rnd(values.get(cal - timedelta(days=1)), digits)
+                if cal - timedelta(days=1) in values
                 else None,
                 "usual_full_day": derive.usual_range(before, digits),
             }
@@ -568,12 +605,13 @@ async def today_vs_usual(
 
     nights = derive.sleep_nights(by_id.get("sleep.stage") or [], basis)
     last_night: dict[str, Any] | None = None
-    if nights and nights[-1].night_of >= today - timedelta(days=2):
-        latest = nights[-1]
+    finished = _last_night(nights, cal)
+    if finished:
+        latest = finished[0]
         earlier = [
             n.asleep_min / 60
-            for n in nights[:-1]
-            if n.night_of >= latest.night_of - timedelta(days=28)
+            for n in nights
+            if latest.night_of - timedelta(days=28) <= n.night_of < latest.night_of
         ]
         band = derive.usual_range(earlier, 2)
         last_night = {
@@ -647,11 +685,13 @@ async def metric_trend(
     basis = await reader.basis()
     body = await reader.get(f"/api/v2/metrics/{metric_id}/series", {"range": range_})
     points = body.get("points") or []
-    today = reader.today(basis)
+    is_total = any(p.get("aggregation_scope") in derive.DAY_TOTAL_SCOPES for p in points)
+    # Totals are calendar days; readings use the person's analytical day.
+    today = reader.calendar_today(basis) if is_total else reader.today(basis)
     start, end = _window(today, days)
     cut = _cut(reader, points, metric_id, basis, start)
+    first = max(start, cut or start)
     unit = UNIT_LABELS.get(str(meta.get("canonical_unit")), meta.get("canonical_unit"))
-    is_total = any(p.get("aggregation_scope") in derive.DAY_TOTAL_SCOPES for p in points)
     window = {
         "period": period,
         "from": start.isoformat(),
@@ -663,7 +703,8 @@ async def metric_trend(
     rows: list[dict[str, Any]] = []
     if is_total:
         daily = derive.daily_totals(points, basis)
-        values = {d: v for d, v in daily.values.items() if start <= d <= end}
+        values = {d: v for d, v in daily.values.items() if first <= d <= end}
+        _note_uncovered(reader, metric_id, daily)
         how = "one total per day" + (
             " (all sources, as the phone sums them)"
             if daily.basis == "all_source_day_total"
@@ -688,7 +729,7 @@ async def metric_trend(
             others = []
         else:
             chosen = per_stream[stream]
-            values = {d: v for d, v in chosen.values.items() if start <= d <= end}
+            values = {d: v for d, v in chosen.values.items() if first <= d <= end}
             rows = [
                 {
                     "date": d.isoformat(),
@@ -719,7 +760,10 @@ async def metric_trend(
         "per_day": how,
         "source": source,
         "days_with_data": len(values),
-        "usual": derive.usual_range(list(values.values()), 2),
+        # Today's unfinished total is not part of what is usual.
+        "usual": derive.usual_range(
+            [v for d, v in values.items() if not (is_total and d == today)], 2
+        ),
     }
     if others:
         payload["other_sources_not_mixed_in"] = others
@@ -837,6 +881,12 @@ def _result_row(r: dict[str, Any]) -> dict[str, Any]:
 async def lab_results(
     client: ObservatoryClient, loinc: str | None = None, *, clock: Clock | None = None
 ) -> dict[str, Any]:
+    if loinc is not None:
+        loinc = loinc.strip()
+        if not LOINC.match(loinc):
+            raise ValueError(
+                f"loinc must look like 2276-4 (digits, a dash, one digit); got {loinc!r}"
+            )
     reader = Reader(client, clock)
     about = (
         "Each result is placed against the reference range its own lab printed (below / within / "
@@ -844,7 +894,7 @@ async def lab_results(
     )
     try:
         if loinc:
-            marker = await reader.get(f"/api/v2/labs/{loinc.strip()}")
+            marker = await reader.get(f"/api/v2/labs/{loinc}")
         else:
             body = await reader.get("/api/v2/labs")
     except ObservatoryError as exc:

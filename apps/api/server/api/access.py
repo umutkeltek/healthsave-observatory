@@ -55,8 +55,8 @@ OWNER_READ_ROUTES: frozenset[tuple[str, str]] = frozenset(
     }
 )
 
-#: Reads computed for the primary person only (findings, lab results, their
-#: time setting). A read key minted FOR the primary person (``healthsave mcp
+#: Reads computed for the primary person only (findings, correlations, lab
+#: results, their time setting). A read key minted FOR the primary person (``healthsave mcp
 #: key``: scope ``read``, bound to the default owner) may GET them, so a
 #: person's own AI client never needs the admin key. A participant's read
 #: key may not: these rows are the primary person's, not theirs.
@@ -64,8 +64,6 @@ PRIMARY_READ_ROUTES: frozenset[tuple[str, str]] = frozenset(
     {
         ("GET", "/api/v2/insights/findings"),
         ("GET", "/api/v2/insights/correlations"),
-        ("GET", "/api/v2/insights/latest"),
-        ("GET", "/api/v2/insights/narratives"),
         ("GET", "/api/v2/labs"),
         ("GET", "/api/v2/labs/{loinc}"),
         ("GET", "/api/v2/settings/analytical-time"),

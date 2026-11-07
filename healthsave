@@ -1647,6 +1647,10 @@ mcp_mint_key() {
     local key=""
     local field value
     output="$(participants_exec add "$MCP_KEY_LABEL" --scope read --primary)" || rc=$?
+    if [ "$rc" -eq 2 ]; then
+        log_error "A read key for your AI client already exists but is not in .env. Replace it: healthsave mcp key --rotate"
+        exit 2
+    fi
     if [ "$rc" -ne 0 ]; then
         log_error "Could not make the read key (exit $rc). Is this stack 1.4.0 or newer? Run 'healthsave update'."
         exit "$rc"
@@ -1809,10 +1813,15 @@ cmd_mcp() {
         if [ "$rotate" = "1" ]; then
             require_api_running
             mcp_revoke_key
+            # Revoked first (one live key per label), and dropped from .env, so a
+            # failed mint leaves no dead key behind: 'healthsave mcp' mints again.
+            sed -i.bak '/^MCP_READ_KEY=/d' "$ENV_FILE" && rm -f "${ENV_FILE}.bak"
             mcp_mint_key
             log_ok "Replaced the read key. The old one no longer works; update your AI client's setup."
         fi
-        echo "  Read key:    $(mcp_key_or_mint)"
+        local shown=""
+        shown="$(mcp_key_or_mint)"
+        echo "  Read key:    ${shown}"
         return 0
     fi
 

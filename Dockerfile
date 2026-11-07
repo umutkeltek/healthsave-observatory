@@ -33,8 +33,13 @@ COPY scripts/ ./scripts/
 # The MCP read server (healthsave mcp): its own venv, so its dependencies never
 # move the server's pinned ones. Clients run /opt/healthsave-mcp/bin/healthsave-mcp.
 COPY packages/mcp/ /tmp/healthsave-mcp/
+# Dependencies come from a hash-locked file (build tooling included), then the
+# package itself without resolving anything new.
 RUN python -m venv /opt/healthsave-mcp \
-    && /opt/healthsave-mcp/bin/pip install --no-cache-dir /tmp/healthsave-mcp \
+    && /opt/healthsave-mcp/bin/pip install --no-cache-dir --require-hashes \
+        -r /tmp/healthsave-mcp/requirements.lock \
+    && /opt/healthsave-mcp/bin/pip install --no-cache-dir --no-deps --no-build-isolation \
+        /tmp/healthsave-mcp \
     && rm -rf /tmp/healthsave-mcp
 
 USER appuser

@@ -297,13 +297,24 @@ YEAR = {
 class FakeObservatory:
     """Answers the read API; ``deny`` lists paths that answer 403 (a narrower key)."""
 
-    def __init__(self, *, deny: tuple[str, ...] = (), cap: int | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        deny: tuple[str, ...] = (),
+        cap: int | None = None,
+        settings: dict | None = None,
+        extra_sleep: list[dict] | None = None,
+    ) -> None:
         self.deny = deny
         self.cap = cap
+        self.settings = settings or SETTINGS
+        self.extra_sleep = extra_sleep or []
         self.requests: list[httpx.Request] = []
 
     def _series(self, metric: str, range_: str) -> list[dict]:
         points = SERIES.get(metric, list)()
+        if metric == "sleep.stage":
+            points = sorted(points + self.extra_sleep, key=lambda p: p["t"])
         since = NOW - timedelta(days=RANGE_DAYS.get(range_, 3650))
         points = [p for p in points if datetime.fromisoformat(p["t"]) >= since]
         if self.cap is not None:
@@ -318,7 +329,7 @@ class FakeObservatory:
                 403, json={"detail": f"api_key_scope: read key cannot call GET {path}"}
             )
         if path == "/api/v2/settings/analytical-time":
-            return httpx.Response(200, json=SETTINGS)
+            return httpx.Response(200, json=self.settings)
         if path == "/api/v2/metrics":
             return httpx.Response(200, json=CATALOG)
         if path.startswith("/api/v2/metrics/") and path.endswith("/series"):
@@ -654,3 +665,58 @@ async def test_overview_lists_what_the_record_holds_and_what_the_key_reads() -> 
     )
     assert narrow["can_read"] == {"readings": True, "findings": False, "lab_results": False}
     assert narrow["limitations"][0]["code"] == "key_scope"
+
+
+# ─── review findings, pinned ───────────────────────────────────────────
+
+
+def _nap_today() -> list[dict]:
+    start = datetime(2026, 11, 7, 13, 0, tzinfo=UTC)
+    return _point_dicts([_sp(start, end=start + timedelta(minutes=90), code="Core")])
+
+
+async def test_an_afternoon_nap_today_is_not_last_night() -> None:
+    clock = lambda: datetime(2026, 11, 7, 16, 0, tzinfo=UTC)  # noqa: E731
+    fake = FakeObservatory(extra_sleep=_nap_today())
+    result = await tools.sleep_summary(fake.client(), "last_night", clock=clock)
+    assert [n["night_of"] for n in result["nights"]] == ["2026-11-06"]
+    today = await tools.today_vs_usual(
+        FakeObservatory(extra_sleep=_nap_today()).client(), clock=clock
+    )
+    assert today["last_night"]["night_of"] == "2026-11-06"
+
+
+async def test_before_the_day_boundary_todays_total_is_still_todays() -> None:
+    # 01:00 with days starting at 04:00: the analytical day is still the 6th,
+    # but the phone's total for the 7th is today's, not the 6th's full total.
+    clock = lambda: datetime(2026, 11, 7, 1, 0, tzinfo=UTC)  # noqa: E731
+    fake = FakeObservatory(settings={"time_zone": "UTC", "day_boundary_minutes": 240})
+    result = await tools.today_vs_usual(fake.client(), clock=clock)
+    steps = next(t for t in result["totals"] if t["metric"] == "activity.steps")
+    assert steps["today_so_far"] == 3100
+    activity = await tools.activity_summary(fake.client(), "today", clock=clock)
+    assert activity["totals"]["steps"]["today_so_far"] == 3100
+
+
+async def test_metric_trend_keeps_todays_unfinished_total_out_of_usual() -> None:
+    result = await tools.metric_trend(
+        FakeObservatory().client(), "activity.steps", "last_7_days", clock=CLOCK
+    )
+    assert result["usual"]["days"] == len(result["days"]) - 1  # today (3,100 so far) left out
+
+
+async def test_a_malformed_loinc_never_reaches_the_url() -> None:
+    fake = FakeObservatory()
+    for bad in ("2276-4?x=1", "../year/2026", "2276-4#", "%2e%2e"):
+        with pytest.raises(ValueError, match="loinc must look like"):
+            await tools.lab_results(fake.client(), bad, clock=CLOCK)
+    assert fake.requests == []
+
+
+async def test_nights_before_a_cut_are_not_counted(monkeypatch) -> None:
+    monkeypatch.setattr(tools.derive, "SERVER_POINT_CAP", 1000)
+    result = await tools.sleep_summary(FakeObservatory(cap=1000).client(), "this_year", clock=CLOCK)
+    [cut] = [lim for lim in result["limitations"] if lim["code"] == "window_cut"]
+    kept_from = cut["detail"].split(" before ")[1][:10]
+    assert result["months"][0]["month"] == kept_from[:7]
+    assert result["summary"]["shortest"]["night_of"] >= kept_from

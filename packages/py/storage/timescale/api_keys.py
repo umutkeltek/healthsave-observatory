@@ -139,11 +139,15 @@ async def _owner_for_label(session, label: str) -> UUID | None:
             FROM api_keys
             WHERE lower(label) = lower(:label)
               AND scope <> 'admin'
+              AND owner_id <> CAST(:default_owner AS UUID)
             ORDER BY created_at ASC
             LIMIT 1
             """
         ),
-        {"label": label},
+        # Never the primary person's owner: a participant named like the
+        # primary person's own read key ("MCP read key") must not write into,
+        # or read as, the primary person's record.
+        {"label": label, "default_owner": str(DEFAULT_OWNER_ID)},
     )
     row = result.first()
     return UUID(str(row[0])) if row is not None else None

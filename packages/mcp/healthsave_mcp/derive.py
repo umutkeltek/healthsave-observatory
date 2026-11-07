@@ -13,7 +13,7 @@ import math
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, timedelta, tzinfo
+from datetime import date, datetime, timedelta, timezone, tzinfo
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -62,7 +62,7 @@ class TimeBasis:
         return f"{self.zone}, days start {start}"
 
 
-UTC_BASIS = TimeBasis(tz=UTC, zone="UTC", day_start_minutes=0, source="utc")
+UTC_BASIS = TimeBasis(tz=timezone.utc, zone="UTC", day_start_minutes=0, source="utc")
 
 
 def time_basis(settings: dict[str, Any] | None) -> TimeBasis:
@@ -90,7 +90,7 @@ def parse_time(value: Any) -> datetime | None:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 def analytical_day(t: datetime, basis: TimeBasis) -> date:
@@ -340,7 +340,8 @@ def sleep_nights(points: Iterable[dict[str, Any]], basis: TimeBasis) -> list[Nig
 
     Sessions split on a gap of four hours or more; a session is shown on the
     evening it began (before local noon counts as the previous evening), and
-    one with under an hour asleep is not a night. Same rules as the web.
+    one with under an hour asleep is not a night. Same rules as the web, except
+    the noon split uses the person's time zone when known (the web uses UTC).
     """
 
     segments = sorted(
@@ -471,6 +472,8 @@ class DailyValues:
     basis: str = "none"
     streams: int = 0
     other_streams: int = 0
+    #: Days with readings but no all-source total (left out, never mixed in).
+    uncovered_days: int = 0
 
 
 def _finite(value: Any) -> float | None:
@@ -483,18 +486,25 @@ def daily_totals(points: Iterable[dict[str, Any]], basis: TimeBasis) -> DailyVal
     """One total per day for a daily-total metric.
 
     Reads the all-source day total (the phone's own sum across sources) when
-    it exists. Without it, the totals of ONE stream are used, the stream with
-    the most days, and the others are counted, never added: two devices
-    counting the same steps must not double them.
+    it exists; days that only have other rows are left out and counted in
+    ``uncovered_days``. Without any all-source total, the totals of ONE stream
+    are used, the stream with the most days, and the others are counted, never
+    added: two devices counting the same steps must not double them. Within
+    that stream a day total wins over its own components; the two are never
+    added either.
     """
 
     rows = [p for p in points if _finite(p.get("value")) is not None]
     all_source = [p for p in rows if p.get("aggregation_scope") == ALL_SOURCE_DAY_TOTAL]
     out = DailyValues()
     if all_source:
-        for point in all_source:
+        other_days: set[date] = set()
+        for point in rows:
             t = parse_time(point.get("t"))
             if t is None:
+                continue
+            if point.get("aggregation_scope") != ALL_SOURCE_DAY_TOTAL:
+                other_days.add(total_day(point, t, basis))
                 continue
             day = total_day(point, t, basis)
             value = _finite(point.get("value"))
@@ -504,25 +514,30 @@ def daily_totals(points: Iterable[dict[str, Any]], basis: TimeBasis) -> DailyVal
             out.counts[day] = 1
         out.basis = "all_source_day_total"
         out.streams = 1
+        out.uncovered_days = len(other_days - set(out.values))
         return out
 
-    by_stream: dict[str, dict[date, float]] = defaultdict(lambda: defaultdict(float))
+    totals: dict[str, dict[date, float]] = defaultdict(dict)
+    parts: dict[str, dict[date, float]] = defaultdict(lambda: defaultdict(float))
     for point in rows:
         t = parse_time(point.get("t"))
         if t is None:
             continue
         stream = str(point.get("stream_id") or point.get("source_id") or "unknown")
-        scope = point.get("aggregation_scope")
         value = _finite(point.get("value")) or 0.0
-        if scope in DAY_TOTAL_SCOPES:
+        if point.get("aggregation_scope") in DAY_TOTAL_SCOPES:
             day = total_day(point, t, basis)
-            current = by_stream[stream].get(day)
-            by_stream[stream][day] = value if current is None else max(current, value)
+            totals[stream][day] = max(totals[stream].get(day, value), value)
         else:
-            by_stream[stream][analytical_day(t, basis)] += value
+            parts[stream][analytical_day(t, basis)] += value
+    by_stream: dict[str, dict[date, float]] = {}
+    for stream in set(totals) | set(parts):
+        merged = dict(parts.get(stream, {}))
+        merged.update(totals.get(stream, {}))  # a day total replaces its components
+        by_stream[stream] = merged
     if not by_stream:
         return out
-    chosen = max(by_stream, key=lambda s: (len(by_stream[s]), sum(by_stream[s].values())))
+    chosen = max(by_stream, key=lambda s: (len(by_stream[s]), sum(by_stream[s].values()), s))
     out.values = dict(by_stream[chosen])
     out.counts = {day: 1 for day in out.values}
     out.basis = "one_stream_total"

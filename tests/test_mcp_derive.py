@@ -8,6 +8,7 @@ landing on the wrong day, or a cut window passed off as complete.
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from healthsave_mcp import derive
@@ -252,3 +253,35 @@ def test_runs_of_missing_lists_every_run_including_single_days() -> None:
 
 def test_utc_basis_is_a_time_basis() -> None:
     assert isinstance(derive.UTC_BASIS, TimeBasis)
+
+
+def test_a_streams_day_total_replaces_its_components_never_adds_to_them() -> None:
+    day = date(2026, 4, 1)
+    t = datetime(2026, 4, 1, 9, tzinfo=UTC)
+    points = [_total(day, 7000, "device_day_total", "watch")] + [
+        {"t": (t + timedelta(hours=h)).isoformat(), "value": 1000, "stream_id": "watch"}
+        for h in range(3)
+    ]
+    assert derive.daily_totals(points, derive.UTC_BASIS).values == {day: 7000}  # not 10,000
+
+
+def test_days_without_the_all_source_total_are_counted_not_mixed_in() -> None:
+    covered, bare = date(2026, 4, 1), date(2026, 4, 2)
+    points = [
+        _total(covered, 9000, "owner_all_source_day_total", "phone-all"),
+        {"t": datetime(2026, 4, 2, 9, tzinfo=UTC).isoformat(), "value": 400, "stream_id": "g"},
+    ]
+    daily = derive.daily_totals(points, derive.UTC_BASIS)
+    assert daily.values == {covered: 9000} and daily.uncovered_days == 1
+    assert bare not in daily.values
+
+
+def test_the_package_runs_on_python_310() -> None:
+    # The server runs on the AI client's computer (requires-python >= 3.10);
+    # datetime.UTC only exists from 3.11.
+    import healthsave_mcp
+
+    root = Path(healthsave_mcp.__file__).parent
+    for source in root.glob("*.py"):
+        text = source.read_text()
+        assert "import UTC" not in text and "datetime.UTC" not in text, source.name
