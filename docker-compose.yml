@@ -28,7 +28,7 @@ services:
       retries: 5
 
   migrate:
-    image: ghcr.io/umutkeltek/healthsave-observatory:${HEALTHSAVE_VERSION:-v1.2.0}
+    image: ghcr.io/umutkeltek/healthsave-observatory:${HEALTHSAVE_VERSION:-v1.3.0}
     command: ["python", "-m", "scripts.migrate"]
     restart: "no"
     depends_on:
@@ -38,7 +38,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:?DB_PASSWORD must be set (see .env.example)}@db:5432/healthsave
 
   api:
-    image: ghcr.io/umutkeltek/healthsave-observatory:${HEALTHSAVE_VERSION:-v1.2.0}
+    image: ghcr.io/umutkeltek/healthsave-observatory:${HEALTHSAVE_VERSION:-v1.3.0}
     restart: unless-stopped
     depends_on:
       db:
@@ -116,7 +116,7 @@ services:
   # API uptime is no longer coupled to scheduler bugs/memory/experiments.
   # Same image as api; different command. Single replica per deployment.
   worker:
-    image: ghcr.io/umutkeltek/healthsave-observatory:${HEALTHSAVE_VERSION:-v1.2.0}
+    image: ghcr.io/umutkeltek/healthsave-observatory:${HEALTHSAVE_VERSION:-v1.3.0}
     command: ["python", "-m", "worker.main"]
     restart: unless-stopped
     depends_on:
@@ -183,7 +183,7 @@ services:
   # `agents.enabled` allowlist, the service idles; enable concrete agent ids in
   # config.yaml before running `docker compose --profile agents up -d agents`.
   agents:
-    image: ghcr.io/umutkeltek/healthsave-observatory:${HEALTHSAVE_VERSION:-v1.2.0}
+    image: ghcr.io/umutkeltek/healthsave-observatory:${HEALTHSAVE_VERSION:-v1.3.0}
     command: ["python", "-m", "agents.main"]
     restart: unless-stopped
     profiles: ["agents"]
@@ -279,7 +279,7 @@ services:
   # Publishes retained MQTT discovery + state topics (`healthsave_*`) so
   # Home Assistant dashboards/automations do not need direct DB access.
   homeassistant-mqtt:
-    image: ghcr.io/umutkeltek/healthsave-observatory:${HEALTHSAVE_VERSION:-v1.2.0}
+    image: ghcr.io/umutkeltek/healthsave-observatory:${HEALTHSAVE_VERSION:-v1.3.0}
     command: ["python", "-m", "homeassistant_mqtt.main"]
     restart: unless-stopped
     profiles: ["home-assistant"]
@@ -350,7 +350,7 @@ services:
   # browser never sees it. Like Grafana it exposes PHI, so it binds to loopback
   # by default (SECURITY-005); set WEB_BIND=0.0.0.0 to reach it from your LAN.
   web:
-    image: ghcr.io/umutkeltek/healthsave-observatory-web:${HEALTHSAVE_VERSION:-v1.2.0}
+    image: ghcr.io/umutkeltek/healthsave-observatory-web:${HEALTHSAVE_VERSION:-v1.3.0}
     restart: unless-stopped
     depends_on:
       api:

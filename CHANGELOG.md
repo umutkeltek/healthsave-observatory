@@ -9,6 +9,22 @@ Plugins carry their own versions.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-07
+
+Year in Health: one calendar year of your record on one page, with every gap
+shown and each device kept separate, plus a share card that carries no
+personal numbers unless you add them.
+
+### Upgrade
+
+```bash
+healthsave update --to v1.3.0
+```
+
+- No migration and no `.env` change. Existing installs keep every setting.
+- The new page reads the data you already have; nothing is recomputed or
+  rewritten.
+
 ### Added
 
 - Year in Health. `/year` in the dashboard shows one calendar year of your
