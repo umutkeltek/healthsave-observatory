@@ -6,7 +6,7 @@ by the same code the API authenticates with, and the plaintext never
 appears on a command line or in the database.
 
 Usage:
-  python -m scripts.participants add LABEL [--scope ingest|read]
+  python -m scripts.participants add LABEL [--scope ingest|read] [--primary]
   python -m scripts.participants list
   python -m scripts.participants revoke LABEL
 
@@ -51,12 +51,14 @@ async def _with_session(work: Callable[[Any], Awaitable[int]]) -> int:
         await engine.dispose()
 
 
-async def _add(session: Any, label: str, scope: str) -> int:
+async def _add(session: Any, label: str, scope: str, primary: bool = False) -> int:
     from storage.timescale.api_keys import ApiKeyError, create_api_key, hash_api_key, mint_api_key
 
     key = mint_api_key()
     try:
-        record = await create_api_key(session, label=label, scope=scope, key_hash=hash_api_key(key))
+        record = await create_api_key(
+            session, label=label, scope=scope, key_hash=hash_api_key(key), primary=primary
+        )
     except ApiKeyError as exc:
         await session.rollback()
         print(f"error: {exc}", file=sys.stderr)
@@ -116,6 +118,11 @@ def _parser() -> argparse.ArgumentParser:
     add = commands.add_parser("add", help="mint a key for a participant")
     add.add_argument("label")
     add.add_argument("--scope", choices=("ingest", "read"), default="ingest")
+    add.add_argument(
+        "--primary",
+        action="store_true",
+        help="read key for the primary person's own tools (healthsave mcp key); needs --scope read",
+    )
     commands.add_parser("list", help="list participants")
     revoke = commands.add_parser("revoke", help="revoke every live key of a participant")
     revoke.add_argument("label")
@@ -125,7 +132,7 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.command == "add":
-        return asyncio.run(_with_session(lambda s: _add(s, args.label, args.scope)))
+        return asyncio.run(_with_session(lambda s: _add(s, args.label, args.scope, args.primary)))
     if args.command == "list":
         return asyncio.run(_with_session(_list))
     return asyncio.run(_with_session(lambda s: _revoke(s, args.label)))

@@ -19,6 +19,7 @@ from server.api import access, deps
 from server.api.access import (
     OWNER_READ_ROUTES,
     PHONE_ROUTES,
+    PRIMARY_READ_ROUTES,
     Principal,
     is_allowed,
     principal_of,
@@ -34,6 +35,8 @@ ALICE_OWNER = UUID("7d0c4f8e-2b6a-4a51-9a7e-0d6a3c2b1f00")
 KEYS = {
     "alice-ingest": {"scope": "ingest", "owner_id": ALICE_OWNER, "revoked_at": None},
     "alice-read": {"scope": "read", "owner_id": ALICE_OWNER, "revoked_at": None},
+    # healthsave mcp key: a read key minted FOR the primary person.
+    "primary-read": {"scope": "read", "owner_id": DEFAULT_OWNER_ID, "revoked_at": None},
     "coach-admin": {"scope": "admin", "owner_id": DEFAULT_OWNER_ID, "revoked_at": None},
     "bob-revoked": {
         "scope": "ingest",
@@ -270,6 +273,74 @@ async def test_read_key_reads_owner_scoped_routes_only(keyed, method, path, allo
         assert exc.value.status_code == 403
 
 
+# ─── the primary person's own read key (healthsave mcp key) ────────────
+
+
+@pytest.mark.parametrize(("method", "path"), sorted(PRIMARY_READ_ROUTES | OWNER_READ_ROUTES))
+async def test_primary_read_key_reads_what_is_computed_for_the_primary_person(
+    keyed, method, path
+) -> None:
+    principal, request = await _resolve("primary-read", method=method, path=path)
+    assert principal is not None and principal.scope == "read"
+    assert principal.owner_id == DEFAULT_OWNER_ID
+    assert resolve_request_owner_id(request) == DEFAULT_OWNER_ID
+
+
+@pytest.mark.parametrize(("method", "path"), sorted(PRIMARY_READ_ROUTES))
+async def test_participant_read_key_never_reads_the_primary_persons_findings(
+    keyed, method, path
+) -> None:
+    with pytest.raises(HTTPException) as exc:
+        await _resolve("alice-read", method=method, path=path)
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/api/v2/owners"),
+        ("GET", "/api/v2/receipts"),
+        ("GET", "/api/v2/intelligence"),
+        ("GET", "/api/v2/privacy"),
+        ("GET", "/api/v2/moments"),
+        ("POST", "/api/apple/batch"),
+        ("POST", "/api/v2/moments"),
+        ("POST", "/api/v2/insights/trigger"),
+        ("PUT", "/api/v2/settings/analytical-time"),
+        ("DELETE", "/api/v2/moments/{moment_id}"),
+    ],
+)
+async def test_primary_read_key_stops_at_reads_it_was_given(keyed, method, path) -> None:
+    with pytest.raises(HTTPException) as exc:
+        await _resolve("primary-read", method=method, path=path)
+    assert exc.value.status_code == 403
+
+
+def test_no_read_key_reaches_any_route_that_changes_something() -> None:
+    """Every non-GET route the app serves is closed to every read key.
+
+    A read key is the one an AI client holds; this is what makes "read-only"
+    a property of the server and not only of the MCP tools.
+    """
+
+    writes = sorted(
+        (method, route.path)
+        for route in app.routes
+        if isinstance(route, APIRoute)
+        for method in route.methods
+        if method not in ("GET", "HEAD")
+    )
+    assert writes, "the app serves no write routes?"
+    for owner in (DEFAULT_OWNER_ID, ALICE_OWNER):
+        reader = Principal(scope="read", owner_id=owner)
+        opened = [(m, p) for m, p in writes if is_allowed(reader, m, p)]
+        assert not opened, f"read key ({owner}) may call: {opened}"
+
+
+def test_primary_read_routes_are_get_only() -> None:
+    assert {method for method, _ in PRIMARY_READ_ROUTES} == {"GET"}
+
+
 def test_unclassified_routes_are_admin_only() -> None:
     participant = Principal(scope="read", owner_id=ALICE_OWNER)
     assert route_class("GET", "/api/v2/some-route-added-later") == "admin"
@@ -284,7 +355,7 @@ def test_route_tables_name_real_routes() -> None:
         if isinstance(route, APIRoute)
         for method in route.methods
     }
-    missing = (PHONE_ROUTES | OWNER_READ_ROUTES) - registered
+    missing = (PHONE_ROUTES | OWNER_READ_ROUTES | PRIMARY_READ_ROUTES) - registered
     assert not missing, f"access tables name routes the app does not serve: {sorted(missing)}"
 
 

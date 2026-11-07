@@ -55,6 +55,23 @@ OWNER_READ_ROUTES: frozenset[tuple[str, str]] = frozenset(
     }
 )
 
+#: Reads computed for the primary person only (findings, lab results, their
+#: time setting). A read key minted FOR the primary person (``healthsave mcp
+#: key``: scope ``read``, bound to the default owner) may GET them, so a
+#: person's own AI client never needs the admin key. A participant's read
+#: key may not: these rows are the primary person's, not theirs.
+PRIMARY_READ_ROUTES: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("GET", "/api/v2/insights/findings"),
+        ("GET", "/api/v2/insights/correlations"),
+        ("GET", "/api/v2/insights/latest"),
+        ("GET", "/api/v2/insights/narratives"),
+        ("GET", "/api/v2/labs"),
+        ("GET", "/api/v2/labs/{loinc}"),
+        ("GET", "/api/v2/settings/analytical-time"),
+    }
+)
+
 OWNER_QUERY_DESCRIPTION = (
     "Owner whose data to read. Admin keys may name any owner (default: the "
     "default owner); a participant read key may only name its own."
@@ -99,8 +116,14 @@ def is_allowed(principal: Principal, method: str, path: str) -> bool:
     kind = route_class(method, path)
     if principal.scope == "ingest":
         return kind == "phone"
+    if method.upper() not in ("GET", "HEAD"):
+        return False
     # read: GETs on the phone surface and the owner-scoped reads, own owner only.
-    return method.upper() in ("GET", "HEAD") and kind in ("phone", "owner_read")
+    if kind in ("phone", "owner_read"):
+        return True
+    # The primary person's own read key also reads what is computed for them.
+    verb = "GET" if method.upper() == "HEAD" else method.upper()
+    return principal.owner_id == DEFAULT_OWNER_ID and (verb, path) in PRIMARY_READ_ROUTES
 
 
 def route_template(request: Any) -> tuple[str, str]:
@@ -162,6 +185,7 @@ __all__ = [
     "OWNER_QUERY_DESCRIPTION",
     "OWNER_READ_ROUTES",
     "PHONE_ROUTES",
+    "PRIMARY_READ_ROUTES",
     "Principal",
     "ReadOwner",
     "authorize",

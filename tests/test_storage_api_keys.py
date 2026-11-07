@@ -174,6 +174,28 @@ async def test_admin_keys_always_act_for_the_default_owner() -> None:
     assert session.calls[0][1]["owner_id"] == str(DEFAULT_OWNER_ID)
 
 
+async def test_primary_read_key_acts_for_the_default_owner_without_a_label_lookup() -> None:
+    # healthsave mcp key: the person's own AI client reads their own record.
+    session = _Session([_Result(row=_key_row(scope="read", owner_id=DEFAULT_OWNER_ID))])
+    record = await create_api_key(
+        session, label="MCP read key", scope="read", key_hash="f" * 64, primary=True
+    )
+    assert record.owner_id == DEFAULT_OWNER_ID
+    assert len(session.calls) == 1  # no participant owner reused or started
+    insert_sql, insert_params = session.calls[0]
+    assert insert_sql.startswith("INSERT INTO api_keys")
+    assert insert_params["owner_id"] == str(DEFAULT_OWNER_ID)
+    assert insert_params["scope"] == "read"
+
+
+@pytest.mark.parametrize("scope", ["ingest", "admin"])
+async def test_primary_is_for_read_keys_only(scope) -> None:
+    with pytest.raises(ApiKeyError, match="only a read key"):
+        await create_api_key(
+            _Session([]), label="MCP read key", scope=scope, key_hash="f" * 64, primary=True
+        )
+
+
 async def test_create_live_duplicate_is_a_deterministic_refusal() -> None:
     duplicate = IntegrityError("INSERT", {}, Exception("uq_api_keys_live_label_scope"))
     session = _Session([_Result(row=(OWNER,)), duplicate])

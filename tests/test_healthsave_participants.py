@@ -181,8 +181,8 @@ class _Session:
 async def test_script_add_stores_only_the_hash_and_prints_the_key_once(monkeypatch, capsys):
     stored: dict = {}
 
-    async def _create(session, *, label, scope, key_hash):
-        stored.update(label=label, scope=scope, key_hash=key_hash)
+    async def _create(session, *, label, scope, key_hash, primary=False):
+        stored.update(label=label, scope=scope, key_hash=key_hash, primary=primary)
         return ApiKeyRecord(id=UUID(int=1), label=label, scope=scope, owner_id=UUID(OWNER))
 
     monkeypatch.setattr(api_keys, "create_api_key", _create)
@@ -193,6 +193,20 @@ async def test_script_add_stores_only_the_hash_and_prints_the_key_once(monkeypat
     assert stored["key_hash"] == api_keys.hash_api_key(key)
     assert key not in stored.values()
     assert f"owner_id={OWNER}" in out and session.committed
+
+
+async def test_script_add_primary_mints_a_read_key_for_the_primary_person(monkeypatch, capsys):
+    stored: dict = {}
+
+    async def _create(session, *, label, scope, key_hash, primary=False):
+        stored.update(label=label, scope=scope, primary=primary)
+        return ApiKeyRecord(id=UUID(int=2), label=label, scope=scope, owner_id=UUID(int=1))
+
+    monkeypatch.setattr(api_keys, "create_api_key", _create)
+    session = _Session()
+    assert await script._add(session, "MCP read key", "read", True) == 0
+    assert stored == {"label": "MCP read key", "scope": "read", "primary": True}
+    assert script._parser().parse_args(["add", "x", "--scope", "read", "--primary"]).primary
 
 
 async def test_script_add_refusal_rolls_back_and_exits_2(monkeypatch, capsys):

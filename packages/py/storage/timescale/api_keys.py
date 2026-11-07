@@ -155,18 +155,24 @@ async def create_api_key(
     label: str,
     scope: str = "ingest",
     key_hash: str,
+    primary: bool = False,
 ) -> ApiKeyRecord:
     """Store one key hash; return its record. Caller commits.
 
     Participant scopes reuse the owner of any earlier key with the same label
     (so a re-paired phone keeps writing into the same person's history) or
-    start a new owner. Admin keys always act for the default owner.
+    start a new owner. Admin keys, and read keys minted with ``primary``
+    (the person's own AI client), always act for the default owner.
     """
 
     clean_label = normalize_label(label)
     if scope not in API_KEY_SCOPES:
         raise ApiKeyError(f"scope must be one of {sorted(API_KEY_SCOPES)}")
-    if scope == "admin":
+    if primary and scope != "read":
+        raise ApiKeyError("only a read key can be minted for the primary person")
+    if scope == "admin" or primary:
+        # A primary read key (``healthsave mcp key``) reads the primary
+        # person's own record; it is not a participant and never one.
         owner_id = DEFAULT_OWNER_ID
     else:
         owner_id = await _owner_for_label(session, clean_label) or uuid4()
