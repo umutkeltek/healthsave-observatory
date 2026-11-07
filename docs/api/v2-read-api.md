@@ -74,6 +74,19 @@ different labs are never averaged.
 | `GET /api/v2/labs` | key | Every marker (LOINC) with its results, plus the labs that sent them |
 | `GET /api/v2/labs/{loinc}` | key | One marker's results, oldest first (`422` malformed LOINC, `404` none) |
 
+## Year in Health
+
+One calendar year of the record, read as coverage, for one person (`?owner=`).
+Days follow the analytical-time setting (time zone and day start). Every day
+without data is in a gap run; headline numbers are per source and never
+averaged across sources. The web dashboard draws it at `/year/<year>`, with a
+share card at `/year/<year>/card` that carries no personal numbers unless the
+person adds them. Field detail: [API_REFERENCE.md](../../API_REFERENCE.md).
+
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `GET /api/v2/year/{year}` | key | Months, sources per month, device changes, every gap per kind of data, per-source headline numbers, limitation codes (`422` for a year that has not started) |
+
 ## Experiments and agents
 
 | Endpoint | Auth | Purpose |
