@@ -23,6 +23,7 @@ Licensed under the Elastic License 2.0.
 - Dashboards for day-to-day use, and Grafana when you want to build your own charts.
 - Findings computed from your measurements. An optional briefing can summarize those findings on the same machine. If you turn on cloud narration, only redacted, derived findings leave the server, and the Privacy view lists them.
 - Home Assistant-friendly routes for the signals you choose to publish.
+- Your own AI can read your record. `healthsave mcp` prints one line that connects Claude Code or Claude Desktop to this server, read-only: "how did I sleep this year?" is answered from your own data. See [Give your AI a body](docs/mcp.md).
 - Room for other inputs on the same record: early Whoop and Amazfit plugins, Garmin and Samsung importers, and planned Android Health Connect and HMAC-signed ingest.
 
 The iPhone app also works without Observatory. Its on-device dashboard, trends, and CSV/JSON/PDF export do not need an account or this server. The app can write Home Assistant sensors on its own, too. Setup guides live at [healthsave.app](https://healthsave.app/).
@@ -220,6 +221,7 @@ cd healthsave-observatory
 - [Web vs Grafana](docs/surfaces/web-vs-grafana.md) - product surface versus raw dashboard boundary.
 - [Home Assistant & MQTT](docs/integrations/home-assistant.md) - bridge HealthSave signals into Home Assistant.
 - [API](docs/api/index.md) - stable ingest and evolving read/query APIs.
+- [Give your AI a body (MCP)](docs/mcp.md) - your own Claude reads your record, read-only, one setup line.
 - [Deployment](docs/operations/deployment.md) - run on a laptop, VM, NAS, Proxmox VM, or homelab box.
 - [CLI distribution](docs/operations/cli-distribution.md) - npm/npx, installers, repo-local launcher, and Homebrew release shape.
 - [Development](docs/development/dev-setup.md) - local development and verification.

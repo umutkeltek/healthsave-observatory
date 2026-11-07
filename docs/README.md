@@ -33,7 +33,8 @@ New here? Start with [Zero To Ready](zero-to-ready.md), then [Connect HealthSave
 
 - [API overview](api/index.md) - stable v1 ingest versus evolving v2 read/query APIs.
 - [v1 Apple contract](api/v1-apple-contract.md) - frozen app compatibility contract.
-- [v2 read API](api/v2-read-api.md) - private read plane for scripts, dashboards, and future CLI/MCP clients.
+- [v2 read API](api/v2-read-api.md) - private read plane for scripts, dashboards, and the MCP server.
+- [Give your AI a body (MCP)](mcp.md) - one setup line lets Claude Code or Claude Desktop read your record; read-only, summaries only.
 
 ## Surfaces
 

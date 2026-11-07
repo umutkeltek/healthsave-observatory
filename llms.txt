@@ -43,6 +43,7 @@ Key facts for assistants:
 - [v2 read API](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/api/v2-read-api.md): Orientation map of `/api/v2/*`: auth, versioning, and which endpoints are open.
 - [API reference](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/API_REFERENCE.md): Payload-level request/response examples for every endpoint, v1 and v2, and who calls each one.
 - [API contract (v1 prose)](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/API.md): Long-form frozen v1 ingest contract: batch format, status shape, raw ingestion log, daily metrics.
+- [Give your AI a body (MCP)](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/mcp.md): Read-only MCP server so the owner's own Claude Code or Claude Desktop can read their record. `healthsave mcp` prints the one-line setup; summaries only, never raw rows; talks to the configured server only.
 
 ## Surfaces
 

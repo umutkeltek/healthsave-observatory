@@ -12,7 +12,7 @@ This split is the whole point. The thing that pushes data *in* (the App Store bi
 | Surface | Prefix | Stability | Who calls it |
 |---|---|---|---|
 | **v1 ingest** | `/api/apple/*`, `/api/health` | Frozen — byte-stable | HealthSave iOS app, compatible third-party clients, importers |
-| **v2 read/query** | `/api/v2/*` | Evolving — pre-stable | Your scripts, the Observatory web app, Home Assistant, (planned) `healthsave` CLI + MCP server |
+| **v2 read/query** | `/api/v2/*` | Evolving — pre-stable | Your scripts, the Observatory web app, Home Assistant, the [MCP server](../mcp.md) |
 
 The legacy `/api/insights/*` endpoints are also frozen (typed and locked alongside v1); their v2 equivalents under `/api/v2/insights/*` are the surface that continues to evolve.
 

@@ -53,7 +53,9 @@ Body Brief**. Findings are computed deterministically first; a language model on
 narrates them. Report-first, no chat interface. This is the loop meant to bring
 you back week after week. See [The Private Body Observatory](concepts/private-body-observatory.md).
 
-### R5 — Agent surface and universal ingest *(planned)*
+### R5 — Agent surface and universal ingest *(in progress)*
+
+Shipped in 1.4.0: the local MCP read server and its read key ([Give your AI a body](mcp.md)).
 
 Two things that turn the Observatory from an app into a platform you build on:
 
@@ -85,7 +87,7 @@ last and starts single-tenant before anything multi-tenant.
 | R2 | Source / Device / Stream identity | Done |
 | R3 | Ship the Observatory web app as the default surface | In progress |
 | R4 | The Body Brief loop (finding cards + weekly brief) | Planned |
-| R5 | Agent surface (CLI + local MCP) + universal ingest | Planned |
+| R5 | Agent surface (CLI + local MCP) + universal ingest | In progress: local MCP read server shipped in 1.4.0 |
 | R6 | Thin routing + source breadth + hosted | Planned |
 
 ---

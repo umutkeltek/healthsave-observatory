@@ -9,6 +9,57 @@ Plugins carry their own versions.
 
 ## [Unreleased]
 
+Give your AI a body: your own Claude can read your record. `healthsave mcp`
+prints one line that connects Claude Code or Claude Desktop to this server,
+read-only.
+
+### Upgrade
+
+```bash
+healthsave update --to v1.4.0
+```
+
+- No migration and no `.env` change on upgrade. `healthsave mcp` adds
+  `MCP_READ_KEY` to `.env` the first time you run it.
+- The API image now also carries the MCP server
+  (`/opt/healthsave-mcp/bin/healthsave-mcp`, in its own environment; the
+  server's own packages are unchanged).
+
+### Added
+
+- MCP read server (`packages/mcp`, [Give your AI a body](docs/mcp.md)). Eight
+  read-only tools: overview, today against your usual, sleep, activity, one
+  metric over time, findings, blood test results and Year in Health. Ask "how
+  did I sleep this year?" and it answers from your own record: nights, hours
+  asleep, bedtimes, stages, the nights with no data, month by month. Every
+  answer carries its units, the endpoints it read and plain limitation codes.
+  Two sources are never averaged.
+- `healthsave mcp` prints the setup line for Claude Code, the config block for
+  Claude Desktop and a Docker line, with this server's address and a read key
+  filled in. `healthsave mcp --check` starts the server the way an AI client
+  does and calls one tool. `healthsave mcp key --rotate` replaces the key.
+- A read key for the primary person. Until now a read key always belonged to a
+  participant. The new key reads your readings plus findings, lab results and
+  your time setting, so your AI client never needs the admin key.
+
+### Privacy and safety
+
+- The MCP server sends only `GET` requests, to the address you give it and
+  nowhere else; it does not follow redirects or use proxy settings. It
+  returns per-day, per-night and per-month summaries, never raw readings.
+- No read key may call any route that writes. A test now fails the build if
+  one ever can.
+- What your AI reads goes to that AI's provider, like the rest of your
+  conversation. Your record stays on your hardware.
+
+### Not yet
+
+- ChatGPT. It reaches MCP servers from OpenAI's cloud, so it would need your
+  Observatory open to the internet.
+- A read covers at most 5,000 readings per request; the tools say from which
+  day an answer is complete when a long period is cut.
+
+
 ## [1.3.0] - 2026-11-07
 
 Year in Health: one calendar year of your record on one page, with every gap

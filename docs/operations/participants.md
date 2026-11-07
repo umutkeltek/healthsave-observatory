@@ -66,12 +66,16 @@ healthsave participants add "Alice Smith" --read
 A read key lets that person's own tools (a script, an MCP client) read their own data through the
 [v2 read API](../api/v2-read-api.md): the owner-scoped reads and their own sync status, nothing else.
 
+To connect your own AI client to your own record, use `healthsave mcp` instead: it makes a
+read key for you, the primary person ([Give your AI a body](../mcp.md)).
+
 ## What a participant key can do
 
 | Key | Can call | Whose data |
 |---|---|---|
 | `ingest` (default, the phone) | `POST /api/apple/batch`, `POST /api/v2/apple/batch`, `GET /api/apple/status`, `GET /api/apple/coverage`, `/api/v2/sync/runs/*` | its own person, always |
 | `read` (`--read`) | GETs on the above, plus series, export, sources, devices, streams and readiness | its own person, always |
+| `read` for you (`healthsave mcp key`) | the same reads, plus findings, lab results and the time setting | the primary person only |
 | the `.env` key (admin) | everything | the primary person; any person with `?owner=` |
 
 Anything else answers `403`. A revoked key answers `401`. The admin lists people with

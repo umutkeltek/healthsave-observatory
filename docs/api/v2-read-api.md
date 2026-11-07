@@ -1,6 +1,6 @@
 # v2 read API (evolving)
 
-The `/api/v2/` plane is **your private read API** — the agent-consumable JSON surface your own scripts, notebooks, and dashboards query locally, without handing your data to a third-party API vendor. It is what the Observatory web app reads today, and it is the contract the planned `healthsave` CLI and local MCP server will speak so your own AI agents can query your body data.
+The `/api/v2/` plane is **your private read API** — the agent-consumable JSON surface your own scripts, notebooks, and dashboards query locally, without handing your data to a third-party API vendor. It is what the Observatory web app reads today, and it is the contract the local MCP server speaks so your own AI client can query your body data ([Give your AI a body](../mcp.md)).
 
 > **Status: evolving — not frozen.** Unlike the [v1 ingest contract](v1-apple-contract.md), the v2 read plane is under active development; request and response shapes may change between releases. Treat it as pre-stable and pin to a backend version when scripting against it.
 
@@ -133,6 +133,12 @@ This makes the trust boundary inspectable. By default `raw_observations_leave_ho
 |---|---|---|
 | `POST /api/v2/sources/whoop/webhook` | HMAC | Whoop push webhook; authenticity via `X-WHOOP-Signature` (not `X-API-Key`) |
 
-## Planned: CLI and MCP
+## MCP server
 
-A `healthsave` CLI and a local MCP server are on the roadmap. Both will sit on top of this same v2 read API, with scoped read tokens, so your own agents can query your body data through the contract documented here rather than against the database directly. Until they ship, scripts call these endpoints over HTTP with the `X-API-Key` header. See [`API_REFERENCE.md`](../../API_REFERENCE.md) for payloads.
+`healthsave mcp` connects your own AI client (Claude Code, Claude Desktop, any MCP
+client) to this API through a read-only MCP server that sits on top of these
+endpoints. It sends only `GET` requests, returns per-day, per-night and per-month
+summaries rather than raw rows, and talks to the configured server only. Its key is a
+read key minted for the primary person (`healthsave mcp key`): it reads the
+owner-scoped routes plus findings, lab results and the time setting, and every
+route that writes answers it `403`. See [Give your AI a body](../mcp.md).
