@@ -30,6 +30,13 @@ COPY plugins/ ./plugins/
 COPY db/migrations/ ./db/migrations/
 COPY scripts/ ./scripts/
 
+# The MCP read server (healthsave mcp): its own venv, so its dependencies never
+# move the server's pinned ones. Clients run /opt/healthsave-mcp/bin/healthsave-mcp.
+COPY packages/mcp/ /tmp/healthsave-mcp/
+RUN python -m venv /opt/healthsave-mcp \
+    && /opt/healthsave-mcp/bin/pip install --no-cache-dir /tmp/healthsave-mcp \
+    && rm -rf /tmp/healthsave-mcp
+
 USER appuser
 EXPOSE 8000
 CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]

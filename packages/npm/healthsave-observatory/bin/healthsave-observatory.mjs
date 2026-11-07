@@ -39,6 +39,7 @@ const DELEGATED_COMMANDS = new Set([
   "verify",
   "install-cli",
   "uninstall-cli",
+  "mcp",
 ]);
 
 function usage() {
@@ -56,6 +57,7 @@ Usage:
   ${PRIMARY_COMMAND} up [dir] [flags]
   ${PRIMARY_COMMAND} down [dir]
   ${PRIMARY_COMMAND} verify [dir]
+  ${PRIMARY_COMMAND} mcp [dir] [key|--check] [flags]
   ${PRIMARY_COMMAND} version
   ${PRIMARY_COMMAND} install-cli [dir] [flags]
   ${PRIMARY_COMMAND} uninstall-cli [dir] [flags]
@@ -65,6 +67,7 @@ Examples:
   healthsave onboard
   npx healthsave
   healthsave doctor
+  healthsave mcp
   healthsave setup basic --no-input
   npx healthsave init /srv/healthsave-observatory
   npx healthsave doctor --dir /srv/healthsave-observatory --json

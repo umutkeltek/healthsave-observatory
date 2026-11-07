@@ -32,6 +32,7 @@ Examples:
   healthsave doctor
   healthsave pair
   healthsave participants add "Alice Smith"
+  healthsave mcp
   healthsave backup
   healthsave --json doctor
   healthsave layers
@@ -56,6 +57,7 @@ Commands:
   doctor                    Check platform, config, services, and URLs
   pair [--new-key]          Show the server URL, API key and pairing QR for the app
   participants add|list|revoke  One key per participant (coach or clinic, one Observatory)
+  mcp [key|--check]         Let your own AI client (Claude Code, Claude Desktop) read your record
   update [--to TAG] [--yes] Move to the newest release (takes a backup first)
   update --rollback [--yes] Care: go back to the release before the last update
   web-password reset        Forget the Settings password; WEB_PASSWORD in .env applies again
@@ -1585,6 +1587,245 @@ cmd_participants() {
             exit 2
             ;;
     esac
+}
+
+# ─── healthsave mcp: your own AI client reads this Observatory ────────────
+
+MCP_KEY_LABEL="MCP read key"
+MCP_IN_IMAGE="/opt/healthsave-mcp/bin/healthsave-mcp"
+MCP_REPO_URL="https://github.com/umutkeltek/healthsave-observatory"
+
+print_mcp_usage() {
+    cat <<'EOF'
+HealthSave MCP
+
+Lets your own AI client (Claude Code, Claude Desktop, any MCP client) read
+summaries of your health record from this Observatory: sleep, activity, today
+against your usual, findings, blood tests, your year. Read-only.
+
+Usage:
+  healthsave mcp [--url URL] [--client claude-code|claude-desktop|docker|chatgpt]
+  healthsave mcp key [--rotate]
+  healthsave mcp --check
+
+  healthsave mcp          Print one setup line per AI client, with this server's
+                          address and a read-only key filled in. Makes the key
+                          the first time (the stack must be running).
+  healthsave mcp key      Show the read key. --rotate replaces it; the old key
+                          stops working at once.
+  healthsave mcp --check  Start the MCP server against this stack the way an AI
+                          client does, and call one tool.
+
+Options:
+  --url URL      Address the AI's computer uses (default: http://<this machine's LAN IP>:8000)
+  --client NAME  Print one client's setup only
+  -h, --help     Show help
+
+The key can read, never write. It is kept in .env as MCP_READ_KEY; treat it
+like a password. What your AI reads goes to that AI's provider: see docs/mcp.md.
+EOF
+}
+
+mcp_release_tag() {
+    # The release this checkout runs: HEALTHSAVE_VERSION in .env, else the
+    # default image tag in docker-compose.yml. The MCP server comes from the
+    # same tag, so a client never runs a newer server than the stack.
+    local tag=""
+    tag="$(read_env_value HEALTHSAVE_VERSION)"
+    if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+        tag="$(grep -oE 'healthsave-observatory:\$\{HEALTHSAVE_VERSION:-v[0-9]+\.[0-9]+\.[0-9]+\}' docker-compose.yml 2>/dev/null \
+            | head -n 1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' || true)"
+    fi
+    printf '%s' "${tag:-v1.4.0}"
+}
+
+mcp_mint_key() {
+    # mcp_mint_key - mint a read key for the primary person inside the API
+    # container and save it to .env as MCP_READ_KEY. Prints nothing.
+    local output=""
+    local rc=0
+    local key=""
+    local field value
+    output="$(participants_exec add "$MCP_KEY_LABEL" --scope read --primary)" || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        log_error "Could not make the read key (exit $rc). Is this stack 1.4.0 or newer? Run 'healthsave update'."
+        exit "$rc"
+    fi
+    while IFS='=' read -r field value; do
+        if [ "$field" = "key" ]; then
+            key="$value"
+        fi
+    done <<<"$output"
+    if [ -z "$key" ]; then
+        log_error "The API container did not return a key."
+        exit 1
+    fi
+    ensure_env_value "MCP_READ_KEY" "$key"
+}
+
+mcp_revoke_key() {
+    local rc=0
+    participants_exec revoke "$MCP_KEY_LABEL" >/dev/null || rc=$?
+    # 1 = no live key with that label: nothing to revoke.
+    if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then
+        exit "$rc"
+    fi
+}
+
+mcp_key_or_mint() {
+    if [ -z "$(read_env_value MCP_READ_KEY)" ]; then
+        require_api_running
+        mcp_mint_key
+        # stderr: this function's stdout is the key itself.
+        log_ok "Made a read-only key for your AI client and saved it to .env (MCP_READ_KEY)." >&2
+    fi
+    read_env_value MCP_READ_KEY
+}
+
+mcp_check() {
+    local key="$1"
+    require_api_running
+    local rc=0
+    # The key travels on stdin, never on a command line.
+    printf '%s\n' "$key" | docker compose exec -T api sh -c '
+        if [ ! -x '"$MCP_IN_IMAGE"' ]; then
+            echo "This stack'"'"'s API image has no MCP server. Run: healthsave update (1.4.0 or newer)." >&2
+            exit 3
+        fi
+        IFS= read -r HEALTHSAVE_API_KEY
+        export HEALTHSAVE_API_KEY
+        HEALTHSAVE_URL=http://127.0.0.1:8000 exec '"$MCP_IN_IMAGE"' --check
+    ' || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        log_error "MCP check failed (exit $rc)."
+        exit 1
+    fi
+}
+
+mcp_print_setup() {
+    local url="$1"
+    local key="$2"
+    local tag="$3"
+    local client="$4"
+    local from="git+${MCP_REPO_URL}@${tag}#subdirectory=packages/mcp"
+    local image="ghcr.io/umutkeltek/healthsave-observatory:${tag}"
+
+    echo
+    echo "  Server URL:  ${url}"
+    echo "  Read key:    ${key}"
+    echo "  (read-only; shown in full, treat it like a password)"
+    if [ "$client" = "all" ] || [ "$client" = "claude-code" ]; then
+        echo
+        echo "Claude Code - run this once on the computer where Claude Code runs (needs uv):"
+        echo
+        echo "  claude mcp add healthsave -e HEALTHSAVE_URL=${url} -e HEALTHSAVE_API_KEY=${key} -- uvx --from \"${from}\" healthsave-mcp"
+    fi
+    if [ "$client" = "all" ] || [ "$client" = "claude-desktop" ]; then
+        echo
+        echo "Claude Desktop - Settings > Developer > Edit Config, add inside \"mcpServers\", restart Claude:"
+        echo
+        cat <<EOF
+  "healthsave": {
+    "command": "uvx",
+    "args": ["--from", "${from}", "healthsave-mcp"],
+    "env": { "HEALTHSAVE_URL": "${url}", "HEALTHSAVE_API_KEY": "${key}" }
+  }
+EOF
+    fi
+    if [ "$client" = "all" ] || [ "$client" = "docker" ]; then
+        echo
+        echo "No uv on that computer? Docker runs the same server from this release's image:"
+        echo
+        echo "  claude mcp add healthsave -e HEALTHSAVE_URL=${url} -e HEALTHSAVE_API_KEY=${key} -- docker run -i --rm -e HEALTHSAVE_URL -e HEALTHSAVE_API_KEY ${image} ${MCP_IN_IMAGE}"
+    fi
+    if [ "$client" = "all" ] || [ "$client" = "chatgpt" ]; then
+        echo
+        echo "ChatGPT - not yet. ChatGPT reaches MCP servers from OpenAI's cloud, so it would need"
+        echo "  this Observatory open to the internet. This release runs on your own computer only."
+    fi
+    echo
+    echo "Uninstall any time: claude mcp remove healthsave. Revoke the key: healthsave mcp key --rotate."
+    echo "Check it: healthsave mcp --check. More: docs/mcp.md"
+}
+
+cmd_mcp() {
+    local sub=""
+    local server_url=""
+    local client="all"
+    local rotate=0
+    local check=0
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help|help)
+                print_mcp_usage
+                return 0
+                ;;
+            key)
+                sub="key"
+                ;;
+            --rotate)
+                rotate=1
+                ;;
+            --check)
+                check=1
+                ;;
+            --url)
+                shift
+                if [ "$#" -eq 0 ] || [ -z "$1" ]; then
+                    log_error "--url needs a value."
+                    exit 2
+                fi
+                server_url="$1"
+                ;;
+            --client)
+                shift
+                case "${1:-}" in
+                    claude-code|claude-desktop|docker|chatgpt|all) client="$1" ;;
+                    *)
+                        log_error "--client must be claude-code, claude-desktop, docker, chatgpt or all."
+                        exit 2
+                        ;;
+                esac
+                ;;
+            *)
+                log_error "Unknown mcp argument: $1"
+                print_mcp_usage
+                exit 2
+                ;;
+        esac
+        shift
+    done
+
+    if [ ! -f "$ENV_FILE" ]; then
+        log_error "$ENV_FILE is missing - run 'healthsave setup basic' first."
+        exit 1
+    fi
+    if [ "$rotate" = "1" ] && [ "$sub" != "key" ]; then
+        log_error "--rotate goes with 'healthsave mcp key'."
+        exit 2
+    fi
+
+    if [ "$sub" = "key" ]; then
+        if [ "$rotate" = "1" ]; then
+            require_api_running
+            mcp_revoke_key
+            mcp_mint_key
+            log_ok "Replaced the read key. The old one no longer works; update your AI client's setup."
+        fi
+        echo "  Read key:    $(mcp_key_or_mint)"
+        return 0
+    fi
+
+    local key=""
+    key="$(mcp_key_or_mint)"
+    if [ "$check" = "1" ]; then
+        mcp_check "$key"
+        return 0
+    fi
+    if [ -z "$server_url" ]; then
+        server_url="$(default_server_url)"
+    fi
+    mcp_print_setup "$server_url" "$key" "$(mcp_release_tag)" "$client"
 }
 
 newest_release_tag() {
@@ -3643,6 +3884,13 @@ case "$cmd" in
             exit 2
         fi
         cmd_participants "$@"
+        ;;
+    mcp)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for mcp."
+            exit 2
+        fi
+        cmd_mcp "$@"
         ;;
     web-password)
         if [ "$json_mode" = "1" ]; then

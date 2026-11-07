@@ -463,6 +463,26 @@ def test_node_cli_delegates_up_flags_without_dir_from_checkout(tmp_path: Path) -
     ]
 
 
+def test_node_cli_delegates_mcp_and_its_key_subcommand(tmp_path: Path) -> None:
+    _require_node()
+    stack = _fake_checkout(tmp_path)
+
+    subprocess.run(
+        ["node", str(BIN), "mcp", "key", "--rotate"],
+        cwd=stack,
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=True,
+    )
+
+    assert (stack / "delegated-args.txt").read_text(encoding="utf-8").splitlines() == [
+        "mcp",
+        "key",
+        "--rotate",
+    ]
+
+
 def test_node_cli_delegates_doctor_help_without_treating_help_as_dir(tmp_path: Path) -> None:
     _require_node()
     stack = _fake_checkout(tmp_path)
