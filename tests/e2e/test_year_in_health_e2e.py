@@ -73,7 +73,11 @@ def test_year_reads_months_gaps_device_changes_and_per_source_numbers() -> None:
     # all-source day total at local midnight): each must land on its own day,
     # not on the day before the 04:00 boundary.
     steps = [
-        {"date": f"{day.isoformat()}T00:00:00.000Z", "qty": 8000 + i, "source": "HealthKit Statistics"}
+        {
+            "date": f"{day.isoformat()}T00:00:00.000Z",
+            "qty": 8000 + i,
+            "source": "HealthKit Statistics",
+        }
         for i, day in enumerate(_days(date(YEAR, 3, 1), date(YEAR, 3, 3)))
     ]
     with httpx.Client(base_url=BASE_URL, timeout=60) as client:
