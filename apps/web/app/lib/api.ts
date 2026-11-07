@@ -1022,6 +1022,126 @@ export function fetchLabMarker(loinc: string): Promise<LabMarkerDetail> {
   return getJson<LabMarkerDetail>(`/api/v2/labs/${encodeURIComponent(loinc)}`);
 }
 
+// Year in Health (server/api/v2_year.py): one calendar year read as coverage.
+// Masks hold one character per day of the window ("1" data, "0" none); the gap
+// runs partition every "0". Headline numbers are per source, never averaged.
+export type YearConfidence = "ok" | "low" | "none" | "future";
+
+export type YearGap = {
+  start: string;
+  end: string;
+  days: number;
+  kind: "before_first" | "inside" | "after_last" | "no_data";
+};
+
+export type YearFamily = {
+  id: string;
+  label: string;
+  metric_ids: string[];
+  days_with_data: number;
+  days_without_data: number;
+  first_day: string | null;
+  last_day: string | null;
+  mask: string;
+  gaps: YearGap[];
+  longest_inside_gap: number;
+  confidence: YearConfidence;
+};
+
+export type YearSource = {
+  stream_id: string;
+  label: string;
+  source_plugin_id: string;
+  first_day: string;
+  last_day: string;
+  days_with_data: number;
+  months: number[];
+  families: string[];
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  new_this_year: boolean;
+  stopped_this_year: boolean;
+};
+
+export type YearDeviceChange = {
+  day: string;
+  kind: "first_seen" | "last_seen";
+  stream_id: string;
+  label: string;
+};
+
+export type YearMonth = {
+  month: number;
+  days: number;
+  days_with_data: number;
+  coverage: number | null;
+  families: string[];
+  source_ids: string[];
+  first_seen_ids: string[];
+  last_seen_ids: string[];
+  confidence: YearConfidence;
+};
+
+export type YearHeadline = {
+  id: string;
+  label: string;
+  value: number;
+  unit: string | null;
+  stream_id: string | null;
+  source_label: string | null;
+  low: number | null;
+  high: number | null;
+  days: number | null;
+  of_days: number | null;
+  basis: string;
+  confidence: YearConfidence;
+};
+
+export type YearWithheld = {
+  id: string;
+  label: string;
+  stream_id: string | null;
+  source_label: string | null;
+  days: number;
+  reason: string;
+};
+
+export type YearLimitation = { code: string; day: string | null; count: number | null };
+
+export type YearInHealth = {
+  year: number;
+  owner_id: string;
+  time_zone: string;
+  day_boundary: string;
+  generated_at: string;
+  window_start: string;
+  window_end: string;
+  days_in_window: number;
+  days_with_data: number;
+  first_day: string | null;
+  last_day: string | null;
+  day_family_counts: number[];
+  mask: string;
+  gaps: YearGap[];
+  longest_inside_gap: number;
+  months: YearMonth[];
+  families: YearFamily[];
+  sources: YearSource[];
+  device_changes: YearDeviceChange[];
+  headlines: YearHeadline[];
+  withheld: YearWithheld[];
+  limitations: YearLimitation[];
+  confidence: YearConfidence;
+};
+
+// A year of the canonical store is a heavy read on a large record (the API
+// caches it); give it longer than the default card timeout.
+const YEAR_TIMEOUT_MS = Number(process.env.API_YEAR_TIMEOUT_MS ?? 30000);
+
+export function fetchYear(year: number): Promise<YearInHealth> {
+  return getJson<YearInHealth>(`/api/v2/year/${year}`, YEAR_TIMEOUT_MS);
+}
+
 // People this Observatory holds data for (participant keys, migration 029).
 // Mirrors server/api/v2_owners.py. The default owner comes first with a null
 // label; a participant whose keys are all revoked stays listed (active false).

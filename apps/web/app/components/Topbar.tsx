@@ -13,6 +13,7 @@ const TITLE_KEYS = {
   "/sleep": ["sleep", "sleepSub"],
   "/activity": ["activity", "activitySub"],
   "/labs": ["labs", "labsSub"],
+  "/year": ["year", "yearSub"],
   "/demo": ["today", "demoSub"],
   "/experiments": ["experiments", "experimentsSub"],
   "/timeline": ["timeline", "timelineSub"],

@@ -4,7 +4,7 @@
 // that person's data can be read there.
 //
 //   scoped  - the server reads that owner when given ?owner= (series, export,
-//             sources, devices, streams, readiness)
+//             sources, devices, streams, readiness, year)
 //   neutral - not one person's data (catalog, meta, the owner list, the host's
 //             egress posture and narrator settings, the change fingerprint)
 //   primary - analysis and records that exist only for the primary person
@@ -27,6 +27,7 @@ const SCOPED: readonly RegExp[] = [
   new RegExp(String.raw`^/api/v2/(?:sources|devices|streams)${END}`),
   new RegExp(String.raw`^/api/v2/streams/[^/?]+${END}`),
   new RegExp(String.raw`^/api/v2/readiness${END}`),
+  new RegExp(String.raw`^/api/v2/year/[^/?]+${END}`),
 ];
 const NEUTRAL: readonly RegExp[] = [
   new RegExp(String.raw`^/api/v2/metrics${END}`),

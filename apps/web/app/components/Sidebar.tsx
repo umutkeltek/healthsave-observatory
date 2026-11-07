@@ -25,6 +25,15 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M2.5 13.5 5.5 7l2.5 5 3-9 2.5 6.5" />
     </>
   ),
+  year: (
+    <>
+      <circle cx="8" cy="8" r="5.5" />
+      <path d="M8 2.5v2" />
+      <path d="M13.5 8h-2" />
+      <path d="M8 13.5v-2" />
+      <path d="M2.5 8h2" />
+    </>
+  ),
   labs: (
     <>
       <path d="M6 2.5h4" />
@@ -130,6 +139,7 @@ type NavKey =
   | "sleep"
   | "activity"
   | "labs"
+  | "year"
   | "findings"
   | "data"
   | "sources"
@@ -160,6 +170,7 @@ const NAV: readonly NavItem[] = [
   { href: "/relationships", labelKey: "relationships", icon: "relationships", group: "explore" },
   { href: "/experiments", labelKey: "experiments", icon: "experiments", group: "explore" },
   { href: "/timeline", labelKey: "timeline", icon: "findings", group: "explore" },
+  { href: "/year", labelKey: "year", icon: "year", group: "explore" },
   { href: "/integrations", labelKey: "integrations", icon: "integrations", group: "manage" },
   { href: "/intelligence", labelKey: "intelligence", icon: "intelligence", group: "manage" },
   { href: "/settings", labelKey: "settings", icon: "settings", group: "manage" },

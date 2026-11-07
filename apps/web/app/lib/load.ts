@@ -38,6 +38,7 @@ import {
   fetchSeriesBatch,
   fetchSources,
   fetchStreams,
+  fetchYear,
   isNarratorOff,
   type Finding,
   type IntelligenceView,
@@ -54,6 +55,7 @@ import {
   type Receipts,
   type SourceView,
   type StreamView,
+  type YearInHealth,
 } from "./api";
 import { formatAgo } from "./format";
 import { hasUsablePoints } from "./ranges";
@@ -354,6 +356,16 @@ export async function safeLabMarker(loinc: string): Promise<LabMarkerDetail | nu
     return await fetchLabMarker(loinc);
   } catch (error) {
     return swallow("labs", error);
+  }
+}
+
+// Year in Health: null means "backend unreachable or failed" (the page says
+// so); a year with no data is a real YearInHealth with zero days.
+export async function safeYear(year: number): Promise<YearInHealth | null> {
+  try {
+    return await ownerSwr(`year:${year}`, 300_000, () => fetchYear(year));
+  } catch (error) {
+    return swallow("year", error);
   }
 }
 
