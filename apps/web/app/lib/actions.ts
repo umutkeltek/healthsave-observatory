@@ -10,6 +10,7 @@ import { cookies } from "next/headers";
 import {
   abandonExperiment,
   analyzeExperiment,
+  ApiError,
   applyIntelligence,
   type ApplyIntelligencePayload,
   type ConsentPayload,
@@ -411,7 +412,11 @@ export async function removeSavedPanelAction(id: string): Promise<ActionResult> 
   }
 }
 
-export type TriggerAnalysisResult = ActionResult & { status?: string };
+// What a trigger did, from the server's own answer (v2_insights.py):
+// completed / skipped (200, nothing new produced) / disabled (409) / failed.
+// Callers decide on this, never on the wording of an error.
+export type TriggerOutcome = "completed" | "skipped" | "disabled" | "failed";
+export type TriggerAnalysisResult = ActionResult & { status?: string; outcome?: TriggerOutcome };
 
 // On-demand narration/analysis refresh (the Weekly Brief card's button). A
 // 409 means the analysis block is disabled - the card surfaces that calmly
@@ -425,8 +430,9 @@ export async function triggerAnalysisAction(
     revalidatePath("/");
     revalidatePath("/findings");
     revalidatePath("/relationships");
-    return { ok: true, status: result.status };
+    return { ok: true, status: result.status, outcome: result.status === "completed" ? "completed" : "skipped" };
   } catch (error) {
-    return failure(error, "Could not run the analysis.");
+    const outcome: TriggerOutcome = error instanceof ApiError && error.status === 409 ? "disabled" : "failed";
+    return { ...failure(error, "Could not run the analysis."), outcome };
   }
 }

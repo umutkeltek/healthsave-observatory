@@ -197,7 +197,7 @@ async function postJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIME
     } catch {
       // non-JSON error body - keep the status line
     }
-    throw new Error(detail);
+    throw new ApiError(detail, res.status, detail);
   }
   // The backend changed: no cached read may show the state before the write.
   clearSwrCache();
@@ -231,7 +231,7 @@ async function putJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEO
     } catch {
       // non-JSON error body - keep the status line
     }
-    throw new Error(detail);
+    throw new ApiError(detail, res.status, detail);
   }
   // The backend changed: no cached read may show the state before the write.
   clearSwrCache();
@@ -264,7 +264,7 @@ async function deleteJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Prom
     } catch {
       // non-JSON error body - keep the status line
     }
-    throw new Error(detail);
+    throw new ApiError(detail, res.status, detail);
   }
   // The backend changed: no cached read may show the state before the write.
   clearSwrCache();
