@@ -11,7 +11,16 @@ import type {
   IntelligenceView,
   IntelMode,
 } from "../../lib/api";
-import { CLOUD_PROVIDERS, type FallbackDraft, OLLAMA_DEFAULT_BASE } from "./constants";
+import type { FallbackDraft } from "./constants";
+import {
+  connectionInputFor,
+  initialDrafts,
+  primaryFor,
+  type ProviderDrafts,
+  withLocalBaseUrl,
+  withModel,
+  withProvider,
+} from "./providerDrafts";
 
 export type StatusMsg = { ok: boolean; text: string };
 
@@ -24,11 +33,9 @@ export function useIntelligenceForm(view: IntelligenceView) {
   const [pending, startTransition] = useTransition();
 
   const [mode, setMode] = useState<IntelMode>(view.mode);
-  const [provider, setProvider] = useState(
-    view.primary?.provider ?? (view.mode === "local" ? "ollama" : "deepseek"),
-  );
-  const [model, setModel] = useState(view.primary?.model ?? CLOUD_PROVIDERS[0].model);
-  const [baseUrl, setBaseUrl] = useState(view.primary?.base_url ?? "");
+  // One draft per mode (providerDrafts.ts): only the visible mode's fields
+  // are ever sent.
+  const [drafts, setDrafts] = useState<ProviderDrafts>(() => initialDrafts(view.primary));
   const [apiKey, setApiKey] = useState("");
   const [redact, setRedact] = useState(view.redact_cloud_prompts);
   const [fallbacks, setFallbacks] = useState<FallbackDraft[]>(
@@ -42,23 +49,19 @@ export function useIntelligenceForm(view: IntelligenceView) {
   const [detectMsg, setDetectMsg] = useState<StatusMsg | null>(null);
   const [consentChecked, setConsentChecked] = useState(false);
 
+  const provider = drafts.cloud.provider;
+  const model = mode === "local" ? drafts.local.model : drafts.cloud.model;
+  const baseUrl = drafts.local.baseUrl;
+  const setModel = (next: string) => setDrafts((d) => withModel(d, mode === "local" ? "local" : "cloud", next));
+  const setBaseUrl = (next: string) => setDrafts((d) => withLocalBaseUrl(d, next));
+
   function pickProvider(id: string) {
-    setProvider(id);
-    const preset = CLOUD_PROVIDERS.find((p) => p.id === id);
-    if (preset) setModel(preset.model);
+    setDrafts((d) => withProvider(d, id, view.primary));
   }
 
   function buildPayload(): ApplyIntelligencePayload {
     if (mode === "off") return { mode: "off" };
-    const primary: ApplyIntelligencePayload["primary"] = {
-      provider: mode === "local" ? "ollama" : provider,
-      model: model.trim(),
-    };
-    if (mode === "local") primary.base_url = baseUrl.trim() || OLLAMA_DEFAULT_BASE;
-    else if (baseUrl.trim()) primary.base_url = baseUrl.trim();
-    if (apiKey.trim()) primary.api_key = apiKey.trim();
-    if (advanced && temperature.trim()) primary.temperature = Number(temperature);
-    if (advanced && maxTokens.trim()) primary.max_tokens = Number(maxTokens);
+    const primary = primaryFor(mode, drafts, { apiKey, temperature, maxTokens, advanced });
 
     const cleanFallbacks: ConnectionInputPayload[] = fallbacks
       .filter((f) => f.model.trim())
@@ -79,12 +82,7 @@ export function useIntelligenceForm(view: IntelligenceView) {
   // The exact connection input the test probe should use for the CURRENT
   // (possibly unsaved) form values.
   function buildConnectionInput(): ConnectionInputPayload {
-    return {
-      provider: mode === "local" ? "ollama" : provider,
-      model: model.trim(),
-      base_url: mode === "local" ? baseUrl.trim() || OLLAMA_DEFAULT_BASE : baseUrl.trim() || null,
-      api_key: apiKey.trim() || null,
-    };
+    return connectionInputFor(mode === "local" ? "local" : "cloud", drafts, apiKey);
   }
 
   function save() {
@@ -118,8 +116,10 @@ export function useIntelligenceForm(view: IntelligenceView) {
         });
         return;
       }
-      setBaseUrl(found.url);
-      if (found.models.length > 0) setModel(found.models[0]);
+      setDrafts((d) => {
+        const located = withLocalBaseUrl(d, found.url);
+        return found.models.length > 0 ? withModel(located, "local", found.models[0]) : located;
+      });
       setDetectMsg({
         ok: true,
         text: `Found Ollama at ${found.url}${
