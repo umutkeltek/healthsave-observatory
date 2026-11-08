@@ -312,8 +312,12 @@ class ExperimentRunner:
 
             result = await self._persist_result(session, experiment.id, computed)
             if prog.is_complete and experiment.status == "collecting":
+                # Atomic: an abandon that landed after `experiment` was read wins.
                 await self.experiment_repository.set_status(
-                    session, experiment_id=experiment.id, status="completed"
+                    session,
+                    experiment_id=experiment.id,
+                    status="completed",
+                    expected_status="collecting",
                 )
             await session.commit()
             return result

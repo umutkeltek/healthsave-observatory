@@ -219,24 +219,34 @@ class TimescaleExperimentRepository:
         experiment_id: UUID,
         status: str,
         owner_id: UUID = DEFAULT_OWNER_ID,
+        expected_status: str | None = None,
     ) -> ExperimentRow | None:
         """Update an experiment's status (bumping ``updated_at``).
 
         Returns the updated row, or ``None`` when no experiment with that id
         exists for the owner — lets the route map a missing experiment to 404
         without a second query.
+
+        With ``expected_status`` the write happens only while the row still has
+        that status (one atomic UPDATE), and ``None`` also means it had moved on.
         """
+        guard = " AND status = :expected_status" if expected_status is not None else ""
         sql = text(
             f"""
             UPDATE experiments
                SET status = :status, updated_at = now()
-             WHERE id = :experiment_id AND owner_id = :owner_id
+             WHERE id = :experiment_id AND owner_id = :owner_id{guard}
             RETURNING {_EXPERIMENT_COLS}
             """
         )
         result = await session.execute(
             sql,
-            {"experiment_id": str(experiment_id), "status": status, "owner_id": str(owner_id)},
+            {
+                "experiment_id": str(experiment_id),
+                "status": status,
+                "owner_id": str(owner_id),
+                "expected_status": expected_status,
+            },
         )
         row = result.first()
         return _experiment_from_row(row) if row is not None else None
@@ -371,9 +381,14 @@ async def set_status(
     experiment_id: UUID,
     status: str,
     owner_id: UUID = DEFAULT_OWNER_ID,
+    expected_status: str | None = None,
 ) -> ExperimentRow | None:
     return await default_repository.set_status(
-        session, experiment_id=experiment_id, status=status, owner_id=owner_id
+        session,
+        experiment_id=experiment_id,
+        status=status,
+        owner_id=owner_id,
+        expected_status=expected_status,
     )
 
 

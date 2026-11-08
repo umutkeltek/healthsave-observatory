@@ -587,6 +587,7 @@ class ExperimentRepository(Protocol):
         experiment_id: UUID,
         status: str,
         owner_id: UUID = ...,
+        expected_status: str | None = ...,
     ) -> ExperimentRow | None: ...
 
     async def insert_result(
