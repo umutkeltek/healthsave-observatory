@@ -10,6 +10,7 @@ bounded so one poll never asks a vendor for unbounded history.
 A widened window that keeps failing (a page cap, a vendor rejecting the range)
 must not be retried forever: after MAX_BACKFILL_FAILURES failed widened polls
 the worker polls the default window again and records the gap it gave up on.
+A poll skipped for want of a token is not a successful poll.
 """
 
 from __future__ import annotations
@@ -198,3 +199,13 @@ async def test_a_failing_default_window_poll_does_not_count_as_a_backfill_failur
         await poll["run"]()
 
     assert poll["failures"] == 0
+
+
+@pytest.mark.asyncio
+async def test_a_poll_skipped_for_want_of_a_token_does_not_move_the_cursor(poll):
+    poll["cursor"] = datetime.now(UTC) - timedelta(days=10)
+    poll["result"] = {"accepted": 0, "rejected": 0, "skipped_no_token": 1}
+
+    await poll["run"]()
+
+    assert poll["recorded"] == []

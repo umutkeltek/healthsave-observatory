@@ -44,7 +44,8 @@ class PolarSource(Source):
         token = await token_store.get_token(session, provider=POLAR_PROVIDER, owner_id=owner_id)
         if token is None:
             log.warning("polar: no stored token owner=%s - skip poll", owner_id)
-            return {"accepted": 0, "rejected": 0}
+            # skipped_no_token: nothing was polled, so the worker keeps its cursor.
+            return {"accepted": 0, "rejected": 0, "skipped_no_token": 1}
         if token.is_expired():
             message = "polar access token unexpectedly expired"
             if hasattr(token_store, "record_refresh_failure"):

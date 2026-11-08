@@ -118,7 +118,8 @@ class GoogleHealthSource(Source):
         )
         if token is None:
             log.warning("google health: no stored token owner=%s - skip poll", owner_id)
-            return {"accepted": 0, "rejected": 0}
+            # skipped_no_token: nothing was polled, so the worker keeps its cursor.
+            return {"accepted": 0, "rejected": 0, "skipped_no_token": 1}
 
         effective_since = since if since is not None else datetime.now(UTC) - DEFAULT_LOOKBACK
         points = await fetch_steps(

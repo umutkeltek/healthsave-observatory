@@ -34,6 +34,9 @@ MAX_BACKFILL = timedelta(days=30)
 # range the vendor rejects) is given up: the next poll uses the plugin's
 # default window again and the gap is recorded on the cursor and logged.
 MAX_BACKFILL_FAILURES = 3
+# A plugin that skipped the poll because no token is stored sets this key in
+# its result; nothing was polled, so the cursor must not move.
+SKIPPED_NO_TOKEN = "skipped_no_token"
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,6 +218,11 @@ def make_source_poll(
                         since.isoformat(),
                     )
                 result = await plugin.ingest(payload)
+                if isinstance(result, dict) and result.get(SKIPPED_NO_TOKEN):
+                    # Nothing was polled: a skip is not a successful poll.
+                    await session.commit()
+                    log.info("%s poll skipped: no stored token", spec.log_label)
+                    return
                 # Same transaction as the poll's data: the cursor never claims
                 # a poll whose writes rolled back.
                 await source_poll_cursors.record_successful_poll(

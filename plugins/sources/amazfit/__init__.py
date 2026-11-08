@@ -165,7 +165,8 @@ class AmazfitSource(Source):
         token = await token_store.get_token(session, provider=PROVIDER, owner_id=owner_id)
         if token is None:
             log.warning("amazfit: no stored token for owner=%s — skip poll", owner_id)
-            return {"accepted": 0, "rejected": 0}
+            # skipped_no_token: nothing was polled, so the worker keeps its cursor.
+            return {"accepted": 0, "rejected": 0, "skipped_no_token": 1}
 
         # 2. Expired? Surface as operator-actionable failure.
         if token.is_expired():

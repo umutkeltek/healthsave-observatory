@@ -244,7 +244,7 @@ async def test_ingest_no_token_returns_zero_counts():
             "token_store": token_store,
         }
     )
-    assert result == {"accepted": 0, "rejected": 0}
+    assert result == {"accepted": 0, "rejected": 0, "skipped_no_token": 1}
     assert http.calls == []
     assert storage.ingest_calls == []
 
