@@ -24,7 +24,7 @@ from analysis.llm.client import HealthLLMClient
 from analysis.scheduler import AnalysisScheduler
 from server.db.session import async_session, engine
 
-from .listener import listener_event_mask, make_listener
+from .reaper import attach_ledger
 from .sources import (
     register_amazfit_poll,
     register_google_health_poll,
@@ -52,11 +52,8 @@ async def run() -> None:
     # (all jobs disabled) — `scheduler.scheduler` is None in that case.
     if scheduler.scheduler is not None:
         leased_by = f"{socket.gethostname()}:{os.getpid()}"
-        scheduler.scheduler.add_listener(
-            make_listener(async_session, leased_by=leased_by),
-            listener_event_mask(),
-        )
-        log.info("pipeline_runs ledger listener attached (leased_by=%s)", leased_by)
+        attach_ledger(scheduler.scheduler, async_session, leased_by=leased_by)
+        log.info("pipeline_runs ledger listener + reaper attached (leased_by=%s)", leased_by)
 
     # Source-plugin polls (Phase 7-pre). Env-gated: set WHOOP_POLL_CRON
     # or AMAZFIT_POLL_CRON to a crontab expression to enable the
