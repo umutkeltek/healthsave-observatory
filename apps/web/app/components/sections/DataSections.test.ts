@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { MetricSeries, MetricSummary, SeriesPoint, StreamView } from "../../lib/api";
-import { buildSourceLabels, shouldUseDemoPatterns, sortCards } from "./DataSections";
+import { buildSourceLabels, patternsState, sortCards } from "./DataSections";
 
 function metric(id: string): MetricSummary {
   return { id, display_name: id, category: "test", value_type: "quantity", canonical_unit: null };
@@ -34,13 +34,19 @@ describe("sortCards", () => {
   });
 });
 
-describe("shouldUseDemoPatterns", () => {
-  test("does not substitute demo readings for a successful empty live series", () => {
-    expect(shouldUseDemoPatterns(series("empty", []))).toBe(false);
+describe("patternsState", () => {
+  test("a successful empty live series stays live (empty), never demo", () => {
+    expect(patternsState(series("empty", []))).toBe("empty");
   });
 
-  test("uses labelled demo readings when the live series could not be loaded", () => {
-    expect(shouldUseDemoPatterns(null)).toBe(true);
+  test("a live series with readings is data", () => {
+    expect(patternsState(series("hr", [point("2026-07-27T00:00:00Z", 60)]))).toBe("data");
+  });
+
+  // This test used to pin shouldUseDemoPatterns(null) === true: a failed read
+  // rendered invented readings under the person's real metric name.
+  test("a series that could not be loaded is unreachable, not demo readings", () => {
+    expect(patternsState(null)).toBe("unreachable");
   });
 });
 

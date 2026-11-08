@@ -17,8 +17,8 @@ import { ZoneBar } from "../ZoneBar";
 import { currentAnalyticalDayOfWeek, timeBasisLabel, UTC_TIME_BASIS } from "../../lib/analyticalTime";
 import { dayOfWeekPivot, distribution, hrZoneHistogram, weekHourPivot } from "../../lib/analytics";
 import type { MetricSeries, MetricSummary, SeriesPoint, StreamView } from "../../lib/api";
-import { demoPatternSeries } from "../../lib/demoSeries";
 import {
+  type DataState,
   GRID_METRICS,
   loadReadinessSparklines,
   safeAnalyticalTime,
@@ -29,7 +29,7 @@ import {
   safeStreams,
 } from "../../lib/load";
 import { friendlyName } from "../../lib/provenance";
-import { rangeLabel } from "../../lib/ranges";
+import { hasUsablePoints, rangeLabel } from "../../lib/ranges";
 
 export const RANGES = ["24h", "7d", "30d", "90d", "1y", "all"];
 // N+1 guard: never fetch more than this many series in one render. The default
@@ -49,8 +49,12 @@ export type DataFilters = {
 
 type Card = { metric: MetricSummary; series: MetricSeries | null };
 
-export function shouldUseDemoPatterns(series: MetricSeries | null): boolean {
-  return series === null;
+// The Patterns panels read the selected metric's own series. A read that failed
+// (or never happened because the catalog failed) is "unreachable" and shows no
+// panels: demo readings never stand in for a person's data outside /demo.
+export function patternsState(series: MetricSeries | null): DataState {
+  if (series === null) return "unreachable";
+  return hasUsablePoints(series) ? "data" : "empty";
 }
 
 export function buildSourceLabels(points: SeriesPoint[], streams: StreamView[]): Record<string, string> {
@@ -162,7 +166,7 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
   );
 
   // Patterns panels for a single selected metric (exotic Grafana panels,
-  // computed from its series points). Falls back to a labelled demo offline.
+  // computed from its series points). Unreachable when that read failed.
   const selectedMetric: MetricSummary | null = metricSel
     ? (all.find((m) => m.id === metricSel) ??
       fallback.find((m) => m.id === metricSel) ?? {
@@ -174,19 +178,20 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
       })
     : null;
 
-  let patterns: { metric: MetricSummary; points: SeriesPoint[]; unit: string; isHr: boolean; demo: boolean } | null =
-    null;
+  let patterns: { metric: MetricSummary; points: SeriesPoint[]; unit: string; isHr: boolean } | null = null;
+  let patternsUnreachable: MetricSummary | null = null;
   if (selectedMetric) {
     const liveSeries = cards.length === 1 && cards[0].metric.id === metricSel ? cards[0].series : null;
-    const demo = shouldUseDemoPatterns(liveSeries);
-    const src = demo ? demoPatternSeries(selectedMetric) : (liveSeries as MetricSeries);
-    patterns = {
-      metric: selectedMetric,
-      points: src.points,
-      unit: src.metric.canonical_unit ?? "",
-      isHr: selectedMetric.id.includes("heart_rate") || src.metric.canonical_unit === "bpm",
-      demo,
-    };
+    if (patternsState(liveSeries) === "unreachable") {
+      patternsUnreachable = selectedMetric;
+    } else if (liveSeries) {
+      patterns = {
+        metric: selectedMetric,
+        points: liveSeries.points,
+        unit: liveSeries.metric.canonical_unit ?? "",
+        isHr: selectedMetric.id.includes("heart_rate") || liveSeries.metric.canonical_unit === "bpm",
+      };
+    }
   }
 
   return (
@@ -221,12 +226,20 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
         {isDefault && <SleepCard series={sleep} />}
       </section>
 
+      {patternsUnreachable && !unknownMetric && (
+        <>
+          <div className="section-label">Patterns · {patternsUnreachable.display_name}</div>
+          <article className="card">
+            <p className="empty">
+              The Observatory API did not answer, so patterns for this signal cannot be shown right now.
+            </p>
+          </article>
+        </>
+      )}
+
       {patterns && !unknownMetric && (
         <>
-          <div className="section-label">
-            Patterns · {patterns.metric.display_name}
-            {patterns.demo ? " · demo" : ""}
-          </div>
+          <div className="section-label">Patterns · {patterns.metric.display_name}</div>
           <div className="today-grid prov-grid">
             <article className="card col-8">
               <div className="card-title">When in the week</div>
