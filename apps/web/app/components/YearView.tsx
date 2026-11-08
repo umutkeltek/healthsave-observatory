@@ -28,6 +28,7 @@ import {
 } from "../lib/year";
 import { type CardOptions, cardLabel, cardQuery } from "../lib/yearCard";
 import { YearCardDownload } from "./YearCardDownload";
+import { YearCardOptionsForm } from "./YearCardOptionsForm";
 
 function Confidence({ value }: { value: YearMonth["confidence"] }) {
   const label = CONFIDENCE_LABEL[value];
@@ -407,19 +408,7 @@ export function YearView({
                   nothing was recorded, and a dot where a device started or stopped. No counts, no dates, no device
                   names. Add them only if you want them on it.
                 </p>
-                <form method="get" action={`/year/${year}#yr-share-title`} className="yr-share-form">
-                  <label>
-                    <input type="checkbox" name="numbers" value="1" defaultChecked={options.numbers} /> Show my
-                    numbers (days with data, sources, longest gap)
-                  </label>
-                  <label>
-                    <input type="checkbox" name="devices" value="1" defaultChecked={options.devices} /> Show device
-                    names
-                  </label>
-                  <button type="submit" className="btn btn-ghost">
-                    Update preview
-                  </button>
-                </form>
+                <YearCardOptionsForm year={year} options={options} />
                 <YearCardDownload year={year} query={query} />
               </div>
             </div>
