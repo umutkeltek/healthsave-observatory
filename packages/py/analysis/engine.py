@@ -126,6 +126,9 @@ class AnalysisEngine:
         Best-effort: the brief already succeeded on a fallback; a missing
         audit table (pre-migration-017 DB) or a write hiccup must not fail
         the run. But it must not be *silent* either — log at warning.
+        The write runs in a savepoint: on PostgreSQL a failed INSERT aborts
+        the transaction, and catching the error alone would leave the brief's
+        later writes failing.
         Metadata carries candidate labels + short error strings only (the
         :class:`~analysis.llm.client.FailoverAttempt` contract) — never
         keys, prompts, or health data.
@@ -135,7 +138,7 @@ class AnalysisEngine:
         from storage.timescale.intelligence import default_repository as intelligence_repo
 
         try:
-            await intelligence_repo.record_audit(
+            await intelligence_repo.record_audit_isolated(
                 session,
                 event_type="narrator_failover",
                 actor="analysis-engine",

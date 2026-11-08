@@ -766,6 +766,23 @@ class TimescaleIntelligenceRepository:
             },
         )
 
+    async def record_audit_isolated(self, session: AsyncSession, **kwargs: Any) -> None:
+        """:meth:`record_audit` inside a SAVEPOINT, for best-effort callers.
+
+        A failed statement aborts the whole PostgreSQL transaction, so a caller
+        that catches the error and carries on would fail on its next write. The
+        savepoint confines the failure to the audit row: on error it is rolled
+        back and the exception re-raised, and the caller's transaction stays
+        usable.
+        """
+        savepoint = await session.begin_nested()
+        try:
+            await self.record_audit(session, **kwargs)
+        except BaseException:
+            await savepoint.rollback()
+            raise
+        await savepoint.commit()
+
     async def list_audit_events(
         self,
         session: AsyncSession,

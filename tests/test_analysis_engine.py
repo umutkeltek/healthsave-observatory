@@ -43,6 +43,17 @@ class _Result:
         return list(self._rows)
 
 
+class _Savepoint:
+    def __init__(self) -> None:
+        self.state = "open"
+
+    async def commit(self) -> None:
+        self.state = "released"
+
+    async def rollback(self) -> None:
+        self.state = "rolled_back"
+
+
 class _FakeSession:
     """Async session stub recording every SQL statement.
 
@@ -55,6 +66,7 @@ class _FakeSession:
     def __init__(self, run_queue: list[int], select_queue: list[list[_Row]] | None = None):
         self.calls: list[tuple[str, dict]] = []
         self.committed = False
+        self.savepoints: list[_Savepoint] = []
         self._queue = list(run_queue)
         self._select_queue = list(select_queue or [])
 
@@ -76,6 +88,11 @@ class _FakeSession:
 
     async def commit(self):
         self.committed = True
+
+    async def begin_nested(self):
+        savepoint = _Savepoint()
+        self.savepoints.append(savepoint)
+        return savepoint
 
     def all_insert_params_for(self, table_name: str) -> list[dict]:
         needle = f"INSERT INTO {table_name}"
@@ -223,6 +240,10 @@ async def test_failover_audit_write_failure_does_not_fail_the_briefing(monkeypat
 
     assert run_id == 101
     assert session.committed is True
+    # On PostgreSQL the failed INSERT aborts the transaction; only rolling
+    # back to the savepoint keeps the brief's later writes alive
+    # (tests/e2e/test_intelligence_audit_e2e.py proves it on a real DB).
+    assert [savepoint.state for savepoint in session.savepoints] == ["rolled_back"]
 
 
 @pytest.mark.asyncio
