@@ -250,6 +250,18 @@ class TimescaleIntelligenceRepository:
                 "key_last4": last4(api_key),
             },
         )
+        # A new key was never tested: drop the stale result on every
+        # connection that uses this credential.
+        await session.execute(
+            text(
+                """
+                UPDATE llm_connections
+                   SET last_test_status = NULL, last_test_at = NULL
+                 WHERE credential_id = :id AND owner_id = :owner_id
+                """
+            ),
+            {"id": credential_id, "owner_id": str(owner_id)},
+        )
         await self.record_audit(
             session,
             owner_id=owner_id,
@@ -371,6 +383,18 @@ class TimescaleIntelligenceRepository:
                    SET provider = :provider, display_name = :display_name,
                        base_url = :base_url, destination = :destination,
                        credential_id = :credential_id, enabled = :enabled,
+                       -- A test result describes the provider, endpoint and
+                       -- key it ran against (SET reads the old row here).
+                       last_test_status = CASE WHEN (provider IS DISTINCT FROM :provider
+                                                    OR base_url IS DISTINCT FROM :base_url
+                                                    OR credential_id IS DISTINCT FROM
+                                                       CAST(:credential_id AS BIGINT))
+                                               THEN NULL ELSE last_test_status END,
+                       last_test_at = CASE WHEN (provider IS DISTINCT FROM :provider
+                                                    OR base_url IS DISTINCT FROM :base_url
+                                                    OR credential_id IS DISTINCT FROM
+                                                       CAST(:credential_id AS BIGINT))
+                                           THEN NULL ELSE last_test_at END,
                        updated_at = NOW()
                  WHERE id = :id AND owner_id = :owner_id
                 RETURNING id, provider, display_name, base_url, destination,
