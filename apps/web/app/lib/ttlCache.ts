@@ -25,19 +25,35 @@ type Entry = {
 
 const MAX_AGE_FACTOR = 10;
 
-const store = new Map<string, Entry>();
-// Bumped by clearSwrCache, so an answer fetched before a write is dropped.
-let generation = 0;
+// One cache per server process, not per bundle: Next bundles route handlers
+// (app/api/changes, which clears this cache when the backend changes)
+// separately from pages, and each bundle gets its own copy of this module.
+// Module-level state would give each its own map, so the change poll would
+// clear a cache no page reads. The state lives on globalThis under one key.
+type SharedState = {
+  entries: Map<string, Entry>;
+  // Bumped by clearSwrCache, so an answer fetched before a write is dropped.
+  generation: number;
+};
+
+const STATE_KEY = Symbol.for("healthsave.web.swrCache");
+
+function shared(): SharedState {
+  const holder = globalThis as typeof globalThis & { [STATE_KEY]?: SharedState };
+  holder[STATE_KEY] ??= { entries: new Map(), generation: 0 };
+  return holder[STATE_KEY];
+}
 
 function remember(key: string, value: unknown, fetchedIn: number): void {
-  if (fetchedIn !== generation) return;
-  store.set(key, { value, storedAt: Date.now(), refreshing: false, refreshFailed: false });
+  const state = shared();
+  if (fetchedIn !== state.generation) return;
+  state.entries.set(key, { value, storedAt: Date.now(), refreshing: false, refreshFailed: false });
 }
 
 export async function swrCache<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
   const now = Date.now();
-  const entry = store.get(key);
-  const fetchedIn = generation;
+  const entry = shared().entries.get(key);
+  const fetchedIn = shared().generation;
 
   if (entry && !entry.refreshFailed && now - entry.storedAt < ttlMs * MAX_AGE_FACTOR) {
     if (now - entry.storedAt >= ttlMs && !entry.refreshing) {
@@ -63,6 +79,7 @@ export async function swrCache<T>(key: string, ttlMs: number, fetcher: () => Pro
 // Dropped on every successful backend write, and by the change poll when the
 // backend's fingerprint moves. Also the test seam.
 export function clearSwrCache(): void {
-  store.clear();
-  generation += 1;
+  const state = shared();
+  state.entries.clear();
+  state.generation += 1;
 }
