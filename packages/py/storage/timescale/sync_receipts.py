@@ -328,10 +328,9 @@ async def claim_receipt_idempotency(
                 completed_at = NULL
             WHERE
                 healthsave_sync_receipts.payload_hash IS NULL
-                OR (
-                    healthsave_sync_receipts.status = 'failed'
-                    AND healthsave_sync_receipts.payload_hash = EXCLUDED.payload_hash
-                )
+                -- A failed attempt stored nothing and froze no response, so it
+                -- does not pin the key to its body: any retry may reclaim it.
+                OR healthsave_sync_receipts.status = 'failed'
                 OR (
                     healthsave_sync_receipts.status IN ('processed', 'empty')
                     AND healthsave_sync_receipts.payload_hash = EXCLUDED.payload_hash
