@@ -47,9 +47,12 @@ export function Sparkline({ values, unit, label }: { values: number[]; unit?: st
 export function MetricCard({
   series,
   fallbackTitle,
+  missing = false,
 }: {
   series: MetricSeries | null;
   fallbackTitle: string;
+  // The backend answered that it does not know this metric (404).
+  missing?: boolean;
 }) {
   // No series means the read failed (an answered empty range is a series with
   // no points, handled below) - not "no readings yet".
@@ -58,9 +61,11 @@ export function MetricCard({
       <article className="card metric-card metric-card-empty">
         <div className="metric-card-head">
           <h2>{fallbackTitle}</h2>
-          <span className="metric-state">no answer</span>
+          <span className="metric-state">{missing ? "not found" : "no answer"}</span>
         </div>
-        <p className="empty">The Observatory API did not answer for this signal.</p>
+        <p className="empty">
+          {missing ? "This Observatory does not know this signal." : "The Observatory API did not answer for this signal."}
+        </p>
       </article>
     );
   }

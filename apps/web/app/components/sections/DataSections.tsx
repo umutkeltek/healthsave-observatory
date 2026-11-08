@@ -26,6 +26,7 @@ import {
   safeMetrics,
   safeReadiness,
   safeSeries,
+  safeSeriesRead,
   safeStreams,
 } from "../../lib/load";
 import { friendlyName } from "../../lib/provenance";
@@ -132,12 +133,15 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
   // invalid selection — show an honest empty state, not "0 metrics" + demo.
   const unknownMetric = Boolean(metricSel) && all.length > 0 && visible.length === 0;
 
-  const [seriesList, sleep] = await Promise.all([
-    Promise.all(visible.map((m) => safeSeries(m.id, range))),
+  const [reads, sleep] = await Promise.all([
+    Promise.all(visible.map((m) => safeSeriesRead(m.id, range))),
     isDefault ? safeSeries("sleep.stage", range) : Promise.resolve(null),
   ]);
 
   // Source + device facets from the actually-fetched points.
+  const seriesList = reads.map((read) => (read.kind === "series" ? read.series : null));
+  // A metric the backend answered 404 for is not found, not unreachable.
+  const notFound = new Set(visible.filter((_, i) => reads[i].kind === "not-found").map((m) => m.id));
   const allPoints = seriesList.flatMap((s) => s?.points ?? []);
   const sourceLabels = buildSourceLabels(allPoints, streams ?? []);
   const sources = [...new Set(allPoints.map((p) => p.source_id))]
@@ -179,11 +183,13 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
     : null;
 
   let patterns: { metric: MetricSummary; points: SeriesPoint[]; unit: string; isHr: boolean } | null = null;
-  let patternsUnreachable: MetricSummary | null = null;
+  let patternsUnavailable: { metric: MetricSummary; reason: "not-found" | "unreachable" } | null = null;
   if (selectedMetric) {
     const liveSeries = cards.length === 1 && cards[0].metric.id === metricSel ? cards[0].series : null;
-    if (patternsState(liveSeries) === "unreachable") {
-      patternsUnreachable = selectedMetric;
+    if (notFound.has(selectedMetric.id)) {
+      patternsUnavailable = { metric: selectedMetric, reason: "not-found" };
+    } else if (patternsState(liveSeries) === "unreachable") {
+      patternsUnavailable = { metric: selectedMetric, reason: "unreachable" };
     } else if (liveSeries) {
       patterns = {
         metric: selectedMetric,
@@ -221,17 +227,24 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
       )}
       <section className="grid">
         {cards.map(({ metric, series }) => (
-          <MetricCard key={metric.id} series={series} fallbackTitle={metric.display_name} />
+          <MetricCard
+            key={metric.id}
+            series={series}
+            fallbackTitle={metric.display_name}
+            missing={notFound.has(metric.id)}
+          />
         ))}
         {isDefault && <SleepCard series={sleep} />}
       </section>
 
-      {patternsUnreachable && !unknownMetric && (
+      {patternsUnavailable && !unknownMetric && (
         <>
-          <div className="section-label">Patterns · {patternsUnreachable.display_name}</div>
+          <div className="section-label">Patterns · {patternsUnavailable.metric.display_name}</div>
           <article className="card">
             <p className="empty">
-              The Observatory API did not answer, so patterns for this signal cannot be shown right now.
+              {patternsUnavailable.reason === "not-found"
+                ? `No signal called “${patternsUnavailable.metric.id}” on this Observatory. Pick one from the filter above.`
+                : "The Observatory API did not answer, so patterns for this signal cannot be shown right now."}
             </p>
           </article>
         </>

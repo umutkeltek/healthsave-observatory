@@ -125,12 +125,26 @@ export async function safeAnalyticalTime(): Promise<AnalyticalTimeSettings | nul
   }
 }
 
-export async function safeSeries(id: string, range = "7d"): Promise<MetricSeries | null> {
+// One series read, three outcomes. The backend's 404 means it does not know
+// the metric: "not-found", which is not an outage.
+export type SeriesRead =
+  | { kind: "series"; series: MetricSeries }
+  | { kind: "not-found" }
+  | { kind: "unreachable" };
+
+export async function safeSeriesRead(id: string, range = "7d"): Promise<SeriesRead> {
   try {
-    return await ownerSwr(`series:${id}:${range}`, 30_000, () => fetchSeries(id, range));
+    return { kind: "series", series: await ownerSwr(`series:${id}:${range}`, 30_000, () => fetchSeries(id, range)) };
   } catch (error) {
-    return swallow("loader", error);
+    if (error instanceof ApiError && error.status === 404) return { kind: "not-found" };
+    swallow("loader", error);
+    return { kind: "unreachable" };
   }
+}
+
+export async function safeSeries(id: string, range = "7d"): Promise<MetricSeries | null> {
+  const read = await safeSeriesRead(id, range);
+  return read.kind === "series" ? read.series : null;
 }
 
 // One request for many metrics, keyed by metric id. Falls back to the

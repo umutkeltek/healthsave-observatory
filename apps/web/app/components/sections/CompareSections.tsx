@@ -8,7 +8,7 @@ import { MultiSeriesChart, type ChartSeries } from "../MultiSeriesChart";
 import { type Delta, groupBySource, groupByStream, periodSplit } from "../../lib/analytics";
 import type { MetricSeries, SeriesPoint, StreamView } from "../../lib/api";
 import { comparability } from "../../lib/healthOpinion";
-import { safeMetrics, safeSeries, safeStreams } from "../../lib/load";
+import { safeMetrics, safeSeriesRead, safeStreams } from "../../lib/load";
 import { rangeLabel } from "../../lib/ranges";
 
 export const COMPARE_RANGES = ["7d", "30d", "90d", "1y", "all"];
@@ -57,12 +57,13 @@ export async function CompareSection({
     (streams ?? []).map((s: StreamView) => [s.id, s.device_label ?? s.source_plugin_id]),
   );
 
-  const live = metricId ? await safeSeries(metricId, range) : null;
-  if (live === null || metricId === null) {
+  const read = metricId ? await safeSeriesRead(metricId, range) : null;
+  if (read === null || read.kind !== "series" || metricId === null) {
     // Nothing to compare: the catalog or the series read failed, or there are no
     // signals yet. Say which - an illustrative comparison never stands in for
     // the person's own data outside /demo.
-    const unreachable = metricId !== null || metrics === null;
+    const notFound = read?.kind === "not-found";
+    const unreachable = !notFound && (metricId !== null || metrics === null);
     return (
       <>
         <CompareControls
@@ -72,9 +73,11 @@ export async function CompareSection({
         <section className="lead">
           <article className="card">
             <p className="empty">
-              {unreachable
-                ? "The Observatory API did not answer, so this comparison cannot be shown right now."
-                : "No signals yet. Sync data from HealthSave, then compare."}
+              {notFound
+                ? `No signal called “${metricId}” on this Observatory. Pick one from the list above.`
+                : unreachable
+                  ? "The Observatory API did not answer, so this comparison cannot be shown right now."
+                  : "No signals yet. Sync data from HealthSave, then compare."}
             </p>
           </article>
         </section>
@@ -82,7 +85,7 @@ export async function CompareSection({
       </>
     );
   }
-  const series: MetricSeries = live;
+  const series: MetricSeries = read.series;
   const unit = series.metric.canonical_unit ?? "";
 
   let chart: ChartSeries[] = [];

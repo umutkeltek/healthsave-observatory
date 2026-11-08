@@ -110,3 +110,40 @@ describe("withheld for a participant is not an outage", () => {
     expect(correlationsState([], false)).toBe("data");
   });
 });
+
+describe("a metric the backend does not know is not an outage", () => {
+  // The review: a 404 for an unknown metric said "The Observatory API did not
+  // answer", in Compare and in the Data patterns panel.
+  function backendWithoutSeries() {
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/v2/metrics")) {
+        return Response.json([
+          { id: "vital.heart_rate", display_name: "Heart Rate", category: "vital", value_type: "numeric", canonical_unit: "bpm" },
+        ]);
+      }
+      if (url.includes("/series")) return Response.json({ detail: "unknown metric" }, { status: 404 });
+      if (url.endsWith("/api/v2/streams")) return Response.json({ count: 0, streams: [] });
+      return Response.json({ detail: "boom" }, { status: 500 });
+    }) as unknown as typeof fetch;
+  }
+
+  test("Compare says the signal was not found", async () => {
+    backendWithoutSeries();
+    const out = html(await CompareSection({ metricSel: "vital.heart_rate", mode: "period", range: "30d" }), "/compare");
+    expect(out).not.toContain("did not answer");
+    expect(out).toContain("No signal called");
+  });
+
+  test("Data's patterns panel and card say the signal was not found", async () => {
+    backendWithoutSeries();
+    const out = html(
+      await ExplorerSection({
+        filters: { metricSel: "vital.heart_rate", categorySel: "", sourceSel: "", deviceSel: "", sortSel: "", range: "7d" },
+      }),
+      "/data",
+    );
+    expect(out).not.toContain("did not answer");
+    expect(out).toContain("No signal called");
+  });
+});
