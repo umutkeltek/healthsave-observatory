@@ -6,11 +6,11 @@ import { anomalyPinIndices } from "../../lib/annotations";
 import { quantile } from "../../components/chart/scale";
 import { formatValue } from "../../lib/format";
 import { comparability } from "../../lib/healthOpinion";
-import { agoLabel, safeFindings, safeMetrics, safeReadiness, safeSeriesWithFallback, safeStreams } from "../../lib/load";
+import { agoLabel, safeFindings, safeMetrics, safeReadiness, safeSeriesForRange, safeStreams } from "../../lib/load";
 import { METRIC_NOTES } from "../../lib/metricNotes";
 import { getPinnedMetrics } from "../../lib/prefs";
 import { friendlyName, shortId } from "../../lib/provenance";
-import { rangeLabel, seriesCoverage, shortDate } from "../../lib/ranges";
+import { rangeLabel, type RangeSeries, rangeSeriesView } from "../../lib/ranges";
 import { hasOwnerDailyTotalSemantics, summarizeNumericSeries } from "../../lib/series";
 import { BaselineRibbon } from "../../components/BaselineRibbon";
 import { MultiSeriesChart } from "../../components/MultiSeriesChart";
@@ -51,8 +51,9 @@ export default async function MetricDetailPage({
   const sp = await searchParams;
   const range: Range = RANGES.includes(sp.range as Range) ? (sp.range as Range) : "30d";
 
-  const [{ requested: series, fallback: fallbackSeries }, metrics, readiness, pinned, findings, streams] = await Promise.all([
-    metricId ? safeSeriesWithFallback(metricId, range) : Promise.resolve({ requested: null, fallback: null }),
+  const noSeries: RangeSeries = { kind: "empty", olderData: "none" };
+  const [read, metrics, readiness, pinned, findings, streams] = await Promise.all([
+    metricId ? safeSeriesForRange(metricId, range) : Promise.resolve(noSeries),
     safeMetrics(),
     safeReadiness(),
     getPinnedMetrics(),
@@ -60,11 +61,12 @@ export default async function MetricDetailPage({
     safeStreams(),
   ]);
 
-  const metric = metrics?.find((m) => m.id === metricId) ?? series?.metric;
+  // One state for what the chart shows: the requested range, the all-time
+  // fallback (labelled as all time, always disclosed), empty, or unreachable.
+  const view = rangeSeriesView(read, range);
+  const effective = view.series;
+  const metric = metrics?.find((m) => m.id === metricId) ?? effective?.metric;
   const stat = readiness?.metrics.find((m) => m.metric_id === metricId);
-  const effective = series ?? fallbackSeries;
-  const usingFallback = series === null && fallbackSeries !== null;
-  const coverage = effective ? seriesCoverage(effective.points) : null;
 
   if (!metric) {
     return (
@@ -187,17 +189,17 @@ export default async function MetricDetailPage({
             <div className="lib-summary-tile">
               <span>Observations</span>
               <strong>{(stat?.observation_count ?? values.length).toLocaleString()}</strong>
-              <small>{stat ? `${stat.days_with_data} days covered` : `${values.length} in range`}</small>
+              <small>{stat ? `${stat.days_with_data} days covered` : `${values.length} in ${view.windowLabel.toLowerCase()}`}</small>
             </div>
             <div className="lib-summary-tile">
               <span>Sources</span>
               <strong>{sourceIds.length || "-"}</strong>
-              <small>{multiSource ? "kept separate" : "single stream"}</small>
+              <small>{sourceIds.length === 0 ? "none shown" : multiSource ? "kept separate" : "single stream"}</small>
             </div>
             <div className="lib-summary-tile">
               <span>Trend status</span>
               <strong>{Object.values(stat?.analyzable ?? {}).some((g) => g.is_sufficient) ? "Ready" : "Building"}</strong>
-              <small>{rangeLabel(range)} range selected</small>
+              <small>{read.kind === "fallback" ? `${view.windowLabel} shown` : `${rangeLabel(range)} range selected`}</small>
             </div>
           </div>
 
@@ -212,12 +214,15 @@ export default async function MetricDetailPage({
                     : "The band shows your own P25-P75 range."}
               </p>
             </div>
+            {view.note && (
+              <p className={`${read.kind === "fallback" ? "meta" : "empty"} lib-fallback-note`}>{view.note}</p>
+            )}
             {values.length >= 2 && !multiSource && (
               <BaselineRibbon
                 values={values}
                 anomalies={anomalies}
                 height={132}
-                axis={[`${rangeLabel(range)}`, "today"]}
+                axis={[view.windowLabel, read.kind === "fallback" ? "latest" : "today"]}
                 hoverLabels={numericPoints.map((p) =>
                   new Date(p.t).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
                 )}
@@ -235,15 +240,11 @@ export default async function MetricDetailPage({
                 }
               />
             )}
-            {values.length < 2 && (
+            {values.length < 2 && !view.note && (
               <p className="empty lib-fallback-note">
                 {stat?.observation_count
                   ? `No numeric readings in the ${rangeLabel(range)} range. Try a longer range.`
-                  : usingFallback
-                    ? coverage
-                      ? `No data in the requested ${rangeLabel(range)} range — showing all available observations (${coverage.count} readings, ${shortDate(coverage.first)} → ${shortDate(coverage.last)}).`
-                      : `No data in the requested ${rangeLabel(range)} range, and no data available overall.`
-                    : "No data for this signal yet. It appears here when a source streams it."}
+                  : "No data for this signal yet. It appears here when a source streams it."}
               </p>
             )}
           </div>
@@ -264,7 +265,11 @@ export default async function MetricDetailPage({
         <article className="card">
           <h2>Sources</h2>
           {sourceSummaries.length === 0 ? (
-            <p className="empty">No sources contributed points in this range.</p>
+            <p className="empty">
+              {read.kind === "unreachable"
+                ? "Sources cannot be shown while the Observatory API is not answering."
+                : "No sources contributed points in this range."}
+            </p>
           ) : (
             <div className="lib-source-list">
               {sourceSummaries.map((source) => (
@@ -292,6 +297,8 @@ export default async function MetricDetailPage({
                 : ""}
               {comp.caveat ? ` ${comp.caveat}` : ""}
             </p>
+          ) : read.kind === "unreachable" ? (
+            <p className="empty">Nothing to interpret while the Observatory API is not answering.</p>
           ) : (
             <p className="empty">Single-source signal. Compare source behavior when another stream contributes data.</p>
           )}

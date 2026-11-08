@@ -60,7 +60,7 @@ import {
   type YearInHealth,
 } from "./api";
 import { formatAgo } from "./format";
-import { hasUsablePoints } from "./ranges";
+import { hasUsablePoints, type RangeSeries } from "./ranges";
 import { ownerCacheKey, PRIMARY_ONLY } from "./participants";
 import { swrCache } from "./ttlCache";
 
@@ -311,23 +311,20 @@ export async function hasAnyData(): Promise<boolean> {
 }
 
 // ── Range-fallback loader ────────────────────────────────────────────────
-// When the requested period holds no usable observations, re-fetch with the
-// widest available window so the UI can show the oldest data it actually has.
-// The caller receives `{ requested, fallback }`; it should render the
-// fallback data with an explicit disclosure, never relabel old data as
-// belonging to the requested period.
-export async function safeSeriesWithFallback(
-  id: string,
-  range: string,
-): Promise<{ requested: MetricSeries | null; fallback: MetricSeries | null }> {
-  if (range === "all") {
-    const series = await safeSeries(id, "all");
-    return { requested: series, fallback: null };
-  }
+// When the requested range answers with no usable readings, re-read the
+// widest window so the view can show the data that does exist - as a
+// "fallback" the caller must label as all time (see rangeSeriesView). A
+// requested range that could not be read is "unreachable": never answer a
+// failed read with another window's data.
+export async function safeSeriesForRange(id: string, range: string): Promise<RangeSeries> {
   const requested = await safeSeries(id, range);
-  if (hasUsablePoints(requested)) return { requested, fallback: null };
-  const fallback = await safeSeries(id, "all");
-  return { requested, fallback: hasUsablePoints(fallback) ? fallback : null };
+  if (requested === null) return { kind: "unreachable" };
+  if (hasUsablePoints(requested)) return { kind: "requested", series: requested };
+  if (range === "all") return { kind: "empty", olderData: "none" };
+  const allTime = await safeSeries(id, "all");
+  if (allTime === null) return { kind: "empty", olderData: "unknown" };
+  if (hasUsablePoints(allTime)) return { kind: "fallback", series: allTime };
+  return { kind: "empty", olderData: "none" };
 }
 
 // Identity / provenance loaders - the Sources view. Each returns the inner
