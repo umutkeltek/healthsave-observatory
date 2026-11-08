@@ -47,4 +47,12 @@ describe("expired session", () => {
     expect(signInPath("/timeline?x=1")).toBe("/login?next=%2Ftimeline%3Fx%3D1");
     expect(signInPath("/")).toBe("/login");
   });
+
+  // The review: on phones (<= 760px) the top bar hides the signed-out pill,
+  // so a message pointing there sent people looking for nothing.
+  test("the signed-out message works at every width: it names the sign-in page, not the top bar", () => {
+    expect(SIGNED_OUT_MESSAGE).not.toContain("top bar");
+    expect(SIGNED_OUT_MESSAGE).toContain("/login");
+    expect(SIGNED_OUT_MESSAGE).toContain("kept");
+  });
 });

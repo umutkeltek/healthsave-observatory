@@ -13,8 +13,10 @@ export const SIGN_IN_REQUIRED = "sign_in_required";
 // shows "signed out" at once instead of at the next poll.
 export const SIGNED_OUT_EVENT = "healthsave:signed-out";
 
+// Shown where an action failed, at any width: phones hide the top bar's
+// "sign in" pill, so the message names the sign-in page itself.
 export const SIGNED_OUT_MESSAGE =
-  "Your session has ended. Sign in again from the top bar (it opens a new tab), then try again. What you entered here is kept.";
+  "Your session has ended. Open /login in a new tab to sign in again, then try again here. What you entered is kept.";
 
 export function isSignInRequired(error: unknown): boolean {
   return error instanceof Error && error.message === SIGN_IN_REQUIRED;
