@@ -77,6 +77,12 @@ async def apple_status(request: Request, session: AsyncSession = Depends(get_ses
             # the exception type so Prometheus + Grafana can alert.
             log.exception("Status query failed for %s", metric)
             status[metric] = {"count": 0, "oldest": None, "newest": None}
+            # The failed statement aborted the PostgreSQL transaction; without a
+            # rollback every later metric query in this loop fails and reads 0.
+            try:
+                await session.rollback()
+            except Exception:
+                log.debug("rollback after failed status query failed", exc_info=True)
             try:
                 STATUS_QUERY_FAILURES.labels(metric=metric, exception=type(exc).__name__).inc()
             except Exception:  # pragma: no cover - metrics import optional

@@ -128,6 +128,12 @@ async def apple_coverage(request: Request, session: AsyncSession = Depends(get_s
             # flag), so degrading a failing metric to None is safe.
             log.exception("Coverage query failed for %s", metric)
             coverage[metric] = None
+            # The failed statement aborted the PostgreSQL transaction; without a
+            # rollback every later query here fails too and reads None.
+            try:
+                await session.rollback()
+            except Exception:
+                log.debug("rollback after failed coverage query failed", exc_info=True)
             try:
                 STATUS_QUERY_FAILURES.labels(metric=metric, exception=type(exc).__name__).inc()
             except Exception:  # pragma: no cover - metrics import optional
