@@ -128,6 +128,27 @@ async def fetch_raw_payloads(
     return out
 
 
+async def ingest_owner_ids(session: AsyncSession) -> set[UUID]:
+    """Every owner that holds an API key or has a sync receipt.
+
+    ``raw_ingestion_log`` has no ``owner_id``, so a raw replay can attribute
+    rows to one owner only when nobody else could have sent them. Participant
+    keys live in ``api_keys`` (029); every batch since migration 024 leaves an
+    owner on its receipt.
+    """
+    rows = await session.execute(
+        text(
+            """
+            SELECT owner_id FROM api_keys
+            UNION
+            SELECT DISTINCT owner_id FROM healthsave_sync_receipts
+             WHERE owner_id IS NOT NULL
+            """
+        )
+    )
+    return {UUID(str(row[0])) for row in rows.all()}
+
+
 # Module-level defaults — production wiring (``server.main``) constructs
 # its own instances; these are the fallback for unit tests that hit
 # routes without a full FastAPI lifespan.
