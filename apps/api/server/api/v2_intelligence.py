@@ -289,6 +289,9 @@ async def put_intelligence(
     # consent given for one provider must not let data reach another. (Kept out
     # of the docstring, which is this route's locked OpenAPI description.)
     scope_before = await _cloud_egress_scope(session)
+    # Turning prompt redaction off changes what leaves the box: ask again too.
+    settings_before = await _repo.get_settings(session)
+    redacted_before = settings_before is not None and bool(settings_before.redact_cloud_prompts)
 
     fields: dict = {"mode": body.mode}
     if body.primary is not None:
@@ -318,6 +321,10 @@ async def put_intelligence(
     if consented and await _cloud_egress_scope(session) != scope_before:
         await _repo.default_repository.record_consent(
             session, granted=False, actor="api", reason="egress_scope_changed"
+        )
+    elif consented and redacted_before and not settings.redact_cloud_prompts:
+        await _repo.default_repository.record_consent(
+            session, granted=False, actor="api", reason="redaction_turned_off"
         )
     await session.commit()
     return await _build_view(session, env_provider=os.getenv("LLM_PROVIDER") or None)

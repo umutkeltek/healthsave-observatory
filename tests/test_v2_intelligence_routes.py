@@ -423,6 +423,40 @@ async def test_resaving_the_same_destinations_keeps_consent(repo):
     assert "consent_revoked" not in repo.audit
 
 
+async def _set_redaction(redact: bool):
+    return await mod.put_intelligence(
+        request=_request(),
+        body=mod.ApplyIntelligenceRequest(
+            mode="cloud",
+            primary=mod.PrimaryInput(provider="deepseek", model="m"),
+            redact_cloud_prompts=redact,
+        ),
+        session=_FakeSession(),
+    )
+
+
+async def test_turning_redaction_off_revokes_consent(repo):
+    """Unredacted prompts carry more than what was consented to: ask again."""
+    await _put(repo, "cloud", "deepseek", api_key="k")
+    assert repo.settings.redact_cloud_prompts is True
+    await _grant()
+
+    view = await _set_redaction(False)
+
+    assert view["allow_cloud_egress"] is False
+    assert view["consent"]["granted"] is False
+
+
+async def test_turning_redaction_on_keeps_consent(repo):
+    await _put(repo, "cloud", "deepseek", api_key="k")
+    await _set_redaction(False)
+    await _grant()
+
+    view = await _set_redaction(True)
+
+    assert view["allow_cloud_egress"] is True
+
+
 # ── test-connection (SSRF-guarded) ──────────────────────────────────────
 
 
