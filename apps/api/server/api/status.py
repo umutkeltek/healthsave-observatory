@@ -18,6 +18,7 @@ stays stable. Pair with a Grafana alert on
 ``rate(hdh_status_query_failures[5m]) > 0``.
 """
 
+import contextlib
 import logging
 
 from fastapi import APIRouter, Depends, Request
@@ -31,6 +32,28 @@ from .metrics import STATUS_QUERY_FAILURES
 log = logging.getLogger("healthsave")
 
 router = APIRouter()
+
+_STATEMENT_TIMEOUT_SQLSTATE = "57014"
+SKIPPED_AFTER_TIMEOUT = "SkippedAfterStatementTimeout"
+
+
+def is_statement_timeout(exc: BaseException) -> bool:
+    """True when ``exc`` is PostgreSQL cancelling a statement (SQLSTATE 57014).
+
+    SQLAlchemy wraps asyncpg's ``QueryCanceledError``; the sqlstate lives on
+    the wrapped error or further down its cause chain.
+    """
+    seen: set[int] = set()
+    error: BaseException | None = exc
+    while error is not None and id(error) not in seen:
+        seen.add(id(error))
+        if _STATEMENT_TIMEOUT_SQLSTATE in (
+            getattr(error, "sqlstate", None),
+            getattr(error, "pgcode", None),
+        ):
+            return True
+        error = getattr(error, "orig", None) or error.__cause__
+    return False
 
 
 @router.get("/api/apple/status", dependencies=[Depends(verify_api_key)])
@@ -60,7 +83,16 @@ async def apple_status(request: Request, session: AsyncSession = Depends(get_ses
     }
     params = {"owner_id": str(owner_id)}
     status = {}
+    timed_out = False
     for metric, base_sql in queries.items():
+        if timed_out:
+            # After a statement timeout the old aborted transaction made every
+            # remaining query fail at once; keep that, rather than letting each
+            # one wait the full timeout again. Same empty value, same shape.
+            status[metric] = {"count": 0, "oldest": None, "newest": None}
+            with contextlib.suppress(Exception):  # metrics import optional
+                STATUS_QUERY_FAILURES.labels(metric=metric, exception=SKIPPED_AFTER_TIMEOUT).inc()
+            continue
         connector = "AND" if "WHERE" in base_sql else "WHERE"
         sql = f"{base_sql} {connector} owner_id = :owner_id"
         try:
@@ -72,6 +104,7 @@ async def apple_status(request: Request, session: AsyncSession = Depends(get_ses
                 "newest": str(row[2]) if row and row[2] else None,
             }
         except Exception as exc:
+            timed_out = is_statement_timeout(exc)
             # iOS contract preserved: keep the silent {count:0} fallback.
             # Operator-side surface added: bump a counter labelled with
             # the exception type so Prometheus + Grafana can alert.

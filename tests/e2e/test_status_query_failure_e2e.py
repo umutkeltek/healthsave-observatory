@@ -5,6 +5,11 @@ and degrade a failing metric to an empty value (the frozen shape stays). On
 PostgreSQL the failed statement aborts the transaction, so without a rollback
 every later query in the loop failed too and reported zeros/None. A mocked
 session cannot show this; these tests run the handlers on a real database.
+
+A statement timeout is the exception: with ``DB_STATEMENT_TIMEOUT_MS`` set,
+rolling back and carrying on would let every remaining query wait the full
+timeout. After a timeout the handlers skip the remaining queries, as the
+aborted transaction used to, with the same empty values and shape.
 """
 
 from __future__ import annotations
@@ -105,5 +110,69 @@ async def test_coverage_keeps_reporting_after_one_metric_query_fails(monkeypatch
             coverage = await apple_coverage(_request(owner), _FirstQueryAborts(session))
 
         assert coverage["workouts"] is not None
+    finally:
+        await engine.dispose()
+
+
+class _FirstQueryTimesOut:
+    """Real session; the first query hits a real statement_timeout (57014)."""
+
+    def __init__(self, session) -> None:
+        self._session = session
+        self.calls_after_timeout = 0
+        self._timed_out = False
+
+    async def execute(self, statement, params=None):
+        from sqlalchemy import text
+
+        if not self._timed_out:
+            self._timed_out = True
+            await self._session.execute(text("SET LOCAL statement_timeout = 50"))
+            await self._session.execute(text("SELECT pg_sleep(1)"))
+        self.calls_after_timeout += 1
+        return await self._session.execute(statement, params)
+
+    def __getattr__(self, name):
+        return getattr(self._session, name)
+
+
+@pytest.mark.asyncio
+async def test_status_skips_the_remaining_queries_after_a_statement_timeout(monkeypatch) -> None:
+    from server.api.status import apple_status
+    from server.ingestion import owner as owner_module
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    monkeypatch.setattr(owner_module, "ALLOW_MULTI_USER", True)
+    engine = create_async_engine(DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1))
+    owner = uuid4()
+    try:
+        async with AsyncSession(engine) as session:
+            proxy = _FirstQueryTimesOut(session)
+            status = await apple_status(_request(owner), proxy)
+
+        assert proxy.calls_after_timeout == 0
+        assert len(status) == 7
+        assert all(v == {"count": 0, "oldest": None, "newest": None} for v in status.values())
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_coverage_skips_the_remaining_queries_after_a_statement_timeout(monkeypatch) -> None:
+    from server.api.coverage import apple_coverage
+    from server.ingestion import owner as owner_module
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    monkeypatch.setattr(owner_module, "ALLOW_MULTI_USER", True)
+    engine = create_async_engine(DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1))
+    owner = uuid4()
+    try:
+        async with AsyncSession(engine) as session:
+            proxy = _FirstQueryTimesOut(session)
+            coverage = await apple_coverage(_request(owner), proxy)
+
+        assert proxy.calls_after_timeout == 0
+        assert coverage["metrics"] == {}
+        assert all(value is None for key, value in coverage.items() if key != "metrics")
     finally:
         await engine.dispose()

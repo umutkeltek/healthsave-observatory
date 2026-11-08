@@ -30,6 +30,7 @@ for any other reader; ``metrics`` is additive. Pinned in the response corpus
 (``coverage.json``).
 """
 
+import contextlib
 import logging
 from datetime import UTC, date, datetime
 from typing import Any
@@ -44,6 +45,7 @@ from storage.ports import ReadinessRepository
 from ..ingestion.owner import OWNER_HEADER, participant_owner_id, resolve_owner_id
 from .deps import get_session, verify_api_key
 from .metrics import STATUS_QUERY_FAILURES
+from .status import SKIPPED_AFTER_TIMEOUT, is_statement_timeout
 
 log = logging.getLogger("healthsave")
 
@@ -113,7 +115,16 @@ async def apple_coverage(request: Request, session: AsyncSession = Depends(get_s
     params = {"owner_id": str(owner_id)}
     coverage: dict[str, Any] = {}
     latest_raw: dict[str, Any] = {}
+    timed_out = False
     for metric, base_sql in _LATEST_QUERIES.items():
+        if timed_out:
+            # After a statement timeout the old aborted transaction made every
+            # remaining query fail at once; keep that, rather than letting each
+            # one wait the full timeout again. Same empty value, same shape.
+            coverage[metric] = None
+            with contextlib.suppress(Exception):  # metrics import optional
+                STATUS_QUERY_FAILURES.labels(metric=metric, exception=SKIPPED_AFTER_TIMEOUT).inc()
+            continue
         connector = "AND" if "WHERE" in base_sql else "WHERE"
         sql = f"{base_sql} {connector} owner_id = :owner_id"
         try:
@@ -122,6 +133,7 @@ async def apple_coverage(request: Request, session: AsyncSession = Depends(get_s
             latest_raw[metric] = value
             coverage[metric] = str(value) if value else None
         except Exception as exc:
+            timed_out = is_statement_timeout(exc)
             # Same operator-surface discipline as /api/apple/status: never let a
             # per-metric SQL failure 500 the whole response. The iOS
             # reconciliation treats None conservatively (does NOT clear the
@@ -142,18 +154,20 @@ async def apple_coverage(request: Request, session: AsyncSession = Depends(get_s
     # Per wire metric, in the shape the app decodes. A metric the server has no row for is
     # simply absent (the app then keeps its flag — the conservative answer).
     metrics: dict[str, str | None] = {}
-    try:
-        wire_names = apple_wire_names()
-        rows = await _COVERAGE_REPO.fetch_canonical_coverage(session, owner_id=owner_id)
-        for row in rows:
-            stamp = wire_timestamp(row.get("last_observation_at"))
-            for name in wire_names.get(row.get("metric_id"), []):
-                current = metrics.get(name)
-                if stamp and (current is None or stamp > current):
-                    metrics[name] = stamp
-    except Exception:
-        # A failing canonical read degrades to the legacy families below, never a 500.
-        log.exception("Canonical coverage read failed for /api/apple/coverage")
+    # After a statement timeout skip the canonical read too: it would wait again.
+    if not timed_out:
+        try:
+            wire_names = apple_wire_names()
+            rows = await _COVERAGE_REPO.fetch_canonical_coverage(session, owner_id=owner_id)
+            for row in rows:
+                stamp = wire_timestamp(row.get("last_observation_at"))
+                for name in wire_names.get(row.get("metric_id"), []):
+                    current = metrics.get(name)
+                    if stamp and (current is None or stamp > current):
+                        metrics[name] = stamp
+        except Exception:
+            # A failing canonical read degrades to the legacy families below, never a 500.
+            log.exception("Canonical coverage read failed for /api/apple/coverage")
     for table, wire_name in _LEGACY_WIRE_NAMES.items():
         if wire_name not in metrics and latest_raw.get(table):
             metrics[wire_name] = wire_timestamp(latest_raw[table])
