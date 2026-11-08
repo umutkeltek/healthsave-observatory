@@ -26,6 +26,10 @@
 // back, and one that started before an expire lands already expired.
 
 export const FAILURE_BACKOFF_MS = 5_000;
+// Keys can come from URLs (/library/<id>, /compare?metric=<id>), so the cache
+// is bounded: least recently used keys go first, and a failed read goes as
+// soon as its backoff has passed.
+export const MAX_SWR_ENTRIES = 500;
 // Beyond this a cached value is too old to show even while refreshing.
 export const MAX_STALE_MS = 24 * 60 * 60_000;
 
@@ -103,11 +107,30 @@ function fetchInto(state: SharedState, key: string, entry: Entry, fetcher: () =>
   return promise;
 }
 
+// Room for one more key: drop failed reads whose backoff has passed, then the
+// least recently used keys. A key with a fetch in flight is never dropped.
+function makeRoom(state: SharedState, now: number): void {
+  for (const [key, entry] of state.entries) {
+    if (entry.failedAt !== null && !entry.inflight && now - entry.failedAt >= FAILURE_BACKOFF_MS) {
+      state.entries.delete(key);
+    }
+  }
+  for (const [key, entry] of state.entries) {
+    if (state.entries.size < MAX_SWR_ENTRIES) break;
+    if (!entry.inflight) state.entries.delete(key);
+  }
+}
+
 export async function swrCache<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
   const state = shared();
   const now = Date.now();
   let entry = state.entries.get(key);
-  if (!entry) {
+  if (entry) {
+    // Most recently used last (a Map keeps insertion order).
+    state.entries.delete(key);
+    state.entries.set(key, entry);
+  } else {
+    makeRoom(state, now);
     entry = {
       value: undefined,
       hasValue: false,
