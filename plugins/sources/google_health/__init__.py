@@ -35,6 +35,12 @@ class GoogleHealthSource(Source):
         owner_id: Any,
         token_store: Any,
     ):
+        """Return a non-expired token or None (no token stored).
+
+        Token state is committed on its own, before any data is fetched, so a
+        later fetch or write failure cannot roll back a refreshed token or a
+        recorded refresh failure (see the Whoop plugin).
+        """
         from .oauth import GoogleHealthClientConfig, refresh_access_token
 
         token = await token_store.get_token(
@@ -55,6 +61,7 @@ class GoogleHealthSource(Source):
                     owner_id=owner_id,
                     error_message=message,
                 )
+                await session.commit()
                 raise GoogleHealthOAuthError(message)
             try:
                 new_token = await refresh_access_token(
@@ -64,14 +71,17 @@ class GoogleHealthSource(Source):
                     owner_id=owner_id,
                 )
                 await token_store.put_token(session, new_token, event_kind="refreshed")
+                await session.commit()
                 token = new_token
             except Exception as exc:
+                await session.rollback()
                 await token_store.record_refresh_failure(
                     session,
                     provider=GOOGLE_HEALTH_PROVIDER,
                     owner_id=owner_id,
                     error_message=str(exc),
                 )
+                await session.commit()
                 raise
 
         return token

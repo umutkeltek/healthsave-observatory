@@ -106,6 +106,14 @@ class _RecordingStorage:
         return self.accept_counts.get(metric, len(samples))
 
 
+class _Session:
+    def __init__(self) -> None:
+        self.commits = 0
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+
 @dataclass
 class _TokenStore:
     """Recording token store."""
@@ -246,11 +254,12 @@ async def test_ingest_expired_token_raises_and_records_failure():
     storage = _RecordingStorage()
     http = _HttpClient()
     token_store = _TokenStore(token=_token(expired=True))
+    session = _Session()
     with pytest.raises(AmazfitAuthError) as exc:
         await _plugin().ingest(
             {
                 "storage": storage,
-                "session": object(),
+                "session": session,
                 "http_client": http,
                 "token_store": token_store,
             }
@@ -260,6 +269,8 @@ async def test_ingest_expired_token_raises_and_records_failure():
     assert "re-extract" in str(exc.value)
     assert len(token_store.refresh_failure_calls) == 1
     assert token_store.refresh_failure_calls[0]["provider"] == PROVIDER
+    # Committed so the worker's rollback of the failed poll cannot erase it.
+    assert session.commits == 1
     assert http.calls == []  # never touched the network
 
 

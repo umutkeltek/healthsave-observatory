@@ -127,6 +127,19 @@ class _CanonicalRepo:
         return len(observations)
 
 
+class _Session:
+    """Records commits/rollbacks: token state is committed before any fetch."""
+
+    def __init__(self) -> None:
+        self.events: list[str] = []
+
+    async def commit(self) -> None:
+        self.events.append("commit")
+
+    async def rollback(self) -> None:
+        self.events.append("rollback")
+
+
 @dataclass
 class _TokenStore:
     """In-memory token store mimicking the storage.timescale.oauth_tokens module."""
@@ -405,11 +418,12 @@ async def test_ingest_refreshes_expired_token_and_audits_refreshed_event():
         post_responses={"oauth2/token": refresh_response},
     )
     plugin = WhoopSource(load_manifest(PLUGIN_DIR / "plugin.yaml"))
+    session = _Session()
 
     result = await plugin.ingest(
         {
             "storage": storage,
-            "session": object(),
+            "session": session,
             "http_client": http,
             "token_store": token_store,
             "oauth_config": _oauth_config(),
@@ -418,6 +432,8 @@ async def test_ingest_refreshes_expired_token_and_audits_refreshed_event():
     )
 
     assert result["accepted"] > 0
+    # The rotated token is committed before any fetch can fail the poll.
+    assert session.events == ["commit"]
     # Refresh happened
     assert len(http.post_calls) == 1
     assert http.post_calls[0]["data"]["grant_type"] == "refresh_token"
@@ -444,12 +460,13 @@ async def test_ingest_records_refresh_failure_and_reraises():
         post_responses={"oauth2/token": refresh_response},
     )
     plugin = WhoopSource(load_manifest(PLUGIN_DIR / "plugin.yaml"))
+    session = _Session()
 
     with pytest.raises(WhoopOAuthError):
         await plugin.ingest(
             {
                 "storage": storage,
-                "session": object(),
+                "session": session,
                 "http_client": http,
                 "token_store": token_store,
                 "oauth_config": _oauth_config(),
@@ -458,6 +475,8 @@ async def test_ingest_records_refresh_failure_and_reraises():
 
     assert len(token_store.refresh_failures) == 1
     assert "401" in token_store.refresh_failures[0] or "HTTP" in token_store.refresh_failures[0]
+    # The failure is committed so the worker's rollback cannot erase it.
+    assert session.events[-1] == "commit"
     # No metric writes when refresh failed.
     assert storage.ingest_calls == []
 
@@ -475,12 +494,13 @@ async def test_ingest_expired_token_with_no_refresh_token_audits_and_raises():
     token_store = _TokenStore(initial_token=token_no_refresh)
     http = _HttpClient(get_responses=_default_get_responses())
     plugin = WhoopSource(load_manifest(PLUGIN_DIR / "plugin.yaml"))
+    session = _Session()
 
     with pytest.raises(WhoopOAuthError):
         await plugin.ingest(
             {
                 "storage": storage,
-                "session": object(),
+                "session": session,
                 "http_client": http,
                 "token_store": token_store,
                 "oauth_config": _oauth_config(),
@@ -488,6 +508,7 @@ async def test_ingest_expired_token_with_no_refresh_token_audits_and_raises():
         )
     assert len(token_store.refresh_failures) == 1
     assert "refresh_token" in token_store.refresh_failures[0]
+    assert session.events == ["commit"]
 
 
 @pytest.mark.asyncio

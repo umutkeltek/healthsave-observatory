@@ -93,7 +93,14 @@ class WhoopSource(Source):
         token_store: Any,
         oauth_config: Any,
     ):
-        """Return a non-expired OAuthToken or None (no token stored)."""
+        """Return a non-expired OAuthToken or None (no token stored).
+
+        Token state is committed on its own, before any data is fetched: Whoop
+        invalidates the old refresh token the moment a refresh succeeds, so a
+        refreshed token rolled back by a later fetch or write failure would
+        leave only a dead token stored. A refresh failure is committed too, so
+        a dead connector leaves a trace in ``oauth_token_events``.
+        """
         from .oauth import (
             WhoopClientConfig,
             WhoopOAuthError,
@@ -112,6 +119,7 @@ class WhoopSource(Source):
                 await token_store.record_refresh_failure(
                     session, provider=PROVIDER, owner_id=owner_id, error_message=msg
                 )
+                await session.commit()
                 raise WhoopOAuthError(msg)
             try:
                 new_token = await refresh_access_token(
@@ -121,14 +129,17 @@ class WhoopSource(Source):
                     owner_id=owner_id,
                 )
                 await token_store.put_token(session, new_token, event_kind="refreshed")
+                await session.commit()
                 token = new_token
             except Exception as e:
+                await session.rollback()
                 await token_store.record_refresh_failure(
                     session,
                     provider=PROVIDER,
                     owner_id=owner_id,
                     error_message=str(e),
                 )
+                await session.commit()
                 raise
 
         return token

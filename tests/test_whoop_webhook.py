@@ -88,6 +88,14 @@ class _RecordingStorage:
         return len(samples)
 
 
+class _Session:
+    def __init__(self) -> None:
+        self.commits = 0
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+
 @dataclass
 class _TokenStore:
     initial_token: OAuthToken | None = None
@@ -309,11 +317,12 @@ async def test_handle_webhook_refreshes_expired_token_then_ingests():
         },
     )
 
+    session = _Session()
     result = await _plugin().handle_webhook(
         {
             "event": {"type": "recovery.updated", "id": "rec-1"},
             "storage": storage,
-            "session": object(),
+            "session": session,
             "http_client": http,
             "token_store": token_store,
             "oauth_config": _oauth_config(),
@@ -321,6 +330,8 @@ async def test_handle_webhook_refreshes_expired_token_then_ingests():
     )
 
     assert result["accepted"] > 0
+    # The rotated token is committed before the fetch, on its own.
+    assert session.commits == 1
     assert len(http.post_calls) == 1
     assert http.post_calls[0]["data"]["grant_type"] == "refresh_token"
     assert len(token_store.put_calls) == 1

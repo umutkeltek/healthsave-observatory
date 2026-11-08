@@ -51,6 +51,9 @@ class PolarSource(Source):
                 await token_store.record_refresh_failure(
                     session, provider=POLAR_PROVIDER, owner_id=owner_id, error_message=message
                 )
+                # Commit now: the worker rolls back the failed poll, which
+                # would otherwise erase the only trace of the dead connector.
+                await session.commit()
             raise PolarOAuthError(message)
 
         effective_since = since if since is not None else datetime.now(UTC) - DEFAULT_LOOKBACK

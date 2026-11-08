@@ -173,6 +173,9 @@ class AmazfitSource(Source):
             await token_store.record_refresh_failure(
                 session, provider=PROVIDER, owner_id=owner_id, error_message=msg
             )
+            # Commit now: the worker rolls back the failed poll, which would
+            # otherwise erase the only trace of the dead connector.
+            await session.commit()
             raise AmazfitAuthError(msg)
 
         # 3. Cursor: explicit since= wins; otherwise default 24h lookback.
