@@ -51,3 +51,18 @@ describe("MetricCard directional tone", () => {
     expect(html).toContain("Higher by");
   });
 });
+
+describe("MetricCard without a series", () => {
+  // null only ever comes from a read that failed (safeSeries); it used to say
+  // "No readings in range yet", as if the backend had answered empty.
+  test("a failed read says the API did not answer", () => {
+    const html = renderToStaticMarkup(<MetricCard series={null} fallbackTitle="Heart Rate" />);
+    expect(html).toContain("did not answer");
+    expect(html).not.toContain("No readings in this range yet");
+  });
+
+  test("an answered empty series still says there are no readings", () => {
+    const html = renderToStaticMarkup(<MetricCard series={series("vital.heart_rate", [])} fallbackTitle="" />);
+    expect(html).toContain("No numeric readings in this range.");
+  });
+});

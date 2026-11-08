@@ -17,7 +17,14 @@ import {
   pearson,
 } from "../../lib/analytics";
 import type { Correlation, MetricSeries, MetricSummary } from "../../lib/api";
-import { agoLabel, safeAnalyticalTime, safeCorrelations, safeMetrics, safeSeries } from "../../lib/load";
+import {
+  agoLabel,
+  safeAnalyticalTime,
+  safeCorrelations,
+  safeMetrics,
+  safeSeries,
+  viewingParticipant,
+} from "../../lib/load";
 
 export const REL_RANGES = ["30d", "90d", "1y", "all"];
 
@@ -90,16 +97,31 @@ function CorrelationRow({
 // null when the correlation read failed - a DIFFERENT state from a reachable
 // backend with zero correlations (honest empty + the compute button).
 async function loadCatalog() {
-  const [metrics, correlations] = await Promise.all([safeMetrics(), safeCorrelations()]);
+  const [metrics, correlations, participant] = await Promise.all([
+    safeMetrics(),
+    safeCorrelations(),
+    viewingParticipant(),
+  ]);
   return {
     unreachable: metrics === null && correlations === null,
     rows: correlations,
+    rowsState: correlationsState(correlations, participant),
     catalog: metrics ?? [],
   };
 }
 
+// Correlations are the primary person's analysis: with a participant selected
+// the read is withheld, which is not an outage.
+export function correlationsState(
+  correlations: Correlation[] | null,
+  viewingParticipant: boolean,
+): "data" | "not-for-person" | "unreachable" {
+  if (correlations !== null) return "data";
+  return viewingParticipant ? "not-for-person" : "unreachable";
+}
+
 export async function ComputedRelationshipsSection({ range }: { range: string }) {
-  const { rows, catalog } = await loadCatalog();
+  const { rows, rowsState, catalog } = await loadCatalog();
   return (
     <section className="lead">
       <article className="card">
@@ -113,7 +135,9 @@ export async function ComputedRelationshipsSection({ range }: { range: string })
         </p>
         {rows === null ? (
           <p className="empty">
-            The Observatory API did not answer, so computed relationships cannot be shown right now.
+            {rowsState === "not-for-person"
+              ? "Computed relationships cover the primary person only."
+              : "The Observatory API did not answer, so computed relationships cannot be shown right now."}
           </p>
         ) : rows.length === 0 ? (
           <p className="empty">

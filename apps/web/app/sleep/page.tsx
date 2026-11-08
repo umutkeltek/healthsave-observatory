@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 
 import { BaselineRibbon } from "../components/BaselineRibbon";
 import { ConsistencyGauge, Hypnogram, StageBreakdown } from "../components/SleepVisuals";
-import { safeSeries } from "../lib/load";
-import { hasUsablePoints, seriesCoverage, shortDate } from "../lib/ranges";
+import { safeSeriesForRange } from "../lib/load";
+import { seriesCoverage, shortDate } from "../lib/ranges";
 import {
   bedtimeDelta,
   bedtimeLabel,
@@ -11,6 +11,7 @@ import {
   deriveNight,
   durationLabel,
   groupSleepNights,
+  nightLabel,
   sleepDebt,
   sleepTrends,
   type SleepNight,
@@ -20,20 +21,43 @@ export const revalidate = 30;
 export const metadata: Metadata = { title: "Sleep · HealthSave Observatory" };
 
 export default async function SleepPage() {
-  let series = await safeSeries("sleep.stage", "30d");
-  let usingFallback = false;
+  // The last 30 days; when they hold nothing, the widest window, so a brand-new
+  // sync has a chance to show something before the full 30d fills - labelled
+  // as such. A read that failed is unreachable, never "no sleep data yet".
+  const read = await safeSeriesForRange("sleep.stage", "30d");
 
-  // If 30d returns no usable data, try the widest available window so a
-  // brand-new sync has a chance to show something before the full 30d fills.
-  if (!hasUsablePoints(series)) {
-    const fallback = await safeSeries("sleep.stage", "all");
-    if (hasUsablePoints(fallback)) {
-      series = fallback;
-      usingFallback = true;
-    }
+  if (read.kind === "unreachable") {
+    return (
+      <section className="lead">
+        <article className="hero sleep-hero firstrun">
+          <div className="hero-eyebrow">Sleep</div>
+          <h2>Sleep could not load</h2>
+          <p className="recovery-line">
+            The Observatory API did not answer, so your nights cannot be shown right now.
+          </p>
+          <div style={{ marginTop: 16, display: "flex", gap: 12 }}>
+            <a href="/" className="btn btn-ghost">
+              ← Today
+            </a>
+          </div>
+        </article>
+      </section>
+    );
   }
 
-  if (!hasUsablePoints(series)) {
+  if (read.kind === "empty" && read.olderData === "unknown") {
+    return (
+      <section className="lead">
+        <article className="hero sleep-hero firstrun">
+          <div className="hero-eyebrow">Sleep</div>
+          <h2>No sleep in the last 30 days</h2>
+          <p className="recovery-line">Older nights could not be checked right now.</p>
+        </article>
+      </section>
+    );
+  }
+
+  if (read.kind === "empty") {
     return (
       <section className="lead">
         <article className="hero sleep-hero firstrun">
@@ -59,6 +83,8 @@ export default async function SleepPage() {
     );
   }
 
+  const series = read.series;
+  const usingFallback = read.kind === "fallback";
   const nightsMap = groupSleepNights(series.points);
   const nights: SleepNight[] = [];
   for (const [key, points] of nightsMap) {
@@ -68,6 +94,7 @@ export default async function SleepPage() {
   nights.sort((a, b) => b.date.localeCompare(a.date));
 
   const lastNight = nights[0];
+  const now = Date.now();
   const trend = sleepTrends(nights);
   const consistency = consistencyScore(trend);
   const debt = sleepDebt(trend);
@@ -82,7 +109,7 @@ export default async function SleepPage() {
       {/* Hero: last night */}
       <section className="lead">
         <article className="hero sleep-hero">
-          {usingFallback && series ? (
+          {usingFallback ? (
             (() => {
               const cov = seriesCoverage(series.points);
               return (
@@ -92,7 +119,7 @@ export default async function SleepPage() {
               );
             })()
           ) : null}
-          <div className="hero-eyebrow">Last night</div>
+          <div className="hero-eyebrow">{lastNight ? nightLabel(lastNight, now) : "Last night"}</div>
           {lastNight ? (
             <>
               <div className="sleep-hero-main">
@@ -145,7 +172,7 @@ export default async function SleepPage() {
           {trend.efficiencies.length > 0 ? (
             <div className="sleep-debt good">
               <strong>{Math.round(trend.efficiencies[trend.efficiencies.length - 1])}%</strong>
-              <span>last night</span>
+              <span>{lastNight && nightLabel(lastNight, now) === "Last night" ? "last night" : "latest night"}</span>
             </div>
           ) : (
             <p className="empty">No data.</p>
@@ -168,16 +195,20 @@ export default async function SleepPage() {
       {durationValues.length >= 3 && (
         <section className="lead">
           <article className="card">
-            <h2>30-day duration trend</h2>
+            <h2>{usingFallback ? "Duration trend · all time" : "30-day duration trend"}</h2>
             <BaselineRibbon
               values={durationValues}
               height={132}
-              axis={["30 days ago", "today"]}
+              axis={usingFallback ? ["first night", "latest night"] : ["30 days ago", "today"]}
               hoverLabels={trend.dates.map((d) =>
                 new Date(d + "T12:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric" }),
               )}
               unit="min"
-              ariaLabel="Sleep duration over the last 30 days against your personal baseline"
+              ariaLabel={
+                usingFallback
+                  ? "Sleep duration over all recorded nights against your personal baseline"
+                  : "Sleep duration over the last 30 days against your personal baseline"
+              }
             />
           </article>
         </section>

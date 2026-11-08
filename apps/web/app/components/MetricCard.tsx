@@ -51,14 +51,16 @@ export function MetricCard({
   series: MetricSeries | null;
   fallbackTitle: string;
 }) {
+  // No series means the read failed (an answered empty range is a series with
+  // no points, handled below) - not "no readings yet".
   if (!series) {
     return (
       <article className="card metric-card metric-card-empty">
         <div className="metric-card-head">
           <h2>{fallbackTitle}</h2>
-          <span className="metric-state">waiting</span>
+          <span className="metric-state">no answer</span>
         </div>
-        <p className="empty">No readings in this range yet.</p>
+        <p className="empty">The Observatory API did not answer for this signal.</p>
       </article>
     );
   }

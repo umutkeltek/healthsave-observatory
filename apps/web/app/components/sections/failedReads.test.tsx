@@ -11,7 +11,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { clearSwrCache } from "../../lib/ttlCache";
 import { CompareSection } from "./CompareSections";
 import { ExplorerSection } from "./DataSections";
-import { ComputedRelationshipsSection, ExplorePairSection } from "./RelationshipsSections";
+import { ComputedRelationshipsSection, correlationsState, ExplorePairSection } from "./RelationshipsSections";
 import { ProvenanceSection } from "./SourcesSections";
 
 const noop = () => {};
@@ -100,5 +100,13 @@ describe("a failed read never turns into demo data", () => {
     expect(pair).not.toMatch(DEMO);
     expect(pair).not.toContain("r = ");
     expect(pair).toContain("did not answer");
+  });
+});
+
+describe("withheld for a participant is not an outage", () => {
+  test("correlations withheld for a participant say they cover the primary person", () => {
+    expect(correlationsState(null, true)).toBe("not-for-person");
+    expect(correlationsState(null, false)).toBe("unreachable");
+    expect(correlationsState([], false)).toBe("data");
   });
 });

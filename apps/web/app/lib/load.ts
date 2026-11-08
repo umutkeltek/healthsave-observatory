@@ -291,6 +291,12 @@ export async function safeIntelligence(): Promise<IntelligenceView | null> {
 // a thrown fetch, so all-null ⇒ unreachable.
 export type DataState = "data" | "empty" | "unreachable";
 
+// True when a participant is being viewed: primary-only reads (findings,
+// correlations, briefs, experiments) are then withheld, not failed.
+export async function viewingParticipant(): Promise<boolean> {
+  return (await currentOwner()) !== null;
+}
+
 export async function dataState(): Promise<DataState> {
   const [readiness, latest, findings] = await Promise.all([
     safeReadiness(),

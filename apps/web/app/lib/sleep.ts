@@ -295,6 +295,17 @@ export function sleepTrends(nights: SleepNight[]): SleepTrend {
   };
 }
 
+// "Last night" only when the night actually ended within the last 36 hours;
+// an older one (the all-time fallback, or a gap in syncing) says when it was.
+export function nightLabel(night: Pick<SleepNight, "wakeTime">, now: number): string {
+  const ended = Date.parse(night.wakeTime);
+  if (Number.isFinite(ended) && now - ended <= 36 * 3_600_000) return "Last night";
+  const date = Number.isFinite(ended)
+    ? new Date(ended).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    : night.wakeTime;
+  return `Latest night · ${date}`;
+}
+
 export function bedtimeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, {
     hour: "2-digit",
