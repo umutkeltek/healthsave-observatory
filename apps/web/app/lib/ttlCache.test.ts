@@ -198,4 +198,16 @@ describe("writes invalidate cached reads", () => {
     await keep();
     expect(await swrCache("receipts", TTL, async () => "after")).toBe("after");
   });
+
+  // The re-review: the connection test and the analysis triggers write audit
+  // events (provider_healthcheck, narrator_failover) that /api/v2/receipts
+  // returns, so they change the cached receipts.
+  test("the connection test and an analysis trigger drop cached receipts", async () => {
+    globalThis.fetch = (async () => Response.json({ ok: true, status: "completed" })) as unknown as typeof fetch;
+    await swrCache("receipts", TTL, async () => "before");
+    await postTestConnection({ provider: "ollama", model: "m" });
+    expect(await swrCache("receipts", TTL, async () => "after test")).toBe("after test");
+    await postInsightsTrigger("daily_briefing");
+    expect(await swrCache("receipts", TTL, async () => "after trigger")).toBe("after trigger");
+  });
 });

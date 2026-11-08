@@ -366,8 +366,9 @@ export type TriggerType =
 export function postInsightsTrigger(type: TriggerType): Promise<TriggerResult> {
   // Analysis runs inline server-side (daily_briefing includes a real LLM
   // narration round-trip) - give it well past the default timeout.
-  // Analysis results (findings, briefs, correlations) are not in the read cache.
-  return postJson<TriggerResult>("/api/v2/insights/trigger", { type }, [], 90_000);
+  // Analysis results are not in the read cache, but a run can log audit events
+  // (narrator_failover) that /api/v2/receipts returns.
+  return postJson<TriggerResult>("/api/v2/insights/trigger", { type }, ["receipts"], 90_000);
 }
 
 // Version axes (open endpoint). Mirrors server/api/v2_meta.py.
@@ -946,8 +947,8 @@ export function postConsent(body: ConsentPayload): Promise<IntelligenceView> {
 }
 
 export function postTestConnection(body: TestConnectionPayload): Promise<TestConnectionResult> {
-  // Read-only probe: nothing cached changes.
-  return postJson<TestConnectionResult>("/api/v2/intelligence/test-connection", body, []);
+  // The probe logs a provider_healthcheck audit event, which /api/v2/receipts returns.
+  return postJson<TestConnectionResult>("/api/v2/intelligence/test-connection", body, ["receipts"]);
 }
 
 // Export - the per-metric CSV/JSON dump surface. Mirrors server/api/v2_export.py;
