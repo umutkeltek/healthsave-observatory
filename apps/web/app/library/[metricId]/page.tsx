@@ -68,6 +68,22 @@ export default async function MetricDetailPage({
   const metric = metrics?.find((m) => m.id === metricId) ?? effective?.metric;
   const stat = readiness?.metrics.find((m) => m.metric_id === metricId);
 
+  // No catalog answer and no series answer: the API is down, which says
+  // nothing about whether the signal exists.
+  if (!metric && metrics === null) {
+    return (
+      <section className="lead">
+        <article className="card lib-unknown">
+          <h2>Signal unavailable</h2>
+          <p className="empty">The Observatory API did not answer, so this signal cannot be shown right now.</p>
+          <Link href="/library" className="btn">
+            Back to Library
+          </Link>
+        </article>
+      </section>
+    );
+  }
+
   if (!metric) {
     return (
       <section className="lead">
