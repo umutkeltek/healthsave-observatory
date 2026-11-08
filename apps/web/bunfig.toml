@@ -1,0 +1,5 @@
+# bun test only (Next ignores this file). Installs the AsyncLocalStorage that
+# Next's own server runtime provides, so tests can run real route handlers and
+# loaders inside a request scope (app/lib/testRequest.ts).
+[test]
+preload = ["./app/lib/testPreload.ts"]

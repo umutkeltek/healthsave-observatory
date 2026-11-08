@@ -3,9 +3,7 @@
 // whitelisted and re-validated here so the route can't be steered anywhere
 // but the one upstream endpoint; the backend enforces its own row cap.
 
-import { cookies } from "next/headers";
-
-import { PARTICIPANT_COOKIE, parseOwnerCookie } from "../../lib/participants";
+import { currentOwner } from "../../lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -36,9 +34,11 @@ export async function GET(request: Request): Promise<Response> {
   if (DAYS.has(days)) qs.set("days", days);
   if (DATE_RE.test(from)) qs.set("from", from);
   if (DATE_RE.test(to)) qs.set("to", to);
-  // Participant view (migration 029): export the person on screen, never the
-  // primary person by accident.
-  const owner = parseOwnerCookie((await cookies()).get(PARTICIPANT_COOKIE)?.value);
+  // Participant view (migration 029): export the person on screen. The same
+  // per-request decision the pages use (lib/api.ts participantView), so a
+  // cookie naming someone the server no longer lists exports the primary
+  // person, exactly as the page shows.
+  const owner = await currentOwner();
   if (owner) qs.set("owner", owner);
 
   const headers: Record<string, string> = {};
