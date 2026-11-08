@@ -4,25 +4,62 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { liveAfterPoll, readCacheSignal } from "../lib/liveSignal";
+import type { Dictionary } from "../lib/i18n";
 import { type PollState, pollState, SIGNED_OUT_EVENT, signInPath } from "../lib/session";
+import { useI18n } from "./I18nProvider";
 
 const POLL_MS = 30_000;
 // While cached values are being refreshed, look again soon so the redraw
 // follows the refresh closely.
 const UPDATING_POLL_MS = 2_000;
 
-type LiveState = PollState | "updating";
+export type LiveState = PollState | "updating";
 
-const MINI_LABELS: Record<LiveState, { aria: string; title: string }> = {
-  live: { aria: "Watching for new data", title: "Watching for new data (30s poll)" },
-  updating: {
-    aria: "Updating cached readings",
-    title: "Some readings on this page are cached and being refreshed; the page redraws when they arrive",
-  },
-  offline: { aria: "Backend unreachable", title: "Backend unreachable" },
-  "signed-out": { aria: "Signed out", title: "Signed out - sign in again to keep watching" },
-  unknown: { aria: "Polling for first response", title: "Polling for first response" },
-};
+function labelsFor(dict: Dictionary, state: LiveState) {
+  return dict.live[state === "signed-out" ? "signedOut" : state];
+}
+
+/**
+ * The top-bar pill (and the status dot phones keep) for one state, in the
+ * interface language. Pure, so every state renders and tests without polling.
+ */
+export function LivePill({ state, dict, signInHref }: { state: LiveState; dict: Dictionary; signInHref: string }) {
+  const labels = labelsFor(dict, state);
+  const mini = (
+    <span
+      className={`live-mini${state === "offline" || state === "signed-out" ? " live-mini-offline" : ""}${
+        state === "unknown" || state === "updating" ? " live-mini-pending" : ""
+      }`}
+      aria-label={labels.aria}
+      title={labels.title}
+    >
+      <span className="live-dot" aria-hidden />
+    </span>
+  );
+  if (state === "unknown") return mini;
+  const pill = dict.live[state === "signed-out" ? "signedOut" : state].pill;
+  if (state === "signed-out") {
+    // A new tab, so whatever is typed on this page survives signing in.
+    return (
+      <>
+        <a className="pill mono live-pill offline" href={signInHref} target="_blank" rel="noopener" title={labels.title}>
+          {pill}
+        </a>
+        {mini}
+      </>
+    );
+  }
+  return (
+    <>
+      <span className={`pill mono live-pill${state === "offline" ? " offline" : ""}`} title={labels.title}>
+        {state === "offline" ? null : <span className="live-dot" aria-hidden />}
+        {pill}
+      </span>
+      {mini}
+    </>
+  );
+}
+
 
 // Conditional poll against /api/changes (the Next proxy; key stays
 // server-side). 304 = nothing new, costs a header exchange. A changed
@@ -33,6 +70,7 @@ const MINI_LABELS: Record<LiveState, { aria: string; title: string }> = {
 export function LiveStatus({ renderedSettled = 0 }: { renderedSettled?: number }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { dict } = useI18n();
   const etag = useRef<string | null>(null);
   const wasLive = useRef(false);
   const [state, setState] = useState<LiveState>("unknown");
@@ -106,68 +144,6 @@ export function LiveStatus({ renderedSettled = 0 }: { renderedSettled?: number }
 
   // Never claim "live" before the first successful poll - but once it HAS
   // been live, a silent disappearance isn't feedback: show offline instead.
-  // The mini indicator (used on mobile) renders in every state so phone users
-  // always have a sync cue - it just changes color as the poll resolves.
-  const miniOnly = (
-    <span
-      className={`live-mini${state === "offline" || state === "signed-out" ? " live-mini-offline" : ""}${
-        state === "unknown" || state === "updating" ? " live-mini-pending" : ""
-      }`}
-      aria-label={MINI_LABELS[state].aria}
-      title={MINI_LABELS[state].title}
-    >
-      <span className="live-dot" aria-hidden />
-    </span>
-  );
-  if (state === "unknown") return miniOnly;
-  if (state === "updating") {
-    return (
-      <>
-        <span
-          className="pill mono live-pill"
-          title="Some readings on this page are cached and being refreshed; the page redraws when they arrive"
-        >
-          <span className="live-dot" aria-hidden />
-          updating
-        </span>
-        {miniOnly}
-      </>
-    );
-  }
-  if (state === "signed-out") {
-    // A new tab, so whatever is typed on this page survives signing in.
-    return (
-      <>
-        <a
-          className="pill mono live-pill offline"
-          href={signInPath(pathname ?? "/")}
-          target="_blank"
-          rel="noopener"
-          title="Your session ended. Sign in again in a new tab, then come back to this one."
-        >
-          signed out · sign in
-        </a>
-        {miniOnly}
-      </>
-    );
-  }
-  if (state === "offline") {
-    return (
-      <>
-        <span className="pill mono live-pill offline" title="Live poll failing - backend unreachable">
-          offline
-        </span>
-        {miniOnly}
-      </>
-    );
-  }
-  return (
-    <>
-      <span className="pill mono live-pill" title="Watching for new data (30s poll)">
-        <span className="live-dot" aria-hidden />
-        live
-      </span>
-      {miniOnly}
-    </>
-  );
+  // The status dot (all phones keep) renders in every state.
+  return <LivePill state={state} dict={dict} signInHref={signInPath(pathname ?? "/")} />;
 }

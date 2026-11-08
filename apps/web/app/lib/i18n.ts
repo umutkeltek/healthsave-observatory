@@ -61,6 +61,32 @@ const englishDictionary = {
     signedOut:
       "Your session has ended. Open /login in a new tab to sign in again, then try again here. What you entered is kept.",
   },
+  live: {
+    live: {
+      pill: "live",
+      title: "Watching for new data (30s poll)",
+      aria: "Watching for new data",
+    },
+    updating: {
+      pill: "updating",
+      title: "Some readings on this page are cached and being refreshed; the page redraws when they arrive",
+      aria: "Updating cached readings",
+    },
+    offline: {
+      pill: "offline",
+      title: "Live poll failing - backend unreachable",
+      aria: "Backend unreachable",
+    },
+    signedOut: {
+      pill: "signed out · sign in",
+      title: "Your session ended. Sign in again in a new tab, then come back to this one.",
+      aria: "Signed out",
+    },
+    unknown: {
+      title: "Polling for first response",
+      aria: "Polling for first response",
+    },
+  },
   navGroups: {
     essentials: "Essentials",
     explore: "Analyze",
@@ -173,6 +199,32 @@ export const dictionaries = {
       signedOut:
         "Tu sesión ha terminado. Abre /login en una pestaña nueva para volver a iniciar sesión y luego inténtalo de nuevo aquí. Lo que escribiste se conserva.",
     },
+    live: {
+      live: {
+        pill: "en vivo",
+        title: "Buscando datos nuevos (consulta cada 30 s)",
+        aria: "Buscando datos nuevos",
+      },
+      updating: {
+        pill: "actualizando",
+        title: "Algunas lecturas de esta página están en caché y se están actualizando; la página se vuelve a dibujar cuando llegan",
+        aria: "Actualizando lecturas en caché",
+      },
+      offline: {
+        pill: "sin conexión",
+        title: "La consulta falla: el servidor no responde",
+        aria: "El servidor no responde",
+      },
+      signedOut: {
+        pill: "sesión cerrada · iniciar sesión",
+        title: "Tu sesión terminó. Vuelve a iniciar sesión en una pestaña nueva y luego regresa a esta.",
+        aria: "Sesión cerrada",
+      },
+      unknown: {
+        title: "Esperando la primera respuesta",
+        aria: "Esperando la primera respuesta",
+      },
+    },
     navGroups: { essentials: "Esencial", explore: "Analizar", manage: "Gestionar" },
     nav: {
       today: "Hoy",
@@ -271,6 +323,32 @@ export const dictionaries = {
     session: {
       signedOut:
         "Votre session a expiré. Ouvrez /login dans un nouvel onglet pour vous reconnecter, puis réessayez ici. Ce que vous avez saisi est conservé.",
+    },
+    live: {
+      live: {
+        pill: "en direct",
+        title: "Surveillance des nouvelles données (toutes les 30 s)",
+        aria: "Surveillance des nouvelles données",
+      },
+      updating: {
+        pill: "mise à jour",
+        title: "Certaines valeurs de cette page viennent du cache et sont en cours d'actualisation ; la page se redessine à leur arrivée",
+        aria: "Actualisation des valeurs en cache",
+      },
+      offline: {
+        pill: "hors ligne",
+        title: "La vérification échoue : le serveur ne répond pas",
+        aria: "Le serveur ne répond pas",
+      },
+      signedOut: {
+        pill: "déconnecté · se connecter",
+        title: "Votre session a expiré. Reconnectez-vous dans un nouvel onglet, puis revenez à celui-ci.",
+        aria: "Déconnecté",
+      },
+      unknown: {
+        title: "En attente de la première réponse",
+        aria: "En attente de la première réponse",
+      },
     },
     navGroups: { essentials: "Essentiel", explore: "Analyser", manage: "Gérer" },
     nav: {
@@ -371,6 +449,32 @@ export const dictionaries = {
       signedOut:
         "Deine Sitzung ist abgelaufen. Öffne /login in einem neuen Tab, melde dich erneut an und versuche es dann hier noch einmal. Deine Eingaben bleiben erhalten.",
     },
+    live: {
+      live: {
+        pill: "aktiv",
+        title: "Prüft auf neue Daten (alle 30 s)",
+        aria: "Prüft auf neue Daten",
+      },
+      updating: {
+        pill: "wird aktualisiert",
+        title: "Einige Werte auf dieser Seite stammen aus dem Cache und werden aktualisiert; die Seite wird neu gezeichnet, sobald sie da sind",
+        aria: "Werte aus dem Cache werden aktualisiert",
+      },
+      offline: {
+        pill: "keine Verbindung",
+        title: "Die Abfrage schlägt fehl: Der Server antwortet nicht",
+        aria: "Der Server antwortet nicht",
+      },
+      signedOut: {
+        pill: "abgemeldet · anmelden",
+        title: "Deine Sitzung ist abgelaufen. Melde dich in einem neuen Tab erneut an und kehre dann hierher zurück.",
+        aria: "Abgemeldet",
+      },
+      unknown: {
+        title: "Warte auf die erste Antwort",
+        aria: "Warte auf die erste Antwort",
+      },
+    },
     navGroups: { essentials: "Basis", explore: "Analysieren", manage: "Verwalten" },
     nav: {
       today: "Heute",
@@ -470,6 +574,32 @@ export const dictionaries = {
       signedOut:
         "セッションが終了しました。新しいタブで /login を開いて再度サインインしてから、ここでもう一度お試しください。入力した内容は保持されています。",
     },
+    live: {
+      live: {
+        pill: "ライブ",
+        title: "新しいデータを確認中（30秒ごと）",
+        aria: "新しいデータを確認中",
+      },
+      updating: {
+        pill: "更新中",
+        title: "このページの一部の値はキャッシュから表示しており、更新中です。届き次第ページを再描画します",
+        aria: "キャッシュの値を更新中",
+      },
+      offline: {
+        pill: "オフライン",
+        title: "確認に失敗しています：サーバーが応答しません",
+        aria: "サーバーが応答しません",
+      },
+      signedOut: {
+        pill: "サインアウト · サインイン",
+        title: "セッションが終了しました。新しいタブでもう一度サインインしてから、このタブに戻ってください。",
+        aria: "サインアウトしました",
+      },
+      unknown: {
+        title: "最初の応答を待っています",
+        aria: "最初の応答を待っています",
+      },
+    },
     navGroups: { essentials: "基本", explore: "分析", manage: "管理" },
     nav: {
       today: "今日",
@@ -568,6 +698,32 @@ export const dictionaries = {
     session: {
       signedOut:
         "你的工作階段已結束。請在新分頁開啟 /login 重新登入，然後回到這裡再試一次。你輸入的內容會保留。",
+    },
+    live: {
+      live: {
+        pill: "即時",
+        title: "正在檢查新資料（每 30 秒）",
+        aria: "正在檢查新資料",
+      },
+      updating: {
+        pill: "更新中",
+        title: "此頁部分數值來自快取，正在更新；資料到達後頁面會重新繪製",
+        aria: "正在更新快取數值",
+      },
+      offline: {
+        pill: "離線",
+        title: "檢查失敗：伺服器沒有回應",
+        aria: "伺服器沒有回應",
+      },
+      signedOut: {
+        pill: "已登出 · 登入",
+        title: "你的工作階段已結束。請在新分頁重新登入，再回到此分頁。",
+        aria: "已登出",
+      },
+      unknown: {
+        title: "等待第一次回應",
+        aria: "等待第一次回應",
+      },
     },
     navGroups: { essentials: "重點", explore: "分析", manage: "管理" },
     nav: {
