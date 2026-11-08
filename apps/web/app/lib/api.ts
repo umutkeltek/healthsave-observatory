@@ -14,7 +14,7 @@ import {
   scopePath,
   type ViewedPerson,
 } from "./participants";
-import { swrCache } from "./ttlCache";
+import { clearSwrCache, swrCache } from "./ttlCache";
 
 export type MetricSummary = {
   id: string;
@@ -199,6 +199,8 @@ async function postJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIME
     }
     throw new Error(detail);
   }
+  // The backend changed: no cached read may show the state before the write.
+  clearSwrCache();
   return res.json() as Promise<T>;
 }
 
@@ -231,6 +233,8 @@ async function putJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEO
     }
     throw new Error(detail);
   }
+  // The backend changed: no cached read may show the state before the write.
+  clearSwrCache();
   return res.json() as Promise<T>;
 }
 
@@ -262,6 +266,8 @@ async function deleteJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Prom
     }
     throw new Error(detail);
   }
+  // The backend changed: no cached read may show the state before the write.
+  clearSwrCache();
   return res.json() as Promise<T>;
 }
 
