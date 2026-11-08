@@ -143,7 +143,12 @@ def _readiness_for_metric(
     )
     freshness_seconds = _freshness_seconds(now, observed_at)
 
-    if coverage_state == "receipt_only":
+    batches_seen = row.get("batches_seen", 0)
+    if batches_seen > 0 and row.get("batches_failed", 0) == batches_seen:
+        # Nothing is pending: the server rejected every batch it received.
+        status = "failed"
+        reason = "every_received_batch_failed"
+    elif coverage_state == "receipt_only":
         status = "receipt_only"
         reason = "receipt_has_not_materialized_in_destination"
     elif (
