@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 
-import { createMoment, updateAnalyticalTime } from "./api";
+import { applyIntelligence, createMoment, postInsightsTrigger, postTestConnection, updateAnalyticalTime } from "./api";
 import { clearSwrCache, FAILURE_BACKOFF_MS, MAX_STALE_MS, staleRefreshStatus, swrCache } from "./ttlCache";
 
 const T0 = new Date("2026-11-08T12:00:00Z").getTime();
@@ -140,5 +140,31 @@ describe("writes invalidate cached reads", () => {
     await swrCache("moments", TTL, async () => "before");
     await expect(createMoment({ kind: "custom", title: "t", start_at: "x" })).rejects.toThrow();
     expect(await swrCache("moments", TTL, fail)).toBe("before");
+  });
+
+  // The review: every successful write cleared every key, including the
+  // read-only connection test and the POSTs behind "Refresh brief".
+  test("a write drops only what it changes", async () => {
+    globalThis.fetch = (async () => Response.json({ ok: true, status: "completed" })) as unknown as typeof fetch;
+    const keep = async () => {
+      expect(await swrCache("readiness", TTL, async () => "refetched")).toBe("cached");
+      expect(await swrCache("series:vital.heart_rate:7d", TTL, async () => "refetched")).toBe("cached");
+    };
+    await swrCache("readiness", TTL, async () => "cached");
+    await swrCache("series:vital.heart_rate:7d", TTL, async () => "cached");
+    await swrCache("moments@owner:abc", TTL, async () => "cached");
+    await swrCache("receipts", TTL, async () => "cached");
+
+    await postTestConnection({ provider: "ollama", model: "m" });
+    await postInsightsTrigger("weekly_summary");
+    await keep();
+
+    await createMoment({ kind: "custom", title: "t", start_at: new Date(T0).toISOString() });
+    await keep();
+    expect(await swrCache("moments@owner:abc", TTL, async () => "after")).toBe("after");
+
+    await applyIntelligence({ mode: "off" });
+    await keep();
+    expect(await swrCache("receipts", TTL, async () => "after")).toBe("after");
   });
 });

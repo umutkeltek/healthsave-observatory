@@ -14,7 +14,7 @@ import {
   scopePath,
   type ViewedPerson,
 } from "./participants";
-import { clearSwrCache, swrCache } from "./ttlCache";
+import { clearSwrCache, invalidateSwr, swrCache } from "./ttlCache";
 
 export type MetricSummary = {
   id: string;
@@ -171,7 +171,21 @@ async function getJson<T>(requestedPath: string, timeoutMs = DEFAULT_TIMEOUT_MS)
 // Server-side POST - used by the experiment write actions. The key never
 // reaches the browser (these run in server actions). On error we surface the
 // backend's `detail` (e.g. a 422 readiness rationale) so the UI can show it.
-async function postJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+// Which cached reads (lib/ttlCache.ts key prefixes) a successful write
+// changes: "all" when it can change any of them, nothing for a read-only POST.
+type Invalidation = readonly string[] | "all";
+
+function invalidate(changed: Invalidation): void {
+  if (changed === "all") clearSwrCache();
+  else if (changed.length > 0) invalidateSwr(changed);
+}
+
+async function postJson<T>(
+  path: string,
+  body: unknown,
+  changed: Invalidation,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+): Promise<T> {
   await assertWritable(path);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (API_KEY) headers["X-API-Key"] = API_KEY;
@@ -199,13 +213,13 @@ async function postJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIME
     }
     throw new ApiError(detail, res.status, detail);
   }
-  // The backend changed: no cached read may show the state before the write.
-  clearSwrCache();
+  // No cached read may show what this write changed as it was before.
+  invalidate(changed);
   return res.json() as Promise<T>;
 }
 
 // Server-side PUT - mirrors postJson. Used by the Intelligence settings apply.
-async function putJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+async function putJson<T>(path: string, body: unknown, changed: Invalidation, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
   await assertWritable(path);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (API_KEY) headers["X-API-Key"] = API_KEY;
@@ -233,13 +247,13 @@ async function putJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEO
     }
     throw new ApiError(detail, res.status, detail);
   }
-  // The backend changed: no cached read may show the state before the write.
-  clearSwrCache();
+  // No cached read may show what this write changed as it was before.
+  invalidate(changed);
   return res.json() as Promise<T>;
 }
 
 // Server-side DELETE. The key never reaches the browser.
-async function deleteJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+async function deleteJson<T>(path: string, changed: Invalidation, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
   await assertWritable(path);
   const headers: Record<string, string> = {};
   if (API_KEY) headers["X-API-Key"] = API_KEY;
@@ -266,8 +280,8 @@ async function deleteJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Prom
     }
     throw new ApiError(detail, res.status, detail);
   }
-  // The backend changed: no cached read may show the state before the write.
-  clearSwrCache();
+  // No cached read may show what this write changed as it was before.
+  invalidate(changed);
   return res.json() as Promise<T>;
 }
 
@@ -352,7 +366,8 @@ export type TriggerType =
 export function postInsightsTrigger(type: TriggerType): Promise<TriggerResult> {
   // Analysis runs inline server-side (daily_briefing includes a real LLM
   // narration round-trip) - give it well past the default timeout.
-  return postJson<TriggerResult>("/api/v2/insights/trigger", { type }, 90_000);
+  // Analysis results (findings, briefs, correlations) are not in the read cache.
+  return postJson<TriggerResult>("/api/v2/insights/trigger", { type }, [], 90_000);
 }
 
 // Version axes (open endpoint). Mirrors server/api/v2_meta.py.
@@ -387,7 +402,8 @@ export function fetchAnalyticalTime(): Promise<AnalyticalTimeSettings> {
 export function updateAnalyticalTime(
   payload: UpdateAnalyticalTimePayload,
 ): Promise<AnalyticalTimeSettings> {
-  return putJson<AnalyticalTimeSettings>("/api/v2/settings/analytical-time", payload);
+  // The time basis decides day buckets, so any cached read can change.
+  return putJson<AnalyticalTimeSettings>("/api/v2/settings/analytical-time", payload, "all");
 }
 
 export type MomentKind =
@@ -432,15 +448,15 @@ export function fetchMoments(limit = 50): Promise<MomentListResponse> {
 }
 
 export function createMoment(payload: CreateMomentPayload): Promise<Moment> {
-  return postJson<Moment>("/api/v2/moments", payload);
+  return postJson<Moment>("/api/v2/moments", payload, ["moments"]);
 }
 
 export function updateMoment(id: number, payload: CreateMomentPayload): Promise<Moment> {
-  return putJson<Moment>(`/api/v2/moments/${id}`, payload);
+  return putJson<Moment>(`/api/v2/moments/${id}`, payload, ["moments"]);
 }
 
 export function deleteMoment(id: number): Promise<{ ok: boolean }> {
-  return deleteJson<{ ok: boolean }>(`/api/v2/moments/${id}`);
+  return deleteJson<{ ok: boolean }>(`/api/v2/moments/${id}`, ["moments"]);
 }
 
 // Data-readiness - Insight Action Loop card #1. Mirrors server/api/v2_readiness.py.
@@ -783,15 +799,15 @@ export function createExperiment(body: {
   start_date?: string;
   hypothesis?: string | null;
 }): Promise<Experiment> {
-  return postJson<Experiment>("/api/v2/experiments", body);
+  return postJson<Experiment>("/api/v2/experiments", body, []);
 }
 
 export function analyzeExperiment(id: string): Promise<Experiment> {
-  return postJson<Experiment>(`/api/v2/experiments/${id}/analyze`, {});
+  return postJson<Experiment>(`/api/v2/experiments/${id}/analyze`, {}, []);
 }
 
 export function abandonExperiment(id: string): Promise<Experiment> {
-  return postJson<Experiment>(`/api/v2/experiments/${id}/abandon`, {});
+  return postJson<Experiment>(`/api/v2/experiments/${id}/abandon`, {}, []);
 }
 
 // Identity - Source / Device / Stream provenance (R2). Mirrors
@@ -921,15 +937,17 @@ export function fetchDetectLocal(): Promise<DetectLocalResult> {
 }
 
 export function applyIntelligence(body: ApplyIntelligencePayload): Promise<IntelligenceView> {
-  return putJson<IntelligenceView>("/api/v2/intelligence", body);
+  // Privacy setting changes are logged as receipt events (the Today vault note).
+  return putJson<IntelligenceView>("/api/v2/intelligence", body, ["receipts"]);
 }
 
 export function postConsent(body: ConsentPayload): Promise<IntelligenceView> {
-  return postJson<IntelligenceView>("/api/v2/intelligence/consent", body);
+  return postJson<IntelligenceView>("/api/v2/intelligence/consent", body, ["receipts"]);
 }
 
 export function postTestConnection(body: TestConnectionPayload): Promise<TestConnectionResult> {
-  return postJson<TestConnectionResult>("/api/v2/intelligence/test-connection", body);
+  // Read-only probe: nothing cached changes.
+  return postJson<TestConnectionResult>("/api/v2/intelligence/test-connection", body, []);
 }
 
 // Export - the per-metric CSV/JSON dump surface. Mirrors server/api/v2_export.py;
