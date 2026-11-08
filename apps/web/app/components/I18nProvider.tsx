@@ -3,6 +3,7 @@
 import { createContext, type ReactNode, useContext, useRef, useState } from "react";
 
 import { setLocaleAction } from "../lib/actions";
+import { runAction } from "../lib/session";
 import { getDictionary, type Dictionary, type Locale } from "../lib/i18n";
 import { commitLocalePreference } from "../lib/localePreference";
 
@@ -35,7 +36,7 @@ export function I18nProvider({
     inFlight.current = true;
     setLocalePending(true);
 
-    const result = await commitLocalePreference(localLocale, next, setLocaleAction);
+    const result = await commitLocalePreference(localLocale, next, (locale) => runAction(() => setLocaleAction(locale)));
     if (result.locale !== localLocale) {
       setLocalLocale(result.locale);
       document.documentElement.lang = result.locale;

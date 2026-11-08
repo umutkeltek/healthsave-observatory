@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 
 import type { ActionResult } from "../lib/actions";
 import { abandonExperimentAction, analyzeExperimentAction } from "../lib/actions";
+import { runAction } from "../lib/session";
 
 // Analyze / Stop controls for a running experiment. Analyze recomputes the
 // controlled ABAB result now (and auto-completes once the window has elapsed);
@@ -14,7 +15,7 @@ export function ExperimentActions({ id, status }: { id: string; status: string }
 
   const run = (action: () => Promise<ActionResult>) =>
     startTransition(async () => {
-      const result = await action();
+      const result = await runAction(action);
       setError(result.ok ? null : (result.error ?? "Action failed."));
     });
 

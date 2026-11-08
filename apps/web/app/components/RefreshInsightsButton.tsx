@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 
 import { triggerAnalysisAction } from "../lib/actions";
+import { runAction } from "../lib/session";
 
 // Refresh the visible brief plus supporting checks. The UI calls this a brief,
 // not narration, because users do not need to know the internal job names.
@@ -10,11 +11,14 @@ export function RefreshInsightsButton() {
   const [pending, startTransition] = useTransition();
   const [note, setNote] = useState<string | null>(null);
 
+  const trigger = (type: Parameters<typeof triggerAnalysisAction>[0]) =>
+    runAction(() => triggerAnalysisAction(type));
+
   // Prefer the weekly brief, then fall back to today's briefing when weekly is disabled.
   const runBriefing = async () => {
-    const weekly = await triggerAnalysisAction("weekly_summary");
+    const weekly = await trigger("weekly_summary");
     if (weekly.ok || !(weekly.error ?? "").includes("disabled")) return weekly;
-    return triggerAnalysisAction("daily_briefing");
+    return trigger("daily_briefing");
   };
 
   const run = () =>
@@ -22,8 +26,8 @@ export function RefreshInsightsButton() {
       setNote(null);
 
       const [recovery, correlation, briefing] = await Promise.all([
-        triggerAnalysisAction("recovery_check"),
-        triggerAnalysisAction("correlation_analysis"),
+        trigger("recovery_check"),
+        trigger("correlation_analysis"),
         runBriefing(),
       ]);
 

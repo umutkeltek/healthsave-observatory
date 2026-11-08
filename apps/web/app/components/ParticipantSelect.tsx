@@ -5,6 +5,7 @@ import { useEffect, useId, useOptimistic, useState, useTransition } from "react"
 
 import { setParticipantAction } from "../lib/actions";
 import { DEFAULT_OWNER_ID, type ParticipantNotice, type ParticipantOption } from "../lib/participants";
+import { runAction } from "../lib/session";
 import { useI18n } from "./I18nProvider";
 
 export type { ParticipantOption };
@@ -98,7 +99,7 @@ export function ParticipantSelect({
           setMovedToPrimary(false);
           startTransition(async () => {
             setShown(next);
-            const result = await setParticipantAction(next);
+            const result = await runAction(() => setParticipantAction(next));
             if (!result.ok) {
               setError(result.error ?? null);
               return;

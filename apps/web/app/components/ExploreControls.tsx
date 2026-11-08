@@ -16,6 +16,7 @@ import {
   type ExploreState,
 } from "../lib/explore";
 import { saveExplorePanelAction } from "../lib/actions";
+import { runAction } from "../lib/session";
 
 // Client islands for the Explore dashboard. They hold no data — they read the
 // current dashboard from the URL (via the `state` prop the server parsed) and
@@ -149,7 +150,7 @@ function SaveToToday({ current }: { current: string }) {
     if (!name) return;
     setError(null);
     startTransition(async () => {
-      const result = await saveExplorePanelAction(current, name);
+      const result = await runAction(() => saveExplorePanelAction(current, name));
       if (result.ok) {
         setSaved(true);
         setLabel("");

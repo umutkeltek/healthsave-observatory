@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 
 import type { AnalyticalTimeSettings } from "../lib/api";
 import { updateAnalyticalTimeAction } from "../lib/actions";
+import { runAction } from "../lib/session";
 
 const COMMON_ZONES = [
   "UTC",
@@ -67,10 +68,12 @@ export function AnalyticalTimeSettingsForm({ initial }: { initial: AnalyticalTim
           type="button"
           disabled={pending}
           onClick={() => startTransition(async () => {
-            const result = await updateAnalyticalTimeAction({
-              time_zone: timeZone,
-              day_boundary_minutes: boundary,
-            });
+            const result = await runAction(() =>
+              updateAnalyticalTimeAction({
+                time_zone: timeZone,
+                day_boundary_minutes: boundary,
+              }),
+            );
             setStatus(result.ok ? "Saved. Calendar analyses now use this time basis." : (result.error ?? "Could not save."));
           })}
         >

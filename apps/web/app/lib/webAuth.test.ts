@@ -218,6 +218,16 @@ describe("proxy", () => {
     expect((await proxy(request("/login", { method: "POST", headers: { "next-action": "abc" } }))).status).toBe(401);
   });
 
+  test("an expired session on a server action answers text/plain, which the page can tell apart from a bug", async () => {
+    await signIn();
+    const response = await proxy(request("/settings", { method: "POST", headers: { "next-action": "abc" } }));
+    expect(response.status).toBe(401);
+    // Next's action client rejects with a text/plain error body as the message;
+    // anything else becomes "An unexpected response was received from the server."
+    expect(response.headers.get("content-type")).toBe("text/plain");
+    expect(await response.text()).toBe("sign_in_required");
+  });
+
   test("a valid session cookie passes", async () => {
     const token = await signIn();
     const response = await proxy(request("/api/export", { cookie: token }));

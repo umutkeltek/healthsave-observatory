@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 
 import { setDensityAction } from "../lib/actions";
+import { runAction } from "../lib/session";
 import type { Density } from "../lib/prefs";
 import { useI18n } from "./I18nProvider";
 
@@ -15,7 +16,7 @@ export function useOptimisticDensity(server: Density): [Density, (mode: Density)
   const [, startTransition] = useTransition();
   const pick = (mode: Density) => {
     setLocal(mode);
-    startTransition(() => setDensityAction(mode).then(() => undefined));
+    startTransition(() => runAction(() => setDensityAction(mode)).then(() => undefined));
   };
   return [local ?? server, pick];
 }

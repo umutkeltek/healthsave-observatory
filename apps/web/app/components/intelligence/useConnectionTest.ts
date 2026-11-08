@@ -3,6 +3,7 @@
 import { type TransitionStartFunction, useState } from "react";
 
 import { testConnectionAction } from "../../lib/actions";
+import { runAction } from "../../lib/session";
 import type { ConnectionInputPayload, TestConnectionResult } from "../../lib/api";
 
 // Test-connection probe state. Takes the form's startTransition so the
@@ -16,7 +17,7 @@ export function useConnectionTest(startTransition: TransitionStartFunction) {
     setTestResult(null);
     setTestErr(null);
     startTransition(async () => {
-      const result = await testConnectionAction(input);
+      const result = await runAction(() => testConnectionAction(input));
       if (result.ok && result.result) setTestResult(result.result);
       else setTestErr(result.error ?? "Test failed.");
     });

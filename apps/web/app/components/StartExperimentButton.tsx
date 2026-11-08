@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 
 import { startExperimentAction } from "../lib/actions";
+import { runAction } from "../lib/session";
 
 // Promotes a testable candidate into a committed experiment. Calls the server
 // action (key stays server-side); shows pending + any backend error inline.
@@ -18,7 +19,7 @@ export function StartExperimentButton({ lever, outcome }: { lever: string; outco
         disabled={pending}
         onClick={() =>
           startTransition(async () => {
-            const result = await startExperimentAction(lever, outcome);
+            const result = await runAction(() => startExperimentAction(lever, outcome));
             setError(result.ok ? null : (result.error ?? "Could not start the experiment."));
           })
         }

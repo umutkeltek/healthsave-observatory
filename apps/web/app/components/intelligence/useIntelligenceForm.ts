@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { applyIntelligenceAction, consentAction, detectLocalAction } from "../../lib/actions";
+import { runAction } from "../../lib/session";
 import type {
   ApplyIntelligencePayload,
   ConnectionInputPayload,
@@ -89,7 +90,7 @@ export function useIntelligenceForm(view: IntelligenceView) {
   function save() {
     setSaveMsg(null);
     startTransition(async () => {
-      const result = await applyIntelligenceAction(buildPayload());
+      const result = await runAction(() => applyIntelligenceAction(buildPayload()));
       if (result.ok) {
         setApiKey("");
         setFallbacks((prev) => prev.map((f) => ({ ...f, apiKey: "" })));
@@ -104,7 +105,7 @@ export function useIntelligenceForm(view: IntelligenceView) {
   function detect() {
     setDetectMsg(null);
     startTransition(async () => {
-      const result = await detectLocalAction();
+      const result = await runAction(() => detectLocalAction());
       if (!result.ok) {
         setDetectMsg({ ok: false, text: result.error ?? "Detection failed." });
         return;
@@ -130,10 +131,12 @@ export function useIntelligenceForm(view: IntelligenceView) {
 
   function toggleConsent(grant: boolean) {
     startTransition(async () => {
-      const result = await consentAction({
-        granted: grant,
-        consent_version: grant ? new Date().toISOString().slice(0, 10) : null,
-      });
+      const result = await runAction(() =>
+        consentAction({
+          granted: grant,
+          consent_version: grant ? new Date().toISOString().slice(0, 10) : null,
+        }),
+      );
       if (result.ok) {
         setConsentChecked(false);
         router.refresh();

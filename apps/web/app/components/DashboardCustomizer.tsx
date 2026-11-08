@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { applyTemplateAction, resetSectionsAction, toggleSectionAction } from "../lib/actions";
+import { runAction } from "../lib/session";
 import type { DashboardSections, Template } from "../lib/templates";
 import { TEMPLATES } from "../lib/templates";
 
@@ -78,7 +79,7 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
   const applyTemplate = (id: string) => {
     setError(null);
     startTransition(async () => {
-      const result = await applyTemplateAction(id as Template["id"]);
+      const result = await runAction(() => applyTemplateAction(id as Template["id"]));
       if (!result.ok) setError(result.error ?? "Could not apply this template.");
       else router.refresh();
     });
@@ -87,7 +88,7 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
   const toggleSection = (key: keyof DashboardSections) => {
     setError(null);
     startTransition(async () => {
-      const result = await toggleSectionAction(key);
+      const result = await runAction(() => toggleSectionAction(key));
       if (!result.ok) setError(result.error ?? "Could not update this section.");
       else router.refresh();
     });
@@ -96,7 +97,7 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
   const reset = () => {
     setError(null);
     startTransition(async () => {
-      const result = await resetSectionsAction();
+      const result = await runAction(() => resetSectionsAction());
       if (!result.ok) setError(result.error ?? "Could not reset the dashboard.");
       else router.refresh();
     });
