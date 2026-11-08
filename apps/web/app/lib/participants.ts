@@ -45,6 +45,91 @@ export function parseOwnerCookie(raw: string | null | undefined): string | null 
   return value;
 }
 
+// Which person this request is about. ONE decision per request, made from the
+// cookie AND the server's own owner list; every read, the per-person cache key,
+// the write guard and the switcher take it from here, so the name on screen and
+// the data under it cannot disagree.
+//   primary     - no participant chosen
+//   participant - a person the server lists
+//   unlisted    - the cookie names someone the server no longer lists: read the
+//                 primary person, say so, and clear the cookie
+//   unverified  - the owner list could not be read: keep the person that was
+//                 chosen, and keep the switcher up so the view stays named
+export type ViewedPerson =
+  | { kind: "primary" }
+  | { kind: "participant"; owner: string }
+  | { kind: "unlisted"; requested: string }
+  | { kind: "unverified"; owner: string };
+
+type ListedOwner = { id: string; label: string | null; is_default: boolean; active: boolean };
+
+export function resolveViewedPerson(
+  cookieOwner: string | null,
+  owners: readonly Pick<ListedOwner, "id" | "is_default">[] | null,
+): ViewedPerson {
+  if (cookieOwner === null) return { kind: "primary" };
+  if (owners === null) return { kind: "unverified", owner: cookieOwner };
+  const listed = owners.some((owner) => !owner.is_default && owner.id.toLowerCase() === cookieOwner);
+  return listed ? { kind: "participant", owner: cookieOwner } : { kind: "unlisted", requested: cookieOwner };
+}
+
+/** The owner id reads go to (null = the primary person). */
+export function readOwner(person: ViewedPerson): string | null {
+  switch (person.kind) {
+    case "participant":
+    case "unverified":
+      return person.owner;
+    case "primary":
+    case "unlisted":
+      return null;
+  }
+}
+
+export type ParticipantOption = {
+  id: string;
+  label: string | null;
+  isDefault: boolean;
+  active: boolean;
+};
+
+export type ParticipantNotice = "unlisted" | "unverified" | null;
+
+export type SwitcherModel = {
+  /** Empty means no select; otherwise always holds `current` and the primary person. */
+  options: ParticipantOption[];
+  current: string;
+  notice: ParticipantNotice;
+  /** The cookie names someone the server does not list: clear it. */
+  clearCookie: boolean;
+};
+
+const PRIMARY_OPTION: ParticipantOption = { id: DEFAULT_OWNER_ID, label: null, isDefault: true, active: true };
+
+/**
+ * What the shell's switcher shows for `person`. The select is shown whenever
+ * the cookie scopes reads, even with one listed owner or no list at all.
+ */
+export function switcherModel(person: ViewedPerson, owners: readonly ListedOwner[] | null): SwitcherModel {
+  const scoped = readOwner(person);
+  const options: ParticipantOption[] = (owners ?? []).map((owner) => ({
+    id: owner.id.toLowerCase(),
+    label: owner.label,
+    isDefault: owner.is_default,
+    active: owner.active,
+  }));
+  if (scoped !== null && !options.some((option) => option.id === scoped)) {
+    options.push({ id: scoped, label: null, isDefault: false, active: true });
+  }
+  const show = options.length > 1 || scoped !== null;
+  if (show && !options.some((option) => option.isDefault)) options.unshift(PRIMARY_OPTION);
+  return {
+    options: show ? options : [],
+    current: scoped ?? DEFAULT_OWNER_ID,
+    notice: person.kind === "unlisted" || person.kind === "unverified" ? person.kind : null,
+    clearCookie: person.kind === "unlisted",
+  };
+}
+
 export function ownerScope(path: string): OwnerScope {
   if (SCOPED.some((re) => re.test(path))) return "scoped";
   if (NEUTRAL.some((re) => re.test(path))) return "neutral";

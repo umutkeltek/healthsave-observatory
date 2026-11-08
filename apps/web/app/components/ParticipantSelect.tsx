@@ -1,42 +1,84 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useId, useState, useTransition } from "react";
+import { useEffect, useId, useOptimistic, useState, useTransition } from "react";
 
 import { setParticipantAction } from "../lib/actions";
-import { DEFAULT_OWNER_ID } from "../lib/participants";
+import { DEFAULT_OWNER_ID, type ParticipantNotice, type ParticipantOption } from "../lib/participants";
 import { useI18n } from "./I18nProvider";
 
-export type ParticipantOption = {
-  id: string;
-  label: string | null;
-  isDefault: boolean;
-  active: boolean;
-};
+export type { ParticipantOption };
+
+// Tabs share the participant cookie, but a tab only re-reads its shell on a
+// refresh: a switch in one tab tells the others to refresh.
+const SWITCH_CHANNEL = "healthsave-participant";
 
 // Client half of the participant switcher: a plain labelled select (the same
 // control grammar as the Explore filters), then a router refresh so every
-// server-rendered card re-reads for the chosen person.
+// server-rendered card re-reads for the chosen person. `current` comes from the
+// server's decision; the only local copy is the optimistic value while a switch
+// is in flight, which falls back to `current` when it ends.
 export function ParticipantSelect({
   owners,
   current,
+  notice = null,
+  clearCookie = false,
 }: {
   owners: ParticipantOption[];
   current: string;
+  notice?: ParticipantNotice;
+  clearCookie?: boolean;
 }) {
   const { dict } = useI18n();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [shown, setShown] = useState(current);
+  const [shown, setShown] = useOptimistic(current);
   const [error, setError] = useState<string | null>(null);
+  // Clearing the cookie re-renders the shell without the notice; keep saying
+  // why the view moved to the primary person until the person picks again.
+  const [movedToPrimary, setMovedToPrimary] = useState(notice === "unlisted");
   const noteId = useId();
   const viewingParticipant = shown !== DEFAULT_OWNER_ID;
+
+  useEffect(() => {
+    if (!clearCookie) return;
+    setMovedToPrimary(true);
+    // Reads already go to the primary person; this only drops the stale cookie.
+    setParticipantAction(DEFAULT_OWNER_ID).catch(() => {});
+  }, [clearCookie]);
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel(SWITCH_CHANNEL);
+    channel.onmessage = () => router.refresh();
+    return () => channel.close();
+  }, [router]);
 
   const name = (owner: ParticipantOption) => {
     if (owner.isDefault) return dict.participants.primary;
     const label = owner.label ?? owner.id.slice(0, 8);
     return owner.active ? label : `${label} (${dict.participants.revoked})`;
   };
+
+  const note = error
+    ? error
+    : movedToPrimary
+      ? dict.participants.unlisted
+      : notice === "unverified"
+        ? dict.participants.unverified
+        : viewingParticipant
+          ? dict.participants.primaryOnly
+          : null;
+
+  if (owners.length === 0) {
+    return note ? (
+      <div className="participant-switcher">
+        <p className="participant-note" role="status">
+          {note}
+        </p>
+      </div>
+    ) : null;
+  }
 
   return (
     <div className="participant-switcher">
@@ -49,18 +91,22 @@ export function ParticipantSelect({
         value={shown}
         disabled={pending}
         aria-busy={pending}
-        aria-describedby={viewingParticipant || error ? noteId : undefined}
+        aria-describedby={note ? noteId : undefined}
         onChange={(event) => {
           const next = event.target.value;
-          const previous = shown;
-          setShown(next);
           setError(null);
+          setMovedToPrimary(false);
           startTransition(async () => {
+            setShown(next);
             const result = await setParticipantAction(next);
             if (!result.ok) {
-              setShown(previous);
               setError(result.error ?? null);
               return;
+            }
+            if (typeof BroadcastChannel !== "undefined") {
+              const channel = new BroadcastChannel(SWITCH_CHANNEL);
+              channel.postMessage("switched");
+              channel.close();
             }
             router.refresh();
           });
@@ -72,13 +118,9 @@ export function ParticipantSelect({
           </option>
         ))}
       </select>
-      {error ? (
+      {note ? (
         <p id={noteId} className="participant-note" role="status" aria-live="polite">
-          {error}
-        </p>
-      ) : viewingParticipant ? (
-        <p id={noteId} className="participant-note">
-          {dict.participants.primaryOnly}
+          {note}
         </p>
       ) : null}
     </div>

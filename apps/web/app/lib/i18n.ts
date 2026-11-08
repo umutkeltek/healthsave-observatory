@@ -52,6 +52,8 @@ const englishDictionary = {
     primary: "Primary person",
     revoked: "revoked",
     primaryOnly: "Findings, experiments and briefs cover the primary person only.",
+    unlisted: "The person you were viewing is no longer on this Observatory. Showing the primary person.",
+    unverified: "Could not load the list of people, so this view stays on the person you chose.",
   },
   navGroups: {
     essentials: "Essentials",
@@ -156,6 +158,8 @@ export const dictionaries = {
       primary: "Persona principal",
       revoked: "revocado",
       primaryOnly: "Hallazgos, experimentos y resúmenes cubren solo a la persona principal.",
+      unlisted: "La persona que estabas viendo ya no está en este Observatory. Se muestra la persona principal.",
+      unverified: "No se pudo cargar la lista de personas, así que esta vista sigue en la persona que elegiste.",
     },
     navGroups: { essentials: "Esencial", explore: "Analizar", manage: "Gestionar" },
     nav: {
@@ -247,6 +251,8 @@ export const dictionaries = {
       primary: "Personne principale",
       revoked: "révoqué",
       primaryOnly: "Les constats, expériences et synthèses ne couvrent que la personne principale.",
+      unlisted: "La personne que vous consultiez n'est plus sur cet Observatory. Affichage de la personne principale.",
+      unverified: "Impossible de charger la liste des personnes : cette vue reste sur la personne choisie.",
     },
     navGroups: { essentials: "Essentiel", explore: "Analyser", manage: "Gérer" },
     nav: {
@@ -338,6 +344,8 @@ export const dictionaries = {
       primary: "Hauptperson",
       revoked: "widerrufen",
       primaryOnly: "Befunde, Experimente und Berichte gelten nur für die Hauptperson.",
+      unlisted: "Die angezeigte Person ist nicht mehr in diesem Observatory. Es wird die Hauptperson angezeigt.",
+      unverified: "Die Personenliste konnte nicht geladen werden, daher bleibt diese Ansicht bei der gewählten Person.",
     },
     navGroups: { essentials: "Basis", explore: "Analysieren", manage: "Verwalten" },
     nav: {
@@ -429,6 +437,8 @@ export const dictionaries = {
       primary: "メインの人",
       revoked: "取り消し済み",
       primaryOnly: "所見・実験・ブリーフはメインの人だけが対象です。",
+      unlisted: "表示していた人はこの Observatory にもういません。メインの人を表示しています。",
+      unverified: "人の一覧を読み込めなかったため、選んだ人の表示を続けています。",
     },
     navGroups: { essentials: "基本", explore: "分析", manage: "管理" },
     nav: {
@@ -520,6 +530,8 @@ export const dictionaries = {
       primary: "主要使用者",
       revoked: "已撤銷",
       primaryOnly: "發現、實驗與摘要僅涵蓋主要使用者。",
+      unlisted: "你正在檢視的人已不在此 Observatory 上，目前顯示主要使用者。",
+      unverified: "無法載入人員清單，因此此檢視仍維持你選擇的人。",
     },
     navGroups: { essentials: "重點", explore: "分析", manage: "管理" },
     nav: {

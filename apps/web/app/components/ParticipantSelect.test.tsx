@@ -3,7 +3,7 @@ import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { DEFAULT_OWNER_ID } from "../lib/participants";
+import { DEFAULT_OWNER_ID, switcherModel, type ViewedPerson } from "../lib/participants";
 import { I18nProvider } from "./I18nProvider";
 import { ParticipantSelect } from "./ParticipantSelect";
 
@@ -55,5 +55,40 @@ describe("ParticipantSelect", () => {
     const html = render(ALICE);
     expect(html).toMatch(new RegExp(`<option value="${ALICE}" selected="">Alice Smith</option>`));
     expect(html).toContain("Findings, experiments and briefs cover the primary person only.");
+  });
+
+  // The switcher renders from the same decision the reads use.
+  function renderFor(person: ViewedPerson, owners: Parameters<typeof switcherModel>[1]): string {
+    const model = switcherModel(person, owners);
+    return renderToStaticMarkup(
+      <AppRouterContext.Provider value={router}>
+        <I18nProvider locale="en" availableLocales={["en"]}>
+          <ParticipantSelect
+            owners={model.options}
+            current={model.current}
+            notice={model.notice}
+            clearCookie={model.clearCookie}
+          />
+        </I18nProvider>
+      </AppRouterContext.Provider>,
+    );
+  }
+  const PRIMARY_ROW = { id: DEFAULT_OWNER_ID, label: null, is_default: true, active: true };
+
+  test("a cookie naming someone no longer listed says the view moved to the primary person", () => {
+    const html = renderFor({ kind: "unlisted", requested: ALICE }, [PRIMARY_ROW]);
+    expect(html).toContain("no longer on this Observatory. Showing the primary person.");
+    expect(html).not.toContain("<select");
+  });
+
+  test("a failed owner list still names the person being read, and offers the way back", () => {
+    const html = renderFor({ kind: "unverified", owner: ALICE }, null);
+    expect(html).toMatch(new RegExp(`<option value="${ALICE}" selected="">${ALICE.slice(0, 8)}</option>`));
+    expect(html).toContain(`<option value="${DEFAULT_OWNER_ID}">Primary person</option>`);
+    expect(html).toContain("Could not load the list of people");
+  });
+
+  test("a single-person install with no cookie renders nothing", () => {
+    expect(renderFor({ kind: "primary" }, [PRIMARY_ROW])).toBe("");
   });
 });

@@ -49,6 +49,8 @@ import {
   type MetricSummary,
   type Moment,
   type NarrativeHistoryItem,
+  OWNERS_CACHE_KEY,
+  OWNERS_TTL_MS,
   type OwnerView,
   type Privacy,
   type Readiness,
@@ -89,7 +91,7 @@ async function ownerSwr<T>(key: string, ttlMs: number, fetcher: () => Promise<T>
 // switcher only when there is more than one. Not person data, so one cache key.
 export const safeOwners = cache(async (): Promise<OwnerView[] | null> => {
   try {
-    return (await swrCache("owners", 30_000, fetchOwners)).owners;
+    return (await swrCache(OWNERS_CACHE_KEY, OWNERS_TTL_MS, fetchOwners)).owners;
   } catch (error) {
     return swallow("owners", error);
   }

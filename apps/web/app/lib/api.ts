@@ -2,8 +2,19 @@
 // consumes). Shapes mirror server/api/v2_metrics.py responses.
 
 import { cookies } from "next/headers";
+import { cache } from "react";
 
-import { ownerScope, PARTICIPANT_COOKIE, parseOwnerCookie, PRIMARY_ONLY, scopePath } from "./participants";
+import {
+  ownerScope,
+  PARTICIPANT_COOKIE,
+  parseOwnerCookie,
+  PRIMARY_ONLY,
+  readOwner,
+  resolveViewedPerson,
+  scopePath,
+  type ViewedPerson,
+} from "./participants";
+import { swrCache } from "./ttlCache";
 
 export type MetricSummary = {
   id: string;
@@ -87,15 +98,37 @@ async function readDetail(res: Response): Promise<string | null> {
   }
 }
 
-// The person the shell's switcher selected (null = the primary person). Read
-// per request from the cookie; outside a request (tests, build) it is null.
-export async function currentOwner(): Promise<string | null> {
+// Shared with safeOwners (lib/load.ts): one cache key for the owner list.
+export const OWNERS_CACHE_KEY = "owners";
+export const OWNERS_TTL_MS = 30_000;
+
+export type ParticipantView = { person: ViewedPerson; owners: OwnerView[] | null };
+
+// Who this request is about, decided once (React cache) from the cookie AND the
+// server's owner list - see resolveViewedPerson. The list is only read when a
+// participant cookie is set, so a single-person install pays nothing. Outside a
+// request (tests, build) there is no cookie: the primary person.
+export const participantView = cache(async (): Promise<ParticipantView> => {
+  let raw: string | undefined;
   try {
-    const jar = await cookies();
-    return parseOwnerCookie(jar.get(PARTICIPANT_COOKIE)?.value);
+    raw = (await cookies()).get(PARTICIPANT_COOKIE)?.value;
   } catch {
-    return null;
+    return { person: { kind: "primary" }, owners: null };
   }
+  const requested = parseOwnerCookie(raw);
+  if (requested === null) return { person: { kind: "primary" }, owners: null };
+  let owners: OwnerView[] | null;
+  try {
+    owners = (await swrCache(OWNERS_CACHE_KEY, OWNERS_TTL_MS, fetchOwners)).owners;
+  } catch {
+    owners = null;
+  }
+  return { person: resolveViewedPerson(requested, owners), owners };
+});
+
+// The owner reads go to (null = the primary person).
+export async function currentOwner(): Promise<string | null> {
+  return readOwner((await participantView()).person);
 }
 
 // Writes go to the primary person's records only (moments, experiments,
@@ -108,7 +141,10 @@ async function assertWritable(path: string): Promise<void> {
 }
 
 async function getJson<T>(requestedPath: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
-  const path = scopePath(requestedPath, await currentOwner());
+  // A neutral path reads the same for everyone, so it never asks who is being
+  // viewed - which is also what lets participantView read the owner list.
+  const owner = ownerScope(requestedPath) === "neutral" ? null : await currentOwner();
+  const path = scopePath(requestedPath, owner);
   if (path === null) {
     // Primary-only surface while a participant is selected: no data, not an outage.
     throw new ApiError(`${requestedPath} -> ${PRIMARY_ONLY}`, 409, PRIMARY_ONLY);
