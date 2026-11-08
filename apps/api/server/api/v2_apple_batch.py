@@ -56,7 +56,9 @@ Pipeline (matches v1 ingest.py::apple_batch for compatibility):
     on each of the five migrated dedicated tables where ``source_uuid``
     matches.
   7. ``plugin.ingest(...)`` with the canonical observations (projection
-    layer keeps the v1 dedicated tables fresh from canonical writes).
+    layer keeps the v1 dedicated tables fresh from canonical writes), then
+    a second ``mark_v1_dedicated_superseded`` pass for samples deleted in
+    their own batch.
   8. Receipt completion + ``RAW_LOG_ORPHANED`` error boundary.
   9. Return v1-equivalent delivery receipt.
 
@@ -725,6 +727,18 @@ async def v2_apple_batch(
                 "wire_schema_version": 2,
             }
         )
+        # Second v1 pass after the projection: a sample deleted in its own
+        # batch is projected into the v1 tables only now, and would otherwise
+        # stay active there while canonical has superseded it.
+        if deletion_uuids:
+            late = await mark_v1_dedicated_superseded(
+                db_session,
+                owner_id=owner_id,
+                uuids=deletion_uuids,
+            )
+            for table, superseded in late.items():
+                v1_deletion_counts[table] = v1_deletion_counts.get(table, 0) + superseded
+
         count = int(result["accepted"])
         records_inserted_new = _optional_int(result.get("inserted_new"))
         records_deduped_existing = _optional_int(result.get("deduped_existing"))
