@@ -26,11 +26,44 @@ function boundaryLabel(minutes: number): string {
   return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 }
 
+type Basis = Pick<AnalyticalTimeSettings, "time_zone" | "day_boundary_minutes">;
+
+function basisLabel(basis: Basis): string {
+  return `${basis.time_zone} · day boundary ${boundaryLabel(basis.day_boundary_minutes)}`;
+}
+
+// The saved basis (from the server) is what analyses use; the form's draft is
+// only that until it is saved.
+export function TimeBasisSummary({ saved, draft }: { saved: Basis; draft: Basis }) {
+  const unsaved = draft.time_zone !== saved.time_zone || draft.day_boundary_minutes !== saved.day_boundary_minutes;
+  return (
+    <>
+      <p className="meta">Current basis: {basisLabel(saved)}</p>
+      {unsaved && <p className="meta">Not saved yet: {basisLabel(draft)}</p>}
+    </>
+  );
+}
+
+export type TimeBasisSaveStatus = { kind: "saved" } | { kind: "error"; message: string };
+
+export function TimeBasisStatus({ status }: { status: TimeBasisSaveStatus | null }) {
+  if (!status) return null;
+  return status.kind === "saved" ? (
+    <span className="meta" role="status">
+      Saved. Calendar analyses now use this time basis.
+    </span>
+  ) : (
+    <span className="exp-error" role="status">
+      {status.message}
+    </span>
+  );
+}
+
 export function AnalyticalTimeSettingsForm({ initial }: { initial: AnalyticalTimeSettings }) {
   const [timeZone, setTimeZone] = useState(initial.time_zone);
   const [boundary, setBoundary] = useState(initial.day_boundary_minutes);
   const [pending, startTransition] = useTransition();
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, setStatus] = useState<TimeBasisSaveStatus | null>(null);
   const zones = COMMON_ZONES.includes(timeZone) ? COMMON_ZONES : [timeZone, ...COMMON_ZONES];
 
   return (
@@ -74,14 +107,14 @@ export function AnalyticalTimeSettingsForm({ initial }: { initial: AnalyticalTim
                 day_boundary_minutes: boundary,
               }),
             );
-            setStatus(result.ok ? "Saved. Calendar analyses now use this time basis." : (result.error ?? "Could not save."));
+            setStatus(result.ok ? { kind: "saved" } : { kind: "error", message: result.error ?? "Could not save." });
           })}
         >
           {pending ? "Saving…" : "Save time basis"}
         </button>
-        {status && <span className={status.startsWith("Saved") ? "meta" : "exp-error"} role="status">{status}</span>}
+        <TimeBasisStatus status={status} />
       </div>
-      <p className="meta">Current basis: {timeZone} · day boundary {boundaryLabel(boundary)}</p>
+      <TimeBasisSummary saved={initial} draft={{ time_zone: timeZone, day_boundary_minutes: boundary }} />
     </article>
   );
 }
