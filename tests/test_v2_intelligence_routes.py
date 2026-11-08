@@ -180,6 +180,7 @@ class _FakeRepo:
         consent_text_hash=None,
         consented_by=None,
         actor=None,
+        reason=None,
     ):
         assert self.settings is not None
         self.settings = dataclasses.replace(
@@ -350,6 +351,76 @@ async def test_put_then_consent_grants_then_revokes(repo):
     revoked = await mod.post_consent(body=mod.ConsentRequest(granted=False), session=_FakeSession())
     assert revoked["allow_cloud_egress"] is False
     assert revoked["consent"]["granted"] is False
+
+
+async def _put(repo, mode, provider, *, api_key=None, base_url=None, fallback=None):
+    return await mod.put_intelligence(
+        request=_request(),
+        body=mod.ApplyIntelligenceRequest(
+            mode=mode,
+            primary=mod.PrimaryInput(
+                provider=provider, model="m", api_key=api_key, base_url=base_url
+            ),
+            fallback=fallback,
+        ),
+        session=_FakeSession(),
+    )
+
+
+async def _grant():
+    view = await mod.post_consent(
+        body=mod.ConsentRequest(granted=True, consent_version="2026-06"), session=_FakeSession()
+    )
+    assert view["allow_cloud_egress"] is True
+    return view
+
+
+async def test_consent_to_one_provider_does_not_carry_over_to_another(repo):
+    """Consent to A, switch to local, then to cloud with B: B must not get data."""
+    await _put(repo, "cloud", "deepseek", api_key="k")
+    await _grant()
+
+    await _put(repo, "local", "ollama", base_url="http://ollama:11434")
+    view = await _put(repo, "cloud", "openrouter", api_key="or")
+
+    assert view["allow_cloud_egress"] is False
+    assert view["consent"]["granted"] is False
+    assert "consent_revoked" in repo.audit
+
+
+async def test_a_mode_change_revokes_consent_until_it_is_granted_again(repo):
+    await _put(repo, "cloud", "deepseek", api_key="k")
+    await _grant()
+
+    await _put(repo, "local", "deepseek")
+    view = await _put(repo, "cloud", "deepseek")
+    assert view["allow_cloud_egress"] is False
+
+    await _grant()
+
+
+async def test_a_new_cloud_fallback_revokes_consent(repo):
+    await _put(repo, "cloud", "deepseek", api_key="k")
+    await _grant()
+
+    view = await _put(
+        repo,
+        "cloud",
+        "deepseek",
+        fallback=[mod.ConnectionInput(provider="openrouter", model="o", api_key="or")],
+    )
+    assert view["allow_cloud_egress"] is False
+
+
+async def test_resaving_the_same_destinations_keeps_consent(repo):
+    """Same mode and cloud destinations: a model change or key rotation keeps it."""
+    await _put(repo, "cloud", "deepseek", api_key="k")
+    await _grant()
+
+    view = await _put(repo, "cloud", "deepseek", api_key="k2")
+    assert view["allow_cloud_egress"] is True
+    assert view["consent"]["granted"] is True
+    assert "consent_revoked" not in repo.audit
 
 
 # ── test-connection (SSRF-guarded) ──────────────────────────────────────

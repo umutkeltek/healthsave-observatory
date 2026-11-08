@@ -602,6 +602,7 @@ class TimescaleIntelligenceRepository:
         consent_text_hash: str | None = None,
         consented_by: str | None = None,
         actor: str | None = None,
+        reason: str | None = None,
     ) -> None:
         """Record (or revoke) cloud-egress consent on the head row + audit it.
 
@@ -649,7 +650,11 @@ class TimescaleIntelligenceRepository:
             owner_id=owner_id,
             actor=actor,
             event_type="consent_granted" if granted else "consent_revoked",
-            metadata={"consent_version": consent_version} if granted else {},
+            metadata=(
+                {"consent_version": consent_version}
+                if granted
+                else ({"reason": reason} if reason else {})
+            ),
         )
 
     # ── fallback chain ──────────────────────────────────────────────

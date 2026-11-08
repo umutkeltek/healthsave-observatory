@@ -13,6 +13,7 @@ this repo owns:
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -336,3 +337,15 @@ async def test_record_audit_serializes_metadata_as_json(repo):
     _, params = session.find("INSERT INTO intelligence_audit_events")
     assert '"connection_id": 3' in params["metadata"]  # JSON-encoded
     assert params["event_type"] == "provider_healthcheck"
+
+
+async def test_revoking_consent_audits_the_reason(repo):
+    session = _FakeSession()
+
+    await repo.record_consent(session, granted=False, reason="egress_scope_changed")
+
+    _, update = session.find("UPDATE intelligence_settings")
+    assert update == {"owner_id": str(OWNER)}
+    _, audit = session.find("INSERT INTO intelligence_audit_events")
+    assert audit["event_type"] == "consent_revoked"
+    assert json.loads(audit["metadata"]) == {"reason": "egress_scope_changed"}
