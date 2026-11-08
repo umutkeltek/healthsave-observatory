@@ -27,13 +27,31 @@ function kindLabel(kind: string): string {
   return KINDS.find((k) => k.key === kind)?.label ?? kind;
 }
 
+// The outcome of the last submit. Its kind - not its wording - decides how it
+// renders, so a backend detail or the signed-out message is never styled as a
+// success.
+export type MomentStatus = { kind: "saved" } | { kind: "error"; message: string };
+
+export function MomentStatusLine({ status }: { status: MomentStatus | null }) {
+  if (!status) return null;
+  return status.kind === "saved" ? (
+    <span className="meta" role="status">
+      Moment added.
+    </span>
+  ) : (
+    <span className="exp-error" role="status">
+      {status.message}
+    </span>
+  );
+}
+
 export function MomentForm() {
   const [kind, setKind] = useState("custom");
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [grade, setGrade] = useState("");
   const [pending, startTransition] = useTransition();
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, setStatus] = useState<MomentStatus | null>(null);
 
   return (
     <article className="card">
@@ -96,20 +114,16 @@ export function MomentForm() {
                 setTitle("");
                 setNote("");
                 setGrade("");
-                setStatus("Moment added.");
+                setStatus({ kind: "saved" });
               } else {
-                setStatus(result.error ?? "Could not add this moment.");
+                setStatus({ kind: "error", message: result.error ?? "Could not add this moment." });
               }
             })
           }
         >
           {pending ? "Adding…" : "Add moment"}
         </button>
-        {status && (
-          <span className={status.includes("Could not") ? "exp-error" : "meta"} role="status">
-            {status}
-          </span>
-        )}
+        <MomentStatusLine status={status} />
       </div>
     </article>
   );

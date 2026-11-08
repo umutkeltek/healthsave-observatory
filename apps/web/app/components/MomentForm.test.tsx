@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MomentForm } from "./MomentForm";
+import { MomentForm, MomentStatusLine } from "./MomentForm";
 
 describe("MomentForm", () => {
   test("renders all 12 life-event kinds in the dropdown", () => {
@@ -45,5 +45,28 @@ describe("MomentForm", () => {
     // The default value of `kind` state is 'custom'. The corresponding
     // <option> for 'custom' should be marked selected.
     expect(html).toMatch(/<option[^>]*value="custom"[^>]*selected[^>]*>Other<\/option>/);
+  });
+});
+
+describe("MomentStatusLine", () => {
+  // The bug: the status was one string and its colour came from
+  // status.includes("Could not"), so a backend detail or the signed-out
+  // message rendered with the success style.
+  test("a failure renders as an error whatever its wording", () => {
+    for (const message of ["title must not be empty", "Your session has ended.", "Could not add this moment."]) {
+      const html = renderToStaticMarkup(<MomentStatusLine status={{ kind: "error", message }} />);
+      expect(html).toContain("exp-error");
+      expect(html).toContain(message);
+    }
+  });
+
+  test("a saved moment renders as a quiet confirmation", () => {
+    const html = renderToStaticMarkup(<MomentStatusLine status={{ kind: "saved" }} />);
+    expect(html).toContain('class="meta"');
+    expect(html).toContain("Moment added.");
+  });
+
+  test("no status renders nothing", () => {
+    expect(renderToStaticMarkup(<MomentStatusLine status={null} />)).toBe("");
   });
 });
