@@ -31,19 +31,23 @@ export async function POST(request: Request) {
 
   if (auth.mode !== "password") return new NextResponse(null, relativeRedirect(next));
 
+  // The form is a plain browser POST: every outcome goes back to a page the
+  // person can read, never a JSON body.
+  const backToSignIn = (error: "1" | "locked") => {
+    const retry = new URLSearchParams({ error });
+    if (next !== "/") retry.set("next", next);
+    return `/login?${retry}`;
+  };
+
   if (passwordAttempts.isBlocked()) {
-    return NextResponse.json(
-      { detail: "too_many_attempts" },
-      { status: 429, headers: { "retry-after": "60", "cache-control": "no-store" } },
-    );
+    const init = relativeRedirect(backToSignIn("locked"));
+    return new NextResponse(null, { ...init, headers: { ...init.headers, "retry-after": "60" } });
   }
 
   if (!(await verifyWebPassword(candidate))) {
     passwordAttempts.recordFailure();
     await new Promise((resolve) => setTimeout(resolve, FAILED_ATTEMPT_DELAY_MS));
-    const retry = new URLSearchParams({ error: "1" });
-    if (next !== "/") retry.set("next", next);
-    return new NextResponse(null, relativeRedirect(`/login?${retry}`));
+    return new NextResponse(null, relativeRedirect(backToSignIn("1")));
   }
 
   const response = new NextResponse(null, relativeRedirect(next));

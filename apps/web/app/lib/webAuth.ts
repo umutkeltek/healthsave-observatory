@@ -152,8 +152,9 @@ export function requestIsHttps(url: URL, forwardedProto: string | null): boolean
 }
 
 // Wrong-password limiter for the whole process: after FAILED_LOGIN_LIMIT misses
-// inside FAILED_LOGIN_WINDOW_MS, sign-in answers 429 without checking until the
-// window moves on. Generated passwords are far out of reach anyway; this is for
+// inside FAILED_LOGIN_WINDOW_MS, sign-in sends the browser back to
+// /login?error=locked (Retry-After: 60) without checking until the window
+// moves on. Generated passwords are far out of reach anyway; this is for
 // passwords a person picks.
 export const FAILED_LOGIN_LIMIT = 10;
 export const FAILED_LOGIN_WINDOW_MS = 60_000;
