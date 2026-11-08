@@ -6,16 +6,19 @@ import type { Divergence } from "../lib/provenance";
 // `live` (a reachable backend with real streams) renders the principle rather
 // than fixture disagreements, because divergence detection is not wired to an
 // API yet and fabricating disagreements would be the exact dishonesty this
-// section exists to refuse. The demo path renders the illustrative cards.
+// section exists to refuse. For the same reason it never claims "no conflict":
+// it points at Compare, where the gap can be seen. The non-live path renders
+// whatever divergences it is given.
 export function DivergenceLog({ divergences, live }: { divergences: Divergence[]; live?: boolean }) {
   if (live) {
     return (
       <article className="card div-empty">
         <p className="empty">
-          No source conflict is flagged in the current stream set. When two sources disagree,
-          both readings stay in the Local Vault. The Observatory can prefer a higher-confidence
-          stream for narration, but it keeps the gap inspectable instead of blending it into a
-          synthetic number.
+          Source conflicts are not detected automatically yet, so an empty log does not mean the
+          sources agree. When two sources disagree, both readings stay in the Local Vault. The
+          Observatory can prefer a higher-confidence stream for narration, but it keeps the gap
+          inspectable instead of blending it into a synthetic number.{" "}
+          <a href="/compare?mode=source">Compare a signal&apos;s sources side by side</a>.
         </p>
       </article>
     );
