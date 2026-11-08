@@ -1,6 +1,7 @@
 import { cache } from "react";
 import Link from "next/link";
 import { type Finding, isNarratorOff, type Privacy, type Readiness } from "../../lib/api";
+import { type NarratorState, narratorState } from "../../lib/narrator";
 import {
   agoLabel,
   dataState,
@@ -358,6 +359,10 @@ async function trendOptions(): Promise<TodayTrendOption[]> {
   });
 }
 
+export function briefSummaryLabel(state: NarratorState): string {
+  return state === "off" ? "Briefs are off" : state === "unknown" ? "Status unknown" : "Not available yet";
+}
+
 export async function TodayStorySection() {
   if (!(await hasAnyData())) return null;
   const [latest, findings, privacy, narratives, candidates, experiments, trends] =
@@ -370,6 +375,8 @@ export async function TodayStorySection() {
       safeExperiments(),
       trendOptions(),
     ]);
+  // A failed privacy read is "unknown": briefs are not reported as off.
+  const narrator = narratorState(privacy);
   const hasBrief = Boolean(latest?.weekly_summary || latest?.daily_briefing);
   return (
     <>
@@ -384,7 +391,7 @@ export async function TodayStorySection() {
         {hasBrief ? (
           <WeeklyBriefCard
             latest={latest}
-            narratorOff={isNarratorOff(privacy?.provider)}
+            narratorOff={narrator === "off"}
             history={narratives ?? []}
           />
         ) : (
@@ -392,14 +399,12 @@ export async function TodayStorySection() {
             <summary>
               Weekly brief
               <span>
-                {isNarratorOff(privacy?.provider)
-                  ? "Briefs are off"
-                  : "Not available yet"}
+                {briefSummaryLabel(narrator)}
               </span>
             </summary>
             <WeeklyBriefCard
               latest={latest}
-              narratorOff={isNarratorOff(privacy?.provider)}
+              narratorOff={narrator === "off"}
               history={narratives ?? []}
             />
           </details>

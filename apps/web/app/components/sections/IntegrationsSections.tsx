@@ -1,8 +1,9 @@
 // Integrations page section: live source/destination posture from v2 reads.
 import Link from "next/link";
 
-import { isNarratorOff, type Readiness, type SourceView } from "../../lib/api";
+import type { Readiness, SourceView } from "../../lib/api";
 import { agoLabel, safePrivacy, safeReadiness, safeSources } from "../../lib/load";
+import { narratorState } from "../../lib/narrator";
 import { freshness, friendlyName } from "../../lib/provenance";
 
 // "connected" only while the source keeps syncing; past the provenance stale
@@ -55,18 +56,22 @@ export async function IntegrationsSection() {
     sourceCard(source, ingestBySource.get(source.plugin_id)),
   );
 
-  const narratorOff = !privacy || isNarratorOff(privacy.provider);
+  // A failed privacy read is "unknown", not "off" (Settings does the same).
+  const narrator = narratorState(privacy);
   const routes: IntegrationCard[] = [
     {
       key: "narrator",
       name: "Narrator",
       kind: "destination · briefs",
       state: "narrator",
-      detail: narratorOff
-        ? "Off. Findings remain computed evidence only."
-        : `${privacy.provider} (${privacy.is_local ? "local" : "cloud"}). Cloud egress ${
-            privacy.cloud_active ? "active" : "blocked"
-          }.`,
+      detail:
+        !privacy || narrator === "unknown"
+          ? "Narrator state unknown: the privacy settings could not be read."
+          : narrator === "off"
+            ? "Off. Findings remain computed evidence only."
+            : `${privacy.provider} (${privacy.is_local ? "local" : "cloud"}). Cloud egress ${
+                privacy.cloud_active ? "active" : "blocked"
+              }.`,
       href: "/intelligence",
       hrefLabel: "Manage",
     },
