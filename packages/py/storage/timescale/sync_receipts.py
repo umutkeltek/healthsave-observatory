@@ -393,8 +393,13 @@ async def complete_receipt_idempotency(
     storage_result_level: str = "accepted_only",
     sample_min_at: str | None = None,
     sample_max_at: str | None = None,
+    sync_run_id: str | None = None,
 ) -> None:
-    """Freeze a claimed response inside the ingest transaction."""
+    """Freeze a claimed response inside the ingest transaction.
+
+    ``sync_run_id`` is written here, in the ingest transaction, so the receipt
+    names its run even when the later best-effort enrichment fails.
+    """
 
     if status not in {"processed", "empty"}:
         raise ValueError("a successful idempotency claim must complete as processed or empty")
@@ -405,6 +410,7 @@ async def complete_receipt_idempotency(
             UPDATE healthsave_sync_receipts
             SET
                 status = :status,
+                sync_run_id = COALESCE(:sync_run_id, sync_run_id),
                 records_received = :records_received,
                 records_accepted = :records_accepted,
                 records_skipped = :records_skipped,
@@ -429,6 +435,7 @@ async def complete_receipt_idempotency(
             "idempotency_key": idempotency_key,
             "payload_hash": payload_hash,
             "status": status,
+            "sync_run_id": sync_run_id,
             "records_received": records_received,
             "records_accepted": records_accepted,
             "records_skipped": records_skipped,
