@@ -18,8 +18,12 @@
 // browser, where the live pill says "updating" and the page redraws once the
 // refresh has landed (components/LiveStatus.tsx).
 //
-// Writes drop only the keys they change (invalidateSwr, from lib/api.ts), and a
-// fetch that started before a drop cannot put its older answer back.
+// New data on the backend (the change poll's fingerprint moved) EXPIRES every
+// entry instead of deleting it (expireSwrCache): each is served once more at
+// once while one background refresh runs, and a fetch already in flight stays
+// shared. Writes drop only the keys they change (invalidateSwr, from
+// lib/api.ts); a fetch that started before a drop cannot put its older answer
+// back, and one that started before an expire lands already expired.
 
 export const FAILURE_BACKOFF_MS = 5_000;
 // Beyond this a cached value is too old to show even while refreshing.
@@ -29,6 +33,9 @@ type Entry = {
   value: unknown;
   hasValue: boolean;
   storedAt: number;
+  // The expire epoch the stored value was fetched in; older than the current
+  // epoch means the backend changed since: stale, whatever its age.
+  epoch: number;
   inflight: Promise<unknown> | null;
   failedAt: number | null;
   error: unknown;
@@ -41,8 +48,11 @@ type Entry = {
 // clear a cache no page reads. The state lives on globalThis under one key.
 type SharedState = {
   entries: Map<string, Entry>;
-  // Background refreshes of values that were served stale, still running.
-  staleRefreshing: number;
+  // Bumped by expireSwrCache.
+  expireEpoch: number;
+  // Entries whose stale value was served while their background refresh runs.
+  // A clear empties it: a dropped entry is no longer on any page.
+  staleRefreshing: Set<Entry>;
   // When the last of those finished (ms, server clock); 0 = never.
   staleSettledAt: number;
 };
@@ -51,12 +61,13 @@ const STATE_KEY = Symbol.for("healthsave.web.swrCache");
 
 function shared(): SharedState {
   const holder = globalThis as typeof globalThis & { [STATE_KEY]?: SharedState };
-  holder[STATE_KEY] ??= { entries: new Map(), staleRefreshing: 0, staleSettledAt: 0 };
+  holder[STATE_KEY] ??= { entries: new Map(), expireEpoch: 0, staleRefreshing: new Set(), staleSettledAt: 0 };
   return holder[STATE_KEY];
 }
 
 function fetchInto(state: SharedState, key: string, entry: Entry, fetcher: () => Promise<unknown>, background: boolean) {
-  if (background) state.staleRefreshing += 1;
+  if (background) state.staleRefreshing.add(entry);
+  const startedIn = state.expireEpoch;
   // An entry dropped (invalidated) while this fetch ran is no longer in the
   // map: its answer predates the drop and is not stored.
   const current = () => state.entries.get(key) === entry;
@@ -67,6 +78,7 @@ function fetchInto(state: SharedState, key: string, entry: Entry, fetcher: () =>
           entry.value = value;
           entry.hasValue = true;
           entry.storedAt = Date.now();
+          entry.epoch = startedIn;
           entry.failedAt = null;
           entry.error = undefined;
         }
@@ -82,10 +94,7 @@ function fetchInto(state: SharedState, key: string, entry: Entry, fetcher: () =>
     )
     .finally(() => {
       if (entry.inflight === promise) entry.inflight = null;
-      if (background) {
-        state.staleRefreshing -= 1;
-        state.staleSettledAt = Date.now();
-      }
+      if (background && state.staleRefreshing.delete(entry)) state.staleSettledAt = Date.now();
     });
   entry.inflight = promise;
   // A background refresh has no caller; its failure is recorded on the entry
@@ -99,7 +108,15 @@ export async function swrCache<T>(key: string, ttlMs: number, fetcher: () => Pro
   const now = Date.now();
   let entry = state.entries.get(key);
   if (!entry) {
-    entry = { value: undefined, hasValue: false, storedAt: 0, inflight: null, failedAt: null, error: undefined };
+    entry = {
+      value: undefined,
+      hasValue: false,
+      storedAt: 0,
+      epoch: state.expireEpoch,
+      inflight: null,
+      failedAt: null,
+      error: undefined,
+    };
     state.entries.set(key, entry);
   }
 
@@ -110,7 +127,7 @@ export async function swrCache<T>(key: string, ttlMs: number, fetcher: () => Pro
 
   if (entry.hasValue) {
     const age = now - entry.storedAt;
-    if (age < ttlMs) return entry.value as T;
+    if (age < ttlMs && entry.epoch === state.expireEpoch) return entry.value as T;
     if (age < MAX_STALE_MS) {
       if (!entry.inflight) fetchInto(state, key, entry, fetcher, true);
       return entry.value as T;
@@ -123,7 +140,7 @@ export async function swrCache<T>(key: string, ttlMs: number, fetcher: () => Pro
 /** Stale values being refreshed right now, and when the last such refresh finished. */
 export function staleRefreshStatus(): { refreshing: number; settledAt: number } {
   const state = shared();
-  return { refreshing: state.staleRefreshing, settledAt: state.staleSettledAt };
+  return { refreshing: state.staleRefreshing.size, settledAt: state.staleSettledAt };
 }
 
 /**
@@ -131,14 +148,28 @@ export function staleRefreshStatus(): { refreshing: number; settledAt: number } 
  * per-person ("@owner:…") and parameterised (":…") variants.
  */
 export function invalidateSwr(prefixes: readonly string[]): void {
-  const { entries } = shared();
-  for (const key of [...entries.keys()]) {
-    if (prefixes.some((p) => key === p || key.startsWith(`${p}@`) || key.startsWith(`${p}:`))) entries.delete(key);
+  const { entries, staleRefreshing } = shared();
+  for (const [key, entry] of [...entries]) {
+    if (prefixes.some((p) => key === p || key.startsWith(`${p}@`) || key.startsWith(`${p}:`))) {
+      entries.delete(key);
+      staleRefreshing.delete(entry);
+    }
   }
 }
 
-// Dropped by the change poll when the backend's fingerprint moves, and by a
-// write that can change any read (the analytical time basis). Also the test seam.
+/**
+ * The backend has new data (the change poll's fingerprint moved): every value
+ * is stale from now on. Values stay and are served once more while their
+ * refresh runs; fetches in flight stay shared.
+ */
+export function expireSwrCache(): void {
+  shared().expireEpoch += 1;
+}
+
+// Drops everything, in-flight fetches included: only for a write that changes
+// what every read means (the analytical time basis). Also the test seam.
 export function clearSwrCache(): void {
-  shared().entries.clear();
+  const state = shared();
+  state.entries.clear();
+  state.staleRefreshing.clear();
 }

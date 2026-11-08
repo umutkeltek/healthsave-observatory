@@ -53,3 +53,57 @@ describe("liveAfterPoll", () => {
     expect(liveAfterPoll(null, 100)).toEqual({ updating: false, redraw: false });
   });
 });
+
+// The re-review: every poll that saw a new fingerprint deleted the whole read
+// cache. During a sync that happens poll after poll: the instant stale path
+// never ran, and each delete let the next caller start another fetch for a
+// key already being fetched.
+describe("a fingerprint move expires the cache instead of deleting it", () => {
+  let tag = 0;
+  const poll = async () => {
+    const sent = `"t${tag}"`;
+    tag += 1;
+    const answer = `"t${tag}"`;
+    globalThis.fetch = (async () =>
+      Response.json({ version_token: answer }, { headers: { etag: answer } })) as unknown as typeof fetch;
+    await GET(new Request("http://box/api/changes", { headers: { "if-none-match": sent } }));
+  };
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  function controlled() {
+    let calls = 0;
+    let resolve: (value: string) => void = () => {};
+    return {
+      fetcher: () => {
+        calls += 1;
+        return new Promise<string>((res) => (resolve = res));
+      },
+      calls: () => calls,
+      resolve: (value: string) => resolve(value),
+    };
+  }
+
+  test("after new data the cached value is served at once while one refresh runs", async () => {
+    await swrCache("readiness", 30_000, async () => "v1");
+    await poll();
+    const backend = controlled();
+    const read = swrCache("readiness", 30_000, backend.fetcher);
+    expect(await Promise.race([read, settle().then(() => "still waiting")])).toBe("v1");
+    expect(backend.calls()).toBe(1);
+    const signal = readCacheSignal((await GET(new Request("http://box/api/changes"))).headers);
+    expect(signal?.refreshing).toBe(1);
+    backend.resolve("v2");
+  });
+
+  test("a fetch in flight stays shared across fingerprint moves", async () => {
+    const backend = controlled();
+    const reads = [swrCache("readiness", 30_000, backend.fetcher)];
+    for (let i = 0; i < 3; i++) {
+      await poll();
+      reads.push(swrCache("readiness", 30_000, backend.fetcher));
+    }
+    expect(backend.calls()).toBe(1);
+    backend.resolve("v1");
+    expect(await Promise.all(reads)).toEqual(["v1", "v1", "v1", "v1"]);
+  });
+});

@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 
 import { applyIntelligence, createMoment, postInsightsTrigger, postTestConnection, updateAnalyticalTime } from "./api";
-import { clearSwrCache, FAILURE_BACKOFF_MS, MAX_STALE_MS, staleRefreshStatus, swrCache } from "./ttlCache";
+import {
+  clearSwrCache,
+  expireSwrCache,
+  FAILURE_BACKOFF_MS,
+  MAX_STALE_MS,
+  staleRefreshStatus,
+  swrCache,
+} from "./ttlCache";
 
 const T0 = new Date("2026-11-08T12:00:00Z").getTime();
 const TTL = 30_000;
@@ -120,6 +127,30 @@ describe("swrCache", () => {
     backend.resolve("old");
     expect(await read).toBe("old");
     expect(await swrCache("k", TTL, async () => "new")).toBe("new");
+  });
+});
+
+describe("expireSwrCache", () => {
+  test("a fresh value becomes stale: served at once, refreshed once in the background", async () => {
+    await swrCache("k", TTL, async () => "v1");
+    expireSwrCache();
+    const backend = controlled<string>();
+    expect(await swrCache("k", TTL, backend.fetcher)).toBe("v1");
+    expect(backend.calls()).toBe(1);
+    backend.resolve("v2");
+    await settle();
+    expect(await swrCache("k", TTL, fail)).toBe("v2");
+  });
+
+  test("a fetch that started before an expire lands already stale", async () => {
+    const backend = controlled<string>();
+    const read = swrCache("k", TTL, backend.fetcher);
+    expireSwrCache();
+    backend.resolve("before the change");
+    expect(await read).toBe("before the change");
+    const next = controlled<string>();
+    expect(await swrCache("k", TTL, next.fetcher)).toBe("before the change");
+    expect(next.calls()).toBe(1);    next.resolve("after");
   });
 });
 

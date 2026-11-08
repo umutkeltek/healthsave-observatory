@@ -4,7 +4,7 @@
 // an unchanged state costs a header exchange and nothing more.
 
 import { cacheSignalHeaders } from "../../lib/liveSignal";
-import { clearSwrCache, staleRefreshStatus } from "../../lib/ttlCache";
+import { expireSwrCache, staleRefreshStatus } from "../../lib/ttlCache";
 
 export const dynamic = "force-dynamic";
 
@@ -35,10 +35,10 @@ export async function GET(request: Request): Promise<Response> {
     const body = await res.json();
     const etag = res.headers.get("etag");
     // A 200 after the browser supplied an ETag means the backend fingerprint
-    // changed. Drop process-level SWR entries before LiveStatus refreshes the
-    // route, otherwise router.refresh() can keep serving stale values until
-    // each entry's independent TTL expires.
-    if (inm && etag && etag !== inm) clearSwrCache();
+    // changed. Expire (not delete) the process-level read cache: the next page
+    // render shows each value once more at once while one background refresh
+    // per key runs, and the "updating" signal below says so.
+    if (inm && etag && etag !== inm) expireSwrCache();
     // Whether the page may be showing cached values that are being refreshed
     // (LiveStatus says "updating", then redraws).
     return Response.json(body, {
