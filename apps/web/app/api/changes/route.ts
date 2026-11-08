@@ -3,7 +3,8 @@
 // key is injected server-side. ETag/304 semantics pass straight through, so
 // an unchanged state costs a header exchange and nothing more.
 
-import { clearSwrCache } from "../../lib/ttlCache";
+import { cacheSignalHeaders } from "../../lib/liveSignal";
+import { clearSwrCache, staleRefreshStatus } from "../../lib/ttlCache";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,10 @@ export async function GET(request: Request): Promise<Response> {
       signal: AbortSignal.timeout(5000),
     });
     if (res.status === 304) {
-      return new Response(null, { status: 304, headers: inm ? { ETag: inm } : undefined });
+      return new Response(null, {
+        status: 304,
+        headers: { ...(inm ? { ETag: inm } : {}), ...cacheSignalHeaders(staleRefreshStatus()) },
+      });
     }
     if (!res.ok) {
       return Response.json({ error: `backend ${res.status}` }, { status: 502 });
@@ -35,7 +39,11 @@ export async function GET(request: Request): Promise<Response> {
     // route, otherwise router.refresh() can keep serving stale values until
     // each entry's independent TTL expires.
     if (inm && etag && etag !== inm) clearSwrCache();
-    return Response.json(body, { headers: etag ? { ETag: etag } : undefined });
+    // Whether the page may be showing cached values that are being refreshed
+    // (LiveStatus says "updating", then redraws).
+    return Response.json(body, {
+      headers: { ...(etag ? { ETag: etag } : {}), ...cacheSignalHeaders(staleRefreshStatus()) },
+    });
   } catch {
     return Response.json({ error: "backend unreachable" }, { status: 502 });
   }

@@ -1,29 +1,38 @@
-// Process-level stale-while-revalidate cache for the few backend reads that
-// are genuinely expensive (canonical-coverage aggregates run 5-20s on a
-// 2M-row store). Semantics:
-//   - fresh hit  → cached value, no fetch
-//   - stale hit  → cached value IMMEDIATELY + one background refresh
-//   - miss       → await the fetch (first request after boot pays once)
-// Per-request dedupe stays in React cache(); this layer makes the SECOND
-// page view (and every navigation) instant. Single-user dashboard: a value
-// up to ttlMs old is indistinguishable from live for these surfaces.
+// Process-level stale-while-revalidate cache for the backend reads that are
+// genuinely expensive (canonical-coverage aggregates run 5-20s cold on a
+// 2M-row store). Per-request dedupe stays in React cache(); this layer makes
+// the SECOND page view (and every navigation) instant. Semantics per key:
+//   - fresh (younger than ttlMs)  → cached value, no fetch
+//   - stale, backend healthy      → cached value AT ONCE + one background
+//                                   refresh; never blocks the page
+//   - miss, or older than MAX_STALE_MS → wait for the fetch
+//   - the last fetch failed       → no stale value is served as current: within
+//                                   FAILURE_BACKOFF_MS the read fails at once
+//                                   (the page shows unreachable) without asking
+//                                   the backend again; after it, one blocking
+//                                   attempt
+// Every fetch is single-flight: concurrent callers share the one in flight.
 //
-// Stale data must not pass for current when the backend is down, so a stale
-// value is served only while the backend is still answering:
-//   - once a background refresh has failed, the next read waits for the
-//     backend (and fails like any other read if it is still down)
-//   - past MAX_AGE_FACTOR × ttlMs a value is never served at all
-// Every successful write clears the cache (lib/api.ts), and a refresh that
-// started before the clear cannot put its older answer back.
+// Honest staleness: a stale value shown while its refresh runs is reported by
+// staleRefreshStatus(). The change poll (app/api/changes) passes it to the
+// browser, where the live pill says "updating" and the page redraws once the
+// refresh has landed (components/LiveStatus.tsx).
+//
+// Writes drop only the keys they change (invalidateSwr, from lib/api.ts), and a
+// fetch that started before a drop cannot put its older answer back.
+
+export const FAILURE_BACKOFF_MS = 5_000;
+// Beyond this a cached value is too old to show even while refreshing.
+export const MAX_STALE_MS = 24 * 60 * 60_000;
 
 type Entry = {
   value: unknown;
+  hasValue: boolean;
   storedAt: number;
-  refreshing: boolean;
-  refreshFailed: boolean;
+  inflight: Promise<unknown> | null;
+  failedAt: number | null;
+  error: unknown;
 };
-
-const MAX_AGE_FACTOR = 10;
 
 // One cache per server process, not per bundle: Next bundles route handlers
 // (app/api/changes, which clears this cache when the backend changes)
@@ -32,54 +41,104 @@ const MAX_AGE_FACTOR = 10;
 // clear a cache no page reads. The state lives on globalThis under one key.
 type SharedState = {
   entries: Map<string, Entry>;
-  // Bumped by clearSwrCache, so an answer fetched before a write is dropped.
-  generation: number;
+  // Background refreshes of values that were served stale, still running.
+  staleRefreshing: number;
+  // When the last of those finished (ms, server clock); 0 = never.
+  staleSettledAt: number;
 };
 
 const STATE_KEY = Symbol.for("healthsave.web.swrCache");
 
 function shared(): SharedState {
   const holder = globalThis as typeof globalThis & { [STATE_KEY]?: SharedState };
-  holder[STATE_KEY] ??= { entries: new Map(), generation: 0 };
+  holder[STATE_KEY] ??= { entries: new Map(), staleRefreshing: 0, staleSettledAt: 0 };
   return holder[STATE_KEY];
 }
 
-function remember(key: string, value: unknown, fetchedIn: number): void {
-  const state = shared();
-  if (fetchedIn !== state.generation) return;
-  state.entries.set(key, { value, storedAt: Date.now(), refreshing: false, refreshFailed: false });
+function fetchInto(state: SharedState, key: string, entry: Entry, fetcher: () => Promise<unknown>, background: boolean) {
+  if (background) state.staleRefreshing += 1;
+  // An entry dropped (invalidated) while this fetch ran is no longer in the
+  // map: its answer predates the drop and is not stored.
+  const current = () => state.entries.get(key) === entry;
+  const promise: Promise<unknown> = fetcher()
+    .then(
+      (value) => {
+        if (current()) {
+          entry.value = value;
+          entry.hasValue = true;
+          entry.storedAt = Date.now();
+          entry.failedAt = null;
+          entry.error = undefined;
+        }
+        return value;
+      },
+      (error: unknown) => {
+        if (current()) {
+          entry.failedAt = Date.now();
+          entry.error = error;
+        }
+        throw error;
+      },
+    )
+    .finally(() => {
+      if (entry.inflight === promise) entry.inflight = null;
+      if (background) {
+        state.staleRefreshing -= 1;
+        state.staleSettledAt = Date.now();
+      }
+    });
+  entry.inflight = promise;
+  // A background refresh has no caller; its failure is recorded on the entry
+  // and surfaces on the next read.
+  if (background) promise.catch(() => {});
+  return promise;
 }
 
 export async function swrCache<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
+  const state = shared();
   const now = Date.now();
-  const entry = shared().entries.get(key);
-  const fetchedIn = shared().generation;
-
-  if (entry && !entry.refreshFailed && now - entry.storedAt < ttlMs * MAX_AGE_FACTOR) {
-    if (now - entry.storedAt >= ttlMs && !entry.refreshing) {
-      entry.refreshing = true;
-      void fetcher().then(
-        (value) => remember(key, value, fetchedIn),
-        () => {
-          // The loaders' logging choke point reports the failure on the
-          // awaited read that follows.
-          entry.refreshing = false;
-          entry.refreshFailed = true;
-        },
-      );
-    }
-    return entry.value as T;
+  let entry = state.entries.get(key);
+  if (!entry) {
+    entry = { value: undefined, hasValue: false, storedAt: 0, inflight: null, failedAt: null, error: undefined };
+    state.entries.set(key, entry);
   }
 
-  const value = await fetcher();
-  remember(key, value, fetchedIn);
-  return value;
+  if (entry.failedAt !== null) {
+    if (!entry.inflight && now - entry.failedAt < FAILURE_BACKOFF_MS) throw entry.error;
+    return (await (entry.inflight ?? fetchInto(state, key, entry, fetcher, false))) as T;
+  }
+
+  if (entry.hasValue) {
+    const age = now - entry.storedAt;
+    if (age < ttlMs) return entry.value as T;
+    if (age < MAX_STALE_MS) {
+      if (!entry.inflight) fetchInto(state, key, entry, fetcher, true);
+      return entry.value as T;
+    }
+  }
+
+  return (await (entry.inflight ?? fetchInto(state, key, entry, fetcher, false))) as T;
 }
 
-// Dropped on every successful backend write, and by the change poll when the
-// backend's fingerprint moves. Also the test seam.
-export function clearSwrCache(): void {
+/** Stale values being refreshed right now, and when the last such refresh finished. */
+export function staleRefreshStatus(): { refreshing: number; settledAt: number } {
   const state = shared();
-  state.entries.clear();
-  state.generation += 1;
+  return { refreshing: state.staleRefreshing, settledAt: state.staleSettledAt };
+}
+
+/**
+ * Drop the keys a write changed. A prefix matches the key itself and its
+ * per-person ("@owner:…") and parameterised (":…") variants.
+ */
+export function invalidateSwr(prefixes: readonly string[]): void {
+  const { entries } = shared();
+  for (const key of [...entries.keys()]) {
+    if (prefixes.some((p) => key === p || key.startsWith(`${p}@`) || key.startsWith(`${p}:`))) entries.delete(key);
+  }
+}
+
+// Dropped by the change poll when the backend's fingerprint moves, and by a
+// write that can change any read (the analytical time basis). Also the test seam.
+export function clearSwrCache(): void {
+  shared().entries.clear();
 }

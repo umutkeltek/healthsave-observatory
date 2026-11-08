@@ -18,12 +18,15 @@ export function Shell({
   participantSwitcher,
   topbarStatus,
   density,
+  renderedAt,
   children,
 }: {
   sidebarStatus: ReactNode;
   participantSwitcher?: ReactNode;
   topbarStatus: ReactNode;
   density: Density;
+  // Server clock at render, for the live poll's redraw (LiveStatus).
+  renderedAt?: number;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -48,7 +51,7 @@ export function Shell({
         onClick={() => setOpen(false)}
       />
       <div className="app-main">
-        <Topbar status={topbarStatus} onMenu={() => setOpen((v) => !v)} />
+        <Topbar status={topbarStatus} renderedAt={renderedAt} onMenu={() => setOpen((v) => !v)} />
         <main className="content">{children}</main>
       </div>
     </div>

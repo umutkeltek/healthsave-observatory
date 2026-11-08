@@ -32,9 +32,11 @@ const TITLE_KEYS = {
 
 export function Topbar({
   status,
+  renderedAt,
   onMenu,
 }: {
   status: ReactNode;
+  renderedAt?: number;
   onMenu?: () => void;
 }) {
   const pathname = usePathname();
@@ -69,7 +71,7 @@ export function Topbar({
         </button>
         <LanguageSwitcher compact />
         <div className="topbar-health" aria-label={dict.chrome.serviceStatus}>
-          <LiveStatus />
+          <LiveStatus renderedAt={renderedAt} />
           {status}
         </div>
         <ThemeToggle />

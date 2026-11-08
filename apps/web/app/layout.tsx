@@ -59,6 +59,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <I18nProvider locale={locale} availableLocales={availableLocales}>
             <Shell
               density={density}
+              renderedAt={Date.now()}
               participantSwitcher={
                 <Suspense fallback={null}>
                   <ParticipantSwitcher />

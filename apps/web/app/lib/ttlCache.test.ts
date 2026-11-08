@@ -1,12 +1,32 @@
 import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 
 import { createMoment, updateAnalyticalTime } from "./api";
-import { clearSwrCache, swrCache } from "./ttlCache";
+import { clearSwrCache, FAILURE_BACKOFF_MS, MAX_STALE_MS, staleRefreshStatus, swrCache } from "./ttlCache";
 
 const T0 = new Date("2026-11-08T12:00:00Z").getTime();
 const TTL = 30_000;
 const fail = () => Promise.reject(new Error("backend down"));
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+// A fetcher the test resolves by hand, counting how often it was called.
+function controlled<T>() {
+  let calls = 0;
+  let resolve: (value: T) => void = () => {};
+  let reject: (error: Error) => void = () => {};
+  const fetcher = () => {
+    calls += 1;
+    return new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+  };
+  return {
+    fetcher,
+    calls: () => calls,
+    resolve: (value: T) => resolve(value),
+    reject: (error: Error) => reject(error),
+  };
+}
 
 const realFetch = globalThis.fetch;
 
@@ -28,28 +48,78 @@ describe("swrCache", () => {
     expect(await swrCache("k", TTL, fail)).toBe("v1");
   });
 
-  test("a stale hit is served once while it refreshes in the background", async () => {
-    await swrCache("k", TTL, async () => "v1");
-    setSystemTime(T0 + TTL + 1);
-    expect(await swrCache("k", TTL, async () => "v2")).toBe("v1");
-    await settle();
-    expect(await swrCache("k", TTL, fail)).toBe("v2");
+  test("concurrent misses share one fetch", async () => {
+    const backend = controlled<string>();
+    const reads = [swrCache("k", TTL, backend.fetcher), swrCache("k", TTL, backend.fetcher)];
+    backend.resolve("v1");
+    expect(await Promise.all(reads)).toEqual(["v1", "v1"]);
+    expect(backend.calls()).toBe(1);
   });
 
-  // The bug: with the backend down, every refresh failed and the cache kept
-  // serving the old value as if it were current, forever.
-  test("after a failed refresh the next read waits for the backend instead of serving stale data", async () => {
+  // The review's regression: readiness older than 10x its TTL (5 minutes) was
+  // refused and every view waited on a 5-20 s read.
+  test("a stale value from a healthy backend is served at once, with one shared background refresh", async () => {
+    await swrCache("readiness", TTL, async () => "v1");
+    setSystemTime(T0 + 3 * 60 * 60_000);
+    const backend = controlled<string>();
+    expect(await swrCache("readiness", TTL, backend.fetcher)).toBe("v1");
+    expect(await swrCache("readiness", TTL, backend.fetcher)).toBe("v1");
+    expect(backend.calls()).toBe(1);
+    expect(staleRefreshStatus().refreshing).toBe(1);
+
+    backend.resolve("v2");
+    await settle();
+    expect(staleRefreshStatus()).toEqual({ refreshing: 0, settledAt: T0 + 3 * 60 * 60_000 });
+    expect(await swrCache("readiness", TTL, fail)).toBe("v2");
+  });
+
+  test("past the max stale age the read waits for the backend", async () => {
+    await swrCache("k", TTL, async () => "v1");
+    setSystemTime(T0 + MAX_STALE_MS);
+    expect(await swrCache("k", TTL, async () => "v2")).toBe("v2");
+  });
+
+  // Truthfulness: once the backend has failed, the old value is not shown
+  // as current; the read fails (unreachable) instead.
+  test("after a failed refresh the stale value is no longer served", async () => {
     await swrCache("k", TTL, async () => "v1");
     setSystemTime(T0 + TTL + 1);
     expect(await swrCache("k", TTL, fail)).toBe("v1");
     await settle();
-    await expect(swrCache("k", TTL, fail)).rejects.toThrow("backend down");
+    await expect(swrCache("k", TTL, async () => "v2")).rejects.toThrow("backend down");
   });
 
-  test("a value past its max age is never served, even before any refresh failed", async () => {
-    await swrCache("k", TTL, async () => "v1");
-    setSystemTime(T0 + 60 * 60_000);
+  // The review: after one failure every request started its own blocking fetch.
+  test("within the backoff after a failure no request reaches the backend", async () => {
     await expect(swrCache("k", TTL, fail)).rejects.toThrow("backend down");
+    let calls = 0;
+    const counting = async () => {
+      calls += 1;
+      return "v";
+    };
+    setSystemTime(T0 + FAILURE_BACKOFF_MS - 1);
+    await expect(swrCache("k", TTL, counting)).rejects.toThrow("backend down");
+    await expect(swrCache("k", TTL, counting)).rejects.toThrow("backend down");
+    expect(calls).toBe(0);
+  });
+
+  test("after the backoff one blocking attempt is shared by concurrent callers", async () => {
+    await expect(swrCache("k", TTL, fail)).rejects.toThrow("backend down");
+    setSystemTime(T0 + FAILURE_BACKOFF_MS);
+    const backend = controlled<string>();
+    const reads = [swrCache("k", TTL, backend.fetcher), swrCache("k", TTL, backend.fetcher)];
+    backend.resolve("back");
+    expect(await Promise.all(reads)).toEqual(["back", "back"]);
+    expect(backend.calls()).toBe(1);
+  });
+
+  test("a value fetched before a clear is not put back", async () => {
+    const backend = controlled<string>();
+    const read = swrCache("k", TTL, backend.fetcher);
+    clearSwrCache();
+    backend.resolve("old");
+    expect(await read).toBe("old");
+    expect(await swrCache("k", TTL, async () => "new")).toBe("new");
   });
 });
 
