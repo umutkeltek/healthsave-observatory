@@ -139,12 +139,36 @@ def test_summary_card_uses_delta_when_sufficient_samples():
     card = build_card("summary", "vital.resting_heart_rate", sd, "info")
     assert card.delta.pct == -6.4
     assert card.delta.direction == "down"
+    # Direction word and magnitude agree — not "ran -6.4%" / "decreased by -6.4%".
+    assert card.claim == "resting heart rate decreased by 6.4% vs your recent baseline"
+    assert "-6.4" not in card.claim
     # Truthful baseline prose — the aggregator baseline is 30 − window days long,
     # not a flat 30 days, and the length isn't derivable from builder inputs.
-    assert "recent baseline" in card.claim
     assert "30-day" not in card.claim
     assert card.baseline_window.label == "recent baseline"
     assert card.coverage.observation_count == 42
+
+
+def test_summary_card_positive_and_zero_deltas_agree_with_direction():
+    up = build_card(
+        "summary",
+        "vital.hrv_sdnn",
+        {"avg": 55.0, "delta_pct_vs_baseline": 1.7, "count": 10},
+        "info",
+    )
+    assert up.delta.direction == "up"
+    assert up.claim == "hrv sdnn increased by 1.7% vs your recent baseline"
+    assert "+" not in up.claim
+
+    flat = build_card(
+        "summary",
+        "activity.steps",
+        {"avg": 8000.0, "delta_pct_vs_baseline": 0.0, "count": 10},
+        "info",
+    )
+    assert flat.delta.direction == "flat"
+    assert flat.claim == "steps unchanged (0.0%) vs your recent baseline"
+    assert "-" not in flat.claim
 
 
 def test_summary_card_below_sample_floor_suppresses_delta_and_flags_coverage():

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { briefLeadSentence, briefParagraphs } from "./textPresentation";
+import { agreeDirectionAndMagnitude, briefLeadSentence, briefParagraphs } from "./textPresentation";
 
 describe("text presentation", () => {
   test("turns narrator markdown into readable plain paragraphs", () => {
@@ -34,6 +34,24 @@ describe("text presentation", () => {
     ]);
     expect(briefParagraphs("Recovery was compared with your 30-day baseline.")).toEqual([
       "Recovery was compared with your 30-day baseline.",
+    ]);
+  });
+
+  test("direction words and percent magnitudes agree", () => {
+    expect(agreeDirectionAndMagnitude("HRV decreased by -1.7% this week.")).toBe(
+      "HRV decreased by 1.7% this week.",
+    );
+    expect(agreeDirectionAndMagnitude("Steps increased by +4.2%.")).toBe("Steps increased by 4.2%.");
+    expect(agreeDirectionAndMagnitude("Weight changed by -1.7%.")).toBe("Weight changed by -1.7%.");
+    expect(agreeDirectionAndMagnitude("HRV was unchanged (0.0%).")).toBe("HRV was unchanged (0.0%).");
+    expect(briefParagraphs("HRV decreased by -1.7% this week.")).toEqual([
+      "HRV decreased by 1.7% this week.",
+    ]);
+    expect(briefParagraphs("HRV decreased by - 1.7% this week.")).toEqual([
+      "HRV decreased by 1.7% this week.",
+    ]);
+    expect(briefParagraphs("Steps increased by +4.2% and weight changed by -0.4%.")).toEqual([
+      "Steps increased by 4.2% and weight changed by -0.4%.",
     ]);
   });
 });
