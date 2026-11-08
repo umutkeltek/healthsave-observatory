@@ -122,8 +122,9 @@ def token_store(monkeypatch):
     async def record_cursor(session, **_kwargs):
         session.pending.append(("cursor",))
 
-    monkeypatch.setattr(source_poll_cursors, "get_last_successful_poll", no_cursor)
+    monkeypatch.setattr(source_poll_cursors, "get_poll_cursor", no_cursor)
     monkeypatch.setattr(source_poll_cursors, "record_successful_poll", record_cursor)
+    monkeypatch.setattr(source_poll_cursors, "record_backfill_failure", record_cursor)
     return stored
 
 

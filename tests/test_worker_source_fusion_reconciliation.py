@@ -137,7 +137,7 @@ def _record_cursor_events(monkeypatch) -> None:
     async def write(session, **_kwargs):
         session.events.append("cursor_write")
 
-    monkeypatch.setattr(source_poll_cursors, "get_last_successful_poll", read)
+    monkeypatch.setattr(source_poll_cursors, "get_poll_cursor", read)
     monkeypatch.setattr(source_poll_cursors, "record_successful_poll", write)
 
 

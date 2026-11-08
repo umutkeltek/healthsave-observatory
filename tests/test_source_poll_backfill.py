@@ -6,18 +6,23 @@ succeeded. Any outage longer than that window (a dead token, the vendor down,
 the worker stopped) left a permanent gap. The worker now keeps a per-provider,
 per-owner "last successful poll" cursor and widens the window to cover the gap,
 bounded so one poll never asks a vendor for unbounded history.
+
+A widened window that keeps failing (a page cap, a vendor rejecting the range)
+must not be retried forever: after MAX_BACKFILL_FAILURES failed widened polls
+the worker polls the default window again and records the gap it gave up on.
 """
 
 from __future__ import annotations
 
-import sys
-import types
+import contextlib
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
 import worker.sources as worker_sources
-from worker.sources import MAX_BACKFILL, make_whoop_poll
+from storage.timescale import source_poll_cursors
+from storage.timescale.source_poll_cursors import PollCursor
+from worker.sources import MAX_BACKFILL, MAX_BACKFILL_FAILURES, make_whoop_poll
 
 from plugins.sources.whoop import DEFAULT_LOOKBACK, WhoopSource
 
@@ -53,25 +58,40 @@ def poll(monkeypatch):
     """Run the real Whoop poll seam with a recorded ingest and an in-memory cursor."""
     import httpx
 
-    state: dict[str, Any] = {"cursor": None, "recorded": [], "payloads": [], "fail": False}
+    state: dict[str, Any] = {
+        "cursor": None,
+        "failures": 0,
+        "recorded": [],
+        "gaps": [],
+        "payloads": [],
+        "result": {"accepted": 0, "rejected": 0},
+        "fail": False,
+    }
 
-    async def get_last_successful_poll(session, *, provider, owner_id):
+    async def get_poll_cursor(session, *, provider, owner_id):
         assert provider == "whoop"
-        return state["cursor"]
+        if state["cursor"] is None:
+            return None
+        return PollCursor(last_success_at=state["cursor"], backfill_failures=state["failures"])
 
-    async def record_successful_poll(session, *, provider, owner_id, polled_at):
+    async def record_successful_poll(session, *, provider, owner_id, polled_at, unfilled_gap=None):
         state["recorded"].append(polled_at)
+        state["gaps"].append(unfilled_gap)
+        state["cursor"] = polled_at
+        state["failures"] = 0
 
-    cursors = types.ModuleType("storage.timescale.source_poll_cursors")
-    cursors.get_last_successful_poll = get_last_successful_poll
-    cursors.record_successful_poll = record_successful_poll
-    monkeypatch.setitem(sys.modules, "storage.timescale.source_poll_cursors", cursors)
+    async def record_backfill_failure(session, *, provider, owner_id):
+        state["failures"] += 1
+
+    monkeypatch.setattr(source_poll_cursors, "get_poll_cursor", get_poll_cursor)
+    monkeypatch.setattr(source_poll_cursors, "record_successful_poll", record_successful_poll)
+    monkeypatch.setattr(source_poll_cursors, "record_backfill_failure", record_backfill_failure)
 
     async def ingest(self, payload):
         state["payloads"].append(payload)
-        if state["fail"]:
-            raise RuntimeError("whoop is down")
-        return {"accepted": 0, "rejected": 0}
+        if state["fail"] is True or (state["fail"] == "wide" and "since" in payload):
+            raise RuntimeError("whoop rejected the window")
+        return dict(state["result"])
 
     async def no_fusion(*_args, **_kwargs):
         return 0
@@ -83,10 +103,7 @@ def poll(monkeypatch):
     async def run() -> _Session:
         session = _Session()
         job = make_whoop_poll(lambda: session)
-        if state["fail"]:
-            with pytest.raises(RuntimeError):
-                await job()
-        else:
+        with contextlib.suppress(RuntimeError):  # a failing poll re-raises
             await job()
         return session
 
@@ -146,3 +163,38 @@ async def test_a_failed_poll_does_not_move_the_cursor(poll):
 
     assert poll["recorded"] == []
     assert session.rollbacks == 1
+
+
+@pytest.mark.asyncio
+async def test_a_widened_window_that_keeps_failing_falls_back_to_the_default(poll):
+    last_success = datetime.now(UTC) - timedelta(days=10)
+    poll["cursor"] = last_success
+    poll["fail"] = "wide"  # the vendor rejects the wide range, not the default one
+
+    for _ in range(MAX_BACKFILL_FAILURES):
+        await poll["run"]()
+    assert poll["failures"] == MAX_BACKFILL_FAILURES
+    assert poll["recorded"] == []
+
+    await poll["run"]()
+
+    narrowed = poll["payloads"][-1]
+    assert "since" not in narrowed, "the poll must fall back to the default window"
+    [gap] = poll["gaps"]
+    assert gap is not None
+    gap_start, gap_end = gap
+    assert gap_start == last_success - DEFAULT_LOOKBACK
+    assert gap_end <= datetime.now(UTC) - DEFAULT_LOOKBACK
+    assert poll["failures"] == 0
+
+
+@pytest.mark.asyncio
+async def test_a_failing_default_window_poll_does_not_count_as_a_backfill_failure(poll):
+    """Outage polls with the default window must not use up the wide retries."""
+    poll["cursor"] = datetime.now(UTC) - timedelta(minutes=30)
+    poll["fail"] = True
+
+    for _ in range(MAX_BACKFILL_FAILURES + 1):
+        await poll["run"]()
+
+    assert poll["failures"] == 0

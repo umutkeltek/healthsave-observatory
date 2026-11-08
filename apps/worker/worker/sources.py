@@ -30,6 +30,10 @@ GOOGLE_HEALTH_DEFAULT_CRON = "*/30 * * * *"
 # back to the last successful poll, but never further than this: one poll
 # must not ask a vendor for unbounded history.
 MAX_BACKFILL = timedelta(days=30)
+# A widened window that failed this many polls in a row (a vendor page cap, a
+# range the vendor rejects) is given up: the next poll uses the plugin's
+# default window again and the gap is recorded on the cursor and logged.
+MAX_BACKFILL_FAILURES = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,31 +176,53 @@ def make_source_poll(
             httpx.AsyncClient(timeout=30.0) as http,
             session_factory() as session,
         ):
+            widened = False
+            unfilled_gap: tuple[datetime, datetime] | None = None
             try:
                 payload: dict[str, Any] = {
                     "storage": storage,
                     "session": session,
                     "http_client": http,
                 }
-                last_success = await source_poll_cursors.get_last_successful_poll(
+                cursor = await source_poll_cursors.get_poll_cursor(
                     session, provider=spec.slug, owner_id=DEFAULT_OWNER_ID
                 )
+                lookback = _plugin_lookback(spec.entrypoint)
                 since = backfill_since(
-                    last_success, lookback=_plugin_lookback(spec.entrypoint), now=polled_at
+                    cursor.last_success_at if cursor is not None else None,
+                    lookback=lookback,
+                    now=polled_at,
                 )
+                if since is not None and cursor.backfill_failures >= MAX_BACKFILL_FAILURES:
+                    unfilled_gap = (since, polled_at - lookback)
+                    log.warning(
+                        "%s poll: backfill from %s failed %d times in a row; polling the "
+                        "default window instead. %s to %s stays unfilled.",
+                        spec.log_label,
+                        since.isoformat(),
+                        cursor.backfill_failures,
+                        unfilled_gap[0].isoformat(),
+                        unfilled_gap[1].isoformat(),
+                    )
+                    since = None
                 if since is not None:
                     payload["since"] = since
+                    widened = True
                     log.info(
                         "%s poll: last success %s, backfilling from %s",
                         spec.log_label,
-                        last_success.isoformat(),
+                        cursor.last_success_at.isoformat(),
                         since.isoformat(),
                     )
                 result = await plugin.ingest(payload)
                 # Same transaction as the poll's data: the cursor never claims
                 # a poll whose writes rolled back.
                 await source_poll_cursors.record_successful_poll(
-                    session, provider=spec.slug, owner_id=DEFAULT_OWNER_ID, polled_at=polled_at
+                    session,
+                    provider=spec.slug,
+                    owner_id=DEFAULT_OWNER_ID,
+                    polled_at=polled_at,
+                    unfilled_gap=unfilled_gap,
                 )
                 await session.commit()
                 try:
@@ -219,6 +245,16 @@ def make_source_poll(
             except Exception:
                 await session.rollback()
                 log.exception("%s poll failed", spec.log_label)
+                if widened:
+                    # Count it in its own transaction: the poll's rolled back.
+                    try:
+                        await source_poll_cursors.record_backfill_failure(
+                            session, provider=spec.slug, owner_id=DEFAULT_OWNER_ID
+                        )
+                        await session.commit()
+                    except Exception:
+                        await session.rollback()
+                        log.exception("%s: could not record the backfill failure", spec.log_label)
                 raise
 
     return _run
