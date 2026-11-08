@@ -158,3 +158,30 @@ async def _record_event(
             "event_kind": event_kind,
         },
     )
+
+
+async def lock_token(
+    session: AsyncSession,
+    *,
+    provider: str,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+) -> OAuthToken | None:
+    """Row-lock ``(owner_id, provider)`` until the transaction ends, then read it.
+
+    A refresher calls this before spending the refresh token. A concurrent
+    refresher (the worker poll and the Whoop webhook can race) waits here, and
+    once the first commits, the fresh read returns the token it stored, so the
+    rotated refresh token is never spent twice. The caller's commit or
+    rollback releases the lock.
+    """
+    await session.execute(
+        text(
+            """
+            SELECT 1 FROM oauth_tokens
+             WHERE owner_id = :owner_id AND provider = :provider
+               FOR UPDATE
+            """
+        ),
+        {"owner_id": str(owner_id), "provider": provider},
+    )
+    return await get_token(session, provider=provider, owner_id=owner_id)

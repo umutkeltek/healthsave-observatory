@@ -112,6 +112,14 @@ class WhoopSource(Source):
             return None
 
         if token.is_expired():
+            # Serialize refreshes of this token: a concurrent poll or webhook may
+            # already have spent the refresh token. Re-read it under a row lock.
+            lock_token = getattr(token_store, "lock_token", None)
+            if lock_token is not None:
+                token = await lock_token(session, provider=PROVIDER, owner_id=owner_id)
+                if token is None or not token.is_expired():
+                    await session.commit()  # release the lock
+                    return token
             if oauth_config is None:
                 oauth_config = WhoopClientConfig.from_env()
             if not token.refresh_token:

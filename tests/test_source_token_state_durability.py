@@ -106,7 +106,11 @@ def token_store(monkeypatch):
     async def record_refresh_failure(session, *, provider, error_message, owner_id=None):
         session.pending.append(("refresh_failed", provider))
 
+    async def lock_token(session, *, provider, owner_id=DEFAULT_OWNER_ID):
+        return stored.get(provider)
+
     monkeypatch.setattr(oauth_tokens, "get_token", get_token)
+    monkeypatch.setattr(oauth_tokens, "lock_token", lock_token)
     monkeypatch.setattr(oauth_tokens, "put_token", put_token)
     monkeypatch.setattr(oauth_tokens, "record_refresh_failure", record_refresh_failure)
 
