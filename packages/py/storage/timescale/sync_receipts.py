@@ -163,8 +163,15 @@ def _sync_coverage_query(owner_id: UUID | None = None) -> str:
                     END AS storage_result_level,
                     coalesce(sum(records_skipped), 0) AS records_skipped,
                     max(coalesce(completed_at, received_at)) AS newest_receipt_at,
-                    min(sample_min_at) AS receipt_sample_min_at,
-                    max(sample_max_at) AS receipt_sample_max_at
+                    -- Only processed batches stored their samples. A failed
+                    -- batch's window must not read as delivered: for day-total
+                    -- metrics it would stretch the stored day's coverage below.
+                    min(sample_min_at) FILTER (
+                        WHERE status = 'processed'
+                    ) AS receipt_sample_min_at,
+                    max(sample_max_at) FILTER (
+                        WHERE status = 'processed'
+                    ) AS receipt_sample_max_at
                 FROM healthsave_sync_receipts{receipt_where}
                 GROUP BY metric
             ),
