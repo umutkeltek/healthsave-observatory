@@ -14,13 +14,13 @@ export function LocalVaultReceipt({
   steps: VaultStep[];
   title?: string;
   seal?: string;
-  variant?: "local" | "egress";
+  variant?: "local" | "egress" | "unknown";
   // Real chain-of-custody proof from /api/v2/receipts (e.g. the last
   // egress-relevant config event) - renders under the chain when available.
   auditNote?: string | null;
 }) {
   return (
-    <article className={`card vault ${variant === "egress" ? "vault-egress" : ""}`}>
+    <article className={`card vault ${variant === "egress" ? "vault-egress" : variant === "unknown" ? "vault-unknown" : ""}`}>
       <div className="vault-head">
         <div className="card-title">{title}</div>
         <span className="vault-seal">{seal}</span>

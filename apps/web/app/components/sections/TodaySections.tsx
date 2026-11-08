@@ -107,22 +107,41 @@ function todaySummary(score: number | null, findings: Finding[] | null, readines
   return `Recovery is low today. Focus on rest, sleep, and heart-rate signals first. ${readyLine}`;
 }
 
-function vaultSteps(privacy: Privacy | null, readiness: Readiness | null): VaultStep[] {
+// The Today vault's posture. A privacy read that failed is "unknown": it never
+// falls back to the green "Stays local" seal or a blocked cloud step.
+export type VaultReceipt = {
+  steps: VaultStep[];
+  title: string;
+  seal: string;
+  variant: "local" | "egress" | "unknown";
+};
+
+export function vaultReceipt(privacy: Privacy | null, readiness: Readiness | null): VaultReceipt {
   const sourceCount = readiness?.sources?.length ?? 0;
   const totalRows = (readiness?.sources ?? []).reduce((n, s) => n + (s.observation_count ?? 0), 0);
-  const provider = privacy?.provider ?? "ollama";
-  const local = privacy?.is_local ?? true;
-  const cloudActive = privacy?.cloud_active ?? false;
-  const narratorOff = isNarratorOff(privacy?.provider);
-  return [
+  const head: VaultStep[] = [
     { label: "HealthSave sync", meta: sourceCount > 1 ? `${sourceCount} sources` : agoLabel(readiness?.last_ingested_at) },
     { label: "Local store", meta: totalRows ? `${totalRows.toLocaleString()} rows` : "ready" },
     { label: "Pattern checks", meta: "on this server" },
-    narratorOff
-      ? { label: "Briefs", meta: "off" }
-      : { label: local ? "Private briefs" : "Cloud briefs", meta: local ? "local" : provider },
-    { label: "Cloud sharing", meta: cloudActive ? "on" : "off", blocked: !cloudActive },
   ];
+  if (privacy === null) {
+    return {
+      steps: [...head, { label: "Briefs", meta: "unknown" }, { label: "Cloud sharing", meta: "unknown" }],
+      title: "Data privacy",
+      seal: "Privacy status unknown",
+      variant: "unknown",
+    };
+  }
+  const cloudActive = privacy.cloud_active;
+  const briefs: VaultStep = isNarratorOff(privacy.provider)
+    ? { label: "Briefs", meta: "off" }
+    : { label: privacy.is_local ? "Private briefs" : "Cloud briefs", meta: privacy.is_local ? "local" : privacy.provider };
+  return {
+    steps: [...head, briefs, { label: "Cloud sharing", meta: cloudActive ? "on" : "off", blocked: !cloudActive }],
+    title: cloudActive ? "Data sharing" : "Data privacy",
+    seal: cloudActive ? "Cloud briefs on" : "Stays local",
+    variant: cloudActive ? "egress" : "local",
+  };
 }
 
 async function EmptyToday({ state }: { state: "empty" | "unreachable" }) {
@@ -285,7 +304,7 @@ export async function HeroSection({ showSignals = true }: { showSignals?: boolea
 export async function VaultSection() {
   if (!(await hasAnyData())) return null;
   const [privacy, readiness, receipts] = await Promise.all([safePrivacy(), safeReadiness(), safeReceipts()]);
-  const cloudActive = privacy?.cloud_active ?? false;
+  const receipt = vaultReceipt(privacy, readiness);
   const lastEvent = receipts?.events?.[0];
   const auditNote = lastEvent
     ? `Privacy setting changed - ${agoLabel(lastEvent.created_at)}`
@@ -295,10 +314,10 @@ export async function VaultSection() {
 
   return (
     <LocalVaultReceipt
-      steps={vaultSteps(privacy, readiness)}
-      title={cloudActive ? "Data sharing" : "Data privacy"}
-      seal={cloudActive ? "Cloud briefs on" : "Stays local"}
-      variant={cloudActive ? "egress" : "local"}
+      steps={receipt.steps}
+      title={receipt.title}
+      seal={receipt.seal}
+      variant={receipt.variant}
       auditNote={auditNote}
     />
   );

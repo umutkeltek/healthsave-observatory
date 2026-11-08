@@ -428,8 +428,9 @@ export async function loadReadinessSparklines(
 export type PostureChip = { text: string; ok: boolean };
 
 export function postureChip(privacy: Privacy | null): PostureChip {
-  // Backend unreachable: assert nothing we can't verify - just "on-host".
-  if (!privacy) return { text: "on-host", ok: true };
+  // The privacy read failed: the posture is unknown. Never show the safe
+  // (green) state for something that could not be checked.
+  if (!privacy) return { text: "posture unknown", ok: false };
   if (isNarratorOff(privacy.provider)) return { text: "on-host · no egress", ok: true };
   if (privacy.is_local) return { text: `local · ${privacy.provider}`, ok: true };
   if (privacy.cloud_active) return { text: `cloud · ${privacy.provider}`, ok: false };

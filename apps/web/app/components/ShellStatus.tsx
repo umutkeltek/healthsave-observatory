@@ -1,8 +1,9 @@
 // Async server components for the chrome's posture/sync status. The layout
 // streams these inside Suspense so the shell paints immediately instead of
 // waiting on the privacy + readiness reads (the old first-byte waterfall).
-// Fallbacks assert only what we can't get wrong ("on-host", no sync claim) -
-// the same posture postureChip reports when the backend is unreachable.
+// Fallbacks (shown while loading) assert only what we can't get wrong
+// ("on-host", no sync claim). A privacy read that failed is "posture unknown"
+// (postureChip), not the loading fallback.
 
 import { agoLabel, postureChip, safePrivacy, safeReadiness } from "../lib/load";
 
