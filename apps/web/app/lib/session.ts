@@ -7,6 +7,8 @@
 // /api/changes. Both show the person a way to sign in again instead of
 // "offline" or the UI-bug card.
 
+import { dictionaries } from "./i18n";
+
 export const SIGN_IN_REQUIRED = "sign_in_required";
 
 // Fired in the browser when an action finds the session gone, so the top bar
@@ -14,9 +16,10 @@ export const SIGN_IN_REQUIRED = "sign_in_required";
 export const SIGNED_OUT_EVENT = "healthsave:signed-out";
 
 // Shown where an action failed, at any width: phones hide the top bar's
-// "sign in" pill, so the message names the sign-in page itself.
-export const SIGNED_OUT_MESSAGE =
-  "Your session has ended. Open /login in a new tab to sign in again, then try again here. What you entered is kept.";
+// "sign in" pill, so the message names the sign-in page itself. The text lives
+// in lib/i18n; English pages show this, a translated surface (the participant
+// switcher) passes its own dictionary's to runAction.
+export const SIGNED_OUT_MESSAGE: string = dictionaries.en.session.signedOut;
 
 export function isSignInRequired(error: unknown): boolean {
   return error instanceof Error && error.message === SIGN_IN_REQUIRED;
@@ -37,13 +40,16 @@ export function announceSignedOut(): void {
  *
  * The cast holds because every action result beyond `ok`/`error` is optional.
  */
-export async function runAction<T extends { ok: boolean; error?: string }>(action: () => Promise<T>): Promise<T> {
+export async function runAction<T extends { ok: boolean; error?: string }>(
+  action: () => Promise<T>,
+  signedOutMessage: string = SIGNED_OUT_MESSAGE,
+): Promise<T> {
   try {
     return await action();
   } catch (error) {
     if (!isSignInRequired(error)) throw error;
     announceSignedOut();
-    return { ok: false, error: SIGNED_OUT_MESSAGE } as T;
+    return { ok: false, error: signedOutMessage } as T;
   }
 }
 

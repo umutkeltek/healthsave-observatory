@@ -29,6 +29,7 @@ import {
   updateAnalyticalTime,
 } from "./api";
 import {
+  getDictionary,
   LOCALE_COOKIE,
   resolveAvailableLocale,
   type Locale,
@@ -234,8 +235,12 @@ export async function setDensityAction(mode: Density): Promise<ActionResult> {
 // lists can be chosen; anything else (or the primary person) clears it.
 export async function setParticipantAction(ownerId: string): Promise<ActionResult> {
   await assertWebSession();
+  // The switcher is translated: answer in the interface language.
+  const jar = await cookies();
+  const { participants } = getDictionary(
+    resolveAvailableLocale(jar.get(LOCALE_COOKIE)?.value, process.env.HEALTHSAVE_EXPERIMENTAL_LOCALES === "1"),
+  );
   try {
-    const jar = await cookies();
     const owner = parseOwnerCookie(ownerId);
     if (owner === null) {
       jar.delete(PARTICIPANT_COOKIE);
@@ -243,12 +248,13 @@ export async function setParticipantAction(ownerId: string): Promise<ActionResul
     }
     const { owners } = await fetchOwners();
     if (!owners.some((entry) => entry.id.toLowerCase() === owner && !entry.is_default)) {
-      return { ok: false, error: "That person is not on this Observatory." };
+      return { ok: false, error: participants.notListed };
     }
     jar.set(PARTICIPANT_COOKIE, owner, { path: "/", sameSite: "lax", httpOnly: true });
     return { ok: true };
-  } catch (error) {
-    return failure(error, "Could not switch the person you are viewing.");
+  } catch {
+    // Not the raw API error: the switcher shows this in its own language.
+    return { ok: false, error: participants.switchFailed };
   }
 }
 

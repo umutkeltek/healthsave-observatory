@@ -4,11 +4,20 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useOptimistic, useState, useTransition } from "react";
 
 import { setParticipantAction } from "../lib/actions";
+import type { Dictionary } from "../lib/i18n";
 import { DEFAULT_OWNER_ID, type ParticipantNotice, type ParticipantOption } from "../lib/participants";
 import { runAction } from "../lib/session";
 import { useI18n } from "./I18nProvider";
 
 export type { ParticipantOption };
+
+/**
+ * Switch the person being viewed. The switcher is translated, so an ended
+ * session is reported in its language, not the English default.
+ */
+export function switchParticipant(next: string, dict: Dictionary) {
+  return runAction(() => setParticipantAction(next), dict.session.signedOut);
+}
 
 // Tabs share the participant cookie, but a tab only re-reads its shell on a
 // refresh: a switch in one tab tells the others to refresh.
@@ -99,7 +108,7 @@ export function ParticipantSelect({
           setMovedToPrimary(false);
           startTransition(async () => {
             setShown(next);
-            const result = await runAction(() => setParticipantAction(next));
+            const result = await switchParticipant(next, dict);
             if (!result.ok) {
               setError(result.error ?? null);
               return;

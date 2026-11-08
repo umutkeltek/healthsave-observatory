@@ -54,6 +54,12 @@ const englishDictionary = {
     primaryOnly: "Findings, experiments and briefs cover the primary person only.",
     unlisted: "The person you were viewing is no longer on this Observatory. Showing the primary person.",
     unverified: "Could not load the list of people, so this view stays on the person you chose.",
+    notListed: "That person is not on this Observatory.",
+    switchFailed: "Could not switch the person you are viewing.",
+  },
+  session: {
+    signedOut:
+      "Your session has ended. Open /login in a new tab to sign in again, then try again here. What you entered is kept.",
   },
   navGroups: {
     essentials: "Essentials",
@@ -160,6 +166,12 @@ export const dictionaries = {
       primaryOnly: "Hallazgos, experimentos y resúmenes cubren solo a la persona principal.",
       unlisted: "La persona que estabas viendo ya no está en este Observatory. Se muestra la persona principal.",
       unverified: "No se pudo cargar la lista de personas, así que esta vista sigue en la persona que elegiste.",
+      notListed: "Esa persona no está en este Observatory.",
+      switchFailed: "No se pudo cambiar la persona que estás viendo.",
+    },
+    session: {
+      signedOut:
+        "Tu sesión ha terminado. Abre /login en una pestaña nueva para volver a iniciar sesión y luego inténtalo de nuevo aquí. Lo que escribiste se conserva.",
     },
     navGroups: { essentials: "Esencial", explore: "Analizar", manage: "Gestionar" },
     nav: {
@@ -253,6 +265,12 @@ export const dictionaries = {
       primaryOnly: "Les constats, expériences et synthèses ne couvrent que la personne principale.",
       unlisted: "La personne que vous consultiez n'est plus sur cet Observatory. Affichage de la personne principale.",
       unverified: "Impossible de charger la liste des personnes : cette vue reste sur la personne choisie.",
+      notListed: "Cette personne n'est pas sur cet Observatory.",
+      switchFailed: "Impossible de changer la personne affichée.",
+    },
+    session: {
+      signedOut:
+        "Votre session a expiré. Ouvrez /login dans un nouvel onglet pour vous reconnecter, puis réessayez ici. Ce que vous avez saisi est conservé.",
     },
     navGroups: { essentials: "Essentiel", explore: "Analyser", manage: "Gérer" },
     nav: {
@@ -346,6 +364,12 @@ export const dictionaries = {
       primaryOnly: "Befunde, Experimente und Berichte gelten nur für die Hauptperson.",
       unlisted: "Die angezeigte Person ist nicht mehr in diesem Observatory. Es wird die Hauptperson angezeigt.",
       unverified: "Die Personenliste konnte nicht geladen werden, daher bleibt diese Ansicht bei der gewählten Person.",
+      notListed: "Diese Person ist nicht in diesem Observatory.",
+      switchFailed: "Die angezeigte Person konnte nicht gewechselt werden.",
+    },
+    session: {
+      signedOut:
+        "Deine Sitzung ist abgelaufen. Öffne /login in einem neuen Tab, melde dich erneut an und versuche es dann hier noch einmal. Deine Eingaben bleiben erhalten.",
     },
     navGroups: { essentials: "Basis", explore: "Analysieren", manage: "Verwalten" },
     nav: {
@@ -439,6 +463,12 @@ export const dictionaries = {
       primaryOnly: "所見・実験・ブリーフはメインの人だけが対象です。",
       unlisted: "表示していた人はこの Observatory にもういません。メインの人を表示しています。",
       unverified: "人の一覧を読み込めなかったため、選んだ人の表示を続けています。",
+      notListed: "その人はこの Observatory にいません。",
+      switchFailed: "表示する人を切り替えられませんでした。",
+    },
+    session: {
+      signedOut:
+        "セッションが終了しました。新しいタブで /login を開いて再度サインインしてから、ここでもう一度お試しください。入力した内容は保持されています。",
     },
     navGroups: { essentials: "基本", explore: "分析", manage: "管理" },
     nav: {
@@ -532,6 +562,12 @@ export const dictionaries = {
       primaryOnly: "發現、實驗與摘要僅涵蓋主要使用者。",
       unlisted: "你正在檢視的人已不在此 Observatory 上，目前顯示主要使用者。",
       unverified: "無法載入人員清單，因此此檢視仍維持你選擇的人。",
+      notListed: "此人不在這個 Observatory 上。",
+      switchFailed: "無法切換你正在檢視的人。",
+    },
+    session: {
+      signedOut:
+        "你的工作階段已結束。請在新分頁開啟 /login 重新登入，然後回到這裡再試一次。你輸入的內容會保留。",
     },
     navGroups: { essentials: "重點", explore: "分析", manage: "管理" },
     nav: {
