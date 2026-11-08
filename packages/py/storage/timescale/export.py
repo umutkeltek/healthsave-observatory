@@ -32,6 +32,14 @@ DEFAULT_ROW_LIMIT = 10_000
 MAX_ROW_LIMIT = 100_000
 
 
+# Tables that keep a revised or deleted HealthKit sample as a 'superseded' row
+# (migration 025). Only the active row is the person's data; every read
+# surface filters on it, and so does the export.
+_SUPERSEDABLE_TABLES = frozenset(
+    {"heart_rate", "hrv", "blood_oxygen", "body_temperature", "sleep_sessions"}
+)
+
+
 @dataclass(frozen=True)
 class MetricExportSpec:
     table: str
@@ -251,6 +259,9 @@ class TimescaleExportRepository:
             raise KeyError(metric)
 
         where_parts = ["owner_id = :owner_id"]
+
+        if spec.table in _SUPERSEDABLE_TABLES:
+            where_parts.append("status = 'active'")
         params: dict[str, Any] = {"owner_id": str(owner_id)}
 
         if spec.metric_filter is not None:
@@ -334,6 +345,8 @@ class TimescaleExportRepository:
         metrics: list[dict] = []
         for metric, spec in METRIC_EXPORTS.items():
             where_parts = ["owner_id = :owner_id"]
+            if spec.table in _SUPERSEDABLE_TABLES:
+                where_parts.append("status = 'active'")
             params: dict[str, Any] = {"owner_id": str(owner_id)}
             if spec.metric_filter is not None:
                 where_parts.append("metric_name = :metric_filter")
