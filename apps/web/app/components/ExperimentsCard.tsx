@@ -6,6 +6,7 @@ import type {
   ExperimentResult,
 } from "../lib/api";
 import type { ExperimentPrefill } from "../lib/experimentPrefill";
+import { experimentStatus, pairKey, runningPairKeys } from "../lib/experimentStatus";
 import { ExperimentActions } from "./ExperimentActions";
 import { StartExperimentButton } from "./StartExperimentButton";
 
@@ -20,10 +21,6 @@ function coeffLabel(candidate: Candidate): string | null {
 
 function num(value: number | null, digits = 2): string {
   return typeof value === "number" ? value.toFixed(digits) : "-";
-}
-
-function pairKey(lever: string | null, outcome: string | null): string {
-  return [lever ?? "", outcome ?? ""].sort().join("~");
 }
 
 // How much weight the inference carries - kept honest (descriptive vs tested).
@@ -117,14 +114,15 @@ function ExperimentRow({ experiment }: { experiment: Experiment }) {
   const prog = experiment.progress;
   const retro = experiment.results.retrospective;
   const controlled = experiment.results.controlled;
-  const collecting = experiment.status === "collecting";
+  const status = experimentStatus(experiment.status);
+  const collecting = status === "collecting";
   return (
-    <li className={`exp-item ${experiment.status === "abandoned" ? "muted-item" : ""}`}>
+    <li className={`exp-item ${status === "abandoned" ? "muted-item" : ""}`}>
       <div className="cand-head">
         <span className="cand-hyp">
           {experiment.lever} → {experiment.outcome}
         </span>
-        <span className={`badge ${experiment.status === "completed" ? "ready" : "waiting"}`}>
+        <span className={`badge ${status === "completed" ? "ready" : "waiting"}`}>
           {experiment.status}
         </span>
       </div>
@@ -244,12 +242,9 @@ export function ExperimentsCard({
   const testable = allCandidates.filter((c) => c.readiness.verdict === "testable");
   const notTestable = allCandidates.filter((c) => c.readiness.verdict !== "testable");
 
-  // Don't offer to start a pair that's already running.
-  const runningPairs = new Set(
-    exps
-      .filter((e) => e.status !== "abandoned")
-      .map((e) => pairKey(e.lever_metric_id, e.outcome_metric_id)),
-  );
+  // Don't offer to start a pair that's still collecting. A completed (or
+  // abandoned) experiment does not block testing the same pair again.
+  const runningPairs = runningPairKeys(exps);
   const startable = testable.filter(
     (c) => !runningPairs.has(pairKey(c.readiness.lever, c.readiness.outcome)),
   );
