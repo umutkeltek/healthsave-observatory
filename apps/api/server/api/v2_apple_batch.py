@@ -56,9 +56,9 @@ Pipeline (matches v1 ingest.py::apple_batch for compatibility):
     on each of the five migrated dedicated tables where ``source_uuid``
     matches.
   7. ``plugin.ingest(...)`` with the canonical observations (projection
-    layer keeps the v1 dedicated tables fresh from canonical writes), then
-    a second ``mark_v1_dedicated_superseded`` pass for samples deleted in
-    their own batch.
+    layer keeps the v1 dedicated tables fresh from canonical writes).
+    Samples deleted in their own batch are left out: they never reach the
+    v1 tables, so they cannot displace the row already in their slot.
   8. Receipt completion + ``RAW_LOG_ORPHANED`` error boundary.
   9. Return v1-equivalent delivery receipt.
 
@@ -712,6 +712,21 @@ async def v2_apple_batch(
         # v1 projection layer keeps the legacy metric tables fresh from the
         # canonical writes. The plugin payload carries the v2 normalizer's
         # canonical observations for any downstream consumer that wants them.
+        # A sample deleted in this same batch is not projected into the v1
+        # tables. Projecting it would retire the active row already in its
+        # (time, device) slot as revised, and the deletion would then retire
+        # the sample too, leaving v1 empty where canonical keeps that row.
+        deleted_here = {uuid.lower() for uuid in deletion_uuids}
+        projected_samples = [
+            sample
+            for sample in samples
+            if str(sample.get("uuid") or "").lower() not in deleted_here
+        ]
+        projected_observations = [
+            observation
+            for observation in canonical_result.observations
+            if str(observation.source_record_uid or "").lower() not in deleted_here
+        ]
         plugin = _resolve_apple_health_plugin(request)
         result = await plugin.ingest(
             {
@@ -721,23 +736,12 @@ async def v2_apple_batch(
                 "first_device_name": first_device_name,
                 "projection": projection,
                 "metric": metric,
-                "samples": samples,
-                "canonical_observations": canonical_result.observations,
+                "samples": projected_samples,
+                "canonical_observations": projected_observations,
                 "owner_id": owner_id,
                 "wire_schema_version": 2,
             }
         )
-        # Second v1 pass after the projection: a sample deleted in its own
-        # batch is projected into the v1 tables only now, and would otherwise
-        # stay active there while canonical has superseded it.
-        if deletion_uuids:
-            late = await mark_v1_dedicated_superseded(
-                db_session,
-                owner_id=owner_id,
-                uuids=deletion_uuids,
-            )
-            for table, superseded in late.items():
-                v1_deletion_counts[table] = v1_deletion_counts.get(table, 0) + superseded
 
         count = int(result["accepted"])
         records_inserted_new = _optional_int(result.get("inserted_new"))
@@ -874,7 +878,8 @@ async def v2_apple_batch(
     )
 
     canonical_accepted = int(getattr(canonical_result, "accepted", 0) or 0)
-    if (canonical_accepted > 0) != (count > 0):
+    # Samples deleted in their own batch are written to canonical only.
+    if projected_samples and (canonical_accepted > 0) != (count > 0):
         _log.warning(
             "v2 dual-write divergence for %s: canonical_accepted=%d projection_accepted=%d",
             metric,
