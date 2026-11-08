@@ -109,6 +109,17 @@ def token_store(monkeypatch):
     monkeypatch.setattr(oauth_tokens, "get_token", get_token)
     monkeypatch.setattr(oauth_tokens, "put_token", put_token)
     monkeypatch.setattr(oauth_tokens, "record_refresh_failure", record_refresh_failure)
+
+    from storage.timescale import source_poll_cursors
+
+    async def no_cursor(session, **_kwargs):
+        return None
+
+    async def record_cursor(session, **_kwargs):
+        session.pending.append(("cursor",))
+
+    monkeypatch.setattr(source_poll_cursors, "get_last_successful_poll", no_cursor)
+    monkeypatch.setattr(source_poll_cursors, "record_successful_poll", record_cursor)
     return stored
 
 

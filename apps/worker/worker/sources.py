@@ -11,6 +11,7 @@ import importlib
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,11 @@ WHOOP_DEFAULT_CRON = "*/30 * * * *"
 AMAZFIT_DEFAULT_CRON = "*/30 * * * *"
 POLAR_DEFAULT_CRON = "*/30 * * * *"
 GOOGLE_HEALTH_DEFAULT_CRON = "*/30 * * * *"
+
+# After an outage longer than a plugin's own lookback, the next poll reaches
+# back to the last successful poll, but never further than this: one poll
+# must not ask a vendor for unbounded history.
+MAX_BACKFILL = timedelta(days=30)
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +76,32 @@ def _load_entrypoint(entrypoint: str):
         raise ValueError(f"invalid source plugin entrypoint: {entrypoint!r}")
     module = importlib.import_module(module_name)
     return getattr(module, attr)
+
+
+def _plugin_lookback(entrypoint: str) -> timedelta | None:
+    """The window a plugin fetches when given no ``since`` (its DEFAULT_LOOKBACK)."""
+    module = importlib.import_module(entrypoint.partition(":")[0])
+    lookback = getattr(module, "DEFAULT_LOOKBACK", None)
+    return lookback if isinstance(lookback, timedelta) else None
+
+
+def backfill_since(
+    last_success: datetime | None,
+    *,
+    lookback: timedelta | None,
+    now: datetime,
+) -> datetime | None:
+    """The fetch start that covers the gap since ``last_success``.
+
+    None keeps the plugin's default window: no poll has succeeded yet, or the
+    default window already reaches back past the last success. Otherwise
+    reach back one lookback before the last success (vendors score records
+    late, which a healthy run of polls would have re-fetched), bounded by
+    :data:`MAX_BACKFILL`.
+    """
+    if last_success is None or lookback is None or last_success >= now - lookback:
+        return None
+    return max(last_success - lookback, now - MAX_BACKFILL)
 
 
 def _has_session_capability(manifest: PluginManifest) -> bool:
@@ -127,24 +159,44 @@ def make_source_poll(
     async def _run() -> None:
         import httpx
         from plugin_sdk import load_manifest
+        from storage.timescale import source_poll_cursors
         from storage.timescale.ingest import PostgresIngestStorage
 
         manifest = load_manifest(_plugin_yaml(spec.slug))
         plugin_cls = _load_entrypoint(spec.entrypoint)
         plugin = plugin_cls(manifest)
         storage = PostgresIngestStorage()
+        polled_at = datetime.now(UTC)
 
         async with (
             httpx.AsyncClient(timeout=30.0) as http,
             session_factory() as session,
         ):
             try:
-                result = await plugin.ingest(
-                    {
-                        "storage": storage,
-                        "session": session,
-                        "http_client": http,
-                    }
+                payload: dict[str, Any] = {
+                    "storage": storage,
+                    "session": session,
+                    "http_client": http,
+                }
+                last_success = await source_poll_cursors.get_last_successful_poll(
+                    session, provider=spec.slug, owner_id=DEFAULT_OWNER_ID
+                )
+                since = backfill_since(
+                    last_success, lookback=_plugin_lookback(spec.entrypoint), now=polled_at
+                )
+                if since is not None:
+                    payload["since"] = since
+                    log.info(
+                        "%s poll: last success %s, backfilling from %s",
+                        spec.log_label,
+                        last_success.isoformat(),
+                        since.isoformat(),
+                    )
+                result = await plugin.ingest(payload)
+                # Same transaction as the poll's data: the cursor never claims
+                # a poll whose writes rolled back.
+                await source_poll_cursors.record_successful_poll(
+                    session, provider=spec.slug, owner_id=DEFAULT_OWNER_ID, polled_at=polled_at
                 )
                 await session.commit()
                 try:
