@@ -134,14 +134,17 @@ async def ingest_owner_ids(session: AsyncSession) -> set[UUID]:
     ``raw_ingestion_log`` has no ``owner_id``, so a raw replay can attribute
     rows to one owner only when nobody else could have sent them. Participant
     keys live in ``api_keys`` (029); every batch since migration 024 leaves an
-    owner on its receipt.
+    owner on its receipt. A database from before 029 has no ``api_keys``
+    table, and then only the receipts are read.
     """
+    has_api_keys = (
+        await session.execute(text("SELECT to_regclass('api_keys') IS NOT NULL"))
+    ).scalar_one()
+    keys_sql = "SELECT owner_id FROM api_keys UNION " if has_api_keys else ""
     rows = await session.execute(
         text(
-            """
-            SELECT owner_id FROM api_keys
-            UNION
-            SELECT DISTINCT owner_id FROM healthsave_sync_receipts
+            f"""
+            {keys_sql}SELECT DISTINCT owner_id FROM healthsave_sync_receipts
              WHERE owner_id IS NOT NULL
             """
         )

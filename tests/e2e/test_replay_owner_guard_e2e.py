@@ -46,3 +46,32 @@ async def test_owners_with_a_receipt_or_a_key_are_seen() -> None:
             await session.rollback()
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_a_database_without_api_keys_does_not_crash_the_owner_check() -> None:
+    """Before migration 029 there is no api_keys table; receipts still count."""
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+    from storage.timescale.ingest import ingest_owner_ids
+
+    engine = create_async_engine(DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1))
+    schema = f"e2e_pre029_{uuid4().hex[:12]}"
+    owner = uuid4()
+    try:
+        async with AsyncSession(engine) as session:
+            # A throwaway schema with receipts but no api_keys, rolled back below.
+            await session.execute(text(f"CREATE SCHEMA {schema}"))
+            await session.execute(
+                text(f"CREATE TABLE {schema}.healthsave_sync_receipts (owner_id UUID)")
+            )
+            await session.execute(
+                text(f"INSERT INTO {schema}.healthsave_sync_receipts VALUES (:owner)"),
+                {"owner": owner},
+            )
+            await session.execute(text(f"SET LOCAL search_path TO {schema}"))
+
+            assert await ingest_owner_ids(session) == {owner}
+            await session.rollback()
+    finally:
+        await engine.dispose()
