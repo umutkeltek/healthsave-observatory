@@ -3434,6 +3434,10 @@ input.filter-select {
   background: var(--raise);
 }
 
+.intg-badge.intg-stale {
+  color: var(--warn);
+}
+
 .intg-kind {
   font-size: var(--fs-2xs);
   color: var(--faint);

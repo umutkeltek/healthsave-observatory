@@ -1,11 +1,13 @@
 // Integrations page section: live source/destination posture from v2 reads.
 import Link from "next/link";
 
-import { isNarratorOff } from "../../lib/api";
+import { isNarratorOff, type Readiness, type SourceView } from "../../lib/api";
 import { agoLabel, safePrivacy, safeReadiness, safeSources } from "../../lib/load";
-import { friendlyName } from "../../lib/provenance";
+import { freshness, friendlyName } from "../../lib/provenance";
 
-type CardState = "connected" | "available" | "host" | "narrator";
+// "connected" only while the source keeps syncing; past the provenance stale
+// threshold (lib/provenance.ts freshness) it is "stale", whatever it once was.
+type CardState = "connected" | "stale" | "available" | "host" | "narrator";
 
 type IntegrationCard = {
   key: string;
@@ -25,6 +27,22 @@ const KNOWN_SOURCES: Record<string, { name: string; kind: string }> = {
   amazfit: { name: "Amazfit / Zepp", kind: "source · cloud API" },
 };
 
+type ReadinessSource = NonNullable<Readiness["sources"]>[number];
+
+export function sourceCard(source: SourceView, ingest: ReadinessSource | undefined): IntegrationCard {
+  const known = KNOWN_SOURCES[source.plugin_id];
+  return {
+    key: source.plugin_id,
+    name: known?.name ?? friendlyName(source.display_name ?? source.plugin_id),
+    kind: known?.kind ?? "source",
+    state: freshness(source.last_seen_at).stale ? "stale" : "connected",
+    detail: ingest
+      ? `${ingest.observation_count.toLocaleString()} observations received.`
+      : "Source identity exists; no readiness aggregate yet.",
+    meta: `last seen ${agoLabel(source.last_seen_at)}`,
+  };
+}
+
 export async function IntegrationsSection() {
   const [sources, readiness, privacy] = await Promise.all([
     safeSources(),
@@ -33,20 +51,9 @@ export async function IntegrationsSection() {
   ]);
   const ingestBySource = new Map((readiness?.sources ?? []).map((s) => [s.source_plugin_id ?? "", s]));
 
-  const connected: IntegrationCard[] = (sources ?? []).map((source) => {
-    const known = KNOWN_SOURCES[source.plugin_id];
-    const ingest = ingestBySource.get(source.plugin_id);
-    return {
-      key: source.plugin_id,
-      name: known?.name ?? friendlyName(source.display_name ?? source.plugin_id),
-      kind: known?.kind ?? "source",
-      state: "connected",
-      detail: ingest
-        ? `${ingest.observation_count.toLocaleString()} observations received.`
-        : "Source identity exists; no readiness aggregate yet.",
-      meta: `last seen ${agoLabel(source.last_seen_at)}`,
-    };
-  });
+  const connected: IntegrationCard[] = (sources ?? []).map((source) =>
+    sourceCard(source, ingestBySource.get(source.plugin_id)),
+  );
 
   const narratorOff = !privacy || isNarratorOff(privacy.provider);
   const routes: IntegrationCard[] = [
@@ -151,6 +158,8 @@ function IntegrationTile({ card }: { card: IntegrationCard }) {
   const badge =
     card.state === "connected"
       ? { label: "connected", cls: "intg-on" }
+      : card.state === "stale"
+        ? { label: "not syncing", cls: "intg-stale" }
       : card.state === "narrator"
         ? { label: "manageable", cls: "intg-manage" }
         : card.state === "host"
