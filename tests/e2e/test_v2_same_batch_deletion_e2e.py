@@ -157,3 +157,81 @@ async def test_a_sample_deleted_in_its_own_batch_does_not_displace_the_slots_act
     assert canonical == {kept: "active", deleted: "superseded"}
     assert projected.get(kept) == "active"
     assert projected.get(deleted) != "active"
+
+
+def _sample(source: str, at: datetime, sample_uuid: str, qty: int) -> dict:
+    return {
+        "uuid": sample_uuid,
+        "startDate": at.isoformat(),
+        "endDate": at.isoformat(),
+        "qty": qty,
+        "unit": "count/min",
+        "source": source,
+        "tzOffsetMinutes": 0,
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_device_whose_samples_are_all_deleted_does_not_take_the_others_rows() -> None:
+    """Mixed-source batch; every sample of the first device is deleted in it.
+
+    The route picked the projection device from all samples, so device B's
+    sample was projected under device A's id, where it also retired A's
+    active row at that time as a "revision".
+    """
+    device_a = f"e2e device A {uuid4()}"
+    device_b = f"e2e device B {uuid4()}"
+    at = datetime(2025, 4, 1, tzinfo=UTC) + timedelta(microseconds=datetime.now().microsecond)
+    kept_a, deleted_a, kept_b = str(uuid4()), str(uuid4()), str(uuid4())
+    headers = {"X-API-Key": API_KEY} if API_KEY else {}
+
+    def batch(samples: list[dict], deletions=()) -> dict:
+        return {
+            "schema_version": 2,
+            "metric": "heart_rate",
+            "batch_index": 0,
+            "total_batches": 1,
+            "source_bundle_id": "com.healthsave.ios",
+            "device": {"name": "e2e", "model": "e2e-host"},
+            "samples": samples,
+            "deletions": [{"uuid": uuid} for uuid in deletions],
+        }
+
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=30) as client:
+        first = await client.post(
+            "/api/v2/apple/batch",
+            json=batch([_sample(device_a, at, kept_a, 60)]),
+            headers=headers,
+        )
+        assert first.status_code in (200, 201, 202), first.text[:400]
+        second = await client.post(
+            "/api/v2/apple/batch",
+            json=batch(
+                [
+                    _sample(device_a, at + timedelta(minutes=1), deleted_a, 61),
+                    _sample(device_b, at, kept_b, 70),
+                ],
+                deletions=[deleted_a],
+            ),
+            headers=headers,
+        )
+        assert second.status_code in (200, 201, 202), second.text[:400]
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        rows = {
+            str(row["source_uuid"]): (row["device_type"], row["status"])
+            for row in await conn.fetch(
+                "SELECT hr.source_uuid, d.device_type, hr.status FROM heart_rate AS hr "
+                "JOIN devices AS d ON d.id = hr.device_id "
+                "WHERE hr.owner_id = $1 AND hr.source_uuid = ANY($2::uuid[])",
+                OWNER,
+                [UUID(kept_a), UUID(deleted_a), UUID(kept_b)],
+            )
+        }
+    finally:
+        await conn.close()
+
+    assert rows.get(kept_a) == (device_a, "active")
+    assert rows.get(kept_b) == (device_b, "active")
+    assert deleted_a not in rows

@@ -727,21 +727,37 @@ async def v2_apple_batch(
             for observation in canonical_result.observations
             if str(observation.source_record_uid or "").lower() not in deleted_here
         ]
-        plugin = _resolve_apple_health_plugin(request)
-        result = await plugin.ingest(
-            {
-                "storage": storage,
-                "session": db_session,
-                "device_id": first_device_id,
-                "first_device_name": first_device_name,
-                "projection": projection,
-                "metric": metric,
-                "samples": projected_samples,
-                "canonical_observations": projected_observations,
-                "owner_id": owner_id,
-                "wire_schema_version": 2,
-            }
-        )
+        # The projection device comes from what is projected: when every
+        # sample of the batch's first device was deleted here, that device's
+        # id must not carry another device's samples into the v1 tables.
+        projected_groups = __import__(
+            "server.ingestion.parsers",
+            fromlist=["group_samples_by_device"],
+        ).group_samples_by_device(projected_samples)
+        if projected_groups:
+            projection_device_name = projected_groups[0][0]
+            projection_device_id = (
+                first_device_id
+                if projection_device_name == first_device_name
+                else await storage.get_or_create_device(db_session, projection_device_name)
+            )
+            plugin = _resolve_apple_health_plugin(request)
+            result = await plugin.ingest(
+                {
+                    "storage": storage,
+                    "session": db_session,
+                    "device_id": projection_device_id,
+                    "first_device_name": projection_device_name,
+                    "projection": projection,
+                    "metric": metric,
+                    "samples": projected_samples,
+                    "canonical_observations": projected_observations,
+                    "owner_id": owner_id,
+                    "wire_schema_version": 2,
+                }
+            )
+        else:
+            result = {"accepted": 0, "rejected": 0}  # every sample was deleted here
 
         count = int(result["accepted"])
         records_inserted_new = _optional_int(result.get("inserted_new"))
