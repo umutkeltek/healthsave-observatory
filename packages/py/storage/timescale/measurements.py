@@ -541,18 +541,28 @@ def _is_active_slot_conflict(exc: IntegrityError, table: str) -> bool:
     SQLAlchemy wraps asyncpg's error; constraint_name lives on its cause. Do
     not infer contention from all IntegrityErrors or by parsing payload text.
     """
+    constraint = _violated_unique_constraint(exc)
+    return constraint is not None and bool(
+        re.fullmatch(rf"(?:_hyper_\d+_\d+_chunk_)?uq_{re.escape(table)}", constraint)
+    )
+
+
+def _violated_unique_constraint(exc: IntegrityError) -> str | None:
+    """The unique constraint a 23505 names, read from asyncpg's wrapped error.
+
+    The SQLAlchemy adapter error carries the sqlstate but not the name; walk
+    the cause chain to the asyncpg error that does.
+    """
     error = exc.orig
     seen = set()
     while error is not None and id(error) not in seen:
         seen.add(id(error))
         if getattr(error, "sqlstate", None) == "23505":
             constraint = getattr(error, "constraint_name", None)
-            if constraint is not None and re.fullmatch(
-                rf"(?:_hyper_\d+_\d+_chunk_)?uq_{re.escape(table)}", constraint
-            ):
-                return True
+            if constraint is not None:
+                return constraint
         error = error.__cause__
-    return False
+    return None
 
 
 async def _upsert_dedicated_identity_rows(
@@ -1339,6 +1349,69 @@ def sleep_session_rows(device_id: int, samples: list[dict]) -> list[dict]:
     return rows
 
 
+_SLEEP_ACTIVE_SLOT_INDEX = "uq_sleep_sessions_device_start"
+
+
+async def _reconcile_sleep_session_slot(session: AsyncSession, row: dict) -> None:
+    """Free the night's active ``(device_id, start_time, owner_id)`` slot for a uuid row.
+
+    The uuid upsert only arbitrates on ``(owner_id, source_uuid)``. A night
+    already stored in the same slot under no uuid (written before uuids) or
+    under another first-stage uuid (HealthKit reshuffled the night) would make
+    the INSERT hit the active-slot index instead: a deterministic 422 that
+    rejects the whole batch. So, after locking the slot and the incoming
+    identity: a legacy row adopts the incoming uuid, and a row under another
+    uuid is a revision and is marked ``superseded``. A uuid that already has a
+    row never retires anything (an outbox replay of an old revision must not
+    retire the newer night), and its upsert never moves the row's slot.
+    """
+    params = {
+        "owner_id": row["owner_id"],
+        "device_id": row["device_id"],
+        "start": row["start"],
+        "source_uuid": row["source_uuid"],
+    }
+    unknown_identity = """
+        NOT EXISTS (
+            SELECT 1 FROM sleep_sessions AS known
+             WHERE known.owner_id = CAST(:owner_id AS UUID)
+               AND known.source_uuid = CAST(:source_uuid AS UUID)
+        )"""
+    in_slot = """
+        owner_id = CAST(:owner_id AS UUID)
+        AND device_id = :device_id
+        AND start_time = :start
+        AND status = 'active'"""
+    await session.execute(
+        text("""
+            SELECT id FROM sleep_sessions
+             WHERE owner_id = CAST(:owner_id AS UUID)
+               AND (source_uuid = CAST(:source_uuid AS UUID)
+                    OR (device_id = :device_id AND start_time = :start AND status = 'active'))
+             ORDER BY id
+             FOR UPDATE
+        """),
+        params,
+    )
+    await session.execute(
+        text(f"""
+            UPDATE sleep_sessions SET source_uuid = CAST(:source_uuid AS UUID)
+             WHERE {in_slot} AND source_uuid IS NULL AND {unknown_identity}
+        """),
+        params,
+    )
+    await session.execute(
+        text(f"""
+            UPDATE sleep_sessions SET status = 'superseded'
+             WHERE {in_slot}
+               AND source_uuid IS NOT NULL
+               AND source_uuid <> CAST(:source_uuid AS UUID)
+               AND {unknown_identity}
+        """),
+        params,
+    )
+
+
 async def _upsert_sleep_session(session: AsyncSession, row: dict) -> int:
     row.setdefault("owner_id", str(DEFAULT_OWNER_ID))
     row.setdefault("source_id", None)
@@ -1348,28 +1421,52 @@ async def _upsert_sleep_session(session: AsyncSession, row: dict) -> int:
     # landing two session rows for one night; when no uuid is present we
     # keep the legacy (device_id, start_time, owner_id) conflict path so
     # shipped clients behave exactly as before (Plan 2026-09-03).
+    # Note: sleep_stage_segments does not carry stage uuids today, so rows
+    # built by sleep_session_rows always take the legacy arm.
     if row.get("source_uuid"):
-        result = await session.execute(
-            text("""
-                INSERT INTO sleep_sessions (device_id, start_time, end_time, total_duration_ms,
-                    deep_ms, rem_ms, light_ms, awake_ms, respiratory_rate, owner_id, source_id,
-                    source_uuid)
-                VALUES (:device_id, :start, :end, :total, :deep, :rem, :light, :awake, :rr,
-                    :owner_id, :source_id, :source_uuid)
-                ON CONFLICT (owner_id, source_uuid) WHERE source_uuid IS NOT NULL DO UPDATE SET
-                    end_time = EXCLUDED.end_time,
-                    total_duration_ms = EXCLUDED.total_duration_ms,
-                    deep_ms = EXCLUDED.deep_ms,
-                    rem_ms = EXCLUDED.rem_ms,
-                    light_ms = EXCLUDED.light_ms,
-                    awake_ms = EXCLUDED.awake_ms,
-                    respiratory_rate = EXCLUDED.respiratory_rate,
-                    source_id = COALESCE(EXCLUDED.source_id, sleep_sessions.source_id)
-                RETURNING id
-            """),
-            row,
-        )
-        return result.scalar()
+        last_conflict = None
+        for _ in range(3):
+            savepoint = await session.begin_nested()
+            try:
+                await _reconcile_sleep_session_slot(session, row)
+                result = await session.execute(
+                    text("""
+                        INSERT INTO sleep_sessions (device_id, start_time, end_time,
+                            total_duration_ms, deep_ms, rem_ms, light_ms, awake_ms,
+                            respiratory_rate, owner_id, source_id, source_uuid)
+                        VALUES (:device_id, :start, :end, :total, :deep, :rem, :light, :awake,
+                            :rr, :owner_id, :source_id, :source_uuid)
+                        ON CONFLICT (owner_id, source_uuid) WHERE source_uuid IS NOT NULL
+                        DO UPDATE SET
+                            end_time = EXCLUDED.end_time,
+                            total_duration_ms = EXCLUDED.total_duration_ms,
+                            deep_ms = EXCLUDED.deep_ms,
+                            rem_ms = EXCLUDED.rem_ms,
+                            light_ms = EXCLUDED.light_ms,
+                            awake_ms = EXCLUDED.awake_ms,
+                            respiratory_rate = EXCLUDED.respiratory_rate,
+                            source_id = COALESCE(EXCLUDED.source_id, sleep_sessions.source_id)
+                        RETURNING id
+                    """),
+                    row,
+                )
+                session_id = result.scalar()
+            except IntegrityError as exc:
+                await savepoint.rollback()
+                # A concurrent writer filled the empty slot first: retry with a
+                # fresh snapshot. Any other violation is the caller's to judge.
+                if _violated_unique_constraint(exc) != _SLEEP_ACTIVE_SLOT_INDEX:
+                    raise
+                last_conflict = exc
+            except BaseException:
+                await savepoint.rollback()
+                raise
+            else:
+                await savepoint.commit()
+                return session_id
+        raise RetryableMeasurementConflict(
+            "Concurrent sleep_sessions revisions exceeded the retry budget; retry this batch"
+        ) from last_conflict
     result = await session.execute(
         text("""
             INSERT INTO sleep_sessions (device_id, start_time, end_time, total_duration_ms,

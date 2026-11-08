@@ -189,3 +189,50 @@ async def test_postwrite_eligibility_uses_complete_arbiter_identity():
     for key, value in identity.items():
         assert f"existing.{key} = incoming.{key}" in str(sql)
         assert params[f"{key}_0"] == value
+
+
+_SLEEP_ROW = {
+    "device_id": 24,
+    "start": "2026-08-01T22:30:00Z",
+    "end": "2026-08-02T02:15:00Z",
+    "total": 1,
+    "deep": 1,
+    "rem": 0,
+    "light": 0,
+    "awake": 0,
+    "rr": None,
+    "source_uuid": "b7d59aba-04af-4bf4-84be-4ab5576d55b8",
+}
+
+
+def _sleep_session(insert_error: BaseException) -> tuple[AsyncMock, AsyncMock]:
+    """Reconcile statements succeed; every sleep_sessions INSERT raises."""
+    session, savepoint = _session()
+
+    async def execute(statement, params=None):
+        if "INSERT INTO sleep_sessions" in str(statement):
+            raise insert_error
+        return MagicMock()
+
+    session.execute.side_effect = execute
+    return session, savepoint
+
+
+@pytest.mark.asyncio
+async def test_sleep_active_slot_race_is_bounded_and_transient():
+    session, savepoint = _sleep_session(_unique_error("uq_sleep_sessions_device_start"))
+    with pytest.raises(Exception) as raised:
+        await measurements._upsert_sleep_session(session, dict(_SLEEP_ROW))
+    assert savepoint.rollback.await_count == 3
+    assert session.rollback.await_count == 0
+    assert _is_transient_write_error(raised.value)
+
+
+@pytest.mark.asyncio
+async def test_sleep_unrelated_integrity_failure_is_never_retried():
+    error = _unique_error("uq_sleep_sessions_source_uuid")
+    session, savepoint = _sleep_session(error)
+    with pytest.raises(IntegrityError) as raised:
+        await measurements._upsert_sleep_session(session, dict(_SLEEP_ROW))
+    assert raised.value is error
+    assert savepoint.rollback.await_count == 1
