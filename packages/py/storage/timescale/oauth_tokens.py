@@ -100,6 +100,22 @@ async def put_token(
         },
     )
     await _record_event(session, token.owner_id, token.provider, event_kind)
+    if event_kind == "authorized":
+        # A newly authorized token gives a widened backfill window its attempts
+        # back (the worker keys source_poll_cursors by this provider id). A
+        # routine refresh does not: Whoop refreshes hourly, which would keep a
+        # window the vendor rejects from ever being given up.
+        await session.execute(
+            text(
+                """
+                UPDATE source_poll_cursors
+                   SET backfill_failures = 0, updated_at = NOW()
+                 WHERE owner_id = :owner_id AND provider = :provider
+                   AND backfill_failures <> 0
+                """
+            ),
+            {"owner_id": str(token.owner_id), "provider": token.provider},
+        )
 
 
 async def revoke_token(

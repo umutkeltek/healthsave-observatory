@@ -49,6 +49,14 @@ class SourcePollSpec:
     # The plugin's data-fetch error ("module:Class"). Only these count as a
     # failed backfill window; None counts nothing.
     fetch_error: str | None = None
+    # The provider id the plugin stores its OAuth token under. The poll cursor
+    # is keyed by it, so authorizing a token can reset the cursor's backfill
+    # attempts (storage.timescale.oauth_tokens.put_token). Defaults to slug.
+    token_provider: str | None = None
+
+    @property
+    def cursor_provider(self) -> str:
+        return self.token_provider or self.slug
 
 
 WHOOP_SPEC = SourcePollSpec(
@@ -68,12 +76,14 @@ POLAR_SPEC = SourcePollSpec(
     entrypoint="plugins.sources.polar:PolarSource",
     log_label="polar",
     fetch_error="plugins.sources.polar.fetch:PolarFetchError",
+    token_provider="polar-accesslink",
 )
 GOOGLE_HEALTH_SPEC = SourcePollSpec(
     slug="google_health",
     entrypoint="plugins.sources.google_health:GoogleHealthSource",
     log_label="google health",
     fetch_error="plugins.sources.google_health.fetch:GoogleHealthFetchError",
+    token_provider="google-health-api",
 )
 
 
@@ -216,7 +226,7 @@ def make_source_poll(
                     "http_client": http,
                 }
                 cursor = await source_poll_cursors.get_poll_cursor(
-                    session, provider=spec.slug, owner_id=DEFAULT_OWNER_ID
+                    session, provider=spec.cursor_provider, owner_id=DEFAULT_OWNER_ID
                 )
                 lookback = _plugin_lookback(spec.entrypoint)
                 since = backfill_since(
@@ -255,7 +265,7 @@ def make_source_poll(
                 # a poll whose writes rolled back.
                 await source_poll_cursors.record_successful_poll(
                     session,
-                    provider=spec.slug,
+                    provider=spec.cursor_provider,
                     owner_id=DEFAULT_OWNER_ID,
                     polled_at=polled_at,
                     unfilled_gap=unfilled_gap,
@@ -286,7 +296,7 @@ def make_source_poll(
                     # Count it in its own transaction: the poll's rolled back.
                     try:
                         await source_poll_cursors.record_backfill_failure(
-                            session, provider=spec.slug, owner_id=DEFAULT_OWNER_ID
+                            session, provider=spec.cursor_provider, owner_id=DEFAULT_OWNER_ID
                         )
                         await session.commit()
                     except Exception:

@@ -205,3 +205,55 @@ async def test_a_rejected_range_still_counts(whoop_poll):
         await poll()
 
     assert await _failures(factory) == 1
+
+
+@pytest.mark.asyncio
+async def test_re_authorizing_resets_the_backfill_attempts(whoop_poll):
+    """Re-authorizing gives the widened window its attempts back."""
+    from sqlalchemy import text
+    from storage.timescale import oauth_tokens
+    from storage.timescale.source_poll_cursors import record_successful_poll
+
+    whoop, factory, poll = whoop_poll
+    last_success = datetime.now(UTC) - timedelta(days=3)
+    async with factory() as session:
+        await record_successful_poll(session, provider="whoop", polled_at=last_success)
+        # As if 3 widened polls had failed.
+        await session.execute(
+            text("UPDATE source_poll_cursors SET backfill_failures = 3 WHERE provider = 'whoop'")
+        )
+        await session.commit()
+
+    async with factory() as session:
+        await oauth_tokens.put_token(session, _token(expired=False, refresh_token="RT-new"))
+        await session.commit()
+    assert await _failures(factory) == 0
+
+    await poll()
+
+    expected = (last_success - timedelta(days=1)).isoformat().replace("+00:00", "Z")
+    windowed = [start for start in whoop.starts if start is not None]
+    assert windowed and set(windowed) == {expected}
+
+
+@pytest.mark.asyncio
+async def test_a_routine_refresh_does_not_reset_the_backfill_attempts(whoop_poll):
+    """Whoop access tokens last an hour: a refresh must not wipe the count."""
+    from sqlalchemy import text
+    from storage.timescale import oauth_tokens
+    from storage.timescale.source_poll_cursors import record_successful_poll
+
+    _whoop, factory, _poll = whoop_poll
+    async with factory() as session:
+        await record_successful_poll(
+            session, provider="whoop", polled_at=datetime.now(UTC) - timedelta(days=3)
+        )
+        await session.execute(
+            text("UPDATE source_poll_cursors SET backfill_failures = 2 WHERE provider = 'whoop'")
+        )
+        await oauth_tokens.put_token(
+            session, _token(expired=False, refresh_token="RT"), event_kind="refreshed"
+        )
+        await session.commit()
+
+    assert await _failures(factory) == 2

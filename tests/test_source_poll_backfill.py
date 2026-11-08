@@ -251,3 +251,18 @@ def test_every_source_poll_names_its_fetch_error() -> None:
         error = _load_entrypoint(spec.fetch_error)
         assert error.__name__.endswith("FetchError")
         assert error("x", status_code=400).status_code == 400
+
+
+def test_each_poll_keys_its_cursor_by_the_token_provider_it_authorizes() -> None:
+    """put_token('authorized') resets the cursor stored under the token's provider."""
+    from worker.sources import AMAZFIT_SPEC, GOOGLE_HEALTH_SPEC, POLAR_SPEC, WHOOP_SPEC
+
+    from plugins.sources.amazfit import PROVIDER as AMAZFIT
+    from plugins.sources.google_health import GOOGLE_HEALTH_PROVIDER
+    from plugins.sources.polar import POLAR_PROVIDER
+    from plugins.sources.whoop import PROVIDER as WHOOP
+
+    assert WHOOP_SPEC.cursor_provider == WHOOP
+    assert AMAZFIT_SPEC.cursor_provider == AMAZFIT
+    assert POLAR_SPEC.cursor_provider == POLAR_PROVIDER
+    assert GOOGLE_HEALTH_SPEC.cursor_provider == GOOGLE_HEALTH_PROVIDER
