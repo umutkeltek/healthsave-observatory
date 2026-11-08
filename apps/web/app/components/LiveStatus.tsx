@@ -30,18 +30,18 @@ const MINI_LABELS: Record<LiveState, { aria: string; title: string }> = {
 // dashboard updates close to real time without a reload. The mint dot only
 // claims "live" while the poll is actually succeeding. A 401 means the web
 // session ended: that is "signed out" with a way to sign in, not "offline".
-export function LiveStatus({ renderedAt = 0 }: { renderedAt?: number }) {
+export function LiveStatus({ renderedSettled = 0 }: { renderedSettled?: number }) {
   const router = useRouter();
   const pathname = usePathname();
   const etag = useRef<string | null>(null);
   const wasLive = useRef(false);
   const [state, setState] = useState<LiveState>("unknown");
-  // When the server rendered this page (server clock): a cache refresh that
-  // landed later means the page may show older values, so it redraws.
-  const renderedAtRef = useRef(renderedAt);
+  // How many cache refreshes had landed when the server rendered this page:
+  // one landing later means the page may show older values, so it redraws.
+  const renderedSettledRef = useRef(renderedSettled);
   useEffect(() => {
-    renderedAtRef.current = Math.max(renderedAtRef.current, renderedAt);
-  }, [renderedAt]);
+    renderedSettledRef.current = Math.max(renderedSettledRef.current, renderedSettled);
+  }, [renderedSettled]);
 
   useEffect(() => {
     const signedOut = () => setState("signed-out");
@@ -78,14 +78,14 @@ export function LiveStatus({ renderedAt = 0 }: { renderedAt?: number }) {
           // Cached values on this page being refreshed: say so, look again
           // soon, and redraw once the refresh has landed.
           const signal = readCacheSignal(res.headers);
-          const { updating, redraw } = liveAfterPoll(signal, renderedAtRef.current);
+          const { updating, redraw } = liveAfterPoll(signal, renderedSettledRef.current);
           if (updating) {
             nextState = "updating";
             nextPoll = UPDATING_POLL_MS;
           }
           if (redraw && signal) {
             refresh = true;
-            renderedAtRef.current = signal.settledAt;
+            renderedSettledRef.current = signal.settled;
           }
         }
         if (refresh) router.refresh();

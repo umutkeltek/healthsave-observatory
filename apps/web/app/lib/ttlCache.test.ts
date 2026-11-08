@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 
 import { applyIntelligence, createMoment, postInsightsTrigger, postTestConnection, updateAnalyticalTime } from "./api";
+import { fakeClocks } from "./testClock";
 import {
   clearSwrCache,
   expireSwrCache,
@@ -37,13 +38,16 @@ function controlled<T>() {
 
 const realFetch = globalThis.fetch;
 
+let clocks: ReturnType<typeof fakeClocks>;
+const at = (ms: number) => clocks.at(ms);
+
 beforeEach(() => {
   clearSwrCache();
-  setSystemTime(T0);
+  clocks = fakeClocks(T0, setSystemTime);
 });
 
 afterEach(() => {
-  setSystemTime();
+  clocks.restore();
   globalThis.fetch = realFetch;
   clearSwrCache();
 });
@@ -51,7 +55,7 @@ afterEach(() => {
 describe("swrCache", () => {
   test("a fresh hit is served without a fetch", async () => {
     await swrCache("k", TTL, async () => "v1");
-    setSystemTime(T0 + TTL - 1);
+    at(TTL - 1);
     expect(await swrCache("k", TTL, fail)).toBe("v1");
   });
 
@@ -67,22 +71,23 @@ describe("swrCache", () => {
   // refused and every view waited on a 5-20 s read.
   test("a stale value from a healthy backend is served at once, with one shared background refresh", async () => {
     await swrCache("readiness", TTL, async () => "v1");
-    setSystemTime(T0 + 3 * 60 * 60_000);
+    at(3 * 60 * 60_000);
     const backend = controlled<string>();
     expect(await swrCache("readiness", TTL, backend.fetcher)).toBe("v1");
     expect(await swrCache("readiness", TTL, backend.fetcher)).toBe("v1");
     expect(backend.calls()).toBe(1);
     expect(staleRefreshStatus().refreshing).toBe(1);
+    const landedBefore = staleRefreshStatus().settled;
 
     backend.resolve("v2");
     await settle();
-    expect(staleRefreshStatus()).toEqual({ refreshing: 0, settledAt: T0 + 3 * 60 * 60_000 });
+    expect(staleRefreshStatus()).toEqual({ refreshing: 0, settled: landedBefore + 1 });
     expect(await swrCache("readiness", TTL, fail)).toBe("v2");
   });
 
   test("past the max stale age the read waits for the backend", async () => {
     await swrCache("k", TTL, async () => "v1");
-    setSystemTime(T0 + MAX_STALE_MS);
+    at(MAX_STALE_MS);
     expect(await swrCache("k", TTL, async () => "v2")).toBe("v2");
   });
 
@@ -90,7 +95,7 @@ describe("swrCache", () => {
   // as current; the read fails (unreachable) instead.
   test("after a failed refresh the stale value is no longer served", async () => {
     await swrCache("k", TTL, async () => "v1");
-    setSystemTime(T0 + TTL + 1);
+    at(TTL + 1);
     expect(await swrCache("k", TTL, fail)).toBe("v1");
     await settle();
     await expect(swrCache("k", TTL, async () => "v2")).rejects.toThrow("backend down");
@@ -104,7 +109,7 @@ describe("swrCache", () => {
       calls += 1;
       return "v";
     };
-    setSystemTime(T0 + FAILURE_BACKOFF_MS - 1);
+    at(FAILURE_BACKOFF_MS - 1);
     await expect(swrCache("k", TTL, counting)).rejects.toThrow("backend down");
     await expect(swrCache("k", TTL, counting)).rejects.toThrow("backend down");
     expect(calls).toBe(0);
@@ -112,7 +117,7 @@ describe("swrCache", () => {
 
   test("after the backoff one blocking attempt is shared by concurrent callers", async () => {
     await expect(swrCache("k", TTL, fail)).rejects.toThrow("backend down");
-    setSystemTime(T0 + FAILURE_BACKOFF_MS);
+    at(FAILURE_BACKOFF_MS);
     const backend = controlled<string>();
     const reads = [swrCache("k", TTL, backend.fetcher), swrCache("k", TTL, backend.fetcher)];
     backend.resolve("back");
@@ -127,6 +132,28 @@ describe("swrCache", () => {
     backend.resolve("old");
     expect(await read).toBe("old");
     expect(await swrCache("k", TTL, async () => "new")).toBe("new");
+  });
+});
+
+// The re-review: durations used the wall clock. After it stepped back (a VM
+// resume, an NTP correction) a value stayed fresh, and a failed key refused
+// reads, for as long as the step.
+describe("durations survive the wall clock stepping back", () => {
+  test("a value past its TTL is stale even if the wall clock stepped back", async () => {
+    await swrCache("k", TTL, async () => "v1");
+    at(TTL + 1);
+    clocks.stepWallBack(60 * 60_000);
+    const backend = controlled<string>();
+    expect(await swrCache("k", TTL, backend.fetcher)).toBe("v1");
+    expect(backend.calls()).toBe(1);
+    backend.resolve("v2");
+  });
+
+  test("a failed key is retried after its backoff even if the wall clock stepped back", async () => {
+    await expect(swrCache("k", TTL, fail)).rejects.toThrow("backend down");
+    at(FAILURE_BACKOFF_MS);
+    clocks.stepWallBack(60 * 60_000);
+    expect(await swrCache("k", TTL, async () => "back")).toBe("back");
   });
 });
 

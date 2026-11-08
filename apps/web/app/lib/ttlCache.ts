@@ -25,6 +25,11 @@
 // lib/api.ts); a fetch that started before a drop cannot put its older answer
 // back, and one that started before an expire lands already expired.
 
+// Durations (TTL, backoff, max stale age) use the monotonic clock: after the
+// wall clock steps back (a VM resume, an NTP correction) a value must not stay
+// fresh, nor a failed key keep refusing reads, for as long as the step.
+const clock = () => performance.now();
+
 export const FAILURE_BACKOFF_MS = 5_000;
 // Keys can come from URLs (/library/<id>, /compare?metric=<id>), so the cache
 // is bounded: least recently used keys go first, and a failed read goes as
@@ -57,15 +62,17 @@ type SharedState = {
   // Entries whose stale value was served while their background refresh runs.
   // A clear empties it: a dropped entry is no longer on any page.
   staleRefreshing: Set<Entry>;
-  // When the last of those finished (ms, server clock); 0 = never.
-  staleSettledAt: number;
+  // How many of those refreshes have landed. A counter, not a time: it is
+  // compared across bundles and with the layout's render (LiveStatus), and a
+  // wall-clock step must not hide a refresh.
+  staleSettled: number;
 };
 
 const STATE_KEY = Symbol.for("healthsave.web.swrCache");
 
 function shared(): SharedState {
   const holder = globalThis as typeof globalThis & { [STATE_KEY]?: SharedState };
-  holder[STATE_KEY] ??= { entries: new Map(), expireEpoch: 0, staleRefreshing: new Set(), staleSettledAt: 0 };
+  holder[STATE_KEY] ??= { entries: new Map(), expireEpoch: 0, staleRefreshing: new Set(), staleSettled: 0 };
   return holder[STATE_KEY];
 }
 
@@ -81,7 +88,7 @@ function fetchInto(state: SharedState, key: string, entry: Entry, fetcher: () =>
         if (current()) {
           entry.value = value;
           entry.hasValue = true;
-          entry.storedAt = Date.now();
+          entry.storedAt = clock();
           entry.epoch = startedIn;
           entry.failedAt = null;
           entry.error = undefined;
@@ -90,7 +97,7 @@ function fetchInto(state: SharedState, key: string, entry: Entry, fetcher: () =>
       },
       (error: unknown) => {
         if (current()) {
-          entry.failedAt = Date.now();
+          entry.failedAt = clock();
           entry.error = error;
         }
         throw error;
@@ -98,7 +105,7 @@ function fetchInto(state: SharedState, key: string, entry: Entry, fetcher: () =>
     )
     .finally(() => {
       if (entry.inflight === promise) entry.inflight = null;
-      if (background && state.staleRefreshing.delete(entry)) state.staleSettledAt = Date.now();
+      if (background && state.staleRefreshing.delete(entry)) state.staleSettled += 1;
     });
   entry.inflight = promise;
   // A background refresh has no caller; its failure is recorded on the entry
@@ -123,7 +130,7 @@ function makeRoom(state: SharedState, now: number): void {
 
 export async function swrCache<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
   const state = shared();
-  const now = Date.now();
+  const now = clock();
   let entry = state.entries.get(key);
   if (entry) {
     // Most recently used last (a Map keeps insertion order).
@@ -160,10 +167,10 @@ export async function swrCache<T>(key: string, ttlMs: number, fetcher: () => Pro
   return (await (entry.inflight ?? fetchInto(state, key, entry, fetcher, false))) as T;
 }
 
-/** Stale values being refreshed right now, and when the last such refresh finished. */
-export function staleRefreshStatus(): { refreshing: number; settledAt: number } {
+/** Stale values being refreshed right now, and how many such refreshes have landed. */
+export function staleRefreshStatus(): { refreshing: number; settled: number } {
   const state = shared();
-  return { refreshing: state.staleRefreshing.size, settledAt: state.staleSettledAt };
+  return { refreshing: state.staleRefreshing.size, settled: state.staleSettled };
 }
 
 /**

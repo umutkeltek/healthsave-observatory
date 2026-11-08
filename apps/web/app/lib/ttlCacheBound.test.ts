@@ -2,6 +2,7 @@
 // and /library/<id> and /compare?metric=<id> key on ids taken from the URL.
 import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 
+import { fakeClocks } from "./testClock";
 import { clearSwrCache, swrCache } from "./ttlCache";
 
 const T0 = new Date("2026-11-08T12:00:00Z").getTime();
@@ -13,13 +14,15 @@ function keys(): string[] {
   return [...state.entries.keys()];
 }
 
+let clocks: ReturnType<typeof fakeClocks>;
+
 beforeEach(() => {
   clearSwrCache();
-  setSystemTime(T0);
+  clocks = fakeClocks(T0, setSystemTime);
 });
 
 afterEach(() => {
-  setSystemTime();
+  clocks.restore();
   clearSwrCache();
 });
 
@@ -39,7 +42,7 @@ describe("bounded read cache", () => {
   test("a failed read is evicted once its backoff has passed", async () => {
     await expect(swrCache("series:typo.metric:30d", TTL, () => Promise.reject(new Error("404")))).rejects.toThrow();
     expect(keys()).toContain("series:typo.metric:30d");
-    setSystemTime(T0 + 60_000);
+    clocks.at(60_000);
     await swrCache("readiness", TTL, async () => "v");
     expect(keys()).not.toContain("series:typo.metric:30d");
   });

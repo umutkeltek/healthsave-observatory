@@ -3,21 +3,24 @@
 import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 
 import { liveAfterPoll, readCacheSignal } from "../../lib/liveSignal";
+import { fakeClocks } from "../../lib/testClock";
 import { clearSwrCache, swrCache } from "../../lib/ttlCache";
 import { GET } from "./route";
 
 const T0 = new Date("2026-11-08T12:00:00Z").getTime();
 const realFetch = globalThis.fetch;
 
+let clocks: ReturnType<typeof fakeClocks>;
+
 beforeEach(() => {
   clearSwrCache();
-  setSystemTime(T0);
+  clocks = fakeClocks(T0, setSystemTime);
   globalThis.fetch = (async () =>
     Response.json({ version_token: "t1" }, { headers: { etag: '"t1"' } })) as unknown as typeof fetch;
 });
 
 afterEach(() => {
-  setSystemTime();
+  clocks.restore();
   globalThis.fetch = realFetch;
   clearSwrCache();
 });
@@ -25,28 +28,29 @@ afterEach(() => {
 describe("/api/changes cache signal", () => {
   test("reports a stale value being refreshed, then when the refresh landed", async () => {
     await swrCache("readiness", 30_000, async () => "v1");
-    setSystemTime(T0 + 60_000);
+    clocks.at(60_000);
     let land: (value: string) => void = () => {};
     expect(await swrCache("readiness", 30_000, () => new Promise<string>((res) => (land = res)))).toBe("v1");
 
     const during = readCacheSignal((await GET(new Request("http://box/api/changes"))).headers);
-    expect(during).toEqual({ refreshing: 1, settledAt: expect.any(Number) });
+    expect(during?.refreshing).toBe(1);
 
     land("v2");
     await new Promise((resolve) => setTimeout(resolve, 0));
     const after = readCacheSignal((await GET(new Request("http://box/api/changes"))).headers);
-    expect(after).toEqual({ refreshing: 0, settledAt: T0 + 60_000 });
+    // Counted, not timed: a wall-clock step cannot hide that it landed.
+    expect(after).toEqual({ refreshing: 0, settled: (during?.settled ?? 0) + 1 });
   });
 });
 
 describe("liveAfterPoll", () => {
   test("a refresh in flight shows updating and does not redraw yet", () => {
-    expect(liveAfterPoll({ refreshing: 1, settledAt: 0 }, 100)).toEqual({ updating: true, redraw: false });
+    expect(liveAfterPoll({ refreshing: 1, settled: 0 }, 0)).toEqual({ updating: true, redraw: false });
   });
 
   test("a refresh that landed after this page rendered redraws it", () => {
-    expect(liveAfterPoll({ refreshing: 0, settledAt: 200 }, 100)).toEqual({ updating: false, redraw: true });
-    expect(liveAfterPoll({ refreshing: 0, settledAt: 50 }, 100)).toEqual({ updating: false, redraw: false });
+    expect(liveAfterPoll({ refreshing: 0, settled: 3 }, 2)).toEqual({ updating: false, redraw: true });
+    expect(liveAfterPoll({ refreshing: 0, settled: 2 }, 2)).toEqual({ updating: false, redraw: false });
   });
 
   test("an older server without the signal changes nothing", () => {
