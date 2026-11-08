@@ -181,3 +181,11 @@ async def test_list_available_metrics_returns_every_whitelisted_metric():
     assert by_metric["heart_rate"]["count"] == 2
     assert by_metric["heart_rate"]["oldest"] == "2026-05-01T12:00:00+00:00"
     assert by_metric["vo2_max"]["display_name"] == "VO2 Max"
+
+
+def test_export_filters_status_on_exactly_the_tables_that_keep_superseded_rows() -> None:
+    """One list: a table added to SOURCE_UUID_TABLES is filtered by the export too."""
+    from storage.timescale import export
+    from storage.timescale.measurements import SOURCE_UUID_TABLES
+
+    assert frozenset(SOURCE_UUID_TABLES) == export._SUPERSEDABLE_TABLES

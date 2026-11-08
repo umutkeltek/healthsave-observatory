@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Any
 from contracts._base import DEFAULT_OWNER_ID
 from sqlalchemy import text
 
+from storage.timescale.measurements import SOURCE_UUID_TABLES
+
 if TYPE_CHECKING:
     from uuid import UUID
 
@@ -35,9 +37,7 @@ MAX_ROW_LIMIT = 100_000
 # Tables that keep a revised or deleted HealthKit sample as a 'superseded' row
 # (migration 025). Only the active row is the person's data; every read
 # surface filters on it, and so does the export.
-_SUPERSEDABLE_TABLES = frozenset(
-    {"heart_rate", "hrv", "blood_oxygen", "body_temperature", "sleep_sessions"}
-)
+_SUPERSEDABLE_TABLES = frozenset(SOURCE_UUID_TABLES)
 
 
 @dataclass(frozen=True)
