@@ -26,6 +26,8 @@ from storage.timescale.source_poll_cursors import PollCursor
 from worker.sources import MAX_BACKFILL, MAX_BACKFILL_FAILURES, make_whoop_poll
 
 from plugins.sources.whoop import DEFAULT_LOOKBACK, WhoopSource
+from plugins.sources.whoop.fetch import WhoopFetchError
+from plugins.sources.whoop.oauth import WhoopOAuthError
 
 
 class _Session:
@@ -90,8 +92,10 @@ def poll(monkeypatch):
 
     async def ingest(self, payload):
         state["payloads"].append(payload)
-        if state["fail"] is True or (state["fail"] == "wide" and "since" in payload):
-            raise RuntimeError("whoop rejected the window")
+        if state["fail"] is True:
+            raise RuntimeError("whoop is down")
+        if state["fail"] == "wide" and "since" in payload:
+            raise WhoopFetchError("GET /v2/recovery returned HTTP 400: range", status_code=400)
         return dict(state["result"])
 
     async def no_fusion(*_args, **_kwargs):
@@ -104,7 +108,7 @@ def poll(monkeypatch):
     async def run() -> _Session:
         session = _Session()
         job = make_whoop_poll(lambda: session)
-        with contextlib.suppress(RuntimeError):  # a failing poll re-raises
+        with contextlib.suppress(RuntimeError, WhoopFetchError):  # a failing poll re-raises
             await job()
         return session
 
@@ -209,3 +213,41 @@ async def test_a_poll_skipped_for_want_of_a_token_does_not_move_the_cursor(poll)
     await poll["run"]()
 
     assert poll["recorded"] == []
+
+
+@pytest.mark.parametrize(
+    ("exc", "counted"),
+    [
+        (WhoopFetchError("HTTP 400", status_code=400), True),
+        (WhoopFetchError("HTTP 422", status_code=422), True),
+        (WhoopFetchError("exceeded max_pages=100"), True),
+        (WhoopFetchError("HTTP 401", status_code=401), False),
+        (WhoopFetchError("HTTP 403", status_code=403), False),
+        (WhoopFetchError("HTTP 429", status_code=429), False),
+        (WhoopFetchError("HTTP 503", status_code=503), False),
+        (WhoopOAuthError("token endpoint returned HTTP 400"), False),
+        (RuntimeError("anything else"), False),
+    ],
+)
+def test_only_range_failures_count_against_a_widened_window(exc, counted) -> None:
+    import httpx
+    from worker.sources import is_backfill_range_failure
+
+    assert is_backfill_range_failure(exc, WhoopFetchError) is counted
+    assert is_backfill_range_failure(httpx.ConnectError("down"), WhoopFetchError) is False
+    assert is_backfill_range_failure(exc, None) is False
+
+
+def test_every_source_poll_names_its_fetch_error() -> None:
+    from worker.sources import (
+        AMAZFIT_SPEC,
+        GOOGLE_HEALTH_SPEC,
+        POLAR_SPEC,
+        WHOOP_SPEC,
+        _load_entrypoint,
+    )
+
+    for spec in (WHOOP_SPEC, AMAZFIT_SPEC, POLAR_SPEC, GOOGLE_HEALTH_SPEC):
+        error = _load_entrypoint(spec.fetch_error)
+        assert error.__name__.endswith("FetchError")
+        assert error("x", status_code=400).status_code == 400

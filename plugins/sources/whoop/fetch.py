@@ -46,6 +46,13 @@ DEFAULT_PAGE_SIZE = 25
 class WhoopFetchError(Exception):
     """Raised when a Whoop data endpoint returns non-200 or malformed JSON."""
 
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        # The HTTP status when the API answered with one; None for a malformed
+        # body or a page-cap overflow. The worker reads it to tell a rejected
+        # window from an outage or an auth failure.
+        self.status_code = status_code
+
 
 class _HttpResponse(Protocol):
     status_code: int
@@ -103,7 +110,10 @@ async def paginated_get(
         response = await http_client.get(f"{API_BASE}{path}", params=params, headers=headers)
         if response.status_code != 200:
             body = getattr(response, "text", "<no body>")
-            raise WhoopFetchError(f"GET {path} returned HTTP {response.status_code}: {body}")
+            raise WhoopFetchError(
+                f"GET {path} returned HTTP {response.status_code}: {body}",
+                status_code=response.status_code,
+            )
         try:
             payload = response.json()
         except Exception as e:
@@ -129,7 +139,10 @@ async def fetch_one(
     response = await http_client.get(f"{API_BASE}{path}", headers=headers)
     if response.status_code != 200:
         body = getattr(response, "text", "<no body>")
-        raise WhoopFetchError(f"GET {path} returned HTTP {response.status_code}: {body}")
+        raise WhoopFetchError(
+            f"GET {path} returned HTTP {response.status_code}: {body}",
+            status_code=response.status_code,
+        )
     try:
         return response.json()
     except Exception as e:

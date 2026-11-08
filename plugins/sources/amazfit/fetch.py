@@ -54,6 +54,13 @@ SPORT_LOAD_LIMIT = 900
 class AmazfitFetchError(Exception):
     """Raised when a Zepp data endpoint returns non-200 or malformed JSON."""
 
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        # The HTTP status when the API answered with one; None for a malformed
+        # body or a page-cap overflow. The worker reads it to tell a rejected
+        # window from an outage or an auth failure.
+        self.status_code = status_code
+
 
 class _HttpResponse(Protocol):
     status_code: int
@@ -125,7 +132,10 @@ async def _get_json(
     response = await http_client.get(url, params=params, headers=headers)
     if response.status_code != 200:
         body = getattr(response, "text", "<no body>")
-        raise AmazfitFetchError(f"GET {url} returned HTTP {response.status_code}: {body[:200]}")
+        raise AmazfitFetchError(
+            f"GET {url} returned HTTP {response.status_code}: {body[:200]}",
+            status_code=response.status_code,
+        )
     try:
         return response.json()
     except Exception as e:

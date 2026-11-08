@@ -13,6 +13,13 @@ DEFAULT_PAGE_SIZE = 1000
 class GoogleHealthFetchError(Exception):
     """Raised when Google Health API response cannot be used."""
 
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        # The HTTP status when the API answered with one; None for a malformed
+        # body or a page-cap overflow. The worker reads it to tell a rejected
+        # window from an outage or an auth failure.
+        self.status_code = status_code
+
 
 class _HttpResponse(Protocol):
     status_code: int
@@ -67,7 +74,8 @@ async def fetch_data_points(
         if response.status_code != 200:
             body = getattr(response, "text", "<no body>")
             raise GoogleHealthFetchError(
-                f"GET dataPoints/{data_type} returned HTTP {response.status_code}: {body}"
+                f"GET dataPoints/{data_type} returned HTTP {response.status_code}: {body}",
+                status_code=response.status_code,
             )
         try:
             payload = response.json()

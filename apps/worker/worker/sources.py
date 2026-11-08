@@ -46,27 +46,34 @@ class SourcePollSpec:
     slug: str
     entrypoint: str
     log_label: str
+    # The plugin's data-fetch error ("module:Class"). Only these count as a
+    # failed backfill window; None counts nothing.
+    fetch_error: str | None = None
 
 
 WHOOP_SPEC = SourcePollSpec(
     slug="whoop",
     entrypoint="plugins.sources.whoop:WhoopSource",
     log_label="whoop",
+    fetch_error="plugins.sources.whoop.fetch:WhoopFetchError",
 )
 AMAZFIT_SPEC = SourcePollSpec(
     slug="amazfit",
     entrypoint="plugins.sources.amazfit:AmazfitSource",
     log_label="amazfit",
+    fetch_error="plugins.sources.amazfit.fetch:AmazfitFetchError",
 )
 POLAR_SPEC = SourcePollSpec(
     slug="polar",
     entrypoint="plugins.sources.polar:PolarSource",
     log_label="polar",
+    fetch_error="plugins.sources.polar.fetch:PolarFetchError",
 )
 GOOGLE_HEALTH_SPEC = SourcePollSpec(
     slug="google_health",
     entrypoint="plugins.sources.google_health:GoogleHealthSource",
     log_label="google health",
+    fetch_error="plugins.sources.google_health.fetch:GoogleHealthFetchError",
 )
 
 
@@ -90,6 +97,27 @@ def _plugin_lookback(entrypoint: str) -> timedelta | None:
     module = importlib.import_module(entrypoint.partition(":")[0])
     lookback = getattr(module, "DEFAULT_LOOKBACK", None)
     return lookback if isinstance(lookback, timedelta) else None
+
+
+# A fetch error with one of these statuses says nothing about the window: the
+# token is refused (401/403), or the vendor is busy or slow (408/429). A 5xx is
+# an outage. Only a 4xx outside this set, or a fetch error with no status (a
+# page-cap overflow, a malformed body), is held against a widened window.
+_NOT_A_RANGE_FAILURE = frozenset({401, 403, 408, 429})
+
+
+def is_backfill_range_failure(exc: BaseException, fetch_error: type | None) -> bool:
+    """True when a widened poll failed because of its window, not auth or an outage.
+
+    Refresh and auth errors, expired tokens and transport errors are never the
+    plugin's fetch error, so a dead token cannot use up the backfill attempts.
+    """
+    if fetch_error is None or not isinstance(exc, fetch_error):
+        return False
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        return True
+    return 400 <= status < 500 and status not in _NOT_A_RANGE_FAILURE
 
 
 def backfill_since(
@@ -250,10 +278,11 @@ def make_source_poll(
                     await session.rollback()
                     log.exception("%s fusion reconciliation failed", spec.log_label)
                 log.info("%s poll: %s", spec.log_label, result)
-            except Exception:
+            except Exception as exc:
                 await session.rollback()
                 log.exception("%s poll failed", spec.log_label)
-                if widened:
+                fetch_error = _load_entrypoint(spec.fetch_error) if spec.fetch_error else None
+                if widened and is_backfill_range_failure(exc, fetch_error):
                     # Count it in its own transaction: the poll's rolled back.
                     try:
                         await source_poll_cursors.record_backfill_failure(
