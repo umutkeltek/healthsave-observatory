@@ -162,13 +162,47 @@ def _result_view(row: Any) -> ResultView:
     )
 
 
+def _stored_calendar(row: Any) -> list | None:
+    """The row's phase calendar, or None when its stored design can't be laid out.
+
+    Rows created before the create route validated ``design`` can hold one the
+    calendar rejects. Serving them without a calendar keeps every read working
+    instead of turning each experiments read into a 500.
+    """
+    try:
+        return build_phase_calendar(row.start_date, row.block_days, row.design)
+    except ValueError:
+        _log.warning("experiment %s has an invalid stored design %r", row.id, row.design)
+        return None
+
+
+_NO_PROGRESS = ProgressView(
+    current_phase=None, day_index=0, total_days=0, days_remaining=0, is_complete=False, pct=0.0
+)
+
+
 def _experiment_view(
     row: Any,
     results: dict[str, Any],
     today: date,
 ) -> ExperimentView:
-    calendar = build_phase_calendar(row.start_date, row.block_days, row.design)
-    prog = progress(calendar, today)
+    calendar = _stored_calendar(row)
+    if calendar is None:
+        calendar_view: list[PhaseView] = []
+        progress_view = _NO_PROGRESS
+    else:
+        prog = progress(calendar, today)
+        calendar_view = [
+            PhaseView(label=p.label, index=p.index, start=p.start, end=p.end) for p in calendar
+        ]
+        progress_view = ProgressView(
+            current_phase=prog.current_phase,
+            day_index=prog.day_index,
+            total_days=prog.total_days,
+            days_remaining=prog.days_remaining,
+            is_complete=prog.is_complete,
+            pct=prog.pct,
+        )
     return ExperimentView(
         id=row.id,
         lever_metric_id=row.lever_metric_id,
@@ -181,17 +215,8 @@ def _experiment_view(
         hypothesis=row.hypothesis,
         status=row.status,
         created_at=row.created_at,
-        calendar=[
-            PhaseView(label=p.label, index=p.index, start=p.start, end=p.end) for p in calendar
-        ],
-        progress=ProgressView(
-            current_phase=prog.current_phase,
-            day_index=prog.day_index,
-            total_days=prog.total_days,
-            days_remaining=prog.days_remaining,
-            is_complete=prog.is_complete,
-            pct=prog.pct,
-        ),
+        calendar=calendar_view,
+        progress=progress_view,
         results={kind: _result_view(r) for kind, r in results.items()},
     )
 
@@ -293,6 +318,12 @@ async def create_experiment(
         )
 
     start = body.start_date or _today()
+    # Validate the design with the same calendar every read builds, before
+    # anything is stored: a stored design the calendar rejects broke reads.
+    try:
+        build_phase_calendar(start, body.block_days, body.design)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     row = await _EXPERIMENT_REPO.create_experiment(
         session,
         lever_metric_id=body.lever_metric_id,
@@ -357,6 +388,11 @@ async def analyze_experiment(
     row = await _EXPERIMENT_REPO.get_experiment(session, experiment_id=experiment_id)
     if row is None:
         raise HTTPException(status_code=404, detail="experiment not found")
+    if _stored_calendar(row) is None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"experiment design {row.design!r} can't be analyzed; abandon it",
+        )
 
     await _make_runner().run_controlled(row, as_of=_today())
 

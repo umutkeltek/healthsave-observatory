@@ -357,3 +357,64 @@ async def test_abandon_sets_status_and_404(wire):
     with pytest.raises(HTTPException) as exc:
         await abandon_experiment(experiment_id=EXP_ID, session=_Session())
     assert exc.value.status_code == 404
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Invalid designs — rejected before commit; stored ones never 500 a read
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_create_rejects_invalid_design_before_anything_is_stored(wire):
+    """A design the phase calendar can't lay out is a 422, and nothing commits.
+
+    It used to be stored and committed first; building the view then raised,
+    so the create returned 500 and every later experiments read did too.
+    """
+    store = _StubStore(created=_experiment_row(design="XYZ"))
+    wire(store)
+    session = _Session()
+    body = CreateExperimentRequest(
+        lever_metric_id="activity.steps",
+        outcome_metric_id="vital.resting_heart_rate",
+        design="XYZ",
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await create_experiment(body=body, session=session)
+
+    assert exc.value.status_code == 422
+    assert "design" in exc.value.detail
+    assert store.created_kw is None
+    assert session.committed is False
+
+
+@pytest.mark.asyncio
+async def test_a_stored_invalid_design_does_not_fail_reads(wire):
+    """Rows written before validation existed still list, open and abandon."""
+    bad = _experiment_row(design="XYZ")
+    wire(_StubStore(listing=[_experiment_row(), bad], got=bad, set_result=bad))
+
+    listing = await list_experiments(session=_Session(), status=None)
+    assert listing.count == 2
+    bad_view = listing.experiments[1]
+    assert bad_view.design == "XYZ"
+    assert bad_view.calendar == []
+    assert bad_view.progress.total_days == 0 and bad_view.progress.is_complete is False
+
+    detail = await get_experiment(experiment_id=EXP_ID, session=_Session())
+    assert detail.calendar == []
+
+    abandoned = await abandon_experiment(experiment_id=EXP_ID, session=_Session())
+    assert abandoned.calendar == []
+
+
+@pytest.mark.asyncio
+async def test_analyze_of_a_stored_invalid_design_is_a_422_not_a_500(wire):
+    runner = wire(_StubStore(got=_experiment_row(design="XYZ")))
+
+    with pytest.raises(HTTPException) as exc:
+        await analyze_experiment(experiment_id=EXP_ID, session=_Session())
+
+    assert exc.value.status_code == 422
+    assert runner.controlled_called is False
