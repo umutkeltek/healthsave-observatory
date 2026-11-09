@@ -19,6 +19,8 @@ from storage.timescale.fusion import default_repository as default_fusion_reposi
 
 from contracts import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID, PluginManifest
 
+from .listener import SKIPPED_KEY
+
 log = logging.getLogger("healthsave.worker.sources")
 
 WHOOP_DEFAULT_CRON = "*/30 * * * *"
@@ -240,10 +242,10 @@ def make_source_poll(
     *,
     spec: SourcePollSpec,
     fusion_repository: Any = default_fusion_repository,
-) -> Callable[[], Awaitable[None]]:
+) -> Callable[[], Awaitable[dict[str, str] | None]]:
     """Return an awaitable APScheduler can invoke for one source adapter."""
 
-    async def _run() -> None:
+    async def _run() -> dict[str, str] | None:
         import httpx
         from plugin_sdk import load_manifest
         from storage.timescale import source_poll_cursors
@@ -304,10 +306,11 @@ def make_source_poll(
                     )
                 result = await plugin.ingest(payload)
                 if isinstance(result, dict) and result.get(SKIPPED_NO_TOKEN):
-                    # Nothing was polled: a skip is not a successful poll.
+                    # Nothing was polled: a skip is not a successful poll, for
+                    # the cursor or for the run ledger (worker.listener).
                     await session.commit()
                     log.info("%s poll skipped: no stored token", spec.log_label)
-                    return
+                    return {SKIPPED_KEY: "no stored token"}
                 # Same transaction as the poll's data: the cursor never claims
                 # a poll whose writes rolled back.
                 await source_poll_cursors.record_successful_poll(
@@ -421,7 +424,7 @@ def _register_source_poll(
     return job_id
 
 
-def make_whoop_poll(session_factory: Any) -> Callable[[], Awaitable[None]]:
+def make_whoop_poll(session_factory: Any) -> Callable[[], Awaitable[dict[str, str] | None]]:
     return make_source_poll(session_factory, spec=WHOOP_SPEC)
 
 
@@ -441,7 +444,7 @@ def register_whoop_poll(
     )
 
 
-def make_amazfit_poll(session_factory: Any) -> Callable[[], Awaitable[None]]:
+def make_amazfit_poll(session_factory: Any) -> Callable[[], Awaitable[dict[str, str] | None]]:
     return make_source_poll(session_factory, spec=AMAZFIT_SPEC)
 
 
@@ -461,7 +464,7 @@ def register_amazfit_poll(
     )
 
 
-def make_polar_poll(session_factory: Any) -> Callable[[], Awaitable[None]]:
+def make_polar_poll(session_factory: Any) -> Callable[[], Awaitable[dict[str, str] | None]]:
     return make_source_poll(session_factory, spec=POLAR_SPEC)
 
 
@@ -481,7 +484,7 @@ def register_polar_poll(
     )
 
 
-def make_google_health_poll(session_factory: Any) -> Callable[[], Awaitable[None]]:
+def make_google_health_poll(session_factory: Any) -> Callable[[], Awaitable[dict[str, str] | None]]:
     return make_source_poll(session_factory, spec=GOOGLE_HEALTH_SPEC)
 
 

@@ -411,3 +411,18 @@ def test_a_failure_is_never_both_a_range_and_an_outage_failure() -> None:
             is_backfill_range_failure(exc, WhoopFetchError)
             and is_backfill_outage_failure(exc, WhoopFetchError)
         ), status
+
+
+@pytest.mark.asyncio
+async def test_a_skipped_poll_tells_the_run_ledger_it_did_nothing(poll, monkeypatch):
+    """The job's return value is what the ledger listener records."""
+    from worker.listener import skipped_reason
+
+    poll["cursor"] = datetime.now(UTC) - timedelta(days=10)
+    poll["result"] = {"accepted": 0, "rejected": 0, "skipped_no_token": 1}
+    job = make_whoop_poll(lambda: _Session())
+
+    assert skipped_reason(await job()) == "no stored token"
+
+    poll["result"] = {"accepted": 3, "rejected": 0}
+    assert skipped_reason(await job()) is None
