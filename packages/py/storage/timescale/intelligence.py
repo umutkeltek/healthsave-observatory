@@ -148,6 +148,12 @@ _AUDIT_EVENT_TYPES = frozenset(
 )
 
 
+# First key of the two-key advisory lock that serializes one owner's fallback
+# chain replacements (the second key is the owner id's hash). Two-key locks
+# never collide with single-bigint keys such as the migration runner's.
+_FALLBACK_CHAIN_LOCK_CLASS = 753266017
+
+
 def _parse_metadata(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
@@ -729,7 +735,20 @@ class TimescaleIntelligenceRepository:
         Delete-then-insert keeps the ``UNIQUE(owner_id, priority)`` constraint
         trivially satisfied and makes reordering a single call. The caller's
         transaction makes it atomic.
+
+        Replacements for one owner are serialized by a transaction-scoped
+        advisory lock taken first. Without it, two concurrent saves interleave:
+        the second DELETE cannot see the first save's uncommitted rows, so its
+        INSERT hits the unique constraint (a 500), or it skips rows the first
+        save already removed and that save's chain outlives a later clear. The
+        lock is held to commit/rollback, so the second save's DELETE sees the
+        first save's committed chain. An advisory lock, not ``FOR UPDATE`` on
+        the head row, because the head row may not exist yet on a first save.
         """
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(:lock_class, hashtext(CAST(:owner_id AS TEXT)))"),
+            {"lock_class": _FALLBACK_CHAIN_LOCK_CLASS, "owner_id": str(owner_id)},
+        )
         await session.execute(
             text("DELETE FROM llm_fallback_routes WHERE owner_id = :owner_id"),
             {"owner_id": str(owner_id)},

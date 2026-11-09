@@ -240,8 +240,12 @@ async def test_set_fallback_routes_replaces_and_orders_by_position(repo):
 
     await repo.set_fallback_routes(session, routes=routes)
 
-    # Delete first, then one insert per route with priority = list index.
-    delete_sql = session.calls[0][0]
+    # Lock the owner's chain, delete, then one insert per route with
+    # priority = list index.
+    lock_sql, lock_params = session.calls[0]
+    assert "pg_advisory_xact_lock" in lock_sql
+    assert lock_params["owner_id"] == str(OWNER)
+    delete_sql = session.calls[1][0]
     assert "DELETE FROM llm_fallback_routes" in delete_sql
     inserts = [(s, p) for s, p in session.calls if "INSERT INTO llm_fallback_routes" in s]
     assert [p["priority"] for _, p in inserts] == [0, 1]
