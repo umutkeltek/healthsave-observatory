@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 // ⌘K palette: jump to any page or any of the ~190 catalog signals without
 // hunting the nav or the Library grid. Pure client island - the metric list
@@ -42,7 +42,33 @@ function score(haystack: string, q: string): number {
 
 const MAX_RESULTS = 12;
 
-export function CommandPalette({ metrics }: { metrics: PaletteMetric[] }) {
+// The signal catalog streams in after the shell (PaletteHost, behind
+// Suspense). It is handed to the one palette instance through this setter.
+// A pages-only palette as the Suspense fallback did not work: React does not
+// hydrate a pending fallback, so the palette could not open until the catalog
+// arrived, and then a new instance replaced it.
+const PaletteCatalogContext = createContext<((metrics: PaletteMetric[]) => void) | null>(null);
+
+/** Hands the streamed catalog to the palette; renders nothing. */
+export function PaletteCatalog({ metrics }: { metrics: PaletteMetric[] }) {
+  const setMetrics = useContext(PaletteCatalogContext);
+  useEffect(() => {
+    setMetrics?.(metrics);
+  }, [setMetrics, metrics]);
+  return null;
+}
+
+export function CommandPalette({ catalog }: { catalog?: ReactNode }) {
+  const [metrics, setMetrics] = useState<PaletteMetric[]>([]);
+  return (
+    <PaletteCatalogContext.Provider value={setMetrics}>
+      {catalog}
+      <PaletteDialog metrics={metrics} />
+    </PaletteCatalogContext.Provider>
+  );
+}
+
+function PaletteDialog({ metrics }: { metrics: PaletteMetric[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
