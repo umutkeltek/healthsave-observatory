@@ -15,6 +15,7 @@ const saved = {
   password: process.env.WEB_PASSWORD,
   file: process.env.WEB_AUTH_FILE,
   locales: process.env.HEALTHSAVE_EXPERIMENTAL_LOCALES,
+  trustProxy: process.env.WEB_TRUST_PROXY,
 };
 let dir = "";
 
@@ -22,6 +23,7 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "hs-login-"));
   process.env.WEB_AUTH_FILE = join(dir, "data", "web-auth.json");
   process.env.WEB_PASSWORD = "correct horse battery";
+  delete process.env.WEB_TRUST_PROXY;
   // A fixed past clock: the limiter's failures from this file are long expired
   // once the real clock is back, so no other test sees them.
   setSystemTime(new Date("2020-01-01T00:00:00Z"));
@@ -36,6 +38,7 @@ afterEach(async () => {
     ["WEB_PASSWORD", saved.password],
     ["WEB_AUTH_FILE", saved.file],
     ["HEALTHSAVE_EXPERIMENTAL_LOCALES", saved.locales],
+    ["WEB_TRUST_PROXY", saved.trustProxy],
   ] as const) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
@@ -68,8 +71,47 @@ describe("sign-in limiter", () => {
     expect(response.headers.get("retry-after")).toBe("60");
   });
 
-  // The bug: one bucket for the whole process, so wrong guesses from any
-  // address that reaches the port locked the owner out everywhere.
+  // Before: a guess was counted only after the password check finished, so
+  // guesses sent all at once were every one checked before the first counted.
+  test("guesses sent at once cannot all slip past the limit", async () => {
+    const answers = await Promise.all(Array.from({ length: FAILED_LOGIN_LIMIT + 5 }, () => signIn("wrong")));
+    const checked = answers.filter((r) => r.headers.get("location")?.startsWith("/login?error=1"));
+    expect(checked.length).toBe(FAILED_LOGIN_LIMIT);
+  });
+
+  test("a right password does not count against anyone", async () => {
+    for (let i = 0; i < FAILED_LOGIN_LIMIT + 2; i++) {
+      const response = await signIn("correct horse battery");
+      expect(response.headers.get("location")).toBe("/sleep");
+    }
+    expect(passwordAttempts.blocked(null)).toBeNull();
+  });
+});
+
+// Default: no trusted proxy in front (the live deploy publishes the web port
+// directly). X-Forwarded-For then comes from the client, so it decides nothing.
+describe("sign-in limiter without a trusted proxy (the default)", () => {
+  // The bug (review of the per-address fix): keying on a header the client
+  // writes let one client spread guesses over made-up addresses, 30 a minute
+  // instead of 10, and keep sign-in paused for everyone.
+  test("made-up forwarded addresses share one bucket at the old limit", async () => {
+    const answers = await Promise.all(
+      Array.from({ length: FAILED_LOGIN_LIMIT + 5 }, (_, i) => signIn("wrong", `10.66.${i}.1`)),
+    );
+    const checked = answers.filter((r) => r.headers.get("location")?.startsWith("/login?error=1"));
+    expect(checked.length).toBe(FAILED_LOGIN_LIMIT);
+    const owner = await signIn("correct horse battery", "192.168.1.20");
+    expect(owner.headers.get("location")).toStartWith("/login?error=locked&wait=");
+  });
+});
+
+describe("sign-in limiter behind a trusted proxy (WEB_TRUST_PROXY=true)", () => {
+  beforeEach(() => {
+    process.env.WEB_TRUST_PROXY = "true";
+  });
+
+  // The bug (audit web #15): one bucket for the whole process, so wrong
+  // guesses from any address locked the owner out everywhere.
   test("wrong passwords from one address do not lock out the owner at another", async () => {
     for (let i = 0; i < FAILED_LOGIN_LIMIT; i++) passwordAttempts.recordFailure("192.168.1.66");
     const owner = await signIn("correct horse battery", "192.168.1.20");
@@ -87,31 +129,15 @@ describe("sign-in limiter", () => {
   });
 
   test("a wrong password counts against the address it came from", async () => {
-    const before = passwordAttempts.trackedClients();
     const response = await signIn("wrong", "192.168.1.66");
     expect(response.headers.get("location")).toBe("/login?error=1&next=%2Fsleep");
-    expect(passwordAttempts.trackedClients()).toBe(before + 1);
+    expect(passwordAttempts.trackedClients()).toBe(1);
     expect(passwordAttempts.blocked("192.168.1.20")).toBeNull();
+    expect(passwordAttempts.blocked("192.168.1.66")).toBeNull();
   });
+});
 
-  // Before: a guess was counted only after the password check finished, so
-  // guesses sent all at once were every one checked before the first counted.
-  test("guesses sent at once cannot all slip past the limit", async () => {
-    const answers = await Promise.all(
-      Array.from({ length: FAILED_LOGIN_LIMIT + 5 }, () => signIn("wrong", "192.168.1.66")),
-    );
-    const checked = answers.filter((r) => r.headers.get("location")?.startsWith("/login?error=1"));
-    expect(checked.length).toBe(FAILED_LOGIN_LIMIT);
-  });
-
-  test("a right password does not count against the address", async () => {
-    for (let i = 0; i < FAILED_LOGIN_LIMIT + 2; i++) {
-      const response = await signIn("correct horse battery", "192.168.1.20");
-      expect(response.headers.get("location")).toBe("/sleep");
-    }
-    expect(passwordAttempts.blocked("192.168.1.20")).toBeNull();
-  });
-
+describe("sign-in page", () => {
   test("the sign-in page says how long to wait, distinct from a wrong password", async () => {
     const locked = await renderLogin({ error: "locked", wait: "42" });
     expect(locked).toContain("Too many wrong passwords. Try again in 42 seconds.");

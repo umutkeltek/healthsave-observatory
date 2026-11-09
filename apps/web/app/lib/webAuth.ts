@@ -151,14 +151,15 @@ export function requestIsHttps(url: URL, forwardedProto: string | null): boolean
   return url.protocol === "https:";
 }
 
-// Wrong-password limiter. Each client address gets its own bucket: after
-// FAILED_LOGIN_LIMIT misses inside FAILED_LOGIN_WINDOW_MS that address is sent
-// back to /login?error=locked without a check until the window moves on, so
-// guesses from one place cannot lock the owner out from another. A
-// process-wide ceiling (FAILED_LOGIN_GLOBAL_LIMIT) still stops a flood that
-// spreads guesses over many made-up addresses. Requests with no address share
-// one bucket, which is the old single-bucket behaviour. Generated passwords are
-// far out of reach anyway; this is for passwords a person picks.
+// Wrong-password limiter. Each bucket allows FAILED_LOGIN_LIMIT misses inside
+// FAILED_LOGIN_WINDOW_MS; past that, sign-in sends the browser back to
+// /login?error=locked (with how long to wait) without a check until the window
+// moves on. By default every request shares one bucket. Behind a trusted proxy
+// (WEB_TRUST_PROXY, see clientAddress) each client address gets its own, so
+// guesses from one place cannot lock the owner out from another, and a
+// process-wide ceiling (FAILED_LOGIN_GLOBAL_LIMIT) still pauses sign-in for
+// everyone during a flood over many addresses. Generated passwords are far out
+// of reach anyway; this is for passwords a person picks.
 export const FAILED_LOGIN_LIMIT = 10;
 export const FAILED_LOGIN_GLOBAL_LIMIT = 30;
 export const FAILED_LOGIN_WINDOW_MS = 60_000;
@@ -171,14 +172,21 @@ export type LoginBlock = {
   retryAfterSeconds: number;
 };
 
-// The address the app already trusts for the request: the last
-// X-Forwarded-For entry is the hop nearest this app. Next fills it from the
-// socket when nothing set it, and a reverse proxy in front (the bundled nginx)
-// appends the address it saw, so behind a proxy a client cannot pick it by
-// sending its own header. Reached directly, a client can send any value; the
-// process-wide ceiling is what holds then. X-Real-IP otherwise; null when
-// neither is there (the shared bucket).
-export function clientAddress(headers: Headers): string | null {
+// Whether a reverse proxy the operator trusts sits in front of the web port and
+// writes X-Forwarded-For (WEB_TRUST_PROXY=true). Off by default: with the port
+// reachable directly, those headers come from the client and can name any
+// address, so they must not decide whose bucket a guess counts against.
+export function trustsProxyHeaders(env: Env = process.env): boolean {
+  return ["1", "true", "yes"].includes((env.WEB_TRUST_PROXY ?? "").trim().toLowerCase());
+}
+
+// The client address the limiter keys on, or null for the one shared bucket.
+// Only behind a trusted proxy (trustsProxyHeaders): then the last
+// X-Forwarded-For entry is the address that proxy saw (it appends it; anything
+// to its left came from the client), else X-Real-IP. Without one, always null:
+// every request shares one bucket at FAILED_LOGIN_LIMIT, the old behaviour.
+export function clientAddress(headers: Headers, env: Env = process.env): string | null {
+  if (!trustsProxyHeaders(env)) return null;
   const forwarded = (headers.get("x-forwarded-for") ?? "")
     .split(",")
     .map((part) => part.trim())

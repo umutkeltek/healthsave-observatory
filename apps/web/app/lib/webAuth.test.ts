@@ -195,21 +195,31 @@ describe("failed sign-in limiter", () => {
 
 describe("client address for the limiter", () => {
   const h = (init: Record<string, string>) => new Headers(init);
+  const behindProxy = { WEB_TRUST_PROXY: "true" };
 
-  test("the hop nearest this app: the last X-Forwarded-For entry", () => {
-    // A reverse proxy appends the address it saw; anything to its left came
-    // from the client and can be made up.
-    expect(clientAddress(h({ "x-forwarded-for": "6.6.6.6, 192.168.1.20" }))).toBe("192.168.1.20");
-    expect(clientAddress(h({ "x-forwarded-for": " 192.168.1.20 " }))).toBe("192.168.1.20");
+  // Without a trusted proxy in front, X-Forwarded-For and X-Real-IP come from
+  // the client, so they must not pick the bucket (review of web #15).
+  test("by default no header decides the address: one shared bucket", () => {
+    expect(clientAddress(h({ "x-forwarded-for": "6.6.6.6" }), {})).toBeNull();
+    expect(clientAddress(h({ "x-real-ip": "6.6.6.6" }), {})).toBeNull();
+    expect(clientAddress(h({ "x-forwarded-for": "6.6.6.6" }), { WEB_TRUST_PROXY: "" })).toBeNull();
+    expect(clientAddress(h({ "x-forwarded-for": "6.6.6.6" }), { WEB_TRUST_PROXY: "no" })).toBeNull();
   });
 
-  test("X-Real-IP when there is no X-Forwarded-For", () => {
-    expect(clientAddress(h({ "x-real-ip": "192.168.1.31" }))).toBe("192.168.1.31");
+  test("behind a trusted proxy: the hop nearest this app, the last X-Forwarded-For entry", () => {
+    // The proxy appends the address it saw; anything to its left came from
+    // the client and can be made up.
+    expect(clientAddress(h({ "x-forwarded-for": "6.6.6.6, 192.168.1.20" }), behindProxy)).toBe("192.168.1.20");
+    expect(clientAddress(h({ "x-forwarded-for": " 192.168.1.20 " }), { WEB_TRUST_PROXY: "1" })).toBe("192.168.1.20");
   });
 
-  test("no address at all is null (the shared bucket)", () => {
-    expect(clientAddress(h({}))).toBeNull();
-    expect(clientAddress(h({ "x-forwarded-for": " , " }))).toBeNull();
+  test("behind a trusted proxy: X-Real-IP when there is no X-Forwarded-For", () => {
+    expect(clientAddress(h({ "x-real-ip": "192.168.1.31" }), behindProxy)).toBe("192.168.1.31");
+  });
+
+  test("behind a trusted proxy with no address at all: the shared bucket", () => {
+    expect(clientAddress(h({}), behindProxy)).toBeNull();
+    expect(clientAddress(h({ "x-forwarded-for": " , " }), behindProxy)).toBeNull();
   });
 });
 

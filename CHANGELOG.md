@@ -29,6 +29,13 @@ Plugins carry their own versions.
     `v0:` entry, or the provider keys saved so far will not open.
   - **After you upgrade**, run one narrator connection test (Test connection
     on the Intelligence settings page) to confirm the saved key still opens.
+- New optional `WEB_TRUST_PROXY` (default `false`, passed to the `web`
+  container). Set it to `true` only when a reverse proxy you trust is the only
+  way to the web port: the sign-in limiter then counts wrong passwords per
+  client address, so a guesser elsewhere cannot lock you out, with a ceiling
+  of thirty a minute across all addresses. Left `false`, sign-in keeps one
+  shared count of ten a minute, as before; the sign-in page now says how long
+  to wait.
 
 ## [1.4.0] - 2026-11-07
 
