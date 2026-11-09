@@ -12,6 +12,9 @@ Each test feeds the real detector a seeded HRV history (a steady baseline
 and one spike at a unique instant), so its findings never collide with
 another run's, and holds the first check inside its transaction with an
 event while the second one runs. Persistence is real PostgreSQL.
+
+The last test pins the failure path: a run whose transaction a database
+error aborted still leaves a 'failed' row, and its lock is released.
 """
 
 from __future__ import annotations
@@ -201,3 +204,46 @@ async def test_a_check_that_raised_does_not_block_the_next_one() -> None:
 
 async def _raise_detector_error(*_args, **_kwargs):
     raise RuntimeError("detector exploded")
+
+
+@pytest.mark.asyncio
+async def test_a_check_that_hit_a_database_error_is_recorded_as_failed() -> None:
+    """A database error aborts the run's transaction, so PostgreSQL refused
+    the 'failed' UPDATE too and the run vanished: no row said it ever ran."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+
+    db_engine = _db_engine()
+    spike_at = _unique_spike()
+    missing_table = f"missing_table_{uuid4().hex[:12]}"
+    broken = _analysis_engine(db_engine, spike_at)
+
+    async def failing_filter(session, anomalies):
+        await session.execute(text(f"SELECT 1 FROM {missing_table}"))
+
+    broken._filter_existing_anomalies = failing_filter
+    healthy = _analysis_engine(db_engine, spike_at)
+
+    before = await _max_run_id(db_engine)
+    try:
+        with pytest.raises(DBAPIError, match=missing_table):
+            await broken.run_anomaly_check()
+
+        runs = await _runs_since(db_engine, before)
+        assert [status for _run_id, status in runs] == ["failed"]
+        async with db_engine.connect() as conn:
+            error = (
+                await conn.execute(
+                    text("SELECT error_message FROM analysis_runs WHERE id = :id"),
+                    {"id": runs[0][0]},
+                )
+            ).scalar()
+        assert missing_table in error
+
+        # The lock went with the rolled-back transaction.
+        run_id = await asyncio.wait_for(healthy.run_anomaly_check(), timeout=10)
+        assert isinstance(run_id, int)
+        assert await _spike_findings(db_engine, spike_at) == 1
+    finally:
+        await _delete_runs_since(db_engine, before)
+        await db_engine.dispose()

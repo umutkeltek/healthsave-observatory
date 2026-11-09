@@ -627,21 +627,55 @@ class AnalysisEngine:
         exception - callers want the root cause, not a bookkeeping
         error that masks it.
         """
+        started_at = datetime.now(tz=UTC)
         run_id = await _sql().begin_run(session, run_type)
         try:
             yield run_id
         except Exception as exc:
-            await self._mark_run_failed(session, run_id, exc)
+            await self._mark_run_failed(
+                session, run_id, exc, run_type=run_type, started_at=started_at
+            )
             raise
 
-    async def _mark_run_failed(self, session, run_id: int | None, exc: Exception) -> None:
-        """Best-effort ``status='failed'`` UPDATE. Swallows secondary errors so the
-        ORIGINAL exception from the caller is what propagates.
+    async def _mark_run_failed(
+        self,
+        session,
+        run_id: int | None,
+        exc: Exception,
+        *,
+        run_type: str,
+        started_at: datetime,
+    ) -> None:
+        """Best-effort: leave a ``status='failed'`` row for the run. Swallows
+        secondary errors so the ORIGINAL exception from the caller is what
+        propagates.
+
+        The UPDATE runs in the run's own transaction and commits what the
+        run wrote so far. When that transaction is unusable (a database
+        error aborted it, and PostgreSQL refuses every statement until
+        rollback), roll back and write the run again as failed on its own.
         """
         if run_id is None:
             return
         try:
             await _sql().mark_run_failed(session, run_id, str(exc))
+            return
+        except Exception:
+            log.warning(
+                "analysis_runs.id=%s: could not mark failed in its transaction; "
+                "rolling back and recording it again",
+                run_id,
+                exc_info=True,
+            )
+        try:
+            await session.rollback()
+            await _sql().record_failed_run(
+                session,
+                run_id=run_id,
+                run_type=run_type,
+                started_at=started_at,
+                error_message=str(exc),
+            )
         except Exception:
             log.exception("failed to mark analysis_runs.id=%s as failed", run_id)
 

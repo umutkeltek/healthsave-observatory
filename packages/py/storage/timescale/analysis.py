@@ -168,9 +168,10 @@ async def mark_run_failed(session, run_id: int, error_message: str) -> None:
     """Best-effort ``status='failed'`` UPDATE.
 
     Caller is responsible for swallowing secondary errors so the
-    ORIGINAL exception propagates; this function commits its own
-    transaction so the failed-row write is durable even when the
-    enclosing transaction rolls back.
+    ORIGINAL exception propagates. Runs in, and commits, the run's own
+    transaction (with whatever the run already wrote); when a database
+    error has aborted that transaction this fails, and the caller rolls
+    back and uses :func:`record_failed_run` instead.
     """
     await session.execute(
         text(
@@ -183,6 +184,40 @@ async def mark_run_failed(session, run_id: int, error_message: str) -> None:
             """
         ),
         {"now": datetime.now(tz=UTC), "error": error_message, "id": run_id},
+    )
+    await session.commit()
+
+
+async def record_failed_run(
+    session,
+    *,
+    run_id: int,
+    run_type: str,
+    started_at: datetime,
+    error_message: str,
+) -> None:
+    """Write run ``run_id`` as ``failed`` after its transaction rolled back.
+
+    A database error aborts the run's transaction, so :func:`mark_run_failed`
+    cannot run in it, and the rollback takes the 'running' row with it. This
+    inserts the run again under the same id (a sequence value is never handed
+    out twice) and commits, so the failure is still on record.
+    """
+    await session.execute(
+        text(
+            """
+            INSERT INTO analysis_runs
+                (id, run_type, status, started_at, completed_at, error_message)
+            VALUES (:id, :run_type, 'failed', :started_at, :now, :error)
+            """
+        ),
+        {
+            "id": run_id,
+            "run_type": run_type,
+            "started_at": started_at,
+            "now": datetime.now(tz=UTC),
+            "error": error_message,
+        },
     )
     await session.commit()
 

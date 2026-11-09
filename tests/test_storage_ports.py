@@ -739,6 +739,7 @@ def test_analysis_module_exposes_expected_async_helpers() -> None:
         "mark_run_skipped",
         "mark_run_completed",
         "mark_run_failed",
+        "record_failed_run",
         "insert_finding",
         "insert_insight",
         "within_cooldown",

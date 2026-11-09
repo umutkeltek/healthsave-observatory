@@ -1072,6 +1072,52 @@ async def test_run_daily_briefing_marks_failed_when_llm_raises():
     assert session.committed is True
 
 
+class _AbortedTransactionSession(_FakeSession):
+    """After a database error PostgreSQL refuses every statement until rollback."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.aborted = False
+        self.rolled_back = False
+
+    async def execute(self, statement, params=None):
+        if self.aborted:
+            raise RuntimeError("current transaction is aborted")
+        return await super().execute(statement, params)
+
+    async def rollback(self):
+        self.aborted = False
+        self.rolled_back = True
+
+
+@pytest.mark.asyncio
+async def test_run_that_hit_a_database_error_is_still_recorded_as_failed():
+    """The failed UPDATE cannot run in the aborted transaction, and the
+    rollback takes the 'running' row with it: write the run again, failed."""
+    session = _AbortedTransactionSession(run_queue=[8000])
+    engine = _make_plain_engine(session)
+    engine.anomaly_detector.detect = AsyncMock(
+        return_value=[Anomaly(metric="hrv", magnitude=-3.2, direction="down", severity="alert")]
+    )
+
+    async def failing_filter(session_, anomalies):
+        session_.aborted = True
+        raise RuntimeError('relation "analysis_findings" does not exist')
+
+    engine._filter_existing_anomalies = failing_filter
+
+    with pytest.raises(RuntimeError, match="analysis_findings"):
+        await engine.run_anomaly_check()
+
+    assert session.rolled_back
+    begin, rewrite = session.all_insert_params_for("analysis_runs")
+    assert rewrite["id"] == 8000
+    assert rewrite["run_type"] == begin["run_type"] == "anomaly_check"
+    assert rewrite["started_at"] is not None
+    assert "analysis_findings" in rewrite["error"]
+    assert session.committed is True
+
+
 # ──────────────────────────────────────────────────────────────────
 #  Finding-card engine seam (P-03): the integration point where a built
 #  card is persisted, and where the aggregator's keys feed the builder.
