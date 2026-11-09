@@ -115,3 +115,58 @@ async def test_concurrent_refreshes_spend_the_refresh_token_once(monkeypatch) ->
             await session.commit()
         await engine.dispose()
         _fernet_from_env.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_a_refresh_keeps_the_metadata_authorizing_stored(monkeypatch) -> None:
+    """A refresh response has no account details; it must not erase them."""
+    from auth import OAuthToken, generate_key
+    from auth.encryption import _fernet_from_env
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from storage.timescale import oauth_tokens
+
+    monkeypatch.setenv("HDH_TOKEN_ENC_KEY", generate_key())
+    _fernet_from_env.cache_clear()
+    engine = create_async_engine(DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1))
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    owner = uuid4()
+
+    def token(access: str, metadata: dict) -> OAuthToken:
+        return OAuthToken(
+            owner_id=owner,
+            provider="whoop",
+            access_token=access,
+            refresh_token="RT",
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+            metadata=metadata,
+        )
+
+    try:
+        async with factory() as session:
+            await oauth_tokens.put_token(
+                session, token("AT-1", {"provider_subject_id": "whoop-user-7", "token_type": "x"})
+            )
+            await oauth_tokens.put_token(
+                session, token("AT-2", {"token_type": "Bearer"}), event_kind="refreshed"
+            )
+            await session.commit()
+            stored = await oauth_tokens.get_token(session, provider="whoop", owner_id=owner)
+        assert stored.access_token == "AT-2"
+        assert stored.metadata == {"provider_subject_id": "whoop-user-7", "token_type": "Bearer"}
+
+        async with factory() as session:  # authorizing again replaces it
+            await oauth_tokens.put_token(session, token("AT-3", {"token_type": "Bearer"}))
+            await session.commit()
+            stored = await oauth_tokens.get_token(session, provider="whoop", owner_id=owner)
+        assert stored.metadata == {"token_type": "Bearer"}
+    finally:
+        from sqlalchemy import text
+
+        async with factory() as session:
+            for table in ("oauth_tokens", "oauth_token_events"):
+                await session.execute(
+                    text(f"DELETE FROM {table} WHERE owner_id = :owner"), {"owner": owner}
+                )
+            await session.commit()
+        await engine.dispose()
+        _fernet_from_env.cache_clear()

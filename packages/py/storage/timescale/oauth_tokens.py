@@ -64,6 +64,9 @@ async def put_token(
 ) -> None:
     """Upsert the token row, encrypt secrets, append an audit event.
 
+    A ``refreshed`` token merges its metadata over the stored metadata; an
+    ``authorized`` (or ``revoked``) one replaces it.
+
     ``event_kind`` MUST be one of ``authorized`` / ``refreshed`` /
     ``revoked``; ``refresh_failed`` is recorded via
     :func:`record_refresh_failure` because it has an error message.
@@ -85,7 +88,13 @@ async def put_token(
                   refresh_token_enc = EXCLUDED.refresh_token_enc,
                   expires_at        = EXCLUDED.expires_at,
                   scopes            = EXCLUDED.scopes,
-                  metadata          = EXCLUDED.metadata,
+                  -- A refresh response carries no account details (Whoop
+                  -- sends token_type, Google nothing), so it keeps what
+                  -- authorizing stored (a subject id, a region) and only
+                  -- adds or updates its own keys.
+                  metadata          = CASE WHEN :merge_metadata
+                                           THEN oauth_tokens.metadata || EXCLUDED.metadata
+                                           ELSE EXCLUDED.metadata END,
                   updated_at        = NOW()
             """
         ),
@@ -97,6 +106,7 @@ async def put_token(
             "expires_at": token.expires_at,
             "scopes": list(token.scopes),
             "metadata": json.dumps(token.metadata),
+            "merge_metadata": event_kind == "refreshed",
         },
     )
     await _record_event(session, token.owner_id, token.provider, event_kind)
