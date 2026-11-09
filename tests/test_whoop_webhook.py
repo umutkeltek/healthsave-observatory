@@ -512,3 +512,43 @@ def test_the_webhook_route_answers_deterministic_failures_with_422_never_500(
 
     assert response.status_code == status
     assert session.rollbacks == 1
+
+
+@pytest.mark.asyncio
+async def test_a_webhook_fetch_refused_with_401_refreshes_once_and_ingests():
+    class _Http(_HttpClient):
+        async def get(self, url, *, params=None, headers=None):
+            if (headers or {}).get("Authorization") == "Bearer AT-fresh":
+                self.get_calls.append({"url": url, "params": {}})
+                return _Response(401, {"message": "Authorization was not valid"})
+            return await super().get(url, params=params, headers=headers)
+
+    http = _Http(
+        get_responses={PATH_WORKOUT: _Response(200, _WORKOUT_RECORD)},
+        post_responses={
+            "oauth2/token": _Response(
+                200,
+                {
+                    "access_token": "AT-new",
+                    "refresh_token": "RT-new",
+                    "expires_in": 3600,
+                    "token_type": "Bearer",
+                },
+            )
+        },
+    )
+    token_store = _TokenStore(initial_token=_fresh_token())
+
+    result = await _plugin().handle_webhook(
+        {
+            "event": {"type": "workout.updated", "id": "wk-1"},
+            "storage": _RecordingStorage(),
+            "session": _Session(),
+            "http_client": http,
+            "token_store": token_store,
+            "oauth_config": _oauth_config(),
+        }
+    )
+
+    assert result["accepted"] > 0
+    assert [kind for _, kind in token_store.put_calls] == ["refreshed"]

@@ -539,3 +539,121 @@ async def test_ingest_with_empty_data_returns_zero():
     # Device still gets created (call shape consistency); no metric writes.
     assert storage.devices == {"Whoop": 1}
     assert storage.ingest_calls == []
+
+
+# ── A 401 on a token that looks valid is refreshed once (M14) ──────────────
+
+
+class _TokenCheckingHttp(_HttpClient):
+    """Answers 401 to any GET made with a refused access token."""
+
+    def __init__(self, *, refused: set[str], **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.refused = refused
+        self.bearers: list[str] = []
+
+    async def get(self, url, *, params=None, headers=None):
+        bearer = (headers or {}).get("Authorization", "").removeprefix("Bearer ")
+        self.bearers.append(bearer)
+        if bearer in self.refused:
+            self.get_calls.append({"url": url, "params": dict(params or {})})
+            return _Response(401, {"message": "Authorization was not valid"})
+        return await super().get(url, params=params, headers=headers)
+
+
+def _token_without_expiry() -> OAuthToken:
+    """Whoop sent no expires_in: the token never looks expired."""
+    return OAuthToken(
+        owner_id=DEFAULT_OWNER_ID,
+        provider=PROVIDER,
+        access_token="AT-dead",
+        refresh_token="RT-live",
+        expires_at=None,
+        scopes=("read:recovery", "offline"),
+    )
+
+
+_REFRESHED = _Response(
+    200,
+    {
+        "access_token": "AT-new",
+        "refresh_token": "RT-new",
+        "expires_in": 3600,
+        "scope": "read:recovery offline",
+        "token_type": "Bearer",
+    },
+)
+
+
+@pytest.mark.asyncio
+async def test_a_refused_token_that_looks_valid_is_refreshed_once_and_the_poll_succeeds():
+    token_store = _TokenStore(initial_token=_token_without_expiry())
+    http = _TokenCheckingHttp(
+        refused={"AT-dead"},
+        get_responses=_default_get_responses(),
+        post_responses={"oauth2/token": _REFRESHED},
+    )
+
+    result = await WhoopSource(load_manifest(PLUGIN_DIR / "plugin.yaml")).ingest(
+        {
+            "storage": _RecordingStorage(),
+            "session": _Session(),
+            "http_client": http,
+            "token_store": token_store,
+            "oauth_config": _oauth_config(),
+            "canonical_repository": _CanonicalRepo(),
+        }
+    )
+
+    assert result["accepted"] > 0
+    assert [call["data"]["refresh_token"] for call in http.post_calls] == ["RT-live"]
+    assert [kind for _, kind in token_store.put_calls] == ["refreshed"]
+    assert http.bearers[0] == "AT-dead" and set(http.bearers[1:]) == {"AT-new"}
+
+
+@pytest.mark.asyncio
+async def test_a_token_refused_again_after_its_refresh_fails_the_poll_without_looping():
+    token_store = _TokenStore(initial_token=_token_without_expiry())
+    http = _TokenCheckingHttp(
+        refused={"AT-dead", "AT-new"},
+        get_responses=_default_get_responses(),
+        post_responses={"oauth2/token": _REFRESHED},
+    )
+
+    with pytest.raises(Exception, match="HTTP 401"):
+        await WhoopSource(load_manifest(PLUGIN_DIR / "plugin.yaml")).ingest(
+            {
+                "storage": _RecordingStorage(),
+                "session": _Session(),
+                "http_client": http,
+                "token_store": token_store,
+                "oauth_config": _oauth_config(),
+                "canonical_repository": _CanonicalRepo(),
+            }
+        )
+    assert len(http.post_calls) == 1, "one refresh, not a loop"
+
+
+@pytest.mark.asyncio
+async def test_a_refused_token_with_no_refresh_token_fails_as_before():
+    token = OAuthToken(
+        owner_id=DEFAULT_OWNER_ID,
+        provider=PROVIDER,
+        access_token="AT-dead",
+        refresh_token=None,
+        expires_at=None,
+    )
+    http = _TokenCheckingHttp(refused={"AT-dead"}, get_responses=_default_get_responses())
+
+    with pytest.raises(Exception, match="HTTP 401"):
+        await WhoopSource(load_manifest(PLUGIN_DIR / "plugin.yaml")).ingest(
+            {
+                "storage": _RecordingStorage(),
+                "session": _Session(),
+                "http_client": http,
+                "token_store": _TokenStore(initial_token=token),
+                "oauth_config": _oauth_config(),
+                "canonical_repository": _CanonicalRepo(),
+            }
+        )
+    assert http.post_calls == []

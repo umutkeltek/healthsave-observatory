@@ -92,8 +92,14 @@ class WhoopSource(Source):
         owner_id: Any,
         token_store: Any,
         oauth_config: Any,
+        rejected_access_token: str | None = None,
     ):
         """Return a non-expired OAuthToken or None (no token stored).
+
+        ``rejected_access_token`` is an access token Whoop just answered with
+        401: it is refreshed even though it looks unexpired (Whoop sent no
+        ``expires_in``, or revoked it early), unless a concurrent caller has
+        already stored a different one.
 
         Token state is committed on its own, before any data is fetched: Whoop
         invalidates the old refresh token the moment a refresh succeeds, so a
@@ -111,13 +117,19 @@ class WhoopSource(Source):
         if token is None:
             return None
 
-        if token.is_expired():
+        def needs_refresh(candidate: Any) -> bool:
+            return candidate.is_expired() or (
+                rejected_access_token is not None
+                and candidate.access_token == rejected_access_token
+            )
+
+        if needs_refresh(token):
             # Serialize refreshes of this token: a concurrent poll or webhook may
             # already have spent the refresh token. Re-read it under a row lock.
             lock_token = getattr(token_store, "lock_token", None)
             if lock_token is not None:
                 token = await lock_token(session, provider=PROVIDER, owner_id=owner_id)
-                if token is None or not token.is_expired():
+                if token is None or not needs_refresh(token):
                     await session.commit()  # release the lock
                     return token
             if oauth_config is None:
@@ -162,6 +174,7 @@ class WhoopSource(Source):
         from storage.timescale.observations import default_repository as default_canonical_repo
 
         from .fetch import (
+            WhoopFetchError,
             fetch_body_measurement,
             fetch_cycles,
             fetch_recovery,
@@ -210,20 +223,37 @@ class WhoopSource(Source):
 
         # 4. Fetch each resource. Whoop allows parallel calls; sequential
         #    is simpler and the per-day record count is tiny.
-        access_token = token.access_token
-        recovery_items = await fetch_recovery(
-            http_client, access_token=access_token, since=effective_since
-        )
-        sleep_items = await fetch_sleep(
-            http_client, access_token=access_token, since=effective_since
-        )
-        workout_items = await fetch_workouts(
-            http_client, access_token=access_token, since=effective_since
-        )
-        cycle_items = await fetch_cycles(
-            http_client, access_token=access_token, since=effective_since
-        )
-        body_item = await fetch_body_measurement(http_client, access_token=access_token)
+        async def fetch_all(access_token: str) -> tuple[Any, ...]:
+            return (
+                await fetch_recovery(http_client, access_token=access_token, since=effective_since),
+                await fetch_sleep(http_client, access_token=access_token, since=effective_since),
+                await fetch_workouts(http_client, access_token=access_token, since=effective_since),
+                await fetch_cycles(http_client, access_token=access_token, since=effective_since),
+                await fetch_body_measurement(http_client, access_token=access_token),
+            )
+
+        try:
+            fetched = await fetch_all(token.access_token)
+        except WhoopFetchError as exc:
+            # A 401 on a token we think is valid (no expires_in was sent, or
+            # Whoop revoked it early): refresh once and fetch again. Without
+            # this the token was never refreshed and every poll failed.
+            if exc.status_code != 401 or not token.refresh_token:
+                raise
+            log.warning("whoop: access token refused (401); refreshing it once")
+            token = await self._load_valid_token(
+                payload,
+                session=session,
+                http_client=http_client,
+                owner_id=owner_id,
+                token_store=token_store,
+                oauth_config=oauth_config,
+                rejected_access_token=token.access_token,
+            )
+            if token is None:
+                raise
+            fetched = await fetch_all(token.access_token)
+        recovery_items, sleep_items, workout_items, cycle_items, body_item = fetched
 
         # 5. Normalize each into per-metric sample lists.
         per_metric: dict[str, list[dict[str, Any]]] = {}
@@ -363,7 +393,28 @@ class WhoopSource(Source):
             return {"accepted": 0, "rejected": 0}
 
         try:
-            data = await fetch_one(http_client, access_token=token.access_token, path=resolved_path)
+            try:
+                data = await fetch_one(
+                    http_client, access_token=token.access_token, path=resolved_path
+                )
+            except WhoopFetchError as exc:
+                if exc.status_code != 401 or not token.refresh_token:
+                    raise
+                log.warning("whoop webhook: access token refused (401); refreshing it once")
+                token = await self._load_valid_token(
+                    payload,
+                    session=session,
+                    http_client=http_client,
+                    owner_id=owner_id,
+                    token_store=token_store,
+                    oauth_config=oauth_config,
+                    rejected_access_token=token.access_token,
+                )
+                if token is None:
+                    raise
+                data = await fetch_one(
+                    http_client, access_token=token.access_token, path=resolved_path
+                )
         except WhoopFetchError as exc:
             if exc.status_code != 404:
                 raise
