@@ -20,6 +20,7 @@ discovery, no asyncio.sleep ticks.
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -501,6 +502,216 @@ async def test_persist_failure_does_not_advance_cursor():
     assert repo.proposals == []
     after = _counter_value("persist-fail-agent", "persist_proposal")
     assert after == before + 1
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Supervisor — one bad proposal cannot wedge the agent (M18)
+# ──────────────────────────────────────────────────────────────────────
+
+
+class _StoreRejected(Exception):
+    """Stands in for the IntegrityError / DataError PostgreSQL raises."""
+
+
+_ACTION_KINDS = {
+    "notify",
+    "create_experiment",
+    "create_briefing",
+    "request_user_input",
+    "tag_measurement",
+}
+
+
+class _ConstrainedAgentRepo(_FakeAgentRepo):
+    """``_FakeAgentRepo`` that rejects what ``action_proposals`` rejects:
+    the ``action_kind`` CHECK, NOT NULL text columns, and values PostgreSQL
+    cannot store (NaN/Infinity in jsonb, NUL in text or jsonb). Like the real
+    repo, it serializes the payload with ``json.dumps`` first.
+    """
+
+    async def propose_action(self, session: Any, **kwargs: Any) -> UUID | None:
+        if kwargs["action_kind"] not in _ACTION_KINDS:
+            raise _StoreRejected("violates check constraint action_proposals_action_kind_check")
+        for column in ("rationale", "capability"):
+            if not isinstance(kwargs[column], str):
+                raise _StoreRejected(f"null value in column {column!r} violates not-null")
+            if "\x00" in kwargs[column]:
+                raise _StoreRejected("invalid byte sequence for encoding UTF8: 0x00")
+        serialized = json.dumps(kwargs["payload"])  # TypeError, like the real repo
+        if "NaN" in serialized or "Infinity" in serialized:
+            raise _StoreRejected("invalid input syntax for type json")
+        if "\\u0000" in serialized:
+            raise _StoreRejected("unsupported Unicode escape sequence")
+        return await super().propose_action(session, **kwargs)
+
+
+class _CursorFeed:
+    """Serves its observations strictly after the cursor, like the real feed."""
+
+    def __init__(self, observations: list[Observation]) -> None:
+        self._observations = observations
+
+    async def fetch_since(self, *, owner_id: UUID, cursor: datetime | None) -> list[Observation]:
+        return [o for o in self._observations if cursor is None or o.occurred_at > cursor]
+
+
+class _EchoAgent(_NullAgent):
+    """Proposes whatever each observed payload carries under ``proposal``,
+    so the same observations produce the same proposals on every tick.
+    """
+
+    async def observe(self, event: dict[str, Any]) -> None:
+        self.queued_proposals.append(event["proposal"])
+
+
+def _good_proposal(subject_id: str) -> dict[str, Any]:
+    return {
+        "action_kind": "notify",
+        "payload": {"title": "HRV anomaly (watch)"},
+        "rationale": "anomaly severity=watch on hrv",
+        "capability": "propose:notify",
+        "subject_id": subject_id,
+    }
+
+
+def _with(**changes: Any) -> dict[str, Any]:
+    proposal = _good_proposal("finding-1")
+    for key, value in changes.items():
+        if value is _MISSING:
+            proposal.pop(key)
+        else:
+            proposal[key] = value
+    return proposal
+
+
+_MISSING = object()
+
+_PROPOSALS_THE_STORE_REJECTS = {
+    "unknown action_kind": _with(action_kind="send_email"),
+    "missing action_kind": _with(action_kind=_MISSING),
+    "null rationale": _with(rationale=None),
+    "null capability": _with(capability=None),
+    "payload not JSON": _with(payload={"at": datetime(2026, 11, 9, tzinfo=UTC)}),
+    "NaN in payload": _with(payload={"magnitude": float("nan")}),
+    "NUL in rationale": _with(rationale="hrv\x00"),
+    "NUL in payload": _with(payload={"title": "hrv\x00"}),
+    "not a mapping": "notify finding-1",
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "bad_proposal",
+    list(_PROPOSALS_THE_STORE_REJECTS.values()),
+    ids=list(_PROPOSALS_THE_STORE_REJECTS),
+)
+async def test_a_proposal_the_store_rejects_is_dropped_and_the_tick_still_commits(bad_proposal):
+    """Before the fix one such proposal failed the whole persist phase: the
+    cursor never moved, the same observations were fed again, the same bad
+    proposal came back, and the agent was wedged for good. Now the bad one
+    is dropped and counted, the good one lands, and the cursor moves on.
+    """
+    plugin_id = "wedge-agent"
+    t0 = datetime(2026, 11, 9, 8, 0, tzinfo=UTC)
+    observations = [
+        Observation("finding-1", t0, {"proposal": bad_proposal}),
+        Observation(
+            "finding-2", t0 + timedelta(minutes=1), {"proposal": _good_proposal("finding-2")}
+        ),
+    ]
+    repo = _ConstrainedAgentRepo()
+    ref = _enabled(plugin_id, agent=_EchoAgent(), feed=_CursorFeed(observations))
+    sup = Supervisor(session_factory=_session_factory(), agents_repo=repo, enabled=[ref])
+    dropped_before = _counter_value(plugin_id, "proposal_invalid")
+    persist_failures_before = _counter_value(plugin_id, "persist_proposal")
+
+    for _tick in range(3):
+        await sup.tick_once(ref)
+
+    assert ref.cursor == observations[-1].occurred_at
+    assert [p["idempotency_key"] for p in repo.proposals] == [f"{plugin_id}:notify:finding-2"]
+    assert [run.get("status") for run in repo.runs] == ["completed"] * 3
+    assert _counter_value(plugin_id, "proposal_invalid") == dropped_before + 1
+    assert _counter_value(plugin_id, "persist_proposal") == persist_failures_before
+
+
+@pytest.mark.asyncio
+async def test_a_propose_result_that_is_not_a_list_is_dropped_not_retried_forever():
+    plugin_id = "none-proposer"
+    agent = _NullAgent()
+
+    async def propose_nothing() -> Any:
+        return None
+
+    agent.propose = propose_nothing  # type: ignore[method-assign]
+    obs = Observation("finding-1", datetime(2026, 11, 9, 8, 0, tzinfo=UTC), {"x": 1})
+    repo = _ConstrainedAgentRepo()
+    ref = _enabled(plugin_id, agent=agent, feed=_CursorFeed([obs]))
+    sup = Supervisor(session_factory=_session_factory(), agents_repo=repo, enabled=[ref])
+    dropped_before = _counter_value(plugin_id, "proposal_invalid")
+
+    await sup.tick_once(ref)
+
+    assert ref.cursor == obs.occurred_at
+    assert repo.proposals == []
+    assert _counter_value(plugin_id, "proposal_invalid") == dropped_before + 1
+
+
+@pytest.mark.asyncio
+async def test_a_payload_that_is_not_an_object_is_dropped():
+    """PostgreSQL would store a JSON array, but every proposal reader types
+    ``payload`` as a dict, so one such row would break the proposals list.
+    """
+    plugin_id = "list-payload-agent"
+    t0 = datetime(2026, 11, 9, 8, 0, tzinfo=UTC)
+    observations = [
+        Observation("finding-1", t0, {"proposal": _with(payload=["not", "an", "object"])}),
+        Observation(
+            "finding-2", t0 + timedelta(minutes=1), {"proposal": _good_proposal("finding-2")}
+        ),
+    ]
+    repo = _ConstrainedAgentRepo()
+    ref = _enabled(plugin_id, agent=_EchoAgent(), feed=_CursorFeed(observations))
+    sup = Supervisor(session_factory=_session_factory(), agents_repo=repo, enabled=[ref])
+
+    await sup.tick_once(ref)
+
+    assert [p["idempotency_key"] for p in repo.proposals] == [f"{plugin_id}:notify:finding-2"]
+    assert ref.cursor == observations[-1].occurred_at
+
+
+@pytest.mark.asyncio
+async def test_a_transient_store_error_still_holds_the_cursor_when_a_proposal_was_dropped():
+    """Dropping a bad proposal must not turn a store failure into a skip:
+    if the database errors while writing a GOOD proposal, nothing commits
+    and the cursor stays put so the next tick retries.
+    """
+    plugin_id = "transient-agent"
+    t0 = datetime(2026, 11, 9, 8, 0, tzinfo=UTC)
+    observations = [
+        Observation("finding-1", t0, {"proposal": _with(action_kind="send_email")}),
+        Observation(
+            "finding-2", t0 + timedelta(minutes=1), {"proposal": _good_proposal("finding-2")}
+        ),
+    ]
+    repo = _ConstrainedAgentRepo()
+    repo.propose_raises = ConnectionError("connection reset by peer")
+    ref = _enabled(plugin_id, agent=_EchoAgent(), feed=_CursorFeed(observations))
+    sup = Supervisor(session_factory=_session_factory(), agents_repo=repo, enabled=[ref])
+    persist_failures_before = _counter_value(plugin_id, "persist_proposal")
+
+    await sup.tick_once(ref)
+
+    assert ref.cursor is None
+    assert repo.proposals == []
+    assert _counter_value(plugin_id, "persist_proposal") == persist_failures_before + 1
+
+    # The database recovers: the next tick re-reads both findings and lands
+    # the good proposal.
+    repo.propose_raises = None
+    await sup.tick_once(ref)
+    assert ref.cursor == observations[-1].occurred_at
+    assert [p["idempotency_key"] for p in repo.proposals] == [f"{plugin_id}:notify:finding-2"]
 
 
 # ──────────────────────────────────────────────────────────────────────
