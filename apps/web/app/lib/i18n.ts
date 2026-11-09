@@ -79,6 +79,7 @@ const englishDictionary = {
     todayRemoved: "Saved. To make room, Today no longer shows: {labels}.",
     emptyView: "Add a panel before saving this view to Today.",
     emptySaved: "This saved view has no panels.",
+    viewNameLimit: "Names can be up to {max} characters.",
   },
   live: {
     live: {
@@ -236,6 +237,7 @@ export const dictionaries = {
       todayRemoved: "Guardado. Para hacer sitio, Hoy ya no muestra: {labels}.",
       emptyView: "Añade un panel antes de guardar esta vista en Hoy.",
       emptySaved: "Esta vista guardada no tiene paneles.",
+      viewNameLimit: "Los nombres pueden tener hasta {max} caracteres.",
     },
     live: {
       live: {
@@ -380,6 +382,7 @@ export const dictionaries = {
       todayRemoved: "Enregistré. Pour faire de la place, Aujourd'hui n'affiche plus : {labels}.",
       emptyView: "Ajoutez un panneau avant d'enregistrer cette vue dans Aujourd'hui.",
       emptySaved: "Cette vue enregistrée n'a aucun panneau.",
+      viewNameLimit: "Les noms peuvent compter jusqu'à {max} caractères.",
     },
     live: {
       live: {
@@ -524,6 +527,7 @@ export const dictionaries = {
       todayRemoved: "Gespeichert. Um Platz zu schaffen, zeigt Heute nicht mehr: {labels}.",
       emptyView: "Füge ein Panel hinzu, bevor du diese Ansicht in Heute speicherst.",
       emptySaved: "Diese gespeicherte Ansicht hat keine Panels.",
+      viewNameLimit: "Namen können bis zu {max} Zeichen lang sein.",
     },
     live: {
       live: {
@@ -668,6 +672,7 @@ export const dictionaries = {
       todayRemoved: "保存しました。空きを作るため、今日には次の項目が表示されなくなりました: {labels}。",
       emptyView: "このビューを今日に保存する前にパネルを追加してください。",
       emptySaved: "この保存済みビューにはパネルがありません。",
+      viewNameLimit: "名前は {max} 文字までです。",
     },
     live: {
       live: {
@@ -812,6 +817,7 @@ export const dictionaries = {
       todayRemoved: "已儲存。為了騰出空間，今日不再顯示：{labels}。",
       emptyView: "請先新增面板，再將此檢視儲存到今日。",
       emptySaved: "此已儲存的檢視沒有任何面板。",
+      viewNameLimit: "名稱最多 {max} 個字元。",
     },
     live: {
       live: {

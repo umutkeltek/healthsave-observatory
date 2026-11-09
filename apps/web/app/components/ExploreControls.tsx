@@ -10,8 +10,10 @@ import {
   EXPLORE_STATS,
   MAX_EXPLORE_METRICS_PER_PANEL,
   MAX_EXPLORE_PANELS,
+  MAX_SAVED_VIEW_NAME,
   encodeExploreState,
   parseSavedViews,
+  shortViewName,
   type ChartKind,
   type ExplorePanel,
   type ExploreState,
@@ -72,10 +74,12 @@ const VIEWS_KEY = "explore_views";
 // Saved views persist in localStorage (per-browser; fine for a single-user
 // self-hosted product). Each stores the current URL query, so opening one just
 // navigates there — the whole dashboard is already URL-encoded.
-function SavedViews({ current }: { current: string }) {
+export function SavedViews({ current }: { current: string }) {
   const router = useRouter();
+  const { dict } = useI18n();
   const [views, setViews] = useState<SavedView[]>([]);
   const [name, setName] = useState("");
+  const limitNote = fillTemplate(dict.prefs.viewNameLimit, { max: MAX_SAVED_VIEW_NAME });
 
   useEffect(() => {
     try {
@@ -109,9 +113,10 @@ function SavedViews({ current }: { current: string }) {
           <button
             type="button"
             className="saved-view-open"
+            title={v.name}
             onClick={() => router.push(`/explore?${v.qs}`)}
           >
-            {v.name}
+            {shortViewName(v.name)}
           </button>
           <button
             type="button"
@@ -126,6 +131,8 @@ function SavedViews({ current }: { current: string }) {
       <input
         className="filter-select saved-view-input"
         placeholder="Save this view as…"
+        maxLength={MAX_SAVED_VIEW_NAME}
+        title={limitNote}
         value={name}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => {
@@ -135,6 +142,7 @@ function SavedViews({ current }: { current: string }) {
       <button type="button" className="btn-ghost panel-remove-btn" onClick={save} disabled={!name.trim()}>
         Save
       </button>
+      {name.length >= MAX_SAVED_VIEW_NAME ? <span className="meta">{limitNote}</span> : null}
     </div>
   );
 }

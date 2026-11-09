@@ -186,11 +186,13 @@ export function deserializeExploreState(raw: string): ExploreState | null {
 // ─── Saved views (localStorage, ExploreControls) ───────────────────────────
 
 export type SavedView = { name: string; qs: string };
-const MAX_SAVED_VIEW_NAME = 60;
-const MAX_SAVED_VIEW_QS = 2000;
+// New names stop here (the field's maxLength). Older builds allowed any length:
+// such names are kept in full and only shortened for display (shortViewName).
+export const MAX_SAVED_VIEW_NAME = 60;
 
 // Storage is outside this app's control (older builds, other tabs, a person
-// editing it): keep only well-formed views, one per name (the last wins).
+// editing it): keep every well-formed view, one per name (the last wins). A
+// view is never dropped for the length of its name or query.
 export function parseSavedViews(raw: string | null): SavedView[] {
   if (!raw) return [];
   let value: unknown;
@@ -206,9 +208,14 @@ export function parseSavedViews(raw: string | null): SavedView[] {
     const { name, qs } = item as { name?: unknown; qs?: unknown };
     if (typeof name !== "string" || typeof qs !== "string") continue;
     const clean = name.trim();
-    if (!clean || clean.length > MAX_SAVED_VIEW_NAME || qs.length > MAX_SAVED_VIEW_QS) continue;
+    if (!clean) continue;
     byName.delete(clean);
     byName.set(clean, { name: clean, qs });
   }
   return [...byName.values()];
+}
+
+/** A saved view's name as shown on its chip: long names end in an ellipsis. */
+export function shortViewName(name: string): string {
+  return name.length > MAX_SAVED_VIEW_NAME ? `${name.slice(0, MAX_SAVED_VIEW_NAME - 1)}…` : name;
 }

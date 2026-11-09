@@ -9,7 +9,9 @@ import {
   normalize,
   parseExploreState,
   parsePanels,
+  MAX_SAVED_VIEW_NAME,
   parseSavedViews,
+  shortViewName,
   type ExplorePanel,
 } from "./explore";
 
@@ -167,5 +169,23 @@ describe("saved views from storage", () => {
       { name: "B", qs: "n=2" },
       { name: "A", qs: "n=3" },
     ]);
+  });
+});
+
+// The bug (review of the #18 fix): views whose name was over 60 characters
+// were dropped on load, then deleted from storage by the next save, and the
+// name field had no limit, so a long name saved nothing without a word.
+describe("saved view names", () => {
+  it("a long name or query saved by an older build is kept in full", () => {
+    const long = "Recovery after the long run, HRV and resting heart rate over ninety days";
+    const query = `range=all&panels=${"line:vital.hrv_sdnn;".repeat(150)}`;
+    expect(long.length).toBeGreaterThan(MAX_SAVED_VIEW_NAME);
+    expect(parseSavedViews(JSON.stringify([{ name: long, qs: query }]))).toEqual([{ name: long, qs: query }]);
+  });
+
+  it("only the display is shortened", () => {
+    const long = "x".repeat(MAX_SAVED_VIEW_NAME + 20);
+    expect(shortViewName(long)).toBe(`${"x".repeat(MAX_SAVED_VIEW_NAME - 1)}…`);
+    expect(shortViewName("Sleep")).toBe("Sleep");
   });
 });
