@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { togglePinAction } from "./actions";
+import { saveExplorePanelAction, togglePinAction } from "./actions";
 import { inRequest } from "./testRequest";
 import { evictedPanels, MAX_PINS, MAX_SAVED_PANELS, PINNED_COOKIE, appendSavedPanel } from "./prefs";
 import { resetWebAuthStoreForTests } from "./webAuthStore.server";
@@ -56,5 +56,18 @@ describe("saved views on Today", () => {
     const existing = [panel(0), panel(1)];
     const again = { id: "p1b", label: "Panel 1", state: "range=7d&panels=line%3Avital.hrv_sdnn" };
     expect(evictedPanels(existing, appendSavedPanel(existing, again), again)).toEqual([]);
+  });
+});
+
+// Removing every Explore panel is now an empty dashboard (audit web #18). Saved
+// to Today it would draw nothing, could not be removed, and could push a real
+// view off Today, so it is refused.
+describe("saving an empty Explore view to Today", () => {
+  test("is refused with the reason", async () => {
+    const result = await inRequest("", () =>
+      saveExplorePanelAction("range=30d&grain=day&stat=mean&panels=", "Nothing here"),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("Add a panel before saving this view to Today.");
   });
 });

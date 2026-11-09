@@ -56,6 +56,7 @@ import {
   type TemplateId,
   TEMPLATES,
 } from "./prefs";
+import { deserializeExploreState } from "./explore";
 import { PARTICIPANT_COOKIE, parseOwnerCookie } from "./participants";
 import { assertWebSession } from "./webSession.server";
 
@@ -392,6 +393,10 @@ export async function saveExplorePanelAction(
     if (!cleanLabel) return { ok: false, error: "A label is required." };
     if (!state || state.length > MAX_SAVED_PANEL_STATE) {
       return { ok: false, error: "This Explore view is too large to save to Today." };
+    }
+    // An emptied dashboard would draw nothing on Today, with no way to remove it.
+    if (!deserializeExploreState(state)?.panels.length) {
+      return { ok: false, error: (await interfaceDictionary()).prefs.emptyView };
     }
     const jar = await cookies();
     const panels = parseSavedPanels(jar.get(SAVED_PANELS_COOKIE)?.value);

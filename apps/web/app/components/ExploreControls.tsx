@@ -141,7 +141,7 @@ function SavedViews({ current }: { current: string }) {
 
 // Save-to-Today: persists the current explore dashboard as a compact card on
 // the Today page. Uses a server action (cookie-backed, revalidates /).
-function SaveToToday({ current }: { current: string }) {
+function SaveToToday({ current, empty }: { current: string; empty: boolean }) {
   const [, startTransition] = useTransition();
   const [label, setLabel] = useState("");
   const [saved, setSaved] = useState(false);
@@ -190,7 +190,8 @@ function SaveToToday({ current }: { current: string }) {
             type="button"
             className="btn-ghost panel-remove-btn"
             onClick={save}
-            disabled={!label.trim()}
+            disabled={!label.trim() || empty}
+            title={empty ? dict.prefs.emptyView : undefined}
           >
             Pin
           </button>
@@ -297,7 +298,7 @@ export function ExploreControls({ state, metrics }: { state: ExploreState; metri
       <SavedViews current={encodeExploreState(state)} />
 
       {/* Save-to-Today: persists this dashboard as a compact card on / */}
-      <SaveToToday current={encodeExploreState(state)} />
+      <SaveToToday current={encodeExploreState(state)} empty={state.panels.length === 0} />
     </div>
   );
 }
