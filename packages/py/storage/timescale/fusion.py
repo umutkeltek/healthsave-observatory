@@ -72,6 +72,10 @@ class SessionCandidatePair:
     direct: SessionObservationCandidate
     relayed: SessionObservationCandidate
     device_link: DeviceLinkConfidence
+    # (direct, relayed) row revisions: the raw payload and capture time each
+    # row was last written from. A rejection is recorded against them, so the
+    # pair is offered again only when one of the rows changes.
+    revisions: tuple[str, str] = ("", "")
 
 
 SESSION_METRIC_ID = "workout.session"
@@ -118,7 +122,11 @@ _SELECT_SESSION_CANDIDATE_PAIRS_SQL = text(
             relayed.value_json->'summary'->>'provider_object_id',
             relayed.source_record_uid
         ) AS relayed_provider_object_id,
-        link.confidence AS device_link_confidence
+        link.confidence AS device_link_confidence,
+        COALESCE(direct.provenance->>'raw_payload_ref', '') || '@'
+            || COALESCE(direct.provenance->>'captured_at', '') AS direct_revision,
+        COALESCE(relayed.provenance->>'raw_payload_ref', '') || '@'
+            || COALESCE(relayed.provenance->>'captured_at', '') AS relayed_revision
       FROM device_identity_links link
       JOIN canonical_observations direct
         ON direct.owner_id = link.owner_id
@@ -146,6 +154,24 @@ _SELECT_SESSION_CANDIDATE_PAIRS_SQL = text(
            <= :boundary_tolerance_s
        AND ABS(EXTRACT(EPOCH FROM direct.interval_end - relayed.interval_end))
            <= :boundary_tolerance_s
+       -- A pair this matcher already rejected, with neither row changed since,
+       -- would be rejected again: skip it instead of appending another
+       -- 'rejected' row every poll and holding a slot in the limit.
+       AND NOT EXISTS (
+           SELECT 1
+             FROM fusion_decisions rejected
+            WHERE rejected.owner_id = link.owner_id
+              AND rejected.decision = 'rejected'
+              AND rejected.matcher_id = :matcher_id
+              AND rejected.matcher_version = :matcher_version
+              AND rejected.variant_observation_ids = ARRAY[direct.id, relayed.id]
+              AND rejected.evidence->>'direct_revision'
+                  = COALESCE(direct.provenance->>'raw_payload_ref', '') || '@'
+                    || COALESCE(direct.provenance->>'captured_at', '')
+              AND rejected.evidence->>'relayed_revision'
+                  = COALESCE(relayed.provenance->>'raw_payload_ref', '') || '@'
+                    || COALESCE(relayed.provenance->>'captured_at', '')
+       )
      ORDER BY direct.interval_start DESC
      LIMIT :limit
     """
@@ -289,6 +315,8 @@ class FusionReconciliationRepository:
                 "metric_id": SESSION_METRIC_ID,
                 "boundary_tolerance_s": BOUNDARY_TOLERANCE_S,
                 "limit": limit,
+                "matcher_id": MATCHER_ID,
+                "matcher_version": MATCHER_VERSION,
             },
         )
         pairs: list[SessionCandidatePair] = []
@@ -309,6 +337,7 @@ class FusionReconciliationRepository:
         relayed: SessionObservationCandidate,
         device_link: DeviceLinkConfidence,
         decided_by: str = "system",
+        revisions: tuple[str, str] | None = None,
     ) -> FusionReconciliationResult:
         sem_key = semantic_key(
             direct.vendor_family,
@@ -360,6 +389,11 @@ class FusionReconciliationRepository:
                 "direct_stream_id": str(direct.stream_id),
                 "relayed_stream_id": str(relayed.stream_id),
                 "device_link_confidence": device_link.value,
+                **(
+                    {"direct_revision": revisions[0], "relayed_revision": revisions[1]}
+                    if revisions is not None
+                    else {}
+                ),
             },
         )
 
@@ -487,4 +521,5 @@ def _row_to_session_candidate_pair(row: dict) -> SessionCandidatePair | None:
         direct=direct,
         relayed=relayed,
         device_link=device_link,
+        revisions=(str(row.get("direct_revision") or ""), str(row.get("relayed_revision") or "")),
     )

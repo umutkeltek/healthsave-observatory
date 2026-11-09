@@ -215,6 +215,7 @@ async def reconcile_device_identity_link_sessions(
             relayed=pair.relayed,
             device_link=pair.device_link,
             decided_by="operator-api",
+            revisions=pair.revisions,
         )
         if result.assigned:
             assigned += 1

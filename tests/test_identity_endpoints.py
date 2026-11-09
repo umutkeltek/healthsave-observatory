@@ -68,6 +68,7 @@ class _Pair:
     def __init__(self, *, provider_subject_id: str) -> None:
         self.provider_subject_id = provider_subject_id
         self.direct = object()
+        self.revisions = ("", "")
         self.relayed = object()
         self.device_link = object()
 

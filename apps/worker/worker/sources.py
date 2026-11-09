@@ -223,6 +223,7 @@ async def reconcile_source_poll_sessions(
             relayed=pair.relayed,
             device_link=pair.device_link,
             decided_by=f"source-poll:{manifest.id}",
+            revisions=pair.revisions,
         )
     return len(pairs)
 

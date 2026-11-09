@@ -1,13 +1,15 @@
-"""E2E: a fused workout stays fused when the phone re-sends it.
+"""E2E: a fused workout stays fused, and a rejected pair is decided once.
 
 Session fusion marks a direct vendor workout (Whoop) and the same workout
 relayed through Apple Health as one logical event: both rows get a semantic
-key and only the primary counts. On real PostgreSQL:
+key and only the primary counts. Two lifecycle edges, on real PostgreSQL:
 
 * The phone re-sends its copy of the workout (same HealthKit uuid). The
   canonical upsert used to write the incoming row's empty semantic key and
   ``is_primary = true`` over the fusion, so both copies counted again, and the
   candidate query (both keys NULL) never fused them back.
+* A pair the matcher rejects was offered again on every poll, appending one
+  more ``rejected`` row each time and holding a slot in the candidate limit.
 """
 
 from __future__ import annotations
@@ -146,6 +148,7 @@ async def _reconcile(session, owner: UUID) -> int:
             direct=pair.direct,
             relayed=pair.relayed,
             device_link=pair.device_link,
+            revisions=pair.revisions,
         )
     return len(pairs)
 
@@ -161,6 +164,16 @@ async def _rows(session, owner: UUID) -> dict[str, tuple[str | None, bool]]:
         {"owner": owner},
     )
     return {row.normalizer_id: (row.semantic_key, row.is_primary) for row in result}
+
+
+async def _decisions(session, owner: UUID) -> list[str]:
+    from sqlalchemy import text
+
+    result = await session.execute(
+        text("SELECT decision FROM fusion_decisions WHERE owner_id = :owner ORDER BY created_at"),
+        {"owner": owner},
+    )
+    return [row.decision for row in result]
 
 
 async def _fused_pair(factory, owner: UUID, *, activity: str = "Running"):
@@ -200,3 +213,26 @@ async def test_a_resent_apple_workout_keeps_its_fusion(db) -> None:
         await session.commit()
         assert await _rows(session, owner) == fused, "both copies count again"
         assert await _reconcile(session, owner) == 0
+
+
+@pytest.mark.asyncio
+async def test_a_rejected_pair_is_decided_once(db) -> None:
+    from storage.timescale.observations import default_repository as canonical
+
+    factory, owner = db
+    # The relayed copy says "cycling", the direct one "running": no fusion.
+    whoop, start, end = await _fused_pair(factory, owner, activity="Cycling")
+    async with factory() as session:
+        for _ in range(3):  # three more polls
+            assert await _reconcile(session, owner) == 0
+        await session.commit()
+        assert await _decisions(session, owner) == ["rejected"]
+
+    # The phone corrects the activity: the changed row is a candidate again.
+    async with factory() as session:
+        await canonical.insert_many(
+            session, [_apple_workout(owner, start, end, activity="Running", raw_ref=300)]
+        )
+        assert await _reconcile(session, owner) == 1
+        await session.commit()
+        assert await _decisions(session, owner) == ["rejected", "assigned"]
