@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 
 import { applyTemplateAction, resetSectionsAction, toggleSectionAction } from "../lib/actions";
 import { runAction } from "../lib/session";
 import type { DashboardSections, Template } from "../lib/templates";
 import { TEMPLATES } from "../lib/templates";
+import { WriteGate } from "../lib/writeGate";
 
 const SECTION_LABELS: Record<keyof DashboardSections, string> = {
   hero: "Recovery hero",
@@ -26,10 +27,26 @@ function findTemplate(sections: DashboardSections): Template | null {
   ) ?? null;
 }
 
-export function DashboardCustomizer({ sections }: { sections: DashboardSections }) {
+// One write at a time (lib/writeGate.ts): each one reads the dashboard cookie
+// and writes it back. `initiallyOpen` and `gate` are test seams.
+export function DashboardCustomizer({
+  sections,
+  initiallyOpen = false,
+  gate: givenGate,
+}: {
+  sections: DashboardSections;
+  initiallyOpen?: boolean;
+  gate?: WriteGate;
+}) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [pending, startTransition] = useTransition();
+  const [open, setOpen] = useState(initiallyOpen);
+  const [gate] = useState(() => givenGate ?? new WriteGate());
+  const pending = useSyncExternalStore(gate.subscribe, gate.isBusy, gate.isBusy);
+  // Writes still run inside a transition, so an unexpected failure reaches the
+  // error boundary as before (runAction rethrows anything but a signed-out
+  // answer) instead of becoming an unhandled rejection.
+  const [, startTransition] = useTransition();
+  const write = (action: () => Promise<void>) => startTransition(async () => void (await gate.run(action)));
   const sheetRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +95,7 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
 
   const applyTemplate = (id: string) => {
     setError(null);
-    startTransition(async () => {
+    write(async () => {
       const result = await runAction(() => applyTemplateAction(id as Template["id"]));
       if (!result.ok) setError(result.error ?? "Could not apply this template.");
       else router.refresh();
@@ -87,7 +104,7 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
 
   const toggleSection = (key: keyof DashboardSections) => {
     setError(null);
-    startTransition(async () => {
+    write(async () => {
       const result = await runAction(() => toggleSectionAction(key));
       if (!result.ok) setError(result.error ?? "Could not update this section.");
       else router.refresh();
@@ -96,7 +113,7 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
 
   const reset = () => {
     setError(null);
-    startTransition(async () => {
+    write(async () => {
       const result = await runAction(() => resetSectionsAction());
       if (!result.ok) setError(result.error ?? "Could not reset the dashboard.");
       else router.refresh();
@@ -169,8 +186,9 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
 }
 
 // The sheet's writing controls. While a save is in flight (`pending`) every one
-// of them is disabled: each save reads the dashboard cookie and writes it
-// back, so a second click before the first lands would overwrite it.
+// of them is unavailable: each save reads the dashboard cookie and writes it
+// back. aria-disabled, not disabled: a disabled control drops focus to <body>,
+// and with it the sheet's Escape and Tab handling.
 export function CustomizerControls({
   sections,
   activeId,
@@ -197,9 +215,11 @@ export function CustomizerControls({
             key={t.id}
             type="button"
             className={`template-card ${activeId === t.id ? "template-active" : ""}`}
-            onClick={() => onTemplate(t.id)}
+            onClick={() => {
+              if (!pending) onTemplate(t.id);
+            }}
             aria-pressed={activeId === t.id}
-            disabled={pending}
+            aria-disabled={pending}
           >
             <span className="template-icon">{t.icon}</span>
             <strong>{t.label}</strong>
@@ -215,9 +235,13 @@ export function CustomizerControls({
           <label key={key} className="section-toggle-row">
             <input
               type="checkbox"
+              data-section={key}
               checked={sections[key]}
-              onChange={() => onToggle(key)}
-              disabled={pending || key === "hero"}
+              onChange={() => {
+                if (!pending) onToggle(key);
+              }}
+              disabled={key === "hero"}
+              aria-disabled={pending && key !== "hero" ? true : undefined}
             />
             <span className="section-toggle-label">
               <strong>{SECTION_LABELS[key]}</strong>
@@ -234,7 +258,14 @@ export function CustomizerControls({
       )}
 
       {/* Reset */}
-      <button type="button" className="btn dashboard-reset-btn" onClick={onReset} disabled={pending}>
+      <button
+        type="button"
+        className="btn dashboard-reset-btn"
+        onClick={() => {
+          if (!pending) onReset();
+        }}
+        aria-disabled={pending}
+      >
         Reset to full layout
       </button>
     </div>

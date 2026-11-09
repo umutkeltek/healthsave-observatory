@@ -7225,6 +7225,13 @@ font-size: 17px;
   transition: border-color var(--dur-1) ease, background var(--dur-1) ease;
 }
 
+/* Customizer controls while a save is in flight. aria-disabled, not disabled,
+   so the focused control keeps focus (DashboardCustomizer.tsx). */
+.dashboard-sheet [aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: progress;
+}
+
 .template-card:hover {
   border-color: var(--accent-line);
 }
