@@ -1,24 +1,31 @@
 """Concrete :class:`agents.supervisor.ObservationFeed` for the
 anomaly-watcher plugin.
 
-Reads ``analysis_findings`` via :class:`storage.ports.BriefingRepository`
-(:func:`storage.timescale.briefings.fetch_anomalies` under the hood),
+Reads ``analysis_findings`` through the briefing repository
+(:meth:`storage.timescale.briefings.TimescaleBriefingRepository.fetch_anomalies_after`),
 filters to operator-attention severities (``watch`` + ``alert``), and
 converts each :class:`storage.timescale.briefings.FindingRow` to an
 :class:`agents.supervisor.Observation`.
 
-Two contracts this feed enforces:
+Three contracts this feed enforces:
 
   1. **Severity allowlist.** The default is ``("watch", "alert")`` —
      ``info`` is intentionally excluded because that's the "noted but
      not actionable" tier from
      :func:`packages.py.analysis.statistical.anomaly._severity_for`.
      Operators can override via the feed constructor when tuning.
-  2. **Ascending order.** The supervisor advances its cursor as
-     ``max(observation.occurred_at)``, which is only correct if
-     observations are returned in ascending ``created_at`` order. The
-     underlying ``fetch_anomalies`` returns newest first; we reverse
-     before yielding.
+  2. **Oldest first, strictly after the cursor.** The supervisor
+     advances its cursor to ``max(observation.occurred_at)`` once a tick
+     commits, and the next read excludes everything at or before it. So
+     each page is the OLDEST findings after the cursor, in ascending
+     ``created_at`` order: a backlog larger than ``limit`` drains over
+     several ticks instead of losing its oldest rows.
+  3. **Whole timestamp groups.** One analysis run writes all of its
+     findings in one transaction, so they share one ``created_at``. A
+     page never ends in the middle of such a group (the storage read
+     extends the page to finish it), so the exclusive cursor can never
+     skip the rest of a group, and a group bigger than ``limit`` cannot
+     pin the cursor in place.
 
 The feed opens its own short-lived session via the injected
 ``session_factory`` — the supervisor's tick reuses the factory for the
@@ -31,11 +38,11 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Iterable
 from datetime import datetime
-from typing import Any
+from typing import Any, Protocol
 from uuid import UUID
 
 from agents.supervisor import Observation
-from storage.ports import BriefingRepository
+from storage.timescale.briefings import FindingRow
 from storage.timescale.briefings import default_repository as default_briefing_repository
 
 log = logging.getLogger("healthsave.plugins.anomaly_watcher.feed")
@@ -47,6 +54,21 @@ excluded — see the module docstring.
 """
 
 
+class AnomalyPageReader(Protocol):
+    """The one storage read this feed needs. Satisfied by
+    :class:`storage.timescale.briefings.TimescaleBriefingRepository`.
+    """
+
+    async def fetch_anomalies_after(
+        self,
+        session: Any,
+        *,
+        after: datetime | None,
+        severities: Iterable[str] | None = None,
+        limit: int = 100,
+    ) -> list[FindingRow]: ...
+
+
 class AnalysisFindingsAnomalyFeed:
     """Concrete observation feed reading anomaly findings.
 
@@ -55,27 +77,28 @@ class AnalysisFindingsAnomalyFeed:
       * ``session_factory`` — callable returning an async context
         manager that yields an :class:`AsyncSession`. Production passes
         ``server.db.session.async_session``; tests pass a fake.
-      * ``briefing_repo`` — :class:`storage.ports.BriefingRepository`
-        Protocol. Defaults to the module-level
-        ``storage.timescale.briefings.default_repository`` so v0
-        callers don't need injection.
+      * ``briefing_repo`` — anything with
+        :meth:`AnomalyPageReader.fetch_anomalies_after`. Defaults to the
+        module-level ``storage.timescale.briefings.default_repository``
+        so v0 callers don't need injection.
       * ``severities`` — allowlist of severities surfaced as
         observations. Defaults to :data:`DEFAULT_SEVERITIES`.
-      * ``limit`` — max findings per fetch. Caps how many proposals
-        one tick can emit (also caps the supervisor's blast radius if
-        the database backfills a huge batch).
+      * ``limit`` — findings per fetch. Caps how many proposals one tick
+        can emit (also caps the supervisor's blast radius if the database
+        backfills a huge batch); a page goes past it only to finish the
+        last ``created_at`` group.
     """
 
     def __init__(
         self,
         *,
         session_factory: Callable[[], Any],
-        briefing_repo: BriefingRepository | None = None,
+        briefing_repo: AnomalyPageReader | None = None,
         severities: Iterable[str] = DEFAULT_SEVERITIES,
         limit: int = 100,
     ) -> None:
         self._session_factory = session_factory
-        self._briefing_repo: BriefingRepository = briefing_repo or default_briefing_repository
+        self._briefing_repo: AnomalyPageReader = briefing_repo or default_briefing_repository
         self._severities = tuple(severities)
         self._limit = limit
 
@@ -85,9 +108,9 @@ class AnalysisFindingsAnomalyFeed:
         owner_id: UUID,
         cursor: datetime | None,
     ) -> list[Observation]:
-        """Read anomaly findings since ``cursor`` and return them as
-        :class:`Observation` instances in ascending ``created_at``
-        order.
+        """Return the oldest anomaly findings created strictly after
+        ``cursor`` as :class:`Observation` instances, ascending by
+        ``created_at``.
 
         ``owner_id`` is currently unused — single-user-mode
         ``analysis_findings`` rows don't carry an explicit owner
@@ -97,19 +120,17 @@ class AnalysisFindingsAnomalyFeed:
         stable across that change.
         """
         async with self._session_factory() as session:
-            rows = await self._briefing_repo.fetch_anomalies(
+            rows = await self._briefing_repo.fetch_anomalies_after(
                 session,
-                since=cursor,
+                after=cursor,
                 severities=self._severities,
                 limit=self._limit,
             )
 
-        # fetch_anomalies returns newest-first (matches the dashboard
-        # default); supervisor's cursor advance assumes ascending. Don't
-        # rely on Python list-reverse equaling SQL ORDER BY: sort
-        # explicitly by created_at so the contract is robust to a future
-        # query-shape change in the repo.
-        ordered = sorted(rows, key=lambda r: r.created_at)
+        # The repo already returns oldest first; sorting again keeps the
+        # supervisor's max(occurred_at) cursor correct even if a future
+        # repo implementation changes its ORDER BY.
+        ordered = sorted(rows, key=lambda r: (r.created_at, r.id))
         return [_row_to_observation(row) for row in ordered]
 
 
@@ -137,4 +158,5 @@ def _row_to_observation(row: Any) -> Observation:
 __all__ = [
     "DEFAULT_SEVERITIES",
     "AnalysisFindingsAnomalyFeed",
+    "AnomalyPageReader",
 ]

@@ -98,6 +98,11 @@ class ObservationFeed(Protocol):
         from — keep storage queries inside the feed, not the supervisor.
       * Return order MUST be ascending by ``occurred_at`` so the
         supervisor's ``max(occurred_at)`` cursor advance is correct.
+      * The next call excludes everything at or before that cursor, so a
+        capped batch MUST be the OLDEST observations after the cursor
+        (newest-first would skip the rest of a backlog) and MUST NOT end
+        in the middle of a group sharing one ``occurred_at`` (the rest of
+        the group would be skipped).
     """
 
     async def fetch_since(
@@ -106,8 +111,8 @@ class ObservationFeed(Protocol):
         owner_id: UUID,
         cursor: datetime | None,
     ) -> list[Observation]:
-        """Return observations newer than ``cursor`` (or all observations
-        when ``cursor`` is ``None`` — initial-load shape).
+        """Return observations strictly newer than ``cursor`` (or all
+        observations when ``cursor`` is ``None`` — initial-load shape).
         """
         ...
 
