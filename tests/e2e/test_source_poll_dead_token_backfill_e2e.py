@@ -199,9 +199,11 @@ async def test_a_vendor_outage_of_any_length_keeps_its_backfill(whoop_poll):
     # The whole vendor is down, well past the outage threshold: neither the
     # widened nor the default window answers, so nothing is held against the
     # backfill.
+    # (A 401 makes the plugin try one refresh, which this token endpoint
+    # refuses with a 400: either way the poll fails without counting.)
     for status in (503, 502, 401, 429, 504) * 3:
         whoop.data_status = status
-        with pytest.raises(Exception, match=f"HTTP {status}"):
+        with pytest.raises(Exception, match=f"HTTP {400 if status == 401 else status}"):
             await poll()
 
     assert await _failures(factory) == 0
