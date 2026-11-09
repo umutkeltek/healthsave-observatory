@@ -6,15 +6,22 @@ import type { MetricOption } from "./FilterBar";
 
 // URL-state controls for /compare: metric, comparison mode, range. Holds no
 // data - writes the query string and lets the server component re-fetch.
-export function CompareControls({ metrics, ranges }: { metrics: MetricOption[]; ranges: string[] }) {
+// `selected` is the page's own parse of the URL (app/compare/page.tsx), so the
+// controls always show what the page shows; the raw query is only the base the
+// next URL is built on.
+export function CompareControls({
+  metrics,
+  ranges,
+  selected,
+}: {
+  metrics: MetricOption[];
+  ranges: string[];
+  selected: { metric: string; mode: "period" | "source" | "device"; range: string };
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-
-  const metric = params.get("metric") ?? "";
-  const modeParam = params.get("mode");
-  const mode = modeParam === "source" || modeParam === "device" ? modeParam : "period";
-  const range = params.get("range") ?? "30d";
+  const { metric, mode, range } = selected;
 
   function set(key: string, value: string) {
     const next = new URLSearchParams(params.toString());

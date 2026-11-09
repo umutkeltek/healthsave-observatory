@@ -232,7 +232,7 @@ export async function ExplorePairSection({
             Day means over shared days - both signals kept verbatim, each on its own scale.
           </p>
           <p className="meta">{timeBasisLabel(timeBasis)}</p>
-          <RelateControls metrics={options} ranges={REL_RANGES} />
+          <RelateControls metrics={options} ranges={REL_RANGES} selected={{ a: aId, b: bId, range }} />
 
           {!pairChosen && aId && aId === bId && (
             <p className="empty">Pick two different signals.</p>

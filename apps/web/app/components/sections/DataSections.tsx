@@ -33,6 +33,8 @@ import { friendlyName } from "../../lib/provenance";
 import { hasUsablePoints, rangeLabel } from "../../lib/ranges";
 
 export const RANGES = ["24h", "7d", "30d", "90d", "1y", "all"];
+// The range the Data page shows when the URL names none it knows.
+export const DEFAULT_DATA_RANGE = "7d";
 // N+1 guard: never fetch more than this many series in one render. The default
 // (unfiltered) grid uses the smaller ceiling; an explicit category filter may
 // show a few more, but stays bounded.
@@ -212,6 +214,15 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
         sources={sources}
         devices={devices}
         ranges={RANGES}
+        defaultRange={DEFAULT_DATA_RANGE}
+        selected={{
+          range,
+          category: categorySel,
+          metric: metricSel,
+          source: sourceSel,
+          device: deviceSel,
+          sort: sortSel,
+        }}
       />
 
       <SourceDistribution dist={dist} sourceLabels={sourceLabels} />

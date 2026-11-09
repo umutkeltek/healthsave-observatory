@@ -20,29 +20,40 @@ const SORTS = [
 export type SourceOption = { id: string; label: string };
 export type DeviceOption = { id: string; label: string };
 
+export type FilterSelection = {
+  range: string;
+  category: string;
+  metric: string;
+  source: string;
+  device: string;
+  sort: string;
+};
+
+// `selected` is the page's own parse of the URL (app/data/page.tsx), so the
+// controls always show what the page shows; the raw query is only the base the
+// next URL is built on.
 export function FilterBar({
   metrics,
   categories,
   sources,
   devices,
   ranges,
+  defaultRange,
+  selected,
 }: {
   metrics: MetricOption[];
   categories: string[];
   sources: SourceOption[];
   devices: DeviceOption[];
   ranges: string[];
+  defaultRange: string;
+  selected: FilterSelection;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
 
-  const range = params.get("range") ?? "7d";
-  const category = params.get("category") ?? "";
-  const metric = params.get("metric") ?? "";
-  const source = params.get("source") ?? "";
-  const device = params.get("device") ?? "";
-  const sort = params.get("sort") ?? "";
+  const { range, category, metric, source, device, sort } = selected;
 
   function update(mutate: (next: URLSearchParams) => void) {
     const next = new URLSearchParams(params.toString());
@@ -62,7 +73,7 @@ export function FilterBar({
 
   // Only offer metrics within the chosen category (if any), so the two facets stay coherent.
   const metricOptions = category ? metrics.filter((m) => m.category === category) : metrics;
-  const active = Boolean(metric || category || source || device || sort || range !== "7d");
+  const active = Boolean(metric || category || source || device || sort || range !== defaultRange);
 
   return (
     <div className="filter-bar" role="search" aria-label="Filter metrics">

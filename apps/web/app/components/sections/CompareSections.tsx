@@ -69,6 +69,7 @@ export async function CompareSection({
         <CompareControls
           metrics={all.map((m) => ({ id: m.id, display_name: m.display_name, category: m.category }))}
           ranges={COMPARE_RANGES}
+          selected={{ metric: metricSel, mode, range }}
         />
         <section className="lead">
           <article className="card">
@@ -170,7 +171,7 @@ export async function CompareSection({
 
   return (
     <>
-      <CompareControls metrics={controlMetrics} ranges={COMPARE_RANGES} />
+      <CompareControls metrics={controlMetrics} ranges={COMPARE_RANGES} selected={{ metric: metricSel, mode, range }} />
 
       <section className="lead">
         <article className="card">

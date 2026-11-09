@@ -7,14 +7,21 @@ import type { MetricOption } from "./FilterBar";
 // URL-state controls for /relationships: signal A, signal B, range. Holds no
 // data - writes the query string and lets the server component re-fetch
 // (the CompareControls idiom).
-export function RelateControls({ metrics, ranges }: { metrics: MetricOption[]; ranges: string[] }) {
+// `selected` is the page's own parse of the URL (app/relationships/page.tsx):
+// a malformed signal id it dropped is not shown as chosen here.
+export function RelateControls({
+  metrics,
+  ranges,
+  selected,
+}: {
+  metrics: MetricOption[];
+  ranges: string[];
+  selected: { a: string; b: string; range: string };
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-
-  const a = params.get("a") ?? "";
-  const b = params.get("b") ?? "";
-  const range = params.get("range") ?? "90d";
+  const { a, b, range } = selected;
 
   function set(key: string, value: string) {
     const next = new URLSearchParams(params.toString());
