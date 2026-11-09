@@ -734,6 +734,7 @@ def test_analysis_module_exposes_expected_async_helpers() -> None:
 
     expected = {
         # analysis_runs lifecycle
+        "try_lock_run_type",
         "begin_run",
         "mark_run_skipped",
         "mark_run_completed",

@@ -187,82 +187,83 @@ class AnalysisEngine:
         or ``None`` when the run was skipped (no data in the lookback
         window). Skipped runs still persist a row in ``analysis_runs``
         for audit; callers that need that id can join via the
-        completed_at timestamp. Re-raises on failure after marking the
-        run ``failed`` with an error message.
+        completed_at timestamp. Also ``None``, with no row, while another
+        daily briefing is in progress (:meth:`_lock_run_type`). Re-raises
+        on failure after marking the run ``failed`` with an error message.
         """
-        async with (
-            self.session_factory() as session,
-            self._run_context(session, "daily_briefing") as run_id,
-        ):
-            summary = await self.aggregator.summarize_period(period="daily", days=1)
-
-            if not summary.metrics:
-                await _sql().mark_run_skipped(session, run_id)
-                await session.commit()
+        async with self.session_factory() as session:
+            if not await self._lock_run_type(session, "daily_briefing"):
                 return None
+            async with self._run_context(session, "daily_briefing") as run_id:
+                summary = await self.aggregator.summarize_period(period="daily", days=1)
 
-            finding_ids: list[int] = []
-            for metric, metric_summary in summary.metrics.items():
-                summary_finding_id = await self._insert_finding(
-                    session,
-                    run_id=run_id,
-                    finding=Finding(
-                        finding_type="summary",
-                        metric=metric,
-                        severity="info",
-                        structured_data=metric_summary,
-                    ),
+                if not summary.metrics:
+                    await _sql().mark_run_skipped(session, run_id)
+                    await session.commit()
+                    return None
+
+                finding_ids: list[int] = []
+                for metric, metric_summary in summary.metrics.items():
+                    summary_finding_id = await self._insert_finding(
+                        session,
+                        run_id=run_id,
+                        finding=Finding(
+                            finding_type="summary",
+                            metric=metric,
+                            severity="info",
+                            structured_data=metric_summary,
+                        ),
+                    )
+                    if summary_finding_id is not None:
+                        finding_ids.append(summary_finding_id)
+
+                anomalies = await self._detect_anomalies_safely()
+                for anomaly in anomalies:
+                    anomaly_finding_id = await self._insert_finding(
+                        session,
+                        run_id=run_id,
+                        finding=Finding(
+                            finding_type="anomaly",
+                            metric=anomaly.metric,
+                            severity=anomaly.severity,
+                            structured_data=anomaly.model_dump(mode="json"),
+                        ),
+                    )
+                    if anomaly_finding_id is not None:
+                        finding_ids.append(anomaly_finding_id)
+
+                recent_trends = await self._fetch_recent_findings(session, "trend")
+                recent_correlations = await self._fetch_recent_findings(session, "correlation")
+
+                prompt = DAILY_BRIEFING_PROMPT_TEMPLATE.format(
+                    period_summary=json.dumps(summary.metrics, indent=2, default=str),
+                    anomalies=_format_anomalies_for_prompt(anomalies),
+                    trends=_format_trends_for_prompt(recent_trends),
+                    correlations=_format_correlations_for_prompt(recent_correlations),
+                    days_of_data=_daily_data_days(summary.metrics),
+                    minimum_required=1,
                 )
-                if summary_finding_id is not None:
-                    finding_ids.append(summary_finding_id)
 
-            anomalies = await self._detect_anomalies_safely()
-            for anomaly in anomalies:
-                anomaly_finding_id = await self._insert_finding(
-                    session,
-                    run_id=run_id,
-                    finding=Finding(
-                        finding_type="anomaly",
-                        metric=anomaly.metric,
-                        severity=anomaly.severity,
-                        structured_data=anomaly.model_dump(mode="json"),
-                    ),
+                insight_result = await self._narrate(session, prompt, insight_type="daily_briefing")
+                await self._record_failover_audit(session, insight_result)
+
+                insight = Insight(
+                    insight_type="daily_briefing",
+                    narrative=insight_result.narrative,
+                    findings_used=finding_ids,
                 )
-                if anomaly_finding_id is not None:
-                    finding_ids.append(anomaly_finding_id)
 
-            recent_trends = await self._fetch_recent_findings(session, "trend")
-            recent_correlations = await self._fetch_recent_findings(session, "correlation")
+                await self._insert_insight(session, insight=insight, run_id=run_id)
 
-            prompt = DAILY_BRIEFING_PROMPT_TEMPLATE.format(
-                period_summary=json.dumps(summary.metrics, indent=2, default=str),
-                anomalies=_format_anomalies_for_prompt(anomalies),
-                trends=_format_trends_for_prompt(recent_trends),
-                correlations=_format_correlations_for_prompt(recent_correlations),
-                days_of_data=_daily_data_days(summary.metrics),
-                minimum_required=1,
-            )
-
-            insight_result = await self._narrate(session, prompt, insight_type="daily_briefing")
-            await self._record_failover_audit(session, insight_result)
-
-            insight = Insight(
-                insight_type="daily_briefing",
-                narrative=insight_result.narrative,
-                findings_used=finding_ids,
-            )
-
-            await self._insert_insight(session, insight=insight, run_id=run_id)
-
-            await _sql().mark_run_completed(
-                session,
-                run_id,
-                llm_provider=insight_result.model,
-                llm_tokens_in=insight_result.tokens_in,
-                llm_tokens_out=insight_result.tokens_out,
-            )
-            await session.commit()
-            return run_id
+                await _sql().mark_run_completed(
+                    session,
+                    run_id,
+                    llm_provider=insight_result.model,
+                    llm_tokens_in=insight_result.tokens_in,
+                    llm_tokens_out=insight_result.tokens_out,
+                )
+                await session.commit()
+                return run_id
 
     async def run_anomaly_check(self) -> int | None:
         return await self._run_job_with_metrics("anomaly_check", self._run_anomaly_check_impl)
@@ -273,9 +274,15 @@ class AnalysisEngine:
         Persists an ``analysis_runs`` row with ``run_type='anomaly_check'``
         and writes each detected anomaly as an ``analysis_findings`` row.
         Returns the run id on completion, or ``None`` when the run was
-        skipped because the detector found nothing.
+        skipped because the detector found nothing, or with no row when a
+        recent check makes this one redundant (cooldown) or another check
+        is in progress (:meth:`_lock_run_type`).
         """
         async with self.session_factory() as session:
+            # Lock first: once it is ours, any earlier check has committed,
+            # so the cooldown read and the existing-anomaly filter see it.
+            if not await self._lock_run_type(session, "anomaly_check"):
+                return None
             cooldown_minutes = self.config.analysis.anomaly_detection.cooldown_minutes
             if await _sql().within_cooldown(session, "anomaly_check", cooldown_minutes):
                 return None
@@ -315,110 +322,119 @@ class AnalysisEngine:
         aggregate the week, persist summary findings, fold in the latest
         trends/correlations, narrate, and persist a ``weekly_summary`` insight.
         Returns the ``analysis_runs.id`` on completion, or ``None`` when the
-        week had no data (skipped, no LLM call).
+        week had no data (skipped, no LLM call) or, with no row, while
+        another weekly summary is in progress (:meth:`_lock_run_type`).
         """
         lookback_days = self.config.analysis.weekly_summary.lookback_days
-        async with (
-            self.session_factory() as session,
-            self._run_context(session, "weekly_summary") as run_id,
-        ):
-            summary = await self.aggregator.summarize_period(period="weekly", days=lookback_days)
-
-            if not summary.metrics:
-                await _sql().mark_run_skipped(session, run_id)
-                await session.commit()
+        async with self.session_factory() as session:
+            if not await self._lock_run_type(session, "weekly_summary"):
                 return None
-
-            finding_ids: list[int] = []
-            for metric, metric_summary in summary.metrics.items():
-                finding_id = await self._insert_finding(
-                    session,
-                    run_id=run_id,
-                    finding=Finding(
-                        finding_type="summary",
-                        metric=metric,
-                        severity="info",
-                        structured_data=metric_summary,
-                    ),
+            async with self._run_context(session, "weekly_summary") as run_id:
+                summary = await self.aggregator.summarize_period(
+                    period="weekly", days=lookback_days
                 )
-                if finding_id is not None:
-                    finding_ids.append(finding_id)
 
-            recent_trends = await self._fetch_recent_findings(session, "trend")
-            recent_correlations = await self._fetch_recent_findings(session, "correlation")
+                if not summary.metrics:
+                    await _sql().mark_run_skipped(session, run_id)
+                    await session.commit()
+                    return None
 
-            cards = _finding_cards_for_brief(summary.metrics, recent_trends, recent_correlations)
+                finding_ids: list[int] = []
+                for metric, metric_summary in summary.metrics.items():
+                    finding_id = await self._insert_finding(
+                        session,
+                        run_id=run_id,
+                        finding=Finding(
+                            finding_type="summary",
+                            metric=metric,
+                            severity="info",
+                            structured_data=metric_summary,
+                        ),
+                    )
+                    if finding_id is not None:
+                        finding_ids.append(finding_id)
 
-            prompt = WEEKLY_SUMMARY_PROMPT_TEMPLATE.format(
-                period_summary=json.dumps(summary.metrics, indent=2, default=str),
-                week_comparison=_format_week_comparison(summary.metrics),
-                trends=_format_trends_for_prompt(recent_trends),
-                correlations=_format_correlations_for_prompt(recent_correlations),
-                findings=_format_finding_cards_for_prompt(cards),
-                # The aggregator does not expose distinct-day counts; like the
-                # daily briefing this reports "data present for the period".
-                days_of_data=_daily_data_days(summary.metrics),
-                minimum_required=1,
-            )
+                recent_trends = await self._fetch_recent_findings(session, "trend")
+                recent_correlations = await self._fetch_recent_findings(session, "correlation")
 
-            insight_result = await self._narrate(session, prompt, insight_type="weekly_summary")
-            await self._record_failover_audit(session, insight_result)
+                cards = _finding_cards_for_brief(
+                    summary.metrics, recent_trends, recent_correlations
+                )
 
-            await self._insert_insight(
-                session,
-                insight=Insight(
-                    insight_type="weekly_summary",
-                    narrative=insight_result.narrative,
-                    findings_used=finding_ids,
-                ),
-                run_id=run_id,
-            )
+                prompt = WEEKLY_SUMMARY_PROMPT_TEMPLATE.format(
+                    period_summary=json.dumps(summary.metrics, indent=2, default=str),
+                    week_comparison=_format_week_comparison(summary.metrics),
+                    trends=_format_trends_for_prompt(recent_trends),
+                    correlations=_format_correlations_for_prompt(recent_correlations),
+                    findings=_format_finding_cards_for_prompt(cards),
+                    # The aggregator does not expose distinct-day counts; like the
+                    # daily briefing this reports "data present for the period".
+                    days_of_data=_daily_data_days(summary.metrics),
+                    minimum_required=1,
+                )
 
-            await _sql().mark_run_completed(
-                session,
-                run_id,
-                llm_provider=insight_result.model,
-                llm_tokens_in=insight_result.tokens_in,
-                llm_tokens_out=insight_result.tokens_out,
-            )
-            await session.commit()
-            return run_id
+                insight_result = await self._narrate(session, prompt, insight_type="weekly_summary")
+                await self._record_failover_audit(session, insight_result)
+
+                await self._insert_insight(
+                    session,
+                    insight=Insight(
+                        insight_type="weekly_summary",
+                        narrative=insight_result.narrative,
+                        findings_used=finding_ids,
+                    ),
+                    run_id=run_id,
+                )
+
+                await _sql().mark_run_completed(
+                    session,
+                    run_id,
+                    llm_provider=insight_result.model,
+                    llm_tokens_in=insight_result.tokens_in,
+                    llm_tokens_out=insight_result.tokens_out,
+                )
+                await session.commit()
+                return run_id
 
     async def run_trend_analysis(self) -> list[Finding]:
         return await self._run_job_with_metrics("trend_analysis", self._run_trend_analysis_impl)
 
     async def _run_trend_analysis_impl(self) -> list[Finding]:
-        """Compute trend findings across enabled metrics."""
-        async with (
-            self.session_factory() as session,
-            self._run_context(session, "trend_analysis") as run_id,
-        ):
-            trends = []
-            period_days = self.config.analysis.trend_analysis.period_days
-            for metric in _TREND_METRICS:
-                trend = await self.trend_analyzer.analyze(metric, days=period_days)
-                if trend is not None:
-                    trends.append(trend)
+        """Compute trend findings across enabled metrics.
 
-            if not trends:
-                await _sql().mark_run_skipped(session, run_id)
-                await session.commit()
+        ``[]`` when no metric has a trend, or, with no run row, while another
+        trend analysis is in progress (:meth:`_lock_run_type`).
+        """
+        async with self.session_factory() as session:
+            if not await self._lock_run_type(session, "trend_analysis"):
                 return []
+            async with self._run_context(session, "trend_analysis") as run_id:
+                trends = []
+                period_days = self.config.analysis.trend_analysis.period_days
+                for metric in _TREND_METRICS:
+                    trend = await self.trend_analyzer.analyze(metric, days=period_days)
+                    if trend is not None:
+                        trends.append(trend)
 
-            findings: list[Finding] = []
-            for trend in trends:
-                finding = Finding(
-                    finding_type="trend",
-                    metric=trend.metric,
-                    severity="info",
-                    structured_data=trend.model_dump(mode="json"),
-                )
-                await self._insert_finding(session, run_id=run_id, finding=finding)
-                findings.append(finding)
+                if not trends:
+                    await _sql().mark_run_skipped(session, run_id)
+                    await session.commit()
+                    return []
 
-            await _sql().mark_run_completed(session, run_id)
-            await session.commit()
-            return findings
+                findings: list[Finding] = []
+                for trend in trends:
+                    finding = Finding(
+                        finding_type="trend",
+                        metric=trend.metric,
+                        severity="info",
+                        structured_data=trend.model_dump(mode="json"),
+                    )
+                    await self._insert_finding(session, run_id=run_id, finding=finding)
+                    findings.append(finding)
+
+                await _sql().mark_run_completed(session, run_id)
+                await session.commit()
+                return findings
 
     async def run_correlation_analysis(self) -> list[Finding]:
         return await self._run_job_with_metrics(
@@ -432,33 +448,35 @@ class AnalysisEngine:
         becomes a ``correlation`` finding, strongest-first — the order is the
         candidate ranking for an eventual n-of-1 experiment. No correlations
         (insufficient/misaligned data, or nothing meaningful) → skipped run.
+        ``[]`` with no run row while another correlation analysis is in
+        progress (:meth:`_lock_run_type`).
         """
-        async with (
-            self.session_factory() as session,
-            self._run_context(session, "correlation_analysis") as run_id,
-        ):
-            period_days = self.config.analysis.correlation_analysis.period_days
-            correlations = await self.correlation_analyzer.analyze(days=period_days)
-
-            if not correlations:
-                await _sql().mark_run_skipped(session, run_id)
-                await session.commit()
+        async with self.session_factory() as session:
+            if not await self._lock_run_type(session, "correlation_analysis"):
                 return []
+            async with self._run_context(session, "correlation_analysis") as run_id:
+                period_days = self.config.analysis.correlation_analysis.period_days
+                correlations = await self.correlation_analyzer.analyze(days=period_days)
 
-            findings: list[Finding] = []
-            for correlation in correlations:
-                finding = Finding(
-                    finding_type="correlation",
-                    metric=f"{correlation.metric_a}~{correlation.metric_b}",
-                    severity="info",
-                    structured_data=correlation.model_dump(mode="json"),
-                )
-                await self._insert_finding(session, run_id=run_id, finding=finding)
-                findings.append(finding)
+                if not correlations:
+                    await _sql().mark_run_skipped(session, run_id)
+                    await session.commit()
+                    return []
 
-            await _sql().mark_run_completed(session, run_id)
-            await session.commit()
-            return findings
+                findings: list[Finding] = []
+                for correlation in correlations:
+                    finding = Finding(
+                        finding_type="correlation",
+                        metric=f"{correlation.metric_a}~{correlation.metric_b}",
+                        severity="info",
+                        structured_data=correlation.model_dump(mode="json"),
+                    )
+                    await self._insert_finding(session, run_id=run_id, finding=finding)
+                    findings.append(finding)
+
+                await _sql().mark_run_completed(session, run_id)
+                await session.commit()
+                return findings
 
     async def run_recovery_check(self) -> int | None:
         return await self._run_job_with_metrics("recovery_check", self._run_recovery_check_impl)
@@ -472,34 +490,36 @@ class AnalysisEngine:
         — the shape the v2 read API and the web hero already consume
         (``structured_data.score``). Returns the run id on completion, or
         ``None`` when no real recovery signal was present: the run is marked
-        skipped rather than emitting a fabricated score.
+        skipped rather than emitting a fabricated score. Also ``None``, with
+        no row, while another recovery check is in progress
+        (:meth:`_lock_run_type`).
         """
-        async with (
-            self.session_factory() as session,
-            self._run_context(session, "recovery_check") as run_id,
-        ):
-            summary = await self.aggregator.summarize_period(
-                period="daily", days=1, metrics=RECOVERY_INPUT_METRICS
-            )
-            data = recovery_finding_data(summary.metrics)
-            if data is None:
-                await _sql().mark_run_skipped(session, run_id)
-                await session.commit()
+        async with self.session_factory() as session:
+            if not await self._lock_run_type(session, "recovery_check"):
                 return None
+            async with self._run_context(session, "recovery_check") as run_id:
+                summary = await self.aggregator.summarize_period(
+                    period="daily", days=1, metrics=RECOVERY_INPUT_METRICS
+                )
+                data = recovery_finding_data(summary.metrics)
+                if data is None:
+                    await _sql().mark_run_skipped(session, run_id)
+                    await session.commit()
+                    return None
 
-            await self._insert_finding(
-                session,
-                run_id=run_id,
-                finding=Finding(
-                    finding_type="recovery_score",
-                    metric="recovery",
-                    severity="info",
-                    structured_data=data,
-                ),
-            )
-            await _sql().mark_run_completed(session, run_id)
-            await session.commit()
-            return run_id
+                await self._insert_finding(
+                    session,
+                    run_id=run_id,
+                    finding=Finding(
+                        finding_type="recovery_score",
+                        metric="recovery",
+                        severity="info",
+                        structured_data=data,
+                    ),
+                )
+                await _sql().mark_run_completed(session, run_id)
+                await session.commit()
+                return run_id
 
     async def _analytical_time(self, session) -> AnalyticalTime:
         from storage.timescale.observatory_settings import default_repository
@@ -574,11 +594,35 @@ class AnalysisEngine:
         AI_BRIEFING_RUNS.labels(job=job, result="success").inc()
         return result
 
+    async def _lock_run_type(self, session, run_type: str) -> bool:
+        """Let one ``run_type`` run at a time, across processes.
+
+        The worker's cron, the API's trigger routes and the anomaly check
+        each ingest batch schedules can start the same run type at once.
+        A run's 'running' row and findings stay invisible to other sessions
+        until it commits, so neither the cooldown nor the existing-anomaly
+        filter could see a run in progress, and overlapping runs wrote the
+        same findings twice. This takes a transaction-scoped advisory lock
+        on ``session``: call it first, before :meth:`_run_context`, so the
+        lock lives exactly as long as the transaction that writes the run
+        (commit, rollback or session close all release it).
+
+        False means another run of this type is in progress: the caller
+        returns its ordinary "skipped" value (``None`` or ``[]``) without
+        writing a run row. It does not wait, so a trigger request or an
+        ingest background task never queues behind a long LLM run.
+        """
+        if await _sql().try_lock_run_type(session, run_type):
+            return True
+        log.info("%s skipped: another %s run is in progress", run_type, run_type)
+        return False
+
     @asynccontextmanager
     async def _run_context(self, session, run_type: str):
         """Lifecycle wrapper for an ``analysis_runs`` row.
 
-        Yields the new ``run_id``. On exception inside the block, marks
+        Take :meth:`_lock_run_type` on the same session first. Yields the
+        new ``run_id``. On exception inside the block, marks
         the run ``failed`` (best-effort) and re-raises the ORIGINAL
         exception - callers want the root cause, not a bookkeeping
         error that masks it.

@@ -28,6 +28,7 @@ so eager imports are safe here.
 from __future__ import annotations
 
 import json
+import zlib
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -66,6 +67,41 @@ def _fetchall(result) -> list[Any]:
 # ──────────────────────────────────────────────────────────────────
 #  analysis_runs lifecycle  (was: analysis.engine internals)
 # ──────────────────────────────────────────────────────────────────
+
+
+# First key of the run-type advisory locks. PostgreSQL keeps the two-int4 key
+# space apart from the single-bigint one (the migration runner's lock).
+_RUN_LOCK_NAMESPACE = 0x48534152  # "HSAR"
+
+
+def _run_type_lock_key(run_type: str) -> int:
+    """Stable signed int4 for ``run_type`` (crc32), the second lock key."""
+    key = zlib.crc32(run_type.encode("utf-8"))
+    return key - (1 << 32) if key >= (1 << 31) else key
+
+
+async def try_lock_run_type(session, run_type: str) -> bool:
+    """Take the advisory lock that lets one ``run_type`` run at a time.
+
+    Transaction-scoped and non-blocking: True when this transaction now
+    holds it (until its commit or rollback), False when another transaction
+    holds it, from this process or any other. Take it before the run reads
+    anything, in the transaction that writes the run: a run's 'running' row
+    and findings are invisible to other sessions until it commits, so this
+    lock is the only thing another run of the same type can see.
+    """
+    result = await session.execute(
+        text(
+            """
+            SELECT pg_try_advisory_xact_lock(
+                CAST(:namespace AS integer), CAST(:key AS integer)
+            ) AS locked
+            """
+        ),
+        {"namespace": _RUN_LOCK_NAMESPACE, "key": _run_type_lock_key(run_type)},
+    )
+    row = result.fetchone()
+    return bool(row is not None and row.locked)
 
 
 async def begin_run(session, run_type: str) -> int | None:
