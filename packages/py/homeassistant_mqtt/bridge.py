@@ -430,6 +430,12 @@ def _readiness_title(key: str) -> str:
     return key.replace("_", " ").title()
 
 
+def build_retained_clear_message(topic: str) -> MQTTMessage:
+    """An empty retained payload: the broker deletes the topic's retained message."""
+
+    return (topic, "", True)
+
+
 def build_availability_message(config: HomeAssistantMQTTConfig) -> MQTTMessage:
     return (availability_topic(config), "online", True)
 
@@ -448,6 +454,23 @@ def build_legacy_availability_messages(config: HomeAssistantMQTTConfig) -> list[
 # :class:`SourceHealthSnapshot` fields — extending that dataclass is
 # the only thing needed to surface a new per-source metric.
 # ──────────────────────────────────────────────────────────────────────
+
+
+# Home Assistant marks a per-source entity unavailable once its state topic has
+# gone this long without a message (MQTT ``expire_after``). The bridge
+# republishes every source still in the snapshot on every cycle, so only a
+# source that aged out of the snapshot query, or a bridge that stopped
+# publishing, goes quiet that long; a few slow or skipped cycles do not. The
+# floor matches the default liveness deadline, after which the bridge restarts.
+SOURCE_EXPIRE_AFTER_CYCLES = 5
+SOURCE_EXPIRE_AFTER_MIN_SECONDS = 300
+
+
+def source_expire_after_seconds(config: HomeAssistantMQTTConfig) -> int:
+    return max(
+        SOURCE_EXPIRE_AFTER_CYCLES * config.publish_interval_seconds,
+        SOURCE_EXPIRE_AFTER_MIN_SECONDS,
+    )
 
 
 SOURCE_METRIC_SPECS: tuple[tuple[str, str, str | None, str | None, str], ...] = (
@@ -518,6 +541,9 @@ def build_source_discovery_messages(
             "availability_topic": entity_availability_topic(config),
             "device": device,
             "enabled_by_default": True,
+            # A source that ages out of the snapshot stops being republished;
+            # HA then shows its entities unavailable instead of the last value.
+            "expire_after": source_expire_after_seconds(config),
             # Re-fire HA state events on every 60s republish (even when the value is
             # unchanged) so dependent template sensors / the room_health brain
             # re-evaluate continuously instead of freezing on a startup-time value.
