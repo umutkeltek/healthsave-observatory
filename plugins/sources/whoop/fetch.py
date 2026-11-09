@@ -26,6 +26,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Protocol
 
+from plugin_sdk.http import get_with_retry
+
 from . import API_BASE
 
 # Whoop v2 path constants — names match the API documentation so a
@@ -107,7 +109,9 @@ async def paginated_get(
     headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
 
     for _ in range(max_pages):
-        response = await http_client.get(f"{API_BASE}{path}", params=params, headers=headers)
+        response = await get_with_retry(
+            http_client, f"{API_BASE}{path}", params=dict(params), headers=headers
+        )
         if response.status_code != 200:
             body = getattr(response, "text", "<no body>")
             raise WhoopFetchError(
@@ -136,7 +140,7 @@ async def fetch_one(
 ) -> dict[str, Any]:
     """GET a single Whoop resource by its fully-qualified path."""
     headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
-    response = await http_client.get(f"{API_BASE}{path}", headers=headers)
+    response = await get_with_retry(http_client, f"{API_BASE}{path}", headers=headers)
     if response.status_code != 200:
         body = getattr(response, "text", "<no body>")
         raise WhoopFetchError(

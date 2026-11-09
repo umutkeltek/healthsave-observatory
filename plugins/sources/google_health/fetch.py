@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Protocol
 
+from plugin_sdk.http import get_with_retry
+
 GOOGLE_HEALTH_API_BASE = "https://health.googleapis.com"
 DATA_TYPE_STEPS = "steps"
 DEFAULT_PAGE_SIZE = 1000
@@ -68,8 +70,8 @@ async def fetch_data_points(
     points: list[dict[str, Any]] = []
 
     for _ in range(max_pages):
-        response = await http_client.get(
-            _data_points_url(data_type), params=params, headers=headers
+        response = await get_with_retry(
+            http_client, _data_points_url(data_type), params=dict(params), headers=headers
         )
         if response.status_code != 200:
             body = getattr(response, "text", "<no body>")

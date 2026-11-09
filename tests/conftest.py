@@ -46,3 +46,18 @@ def _clear_v2_read_cache():
     v2_read_cache.clear()
     yield
     v2_read_cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def _instant_vendor_retry_backoff(monkeypatch):
+    """A source plugin's vendor GET retries a 5xx with backoff
+    (plugin_sdk.http). Tests that script vendor failures must not sleep."""
+    try:
+        import plugin_sdk.http as vendor_http
+    except Exception:  # pragma: no cover - plugin_sdk may not import in every subset
+        return
+
+    async def _no_wait(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr(vendor_http, "_sleep", _no_wait)

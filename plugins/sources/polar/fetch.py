@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Protocol
 
+from plugin_sdk.http import get_with_retry
+
 from .oauth import POLAR_API_BASE
 
 PATH_EXERCISES = "/v3/exercises"
@@ -52,7 +54,8 @@ async def fetch_exercises(
     """
 
     _ = since
-    response = await http_client.get(
+    response = await get_with_retry(
+        http_client,
         f"{POLAR_API_BASE}{PATH_EXERCISES}",
         params={"samples": "false", "zones": "false"},
         headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},

@@ -33,6 +33,7 @@ from datetime import UTC, date, datetime
 from typing import Any, Protocol
 
 from auth import OAuthToken
+from plugin_sdk.http import get_with_retry
 
 from . import DATA_API_HEADERS_BASE
 
@@ -129,7 +130,7 @@ async def _get_json(
     headers: dict[str, str],
 ) -> dict[str, Any]:
     """Issue a GET, raise on non-200 / non-JSON, return parsed body."""
-    response = await http_client.get(url, params=params, headers=headers)
+    response = await get_with_retry(http_client, url, params=params, headers=headers)
     if response.status_code != 200:
         body = getattr(response, "text", "<no body>")
         raise AmazfitFetchError(
