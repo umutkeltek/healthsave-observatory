@@ -29,7 +29,7 @@ function findTemplate(sections: DashboardSections): Template | null {
 export function DashboardCustomizer({ sections }: { sections: DashboardSections }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
   const sheetRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -146,52 +146,15 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
           automatically — it persists across sessions.
         </p>
 
-        {/* Template picker */}
-        <div className="template-grid">
-          {TEMPLATES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={`template-card ${active?.id === t.id ? "template-active" : ""}`}
-              onClick={() => applyTemplate(t.id)}
-              aria-pressed={active?.id === t.id}
-            >
-              <span className="template-icon">{t.icon}</span>
-              <strong>{t.label}</strong>
-              <span className="template-short">{t.short}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Section toggles */}
-        <div className="dashboard-section-toggles">
-          <h3>Section visibility</h3>
-          {(Object.keys(sections) as (keyof DashboardSections)[]).map((key) => (
-            <label key={key} className="section-toggle-row">
-              <input
-                type="checkbox"
-                checked={sections[key]}
-                onChange={() => toggleSection(key)}
-                disabled={key === "hero"}
-              />
-              <span className="section-toggle-label">
-                <strong>{SECTION_LABELS[key]}</strong>
-                {key === "hero" && <em>Always visible</em>}
-              </span>
-            </label>
-          ))}
-        </div>
-
-        {error && (
-          <p className="exp-error" role="status">
-            {error}
-          </p>
-        )}
-
-        {/* Reset */}
-        <button type="button" className="btn dashboard-reset-btn" onClick={reset}>
-          Reset to full layout
-        </button>
+        <CustomizerControls
+          sections={sections}
+          activeId={active?.id ?? null}
+          pending={pending}
+          error={error}
+          onTemplate={applyTemplate}
+          onToggle={toggleSection}
+          onReset={reset}
+        />
 
         <button
           type="button"
@@ -202,5 +165,78 @@ export function DashboardCustomizer({ sections }: { sections: DashboardSections 
         </button>
       </div>
     </>
+  );
+}
+
+// The sheet's writing controls. While a save is in flight (`pending`) every one
+// of them is disabled: each save reads the dashboard cookie and writes it
+// back, so a second click before the first lands would overwrite it.
+export function CustomizerControls({
+  sections,
+  activeId,
+  pending,
+  error,
+  onTemplate,
+  onToggle,
+  onReset,
+}: {
+  sections: DashboardSections;
+  activeId: string | null;
+  pending: boolean;
+  error: string | null;
+  onTemplate: (id: string) => void;
+  onToggle: (key: keyof DashboardSections) => void;
+  onReset: () => void;
+}) {
+  return (
+    <div aria-busy={pending}>
+      {/* Template picker */}
+      <div className="template-grid">
+        {TEMPLATES.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className={`template-card ${activeId === t.id ? "template-active" : ""}`}
+            onClick={() => onTemplate(t.id)}
+            aria-pressed={activeId === t.id}
+            disabled={pending}
+          >
+            <span className="template-icon">{t.icon}</span>
+            <strong>{t.label}</strong>
+            <span className="template-short">{t.short}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Section toggles */}
+      <div className="dashboard-section-toggles">
+        <h3>Section visibility</h3>
+        {(Object.keys(sections) as (keyof DashboardSections)[]).map((key) => (
+          <label key={key} className="section-toggle-row">
+            <input
+              type="checkbox"
+              checked={sections[key]}
+              onChange={() => onToggle(key)}
+              disabled={pending || key === "hero"}
+            />
+            <span className="section-toggle-label">
+              <strong>{SECTION_LABELS[key]}</strong>
+              {key === "hero" && <em>Always visible</em>}
+            </span>
+          </label>
+        ))}
+      </div>
+
+      {error && (
+        <p className="exp-error" role="status">
+          {error}
+        </p>
+      )}
+
+      {/* Reset */}
+      <button type="button" className="btn dashboard-reset-btn" onClick={onReset} disabled={pending}>
+        Reset to full layout
+      </button>
+    </div>
   );
 }
