@@ -189,7 +189,12 @@ _INSERT_SQL = text(
     WHERE canonical_observations.aggregation_scope = EXCLUDED.aggregation_scope
       AND canonical_observations.normalizer_id = 'apple_health'
       AND EXCLUDED.normalizer_id = 'apple_health'
-      AND canonical_observations.status = 'active'
+      -- 'superseded' on an Apple row means deleted (only the deletions
+      -- channel sets it). HKSample.uuid survives delete-and-reinsert, so the
+      -- same sample re-added in a LATER request than its deletion (the
+      -- recency ladder below) is active again. A deletion in the same request
+      -- still wins: the v2 route writes a batch's samples before its deletions.
+      AND canonical_observations.status IN ('active', 'superseded')
       AND CASE
             WHEN pg_input_is_valid(
                     COALESCE(EXCLUDED.provenance->>'raw_payload_ref', ''),
