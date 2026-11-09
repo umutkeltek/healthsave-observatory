@@ -25,6 +25,8 @@
 // lib/api.ts); a fetch that started before a drop cannot put its older answer
 // back, and one that started before an expire lands already expired.
 
+import { cache } from "react";
+
 // Durations (TTL, backoff, max stale age) use the monotonic clock: after the
 // wall clock steps back (a VM resume, an NTP correction) a value must not stay
 // fresh, nor a failed key keep refusing reads, for as long as the step.
@@ -74,6 +76,38 @@ function shared(): SharedState {
   const holder = globalThis as typeof globalThis & { [STATE_KEY]?: SharedState };
   holder[STATE_KEY] ??= { entries: new Map(), expireEpoch: 0, staleRefreshing: new Set(), staleSettled: 0 };
   return holder[STATE_KEY];
+}
+
+// The landed-refresh count a page render is compared against (the live poll
+// redraws once more have landed; components/LiveStatus.tsx). Taken once per
+// server request, at the first cache read or when the layout asks, whichever
+// comes first: the root layout and the page render in parallel, so a count
+// read by the layout later could already include a refresh this page started,
+// and that page would never redraw. React's cache() is request-scoped in server
+// components; elsewhere it is a plain call, where no mark is rendered.
+type RenderScope = { settled: number | null };
+const requestScope = cache((): RenderScope => ({ settled: null }));
+let testScope: RenderScope | null = null;
+
+function markRender(state: SharedState): number {
+  const scope = testScope ?? requestScope();
+  scope.settled ??= state.staleSettled;
+  return scope.settled;
+}
+
+/** The landed-refresh count when this request's render started reading. */
+export function renderedSettledMark(): number {
+  return markRender(shared());
+}
+
+/** Test seam: run fn as one server request render. */
+export async function inRenderScopeForTests<T>(fn: () => Promise<T>): Promise<T> {
+  testScope = { settled: null };
+  try {
+    return await fn();
+  } finally {
+    testScope = null;
+  }
 }
 
 function fetchInto(state: SharedState, key: string, entry: Entry, fetcher: () => Promise<unknown>, background: boolean) {
@@ -130,6 +164,7 @@ function makeRoom(state: SharedState, now: number): void {
 
 export async function swrCache<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
   const state = shared();
+  markRender(state);
   const now = clock();
   let entry = state.entries.get(key);
   if (entry) {

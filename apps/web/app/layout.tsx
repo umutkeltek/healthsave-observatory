@@ -16,7 +16,7 @@ import {
 import "./globals.css";
 import { getAvailableLocales, getLocale } from "./lib/i18n.server";
 import { getDensity } from "./lib/prefs";
-import { staleRefreshStatus } from "./lib/ttlCache";
+import { renderedSettledMark } from "./lib/ttlCache";
 import { BARE_LAYOUT_HEADER } from "./lib/webAuth";
 import { hasWebSession } from "./lib/webSession.server";
 
@@ -60,7 +60,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <I18nProvider locale={locale} availableLocales={availableLocales}>
             <Shell
               density={density}
-              renderedSettled={staleRefreshStatus().settled}
+              renderedSettled={renderedSettledMark()}
               participantSwitcher={
                 <Suspense fallback={null}>
                   <ParticipantSwitcher />

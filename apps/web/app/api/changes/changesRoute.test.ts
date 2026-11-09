@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bu
 
 import { liveAfterPoll, readCacheSignal } from "../../lib/liveSignal";
 import { fakeClocks } from "../../lib/testClock";
-import { clearSwrCache, swrCache } from "../../lib/ttlCache";
+import { clearSwrCache, inRenderScopeForTests, renderedSettledMark, staleRefreshStatus, swrCache } from "../../lib/ttlCache";
 import { GET } from "./route";
 
 const T0 = new Date("2026-11-08T12:00:00Z").getTime();
@@ -109,5 +109,35 @@ describe("a fingerprint move expires the cache instead of deleting it", () => {
     expect(backend.calls()).toBe(1);
     backend.resolve("v1");
     expect(await Promise.all(reads)).toEqual(["v1", "v1", "v1", "v1"]);
+  });
+});
+
+describe("the page's render mark", () => {
+  // The bug: the root layout read the landed-refresh count while the page's
+  // own reads ran in parallel. A stale value the page showed, refreshed fast
+  // enough to land before the layout read the count, counted as already shown:
+  // the poll never redrew and the page kept the old value.
+  test("a refresh this render started is never counted as shown, even if it lands first", async () => {
+    await swrCache("readiness", 30_000, async () => "v1");
+    clocks.at(60_000);
+    await inRenderScopeForTests(async () => {
+      // The page's read: the stale value at once, a background refresh starts.
+      expect(await swrCache("readiness", 30_000, async () => "v2")).toBe("v1");
+      await new Promise((resolve) => setTimeout(resolve, 0)); // the refresh lands
+      // Only now does the layout ask for the mark.
+      const signal = staleRefreshStatus();
+      expect(signal.refreshing).toBe(0);
+      expect(liveAfterPoll(signal, renderedSettledMark()).redraw).toBe(true);
+      // What the layout used to pass: it hid the landed refresh.
+      expect(liveAfterPoll(signal, signal.settled).redraw).toBe(false);
+    });
+  });
+
+  test("one render has one mark, taken before its first read", async () => {
+    await inRenderScopeForTests(async () => {
+      const first = renderedSettledMark();
+      await swrCache("a", 30_000, async () => 1);
+      expect(renderedSettledMark()).toBe(first);
+    });
   });
 });
