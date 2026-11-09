@@ -230,6 +230,59 @@ _UPSERT_DEVICE_IDENTITY_LINK_SQL = text(
     """
 )
 
+# Undo the fusion of every pair whose latest decision is 'assigned' but whose
+# device link no longer qualifies (not confirmed, too weak, expired or gone):
+# the candidate query would never fuse it today, so it must not stay fused.
+# Only rows still carrying that decision's semantic key are touched, which
+# makes the sweep idempotent.
+_REVOKE_UNQUALIFIED_ASSIGNMENTS_SQL = text(
+    """
+    WITH latest AS (
+        SELECT DISTINCT ON (d.workspace_id, d.semantic_key)
+               d.workspace_id,
+               d.semantic_key,
+               d.decision,
+               d.variant_observation_ids,
+               d.evidence->>'direct_stream_id' AS direct_stream_id,
+               d.evidence->>'relayed_stream_id' AS relayed_stream_id
+          FROM fusion_decisions d
+         WHERE d.owner_id = CAST(:owner_id AS UUID)
+           AND d.matcher_id = :matcher_id
+           AND d.decision IN ('assigned', 'revoked')
+         ORDER BY d.workspace_id, d.semantic_key, d.created_at DESC
+    ),
+    unqualified AS (
+        SELECT latest.*
+          FROM latest
+         WHERE latest.decision = 'assigned'
+           AND NOT EXISTS (
+               SELECT 1
+                 FROM device_identity_links link
+                WHERE link.owner_id = CAST(:owner_id AS UUID)
+                  AND link.direct_stream_id::text = latest.direct_stream_id
+                  AND link.relayed_stream_id::text = latest.relayed_stream_id
+                  AND link.status = 'confirmed'
+                  AND link.confidence IN ('medium', 'strong')
+                  AND (link.valid_to IS NULL OR link.valid_to > now())
+           )
+    )
+    UPDATE canonical_observations AS obs
+       SET semantic_key = NULL,
+           semantic_key_version = NULL,
+           is_primary = TRUE
+      FROM unqualified
+     WHERE obs.owner_id = CAST(:owner_id AS UUID)
+       AND obs.workspace_id = unqualified.workspace_id
+       AND obs.id = ANY(unqualified.variant_observation_ids)
+       AND obs.semantic_key = unqualified.semantic_key
+    RETURNING obs.id AS observation_id,
+              unqualified.workspace_id,
+              unqualified.semantic_key,
+              unqualified.direct_stream_id,
+              unqualified.relayed_stream_id
+    """
+)
+
 _INSERT_DECISION_SQL = text(
     """
     INSERT INTO fusion_decisions (
@@ -298,6 +351,58 @@ class FusionReconciliationRepository:
                 "valid_to": valid_to.isoformat() if valid_to else None,
             },
         )
+        # A link that stops qualifying takes back what it fused.
+        await self.revoke_unqualified_assignments(
+            session, owner_id=owner_id, decided_by="device-identity-link"
+        )
+
+    async def revoke_unqualified_assignments(
+        self,
+        session: AsyncSession,
+        *,
+        owner_id: UUID,
+        decided_by: str = "system",
+    ) -> int:
+        """Unfuse pairs whose device link no longer qualifies; return pairs revoked.
+
+        Each unfused pair gets a ``revoked`` decision. Runs when a link is
+        saved and before each reconciliation pass (which also catches a link
+        whose ``valid_to`` has passed).
+        """
+        result = await session.execute(
+            _REVOKE_UNQUALIFIED_ASSIGNMENTS_SQL,
+            {"owner_id": str(owner_id), "matcher_id": MATCHER_ID},
+        )
+        revoked: dict[tuple[UUID, str], dict[str, object]] = {}
+        for row in result.mappings().all():
+            key = (_as_uuid(row["workspace_id"]), str(row["semantic_key"]))
+            entry = revoked.setdefault(
+                key,
+                {
+                    "ids": [],
+                    "direct_stream_id": row["direct_stream_id"],
+                    "relayed_stream_id": row["relayed_stream_id"],
+                },
+            )
+            entry["ids"].append(_as_uuid(row["observation_id"]))  # type: ignore[union-attr]
+        for (workspace_id, sem_key), entry in revoked.items():
+            await self._record_decision(
+                session,
+                owner_id=owner_id,
+                workspace_id=workspace_id,
+                semantic_key=sem_key,
+                decision="revoked",
+                confidence=0.0,
+                primary_observation_id=None,
+                variant_observation_ids=tuple(entry["ids"]),  # type: ignore[arg-type]
+                decided_by=decided_by,
+                evidence={
+                    "reason": "device link no longer confirmed with medium or strong confidence",
+                    "direct_stream_id": str(entry["direct_stream_id"]),
+                    "relayed_stream_id": str(entry["relayed_stream_id"]),
+                },
+            )
+        return len(revoked)
 
     async def find_session_candidate_pairs(
         self,

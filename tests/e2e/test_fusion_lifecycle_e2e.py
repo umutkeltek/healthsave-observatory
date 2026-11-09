@@ -1,8 +1,9 @@
-"""E2E: a fused workout stays fused, and a rejected pair is decided once.
+"""E2E: a fused workout stays fused, a rejected pair is decided once, and a link
+that stops qualifying unfuses what it fused.
 
 Session fusion marks a direct vendor workout (Whoop) and the same workout
 relayed through Apple Health as one logical event: both rows get a semantic
-key and only the primary counts. Two lifecycle edges, on real PostgreSQL:
+key and only the primary counts. Three lifecycle edges, on real PostgreSQL:
 
 * The phone re-sends its copy of the workout (same HealthKit uuid). The
   canonical upsert used to write the incoming row's empty semantic key and
@@ -10,6 +11,8 @@ key and only the primary counts. Two lifecycle edges, on real PostgreSQL:
   candidate query (both keys NULL) never fused them back.
 * A pair the matcher rejects was offered again on every poll, appending one
   more ``rejected`` row each time and holding a slot in the candidate limit.
+* A device link moved off ``confirmed`` left the pairs it had fused fused;
+  ``revoked`` had no writer.
 """
 
 from __future__ import annotations
@@ -236,3 +239,52 @@ async def test_a_rejected_pair_is_decided_once(db) -> None:
         assert await _reconcile(session, owner) == 1
         await session.commit()
         assert await _decisions(session, owner) == ["rejected", "assigned"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "confidence"),
+    [("rejected", "strong"), ("expired", "strong"), ("confirmed", "weak")],
+)
+async def test_a_link_that_stops_qualifying_unfuses_its_pairs(db, status, confidence) -> None:
+    factory, owner = db
+    whoop, _start, _end = await _fused_pair(factory, owner, activity="Running")
+
+    async with factory() as session:
+        await _link(session, owner, whoop.stream_id, status=status, confidence=confidence)
+        await session.commit()
+        assert await _rows(session, owner) == {
+            "whoop-healthsave": (None, True),
+            "apple_health": (None, True),
+        }
+        assert await _decisions(session, owner) == ["assigned", "revoked"]
+
+        # Idempotent: saving the same link again revokes nothing new.
+        await _link(session, owner, whoop.stream_id, status=status, confidence=confidence)
+        await session.commit()
+        assert await _decisions(session, owner) == ["assigned", "revoked"]
+
+
+@pytest.mark.asyncio
+async def test_a_link_past_its_valid_to_is_unfused_by_the_next_pass(db) -> None:
+    """Expiry is a time, not a write: the pass before each reconciliation catches it."""
+    from sqlalchemy import text
+    from storage.timescale.fusion import default_repository
+
+    factory, owner = db
+    await _fused_pair(factory, owner)
+    async with factory() as session:
+        await session.execute(
+            text(
+                "UPDATE device_identity_links SET valid_to = now() - interval '1 minute' "
+                "WHERE owner_id = :owner"
+            ),
+            {"owner": owner},
+        )
+        assert await default_repository.revoke_unqualified_assignments(session, owner_id=owner) == 1
+        await session.commit()
+        assert await _rows(session, owner) == {
+            "whoop-healthsave": (None, True),
+            "apple_health": (None, True),
+        }
+        assert await _decisions(session, owner) == ["assigned", "revoked"]

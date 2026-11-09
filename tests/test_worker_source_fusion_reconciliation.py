@@ -105,6 +105,10 @@ class _FusionRepo:
         self.find_calls: list[dict] = []
         self.reconcile_calls: list[dict] = []
 
+    async def revoke_unqualified_assignments(self, session, **kwargs):
+        session.events.append("fusion_revoke")
+        return 0
+
     async def find_session_candidate_pairs(self, session, **kwargs):
         session.events.append("fusion_find")
         self.find_calls.append(kwargs)
@@ -217,6 +221,7 @@ async def test_make_source_poll_runs_fusion_after_successful_ingest_commit(monke
         "ingest",
         "cursor_write",
         "commit",
+        "fusion_revoke",
         "fusion_find",
         "fusion_reconcile",
         "commit",

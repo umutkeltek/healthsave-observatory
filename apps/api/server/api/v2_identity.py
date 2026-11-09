@@ -196,6 +196,9 @@ async def reconcile_device_identity_link_sessions(
     limit: Annotated[int, Query(ge=1, le=1000)] = 100,
     session: AsyncSession = Depends(get_session),
 ) -> SessionFusionReconciliationResponse:
+    await fusion_repository.revoke_unqualified_assignments(
+        session, owner_id=DEFAULT_OWNER_ID, decided_by="operator-api"
+    )
     pairs = await fusion_repository.find_session_candidate_pairs(
         session,
         owner_id=DEFAULT_OWNER_ID,
@@ -222,8 +225,7 @@ async def reconcile_device_identity_link_sessions(
         else:
             rejected += 1
 
-    if pairs:
-        await session.commit()
+    await session.commit()
 
     return SessionFusionReconciliationResponse(
         matched_pairs=len(pairs),

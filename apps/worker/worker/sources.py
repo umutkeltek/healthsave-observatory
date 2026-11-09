@@ -202,12 +202,19 @@ async def reconcile_source_poll_sessions(
     """Run reversible session fusion after a source poll.
 
     This consumes manifest semantics and confirmed device links; it does not
-    create identity links or mutate raw observations.
+    create identity links or mutate raw observations. Returns the number of
+    pairs revoked plus the number of candidate pairs decided (0 = nothing to
+    commit).
     """
 
     if not _has_session_capability(manifest):
         return 0
 
+    # A link that stopped qualifying (including one whose valid_to passed)
+    # takes back what it fused before new pairs are considered.
+    revoked = await fusion_repository.revoke_unqualified_assignments(
+        session, owner_id=owner_id, decided_by=f"source-poll:{manifest.id}"
+    )
     pairs = await fusion_repository.find_session_candidate_pairs(
         session,
         owner_id=owner_id,
@@ -225,7 +232,7 @@ async def reconcile_source_poll_sessions(
             decided_by=f"source-poll:{manifest.id}",
             revisions=pair.revisions,
         )
-    return len(pairs)
+    return revoked + len(pairs)
 
 
 def make_source_poll(
