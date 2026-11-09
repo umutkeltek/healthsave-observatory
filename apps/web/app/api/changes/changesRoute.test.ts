@@ -2,7 +2,16 @@
 // that are being refreshed, so it can say "updating" and redraw when done.
 import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 
-import { liveAfterPoll, nextPollDelay, NAV_WATCH_MS, POLL_MS, readCacheSignal, UPDATING_POLL_MS } from "../../lib/liveSignal";
+import {
+  afterPoll,
+  armWatch,
+  liveAfterPoll,
+  nextPollDelay,
+  NAV_WATCH_MS,
+  POLL_MS,
+  readCacheSignal,
+  UPDATING_POLL_MS,
+} from "../../lib/liveSignal";
 import { fakeClocks } from "../../lib/testClock";
 import { clearSwrCache, inRenderScopeForTests, renderedSettledMark, staleRefreshStatus, swrCache } from "../../lib/ttlCache";
 import { GET } from "./route";
@@ -165,5 +174,46 @@ describe("when the live pill polls", () => {
 
   test("while cached values are being refreshed it polls fast", () => {
     expect(nextPollDelay({ ...base, updating: true })).toBe(UPDATING_POLL_MS);
+  });
+});
+
+// The bug (review of the navigation fix): every redraw re-armed the 10 s fast
+// window, and every new change token causes a redraw, so while data arrived
+// faster than every 10 s (a backfill, connectors) a visible tab polled and
+// redrew every 2 s for as long as it lasted, instead of every 30 s.
+describe("the live poll over time", () => {
+  test("only a navigation arms fast polling; redraws caused by new data do not", () => {
+    let memory = armWatch({ etag: '"t0"', wasLive: true, renderedSettled: 0, watchUntil: 0 }, 0);
+    let now = 0;
+    let token = 0;
+    const delays: { at: number; delay: number }[] = [];
+    while (now < 120_000) {
+      // New data on the backend every time it is asked.
+      token += 1;
+      const step = afterPoll(memory, { status: 200, etag: `"t${token}"`, signal: { refreshing: 0, settled: 0 } }, now, false);
+      expect(step.refresh).toBe(true);
+      memory = step.memory;
+      delays.push({ at: now, delay: step.delay ?? -1 });
+      now += step.delay ?? POLL_MS;
+    }
+    const inWindow = delays.filter((d) => d.at < NAV_WATCH_MS);
+    const after = delays.filter((d) => d.at >= NAV_WATCH_MS);
+    expect(inWindow.every((d) => d.delay === UPDATING_POLL_MS)).toBe(true);
+    expect(after.length).toBeGreaterThan(0);
+    expect(after.every((d) => d.delay === POLL_MS)).toBe(true);
+  });
+
+  test("a redraw after a cached value was refreshed does not re-arm it either", () => {
+    let memory = { etag: '"t0"', wasLive: true, renderedSettled: 0, watchUntil: 0 };
+    const step = afterPoll(memory, { status: 304, etag: '"t0"', signal: { refreshing: 0, settled: 1 } }, 50_000, false);
+    expect(step.refresh).toBe(true);
+    expect(step.delay).toBe(POLL_MS);
+    memory = step.memory;
+    expect(memory.renderedSettled).toBe(1);
+  });
+
+  test("a hidden tab schedules nothing, whatever the answer", () => {
+    const memory = armWatch({ etag: null, wasLive: false, renderedSettled: 0, watchUntil: 0 }, 0);
+    expect(afterPoll(memory, { status: 200, etag: '"t1"', signal: null }, 1, true).delay).toBeNull();
   });
 });

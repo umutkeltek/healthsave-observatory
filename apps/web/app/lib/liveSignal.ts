@@ -5,6 +5,8 @@
 //                step can hide one)
 // Client-safe: no server imports.
 
+import { type PollState, pollState } from "./session";
+
 export const REFRESHING_HEADER = "x-healthsave-refreshing";
 export const REFRESHED_HEADER = "x-healthsave-refreshed";
 
@@ -64,4 +66,63 @@ export function nextPollDelay({
 }): number | null {
   if (hidden) return null;
   return updating || now < watchUntil ? UPDATING_POLL_MS : POLL_MS;
+}
+
+export type LiveState = PollState | "updating";
+
+// What the live poll remembers between polls (components/LiveStatus.tsx).
+export type PollMemory = {
+  etag: string | null;
+  wasLive: boolean;
+  // Landed-refresh count the shown page was rendered against.
+  renderedSettled: number;
+  // Fast polling until then (performance.now clock): set by a navigation.
+  watchUntil: number;
+};
+
+/** A navigation: poll often for NAV_WATCH_MS. */
+export function armWatch(memory: PollMemory, now: number): PollMemory {
+  return { ...memory, watchUntil: now + NAV_WATCH_MS };
+}
+
+/**
+ * One poll of /api/changes, answered (status, ETag, cache signal) or not
+ * (status null): the pill's state, whether to redraw the page, and the delay
+ * before the next poll (null: none, the tab is hidden).
+ */
+export function afterPoll(
+  memory: PollMemory,
+  answer: { status: number | null; etag: string | null; signal: CacheSignal | null },
+  now: number,
+  hidden: boolean,
+): { memory: PollMemory; state: LiveState; refresh: boolean; delay: number | null } {
+  const next = { ...memory };
+  let refresh = false;
+  if (answer.status === 200 && answer.etag) {
+    if (next.etag && answer.etag !== next.etag) refresh = true;
+    next.etag = answer.etag;
+  }
+  let state: LiveState = pollState(answer.status, next.wasLive);
+  let updating = false;
+  if (state === "live") {
+    next.wasLive = true;
+    // Cached values on this page being refreshed: say so, look again soon,
+    // and redraw once the refresh has landed.
+    const after = liveAfterPoll(answer.signal, next.renderedSettled);
+    updating = after.updating;
+    if (updating) state = "updating";
+    if (after.redraw && answer.signal) {
+      refresh = true;
+      next.renderedSettled = answer.signal.settled;
+    }
+  }
+  // A redraw this poll causes does not re-arm fast polling: new data arriving
+  // faster than the fast window would otherwise keep a tab polling and
+  // redrawing every 2 s for as long as it lasts. Only a navigation arms it.
+  return {
+    memory: next,
+    state,
+    refresh,
+    delay: nextPollDelay({ hidden, updating, now, watchUntil: next.watchUntil }),
+  };
 }
