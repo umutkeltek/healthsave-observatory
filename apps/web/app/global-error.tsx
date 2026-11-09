@@ -1,7 +1,30 @@
 "use client";
 
+import "./globals.css";
+
+type ThemeStorage = Pick<Storage, "getItem">;
+
+// The theme the person chose (ThemeToggle stores it), light by default: the
+// same rule as the layout's pre-paint script.
+export function savedTheme(storage: ThemeStorage | undefined): "light" | "dark" {
+  try {
+    return storage?.getItem("theme") === "dark" ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
+
+function browserStorage(): ThemeStorage | undefined {
+  try {
+    return typeof localStorage === "undefined" ? undefined : localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
 // Last-resort boundary: catches throws in the root layout/shell itself, where
-// app/error.tsx can't help. Must render its own <html>/<body>.
+// app/error.tsx can't help. Must render its own <html>/<body>. It uses the
+// sign-in page's standalone card, so it keeps the one design language.
 export default function GlobalError({
   error,
   reset,
@@ -10,19 +33,13 @@ export default function GlobalError({
   reset: () => void;
 }) {
   return (
-    <html lang="en" data-theme="dark">
+    <html lang="en" data-theme={savedTheme(browserStorage())} suppressHydrationWarning>
       <body>
-        <main style={{ display: "grid", placeItems: "center", minHeight: "100vh", fontFamily: "system-ui" }}>
-          <div style={{ textAlign: "center", maxWidth: 420 }}>
-            <h1 style={{ fontSize: 18 }}>HealthSave Observatory hit a UI error</h1>
-            <p style={{ opacity: 0.7, fontSize: 14 }}>
-              Your data is untouched.{error.digest ? ` Ref ${error.digest}.` : ""}
-            </p>
-            <button
-              type="button"
-              onClick={() => reset()}
-              style={{ padding: "8px 16px", borderRadius: 8, cursor: "pointer" }}
-            >
+        <main className="signin">
+          <div className="card">
+            <h2>HealthSave Observatory hit a UI error</h2>
+            <p className="empty">Your data is untouched.{error.digest ? ` Ref ${error.digest}.` : ""}</p>
+            <button type="button" className="btn" onClick={() => reset()}>
               Reload
             </button>
           </div>
