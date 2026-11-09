@@ -1,27 +1,27 @@
 // A refused pin explains itself (audit web #19). The star sits in a grid cell
-// of Library rows, so the button and its message must be one element, or the
-// message takes a column and the row's layout breaks.
+// of Library rows, so the star and its message must be ONE element, or the
+// message takes the next column and the row's layout breaks.
 import { describe, expect, test } from "bun:test";
-import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
-import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { I18nProvider } from "./I18nProvider";
-import { PinButton } from "./PinButton";
+import { PinControl } from "./PinButton";
 
-const noop = () => {};
-const router = { refresh: noop, push: noop, replace: noop, back: noop, forward: noop, prefetch: noop } as unknown as AppRouterInstance;
+const REFUSED = "You can pin up to 16 signals. Unpin one first.";
 
-describe("pin button", () => {
-  test("renders as one element, whatever it has to say", () => {
+describe("pin control", () => {
+  test("with a message, star and message are one element", () => {
     const html = renderToStaticMarkup(
-      <AppRouterContext.Provider value={router}>
-        <I18nProvider locale="en" availableLocales={["en"]}>
-          <PinButton metricId="vital.hrv_sdnn" pinned={false} />
-        </I18nProvider>
-      </AppRouterContext.Provider>,
+      <PinControl pinned={false} pending={false} error={REFUSED} label="Pin to Today" onPick={() => {}} />,
     );
-    expect(html.startsWith('<span class="pin-control">')).toBe(true);
-    expect(html.endsWith("</span>")).toBe(true);
+    expect(html).toMatch(
+      new RegExp(`^<span class="pin-control"><button[^>]*>[\\s\\S]*</button><span class="pin-error"[^>]*>${REFUSED}</span></span>$`),
+    );
+  });
+
+  test("without a message, only the star inside the same element", () => {
+    const html = renderToStaticMarkup(
+      <PinControl pinned pending={false} error={null} label="Unpin from Today" onPick={() => {}} />,
+    );
+    expect(html).toMatch(/^<span class="pin-control"><button[^>]*aria-label="Unpin from Today"[^>]*>[\s\S]*<\/button><\/span>$/);
   });
 });

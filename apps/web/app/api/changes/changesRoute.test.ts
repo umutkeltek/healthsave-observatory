@@ -142,12 +142,30 @@ describe("the page's render mark", () => {
     });
   });
 
+  // Fails if the mark is read live instead of once per render: a refresh
+  // landing mid-render moves the live count but not this render's mark.
   test("one render has one mark, taken before its first read", async () => {
+    await swrCache("a", 30_000, async () => 1);
+    clocks.at(60_000);
     await inRenderScopeForTests(async () => {
       const first = renderedSettledMark();
-      await swrCache("a", 30_000, async () => 1);
+      expect(await swrCache("a", 30_000, async () => 2)).toBe(1); // stale: refresh starts
+      await new Promise((resolve) => setTimeout(resolve, 0)); // and lands
+      expect(staleRefreshStatus().settled).toBe(first + 1);
       expect(renderedSettledMark()).toBe(first);
     });
+  });
+
+  test("a new render takes a new mark", async () => {
+    await swrCache("a", 30_000, async () => 1);
+    clocks.at(60_000);
+    const first = await inRenderScopeForTests(async () => {
+      const mark = renderedSettledMark();
+      await swrCache("a", 30_000, async () => 2);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return mark;
+    });
+    expect(await inRenderScopeForTests(async () => renderedSettledMark())).toBe(first + 1);
   });
 });
 
