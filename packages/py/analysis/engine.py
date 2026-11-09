@@ -177,10 +177,12 @@ class AnalysisEngine:
         client = self.llm_client if effective is self.config.llm else HealthLLMClient(effective)
         return await client.generate_insight(prompt, insight_type=insight_type)
 
-    async def run_daily_briefing(self) -> int | None:
-        return await self._run_job_with_metrics("daily_briefing", self._run_daily_briefing_impl)
+    async def run_daily_briefing(self, *, skip_if_busy: bool = False) -> int | None:
+        return await self._run_job_with_metrics(
+            "daily_briefing", lambda: self._run_daily_briefing_impl(skip_if_busy=skip_if_busy)
+        )
 
-    async def _run_daily_briefing_impl(self) -> int | None:
+    async def _run_daily_briefing_impl(self, *, skip_if_busy: bool = False) -> int | None:
         """Produce yesterday's narrative morning briefing.
 
         Returns the newly-created ``analysis_runs.id`` on a completed run,
@@ -192,7 +194,7 @@ class AnalysisEngine:
         on failure after marking the run ``failed`` with an error message.
         """
         async with self.session_factory() as session:
-            if not await self._lock_run_type(session, "daily_briefing"):
+            if not await self._lock_run_type(session, "daily_briefing", skip_if_busy=skip_if_busy):
                 return None
             async with self._run_context(session, "daily_briefing") as run_id:
                 summary = await self.aggregator.summarize_period(period="daily", days=1)
@@ -265,10 +267,12 @@ class AnalysisEngine:
                 await session.commit()
                 return run_id
 
-    async def run_anomaly_check(self) -> int | None:
-        return await self._run_job_with_metrics("anomaly_check", self._run_anomaly_check_impl)
+    async def run_anomaly_check(self, *, skip_if_busy: bool = True) -> int | None:
+        return await self._run_job_with_metrics(
+            "anomaly_check", lambda: self._run_anomaly_check_impl(skip_if_busy=skip_if_busy)
+        )
 
-    async def _run_anomaly_check_impl(self) -> int | None:
+    async def _run_anomaly_check_impl(self, *, skip_if_busy: bool = True) -> int | None:
         """Lightweight detector run with no LLM narration.
 
         Persists an ``analysis_runs`` row with ``run_type='anomaly_check'``
@@ -281,7 +285,7 @@ class AnalysisEngine:
         async with self.session_factory() as session:
             # Lock first: once it is ours, any earlier check has committed,
             # so the cooldown read and the existing-anomaly filter see it.
-            if not await self._lock_run_type(session, "anomaly_check"):
+            if not await self._lock_run_type(session, "anomaly_check", skip_if_busy=skip_if_busy):
                 return None
             cooldown_minutes = self.config.analysis.anomaly_detection.cooldown_minutes
             if await _sql().within_cooldown(session, "anomaly_check", cooldown_minutes):
@@ -312,10 +316,12 @@ class AnalysisEngine:
                 await session.commit()
                 return run_id
 
-    async def run_weekly_summary(self) -> int | None:
-        return await self._run_job_with_metrics("weekly_summary", self._run_weekly_summary_impl)
+    async def run_weekly_summary(self, *, skip_if_busy: bool = False) -> int | None:
+        return await self._run_job_with_metrics(
+            "weekly_summary", lambda: self._run_weekly_summary_impl(skip_if_busy=skip_if_busy)
+        )
 
-    async def _run_weekly_summary_impl(self) -> int | None:
+    async def _run_weekly_summary_impl(self, *, skip_if_busy: bool = False) -> int | None:
         """Produce the weekly rollup narrative.
 
         Mirrors the daily briefing over a config-driven multi-day window:
@@ -327,7 +333,7 @@ class AnalysisEngine:
         """
         lookback_days = self.config.analysis.weekly_summary.lookback_days
         async with self.session_factory() as session:
-            if not await self._lock_run_type(session, "weekly_summary"):
+            if not await self._lock_run_type(session, "weekly_summary", skip_if_busy=skip_if_busy):
                 return None
             async with self._run_context(session, "weekly_summary") as run_id:
                 summary = await self.aggregator.summarize_period(
@@ -396,17 +402,19 @@ class AnalysisEngine:
                 await session.commit()
                 return run_id
 
-    async def run_trend_analysis(self) -> list[Finding]:
-        return await self._run_job_with_metrics("trend_analysis", self._run_trend_analysis_impl)
+    async def run_trend_analysis(self, *, skip_if_busy: bool = False) -> list[Finding]:
+        return await self._run_job_with_metrics(
+            "trend_analysis", lambda: self._run_trend_analysis_impl(skip_if_busy=skip_if_busy)
+        )
 
-    async def _run_trend_analysis_impl(self) -> list[Finding]:
+    async def _run_trend_analysis_impl(self, *, skip_if_busy: bool = False) -> list[Finding]:
         """Compute trend findings across enabled metrics.
 
         ``[]`` when no metric has a trend, or, with no run row, while another
         trend analysis is in progress (:meth:`_lock_run_type`).
         """
         async with self.session_factory() as session:
-            if not await self._lock_run_type(session, "trend_analysis"):
+            if not await self._lock_run_type(session, "trend_analysis", skip_if_busy=skip_if_busy):
                 return []
             async with self._run_context(session, "trend_analysis") as run_id:
                 trends = []
@@ -436,12 +444,13 @@ class AnalysisEngine:
                 await session.commit()
                 return findings
 
-    async def run_correlation_analysis(self) -> list[Finding]:
+    async def run_correlation_analysis(self, *, skip_if_busy: bool = False) -> list[Finding]:
         return await self._run_job_with_metrics(
-            "correlation_analysis", self._run_correlation_analysis_impl
+            "correlation_analysis",
+            lambda: self._run_correlation_analysis_impl(skip_if_busy=skip_if_busy),
         )
 
-    async def _run_correlation_analysis_impl(self) -> list[Finding]:
+    async def _run_correlation_analysis_impl(self, *, skip_if_busy: bool = False) -> list[Finding]:
         """Persist Spearman correlations for the configured metric pairs.
 
         Brain-1-only (no LLM): each significant, non-trivial correlation
@@ -452,7 +461,9 @@ class AnalysisEngine:
         progress (:meth:`_lock_run_type`).
         """
         async with self.session_factory() as session:
-            if not await self._lock_run_type(session, "correlation_analysis"):
+            if not await self._lock_run_type(
+                session, "correlation_analysis", skip_if_busy=skip_if_busy
+            ):
                 return []
             async with self._run_context(session, "correlation_analysis") as run_id:
                 period_days = self.config.analysis.correlation_analysis.period_days
@@ -478,10 +489,12 @@ class AnalysisEngine:
                 await session.commit()
                 return findings
 
-    async def run_recovery_check(self) -> int | None:
-        return await self._run_job_with_metrics("recovery_check", self._run_recovery_check_impl)
+    async def run_recovery_check(self, *, skip_if_busy: bool = False) -> int | None:
+        return await self._run_job_with_metrics(
+            "recovery_check", lambda: self._run_recovery_check_impl(skip_if_busy=skip_if_busy)
+        )
 
-    async def _run_recovery_check_impl(self) -> int | None:
+    async def _run_recovery_check_impl(self, *, skip_if_busy: bool = False) -> int | None:
         """Compute today's Recovery Score and persist it as a single finding.
 
         Brain-1 only: summarizes the recovery-input metrics over the daily window
@@ -495,7 +508,7 @@ class AnalysisEngine:
         (:meth:`_lock_run_type`).
         """
         async with self.session_factory() as session:
-            if not await self._lock_run_type(session, "recovery_check"):
+            if not await self._lock_run_type(session, "recovery_check", skip_if_busy=skip_if_busy):
                 return None
             async with self._run_context(session, "recovery_check") as run_id:
                 summary = await self.aggregator.summarize_period(
@@ -594,7 +607,7 @@ class AnalysisEngine:
         AI_BRIEFING_RUNS.labels(job=job, result="success").inc()
         return result
 
-    async def _lock_run_type(self, session, run_type: str) -> bool:
+    async def _lock_run_type(self, session, run_type: str, *, skip_if_busy: bool) -> bool:
         """Let one ``run_type`` run at a time, across processes.
 
         The worker's cron, the API's trigger routes and the anomaly check
@@ -607,11 +620,17 @@ class AnalysisEngine:
         lock lives exactly as long as the transaction that writes the run
         (commit, rollback or session close all release it).
 
-        False means another run of this type is in progress: the caller
-        returns its ordinary "skipped" value (``None`` or ``[]``) without
-        writing a run row. It does not wait, so a trigger request or an
-        ingest background task never queues behind a long LLM run.
+        ``skip_if_busy`` (scheduled jobs, the per-batch anomaly check): when
+        another run of this type holds the lock, return False at once; the
+        caller returns its ordinary "skipped" value (``None`` or ``[]``)
+        without a run row, so a background task never queues behind a long
+        LLM run. Otherwise (a trigger route, which a person is waiting on):
+        wait for that run to commit, then run, so the route answers as it
+        did before the lock existed. Always True in that case.
         """
+        if not skip_if_busy:
+            await _sql().wait_for_run_type_lock(session, run_type)
+            return True
         if await _sql().try_lock_run_type(session, run_type):
             return True
         log.info("%s skipped: another %s run is in progress", run_type, run_type)

@@ -104,6 +104,25 @@ async def try_lock_run_type(session, run_type: str) -> bool:
     return bool(row is not None and row.locked)
 
 
+async def wait_for_run_type_lock(session, run_type: str) -> None:
+    """Take the same lock as :func:`try_lock_run_type`, waiting while it is held.
+
+    For a run a caller asked for and waits on (a trigger route): it runs after
+    the run in progress commits, so it sees that run's rows, instead of being
+    turned away.
+    """
+    await session.execute(
+        text(
+            """
+            SELECT pg_advisory_xact_lock(
+                CAST(:namespace AS integer), CAST(:key AS integer)
+            )
+            """
+        ),
+        {"namespace": _RUN_LOCK_NAMESPACE, "key": _run_type_lock_key(run_type)},
+    )
+
+
 async def begin_run(session, run_type: str) -> int | None:
     """Insert ``analysis_runs`` row with ``status='running'`` and return its id."""
     result = await session.execute(

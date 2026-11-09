@@ -89,6 +89,8 @@ class _FakeSession:
         self.calls.append((sql, params or {}))
         if "pg_try_advisory_xact_lock" in sql:
             return _Result(_Row(locked=self.lock_available))
+        if "pg_advisory_xact_lock" in sql:
+            return _Result()  # the blocking lock: returns once the holder commits
         if sql.startswith("SELECT") and self._select_queue:
             rows = self._select_queue.pop(0)
             return _Result(row=rows[0] if rows else None, rows=rows)
@@ -583,13 +585,13 @@ def _lock_calls(session) -> list[dict]:
 async def test_run_skips_without_a_run_row_while_another_run_of_its_type_holds_the_lock(
     method_name, skipped
 ):
-    """M16: the worker cron, the trigger routes and the per-batch ingest hook
-    can start the same run type at once. The second one does no work and
-    returns the run's ordinary "skipped" value."""
+    """M16: a scheduled run (or the per-batch anomaly check) that finds another
+    run of its type in progress does no work and returns the run's ordinary
+    "skipped" value. Trigger routes wait instead (see the test below)."""
     session = _FakeSession(run_queue=[7000, 7001], lock_available=False)
     engine = _engine_with_mocked_collaborators(session)
 
-    result = await getattr(engine, method_name)()
+    result = await getattr(engine, method_name)(skip_if_busy=True)
 
     assert result == skipped
     assert len(_lock_calls(session)) == 1
@@ -603,6 +605,33 @@ async def test_run_skips_without_a_run_row_while_another_run_of_its_type_holds_t
     engine.llm_client.generate_insight.assert_not_awaited()
 
 
+# The routes that trigger a run (/api/insights/trigger, /api/v2/insights/trigger)
+# call these with no arguments. From their caller's view a run must behave as
+# it did before the lock: never answer "skipped" because another run of the
+# type is in progress. They wait for it, then run.
+_TRIGGERABLE = [
+    ("run_daily_briefing", "daily_briefing"),
+    ("run_weekly_summary", "weekly_summary"),
+    ("run_trend_analysis", "trend_analysis"),
+    ("run_correlation_analysis", "correlation_analysis"),
+    ("run_recovery_check", "recovery_check"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("method_name", "run_type"), _TRIGGERABLE)
+async def test_a_triggered_run_waits_for_a_run_in_progress_then_runs(method_name, run_type):
+    session = _FakeSession(run_queue=[7300, 7301], lock_available=False)
+    engine = _engine_with_mocked_collaborators(session)
+
+    await getattr(engine, method_name)()
+
+    statements = [sql for sql, _params in session.calls]
+    assert "pg_advisory_xact_lock" in statements[0], "the blocking lock, not the try-lock"
+    assert not any("pg_try_advisory_xact_lock" in sql for sql in statements)
+    assert [p["run_type"] for p in session.all_insert_params_for("analysis_runs")] == [run_type]
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("method_name", "_skipped"), _RUN_METHODS)
 async def test_run_takes_its_lock_in_the_transaction_that_writes_its_run_row(method_name, _skipped):
@@ -612,7 +641,7 @@ async def test_run_takes_its_lock_in_the_transaction_that_writes_its_run_row(met
     session = _FakeSession(run_queue=[7100, 7101])
     engine = _engine_with_mocked_collaborators(session)
 
-    await getattr(engine, method_name)()
+    await getattr(engine, method_name)(skip_if_busy=True)
 
     statements = [sql for sql, _params in session.calls]
     assert "pg_try_advisory_xact_lock" in statements[0]
@@ -627,7 +656,7 @@ async def test_each_run_type_has_its_own_lock():
     keys = []
     for method_name, _skipped in _RUN_METHODS:
         session = _FakeSession(run_queue=[], lock_available=False)
-        await getattr(_engine_with_mocked_collaborators(session), method_name)()
+        await getattr(_engine_with_mocked_collaborators(session), method_name)(skip_if_busy=True)
         (params,) = _lock_calls(session)
         keys.append(tuple(sorted(params.items())))
 

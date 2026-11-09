@@ -247,3 +247,51 @@ async def test_a_check_that_hit_a_database_error_is_recorded_as_failed() -> None
     finally:
         await _delete_runs_since(db_engine, before)
         await db_engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_a_run_that_does_not_skip_waits_for_the_run_in_progress_then_runs() -> None:
+    """The trigger routes' mode (skip_if_busy=False): wait, then run.
+
+    The waiting run starts only after the first commits, so it sees that
+    run's finding and does not write it again.
+    """
+    db_engine = _db_engine()
+    spike_at = _unique_spike()
+    first = _analysis_engine(db_engine, spike_at)
+    waiting = _analysis_engine(db_engine, spike_at)
+
+    first_filtered = asyncio.Event()
+    release_first = asyncio.Event()
+    unheld_filter = first._filter_existing_anomalies
+
+    async def held_filter(session, anomalies):
+        kept = await unheld_filter(session, anomalies)
+        first_filtered.set()
+        await release_first.wait()
+        return kept
+
+    first._filter_existing_anomalies = held_filter
+
+    before = await _max_run_id(db_engine)
+    try:
+        first_run = asyncio.create_task(first.run_anomaly_check())
+        await asyncio.wait_for(first_filtered.wait(), timeout=10)
+
+        waiting_run = asyncio.create_task(waiting.run_anomaly_check(skip_if_busy=False))
+        await asyncio.sleep(0.5)
+        assert not waiting_run.done(), "it waits while the first run holds the lock"
+
+        release_first.set()
+        first_result = await asyncio.wait_for(first_run, timeout=10)
+        waiting_result = await asyncio.wait_for(waiting_run, timeout=10)
+
+        assert isinstance(first_result, int)
+        assert waiting_result is None  # it ran and found nothing new
+        assert await _spike_findings(db_engine, spike_at) == 1
+        runs = await _runs_since(db_engine, before)
+        assert [status for _id, status in runs] == ["completed", "skipped"]
+    finally:
+        release_first.set()
+        await _delete_runs_since(db_engine, before)
+        await db_engine.dispose()
