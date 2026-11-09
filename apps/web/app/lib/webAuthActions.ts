@@ -6,7 +6,9 @@
 
 import { cookies, headers } from "next/headers";
 
+import { getDictionary, signInBlockedMessage } from "./i18n";
 import {
+  clientAddress,
   createSessionToken,
   isSameOriginPost,
   SESSION_COOKIE,
@@ -27,10 +29,18 @@ export type WebSignInResult = { ok: boolean; error?: string };
 async function checkCurrentPassword(current: string): Promise<string | null> {
   const auth = await resolveWebAuth();
   if (auth.mode !== "password") return null;
-  if (passwordAttempts.isBlocked()) return "Too many wrong passwords. Wait a minute and try again.";
-  if (await verifyWebPassword(current)) return null;
-  passwordAttempts.recordFailure();
-  return "The current password is not right.";
+  const client = clientAddress(await headers());
+  const block = passwordAttempts.blocked(client);
+  if (block) {
+    // The Settings sign-in form (WebSignInSettings) is not in the catalog yet and
+    // reads in English; its messages stay in the form's language.
+    return signInBlockedMessage(getDictionary("en"), block.scope, block.retryAfterSeconds);
+  }
+  // Counted before the check and taken back on a match (see recordFailure).
+  const attempt = passwordAttempts.recordFailure(client);
+  if (!(await verifyWebPassword(current))) return "The current password is not right.";
+  passwordAttempts.forgive(client, attempt);
+  return null;
 }
 
 async function refreshSessionCookie() {

@@ -151,34 +151,141 @@ export function requestIsHttps(url: URL, forwardedProto: string | null): boolean
   return url.protocol === "https:";
 }
 
-// Wrong-password limiter for the whole process: after FAILED_LOGIN_LIMIT misses
-// inside FAILED_LOGIN_WINDOW_MS, sign-in sends the browser back to
-// /login?error=locked (Retry-After: 60) without checking until the window
-// moves on. Generated passwords are far out of reach anyway; this is for
-// passwords a person picks.
+// Wrong-password limiter. Each client address gets its own bucket: after
+// FAILED_LOGIN_LIMIT misses inside FAILED_LOGIN_WINDOW_MS that address is sent
+// back to /login?error=locked without a check until the window moves on, so
+// guesses from one place cannot lock the owner out from another. A
+// process-wide ceiling (FAILED_LOGIN_GLOBAL_LIMIT) still stops a flood that
+// spreads guesses over many made-up addresses. Requests with no address share
+// one bucket, which is the old single-bucket behaviour. Generated passwords are
+// far out of reach anyway; this is for passwords a person picks.
 export const FAILED_LOGIN_LIMIT = 10;
+export const FAILED_LOGIN_GLOBAL_LIMIT = 30;
 export const FAILED_LOGIN_WINDOW_MS = 60_000;
+export const MAX_TRACKED_LOGIN_CLIENTS = 1024;
+
+export type LoginBlock = {
+  // "client": this address made too many guesses. "everyone": too many guesses
+  // overall, so sign-in is paused for every address.
+  scope: "client" | "everyone";
+  retryAfterSeconds: number;
+};
+
+// The address the app already trusts for the request: the last
+// X-Forwarded-For entry is the hop nearest this app. Next fills it from the
+// socket when nothing set it, and a reverse proxy in front (the bundled nginx)
+// appends the address it saw, so behind a proxy a client cannot pick it by
+// sending its own header. Reached directly, a client can send any value; the
+// process-wide ceiling is what holds then. X-Real-IP otherwise; null when
+// neither is there (the shared bucket).
+export function clientAddress(headers: Headers): string | null {
+  const forwarded = (headers.get("x-forwarded-for") ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (forwarded.length > 0) return forwarded[forwarded.length - 1].slice(0, 100);
+  const real = (headers.get("x-real-ip") ?? "").trim();
+  return real ? real.slice(0, 100) : null;
+}
+
+// Durations use the monotonic clock: a wall clock stepping back (VM resume, NTP)
+// must not keep an address blocked for as long as the step.
+const monotonic = () => performance.now();
+const NO_ADDRESS = "";
 
 export class FailedLoginLimiter {
-  private failures: number[] = [];
+  private readonly limit: number;
+  private readonly windowMs: number;
+  private readonly globalLimit: number;
+  private readonly maxClients: number;
+  private readonly clients = new Map<string, number[]>();
+  private all: number[] = [];
 
-  constructor(
-    private readonly limit = FAILED_LOGIN_LIMIT,
-    private readonly windowMs = FAILED_LOGIN_WINDOW_MS,
-  ) {}
+  constructor({
+    limit = FAILED_LOGIN_LIMIT,
+    windowMs = FAILED_LOGIN_WINDOW_MS,
+    globalLimit = FAILED_LOGIN_GLOBAL_LIMIT,
+    maxClients = MAX_TRACKED_LOGIN_CLIENTS,
+  }: { limit?: number; windowMs?: number; globalLimit?: number; maxClients?: number } = {}) {
+    this.limit = limit;
+    this.windowMs = windowMs;
+    this.globalLimit = globalLimit;
+    this.maxClients = maxClients;
+  }
 
-  private prune(now: number) {
+  private recent(failures: number[], now: number): number[] {
     const cutoff = now - this.windowMs;
-    while (this.failures.length > 0 && this.failures[0] <= cutoff) this.failures.shift();
+    let first = 0;
+    while (first < failures.length && failures[first] <= cutoff) first++;
+    return first === 0 ? failures : failures.slice(first);
   }
 
-  isBlocked(now: number = Date.now()): boolean {
-    this.prune(now);
-    return this.failures.length >= this.limit;
+  // Seconds until fewer than `limit` of these failures are inside the window.
+  private wait(failures: number[], limit: number, now: number): number {
+    const oldestCounted = failures[failures.length - limit];
+    return Math.max(1, Math.ceil((oldestCounted + this.windowMs - now) / 1000));
   }
 
-  recordFailure(now: number = Date.now()) {
-    this.prune(now);
-    this.failures.push(now);
+  /** Why a check for this address must not run now, or null when it may. */
+  blocked(client: string | null, now: number = monotonic()): LoginBlock | null {
+    this.all = this.recent(this.all, now);
+    const key = client ?? NO_ADDRESS;
+    const mine = this.recent(this.clients.get(key) ?? [], now);
+    if (mine.length === 0) this.clients.delete(key);
+    else this.clients.set(key, mine);
+
+    let block: LoginBlock | null = null;
+    if (mine.length >= this.limit) {
+      block = { scope: "client", retryAfterSeconds: this.wait(mine, this.limit, now) };
+    }
+    if (this.all.length >= this.globalLimit) {
+      const everyone = this.wait(this.all, this.globalLimit, now);
+      if (!block || everyone > block.retryAfterSeconds) block = { scope: "everyone", retryAfterSeconds: everyone };
+    }
+    return block;
+  }
+
+  /**
+   * Counts one failure for this address and returns its stamp. Callers count an
+   * attempt BEFORE checking the password and forgive it on a match, so guesses
+   * sent all at once cannot each be checked before the first one is counted.
+   */
+  recordFailure(client: string | null, now: number = monotonic()): number {
+    const key = client ?? NO_ADDRESS;
+    const mine = this.recent(this.clients.get(key) ?? [], now);
+    // Most recently failed last (a Map keeps insertion order), so the bound
+    // below forgets the address that has been quiet longest.
+    this.clients.delete(key);
+    this.clients.set(key, [...mine, now]);
+    this.all = [...this.recent(this.all, now), now];
+    for (const [stale] of this.clients) {
+      if (this.clients.size <= this.maxClients) break;
+      this.clients.delete(stale);
+    }
+    return now;
+  }
+
+  /** Takes back one counted attempt (the password matched). */
+  forgive(client: string | null, stamp: number) {
+    const key = client ?? NO_ADDRESS;
+    const mine = this.clients.get(key);
+    const at = mine?.indexOf(stamp) ?? -1;
+    if (mine && at >= 0) {
+      const rest = [...mine.slice(0, at), ...mine.slice(at + 1)];
+      if (rest.length === 0) this.clients.delete(key);
+      else this.clients.set(key, rest);
+    }
+    const inAll = this.all.indexOf(stamp);
+    if (inAll >= 0) this.all = [...this.all.slice(0, inAll), ...this.all.slice(inAll + 1)];
+  }
+
+  trackedClients(): number {
+    return this.clients.size;
+  }
+
+  // Test seam: forget every failure.
+  reset() {
+    this.clients.clear();
+    this.all = [];
   }
 }

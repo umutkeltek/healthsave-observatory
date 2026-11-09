@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import {
+  clientAddress,
   createSessionToken,
   isSameOriginPost,
   relativeRedirect,
@@ -13,8 +14,8 @@ import { passwordAttempts, resolveWebAuth, verifyWebPassword } from "../../lib/w
 
 export const dynamic = "force-dynamic";
 
-// A fixed pause after a wrong password, plus the process-wide limiter shared with
-// the Settings password forms.
+// A fixed pause after a wrong password, plus the limiter shared with the Settings
+// password forms: per client address, under a process-wide ceiling.
 const FAILED_ATTEMPT_DELAY_MS = 750;
 
 // The sign-in form on /login posts here. 303 so the browser follows with a GET.
@@ -33,22 +34,28 @@ export async function POST(request: Request) {
 
   // The form is a plain browser POST: every outcome goes back to a page the
   // person can read, never a JSON body.
-  const backToSignIn = (error: "1" | "locked") => {
-    const retry = new URLSearchParams({ error });
+  const backToSignIn = (params: Record<string, string>) => {
+    const retry = new URLSearchParams(params);
     if (next !== "/") retry.set("next", next);
     return `/login?${retry}`;
   };
 
-  if (passwordAttempts.isBlocked()) {
-    const init = relativeRedirect(backToSignIn("locked"));
-    return new NextResponse(null, { ...init, headers: { ...init.headers, "retry-after": "60" } });
+  const client = clientAddress(request.headers);
+  const block = passwordAttempts.blocked(client);
+  if (block) {
+    // "locked": this address guessed too often; "paused": everyone waits.
+    const wait = String(block.retryAfterSeconds);
+    const init = relativeRedirect(backToSignIn({ error: block.scope === "everyone" ? "paused" : "locked", wait }));
+    return new NextResponse(null, { ...init, headers: { ...init.headers, "retry-after": wait } });
   }
 
+  // Counted before the check and taken back on a match (see recordFailure).
+  const attempt = passwordAttempts.recordFailure(client);
   if (!(await verifyWebPassword(candidate))) {
-    passwordAttempts.recordFailure();
     await new Promise((resolve) => setTimeout(resolve, FAILED_ATTEMPT_DELAY_MS));
-    return new NextResponse(null, relativeRedirect(backToSignIn("1")));
+    return new NextResponse(null, relativeRedirect(backToSignIn({ error: "1" })));
   }
+  passwordAttempts.forgive(client, attempt);
 
   const response = new NextResponse(null, relativeRedirect(next));
   response.cookies.set(

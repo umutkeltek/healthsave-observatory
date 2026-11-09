@@ -61,6 +61,19 @@ const englishDictionary = {
     signedOut:
       "Your session has ended. Open /login in a new tab to sign in again, then try again here. What you entered is kept.",
   },
+  signIn: {
+    pageTitle: "Sign in",
+    prompt: "Enter the web password for this Observatory.",
+    wrong: "That password is not right.",
+    locked: "Too many wrong passwords. Try again in {wait}.",
+    paused: "Too many wrong passwords were tried on this Observatory, so sign-in is paused for everyone. Try again in {wait}.",
+    waitSecond: "1 second",
+    waitSeconds: "{n} seconds",
+    waitUnknown: "a minute",
+    password: "Password",
+    hint: "It is WEB_PASSWORD in the .env file on the machine that runs the Observatory.",
+    submit: "Sign in",
+  },
   live: {
     live: {
       pill: "live",
@@ -199,6 +212,19 @@ export const dictionaries = {
       signedOut:
         "Tu sesión ha terminado. Abre /login en una pestaña nueva para volver a iniciar sesión y luego inténtalo de nuevo aquí. Lo que escribiste se conserva.",
     },
+    signIn: {
+      pageTitle: "Iniciar sesión",
+      prompt: "Introduce la contraseña web de este Observatory.",
+      wrong: "Esa contraseña no es correcta.",
+      locked: "Demasiadas contraseñas incorrectas. Vuelve a intentarlo dentro de {wait}.",
+      paused: "Se probaron demasiadas contraseñas incorrectas en este Observatory, así que el inicio de sesión está en pausa para todos. Vuelve a intentarlo dentro de {wait}.",
+      waitSecond: "1 segundo",
+      waitSeconds: "{n} segundos",
+      waitUnknown: "un minuto",
+      password: "Contraseña",
+      hint: "Es WEB_PASSWORD en el archivo .env del equipo que ejecuta el Observatory.",
+      submit: "Iniciar sesión",
+    },
     live: {
       live: {
         pill: "en vivo",
@@ -323,6 +349,19 @@ export const dictionaries = {
     session: {
       signedOut:
         "Votre session a expiré. Ouvrez /login dans un nouvel onglet pour vous reconnecter, puis réessayez ici. Ce que vous avez saisi est conservé.",
+    },
+    signIn: {
+      pageTitle: "Connexion",
+      prompt: "Saisissez le mot de passe web de cet Observatory.",
+      wrong: "Ce mot de passe est incorrect.",
+      locked: "Trop de mots de passe incorrects. Réessayez dans {wait}.",
+      paused: "Trop de mots de passe incorrects ont été essayés sur cet Observatory, donc la connexion est suspendue pour tout le monde. Réessayez dans {wait}.",
+      waitSecond: "1 seconde",
+      waitSeconds: "{n} secondes",
+      waitUnknown: "une minute",
+      password: "Mot de passe",
+      hint: "C'est WEB_PASSWORD dans le fichier .env de la machine qui exécute l'Observatory.",
+      submit: "Se connecter",
     },
     live: {
       live: {
@@ -449,6 +488,19 @@ export const dictionaries = {
       signedOut:
         "Deine Sitzung ist abgelaufen. Öffne /login in einem neuen Tab, melde dich erneut an und versuche es dann hier noch einmal. Deine Eingaben bleiben erhalten.",
     },
+    signIn: {
+      pageTitle: "Anmelden",
+      prompt: "Gib das Web-Passwort für dieses Observatory ein.",
+      wrong: "Dieses Passwort ist nicht richtig.",
+      locked: "Zu viele falsche Passwörter. Versuche es in {wait} erneut.",
+      paused: "Auf diesem Observatory wurden zu viele falsche Passwörter versucht, deshalb ist die Anmeldung für alle pausiert. Versuche es in {wait} erneut.",
+      waitSecond: "1 Sekunde",
+      waitSeconds: "{n} Sekunden",
+      waitUnknown: "einer Minute",
+      password: "Passwort",
+      hint: "Es ist WEB_PASSWORD in der .env-Datei auf dem Rechner, auf dem das Observatory läuft.",
+      submit: "Anmelden",
+    },
     live: {
       live: {
         pill: "aktiv",
@@ -573,6 +625,19 @@ export const dictionaries = {
     session: {
       signedOut:
         "セッションが終了しました。新しいタブで /login を開いて再度サインインしてから、ここでもう一度お試しください。入力した内容は保持されています。",
+    },
+    signIn: {
+      pageTitle: "サインイン",
+      prompt: "この Observatory の Web パスワードを入力してください。",
+      wrong: "パスワードが正しくありません。",
+      locked: "パスワードの誤りが多すぎます。{wait}後にもう一度お試しください。",
+      paused: "この Observatory で誤ったパスワードが多数試されたため、すべての人のサインインを一時停止しています。{wait}後にもう一度お試しください。",
+      waitSecond: "1 秒",
+      waitSeconds: "{n} 秒",
+      waitUnknown: "1 分",
+      password: "パスワード",
+      hint: "Observatory を実行しているマシンの .env ファイルにある WEB_PASSWORD です。",
+      submit: "サインイン",
     },
     live: {
       live: {
@@ -699,6 +764,19 @@ export const dictionaries = {
       signedOut:
         "你的工作階段已結束。請在新分頁開啟 /login 重新登入，然後回到這裡再試一次。你輸入的內容會保留。",
     },
+    signIn: {
+      pageTitle: "登入",
+      prompt: "輸入此 Observatory 的網頁密碼。",
+      wrong: "密碼不正確。",
+      locked: "密碼錯誤次數過多。請在 {wait}後再試一次。",
+      paused: "此 Observatory 上嘗試了過多錯誤密碼，因此已暫停所有人的登入。請在 {wait}後再試一次。",
+      waitSecond: "1 秒",
+      waitSeconds: "{n} 秒",
+      waitUnknown: "1 分鐘",
+      password: "密碼",
+      hint: "即執行 Observatory 的機器上 .env 檔案中的 WEB_PASSWORD。",
+      submit: "登入",
+    },
     live: {
       live: {
         pill: "即時",
@@ -803,4 +881,27 @@ export const dictionaries = {
 
 export function getDictionary(locale: Locale): Dictionary {
   return dictionaries[locale] ?? dictionaries.en;
+}
+
+/** Fills "{name}" placeholders in a catalog string. */
+export function fillTemplate(template: string, values: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (whole, name: string) => (name in values ? String(values[name]) : whole));
+}
+
+/**
+ * The sentence for a blocked sign-in, with how long to wait. `scope` is the
+ * limiter's (lib/webAuth.ts): "everyone" when sign-in is paused for all.
+ */
+export function signInBlockedMessage(
+  dict: Dictionary,
+  scope: "client" | "everyone",
+  retryAfterSeconds: number | null,
+): string {
+  const wait =
+    retryAfterSeconds === null
+      ? dict.signIn.waitUnknown
+      : retryAfterSeconds === 1
+        ? dict.signIn.waitSecond
+        : fillTemplate(dict.signIn.waitSeconds, { n: retryAfterSeconds });
+  return fillTemplate(scope === "everyone" ? dict.signIn.paused : dict.signIn.locked, { wait });
 }
