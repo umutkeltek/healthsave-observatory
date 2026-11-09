@@ -214,6 +214,7 @@ class _StubStore:
 
     async def set_status(self, session, *, experiment_id, status, **kw):
         self.set_call = (experiment_id, status)
+        self.set_kw = kw
         return self._set_result
 
     async def latest_results_by_kind(self, session, *, experiment_id):
@@ -353,10 +354,36 @@ async def test_abandon_sets_status_and_404(wire):
     assert view.status == "abandoned" and session.committed
     assert store.set_call == (EXP_ID, "abandoned")
 
-    wire(_StubStore(set_result=None))
+    wire(_StubStore(set_result=None, got=None))
     with pytest.raises(HTTPException) as exc:
         await abandon_experiment(experiment_id=EXP_ID, session=_Session())
     assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_abandon_only_moves_a_collecting_experiment(wire):
+    store = _StubStore(set_result=_experiment_row(status="abandoned"))
+    wire(store)
+    await abandon_experiment(experiment_id=EXP_ID, session=_Session())
+    assert store.set_kw.get("expected_status") == "collecting"
+
+
+@pytest.mark.asyncio
+async def test_a_completed_experiment_cannot_be_abandoned(wire):
+    """The guarded write misses; the experiment keeps its completed status."""
+    wire(_StubStore(set_result=None, got=_experiment_row(status="completed")))
+    session = _Session()
+    with pytest.raises(HTTPException) as exc:
+        await abandon_experiment(experiment_id=EXP_ID, session=session)
+    assert exc.value.status_code == 409
+    assert session.committed is False
+
+
+@pytest.mark.asyncio
+async def test_abandoning_an_abandoned_experiment_returns_it_unchanged(wire):
+    wire(_StubStore(set_result=None, got=_experiment_row(status="abandoned")))
+    view = await abandon_experiment(experiment_id=EXP_ID, session=_Session())
+    assert view.status == "abandoned"
 
 
 # ──────────────────────────────────────────────────────────────────────

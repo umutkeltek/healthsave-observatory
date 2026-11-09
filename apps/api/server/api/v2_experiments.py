@@ -408,11 +408,22 @@ async def abandon_experiment(
     session: AsyncSession = Depends(get_session),
 ) -> ExperimentView:
     """Stop an experiment (status → abandoned)."""
+    # The docstring above is the OpenAPI description (pinned by the lock).
+    # Only a collecting experiment moves: one already abandoned is returned
+    # unchanged, and a completed one keeps its result and status (409), so a
+    # late click cannot relabel a finished experiment.
     row = await _EXPERIMENT_REPO.set_status(
-        session, experiment_id=experiment_id, status="abandoned"
+        session, experiment_id=experiment_id, status="abandoned", expected_status="collecting"
     )
     if row is None:
-        raise HTTPException(status_code=404, detail="experiment not found")
+        row = await _EXPERIMENT_REPO.get_experiment(session, experiment_id=experiment_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="experiment not found")
+        if row.status != "abandoned":
+            raise HTTPException(
+                status_code=409,
+                detail=f"experiment is {row.status}; only a collecting experiment can be abandoned",
+            )
     await session.commit()
     results = await _EXPERIMENT_REPO.latest_results_by_kind(session, experiment_id=experiment_id)
     return _experiment_view(row, results, _today())
