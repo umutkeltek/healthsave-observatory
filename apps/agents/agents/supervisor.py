@@ -394,9 +394,16 @@ class Supervisor:
             log.warning("agent %s persist_proposal failed: %s", ref.plugin_id, exc)
             return
 
-        # Cursor advance — ONLY after persist commit succeeded.
+        # Cursor advance — ONLY after persist commit succeeded. It never moves
+        # back: a feed may also return rows behind the cursor that committed
+        # late (see AnalysisFindingsAnomalyFeed); those must not rewind it.
         if observations:
-            ref.cursor = max(obs.occurred_at for obs in observations)
+            newest = max(obs.occurred_at for obs in observations)
+            ref.cursor = newest if ref.cursor is None else max(ref.cursor, newest)
+            # A feed that re-reads behind its cursor learns what was delivered.
+            acknowledge = getattr(ref.observation_feed, "acknowledge", None)
+            if callable(acknowledge):
+                acknowledge(observations)
 
     @staticmethod
     def _storable_proposals(ref: EnabledAgent, proposals: Any) -> list[dict[str, Any]]:

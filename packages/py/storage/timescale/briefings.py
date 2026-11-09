@@ -280,6 +280,59 @@ class TimescaleBriefingRepository:
             for row in rows
         ]
 
+    async def fetch_anomalies_between(
+        self,
+        session: AsyncSession,
+        *,
+        after: datetime,
+        until: datetime,
+        severities: Iterable[str] | None = None,
+        exclude_ids: Iterable[int] = (),
+        limit: int = 1000,
+    ) -> list[FindingRow]:
+        """Anomaly findings with ``after < created_at <= until``, oldest first,
+        leaving out ``exclude_ids``.
+
+        The agents' anomaly feed re-scans a window behind its watermark with
+        this: ``created_at`` is the writing transaction's START, so a long
+        transaction (a daily briefing holds one through its LLM call) can
+        commit findings stamped earlier than ones the feed already passed.
+        """
+        params: dict[str, Any] = {
+            "after": after,
+            "until": until,
+            "exclude": sorted({int(i) for i in exclude_ids}),
+            "limit": limit,
+        }
+        severity_sql = ""
+        severity_list = sorted(set(severities)) if severities is not None else []
+        if severity_list:
+            params["severities"] = severity_list
+            severity_sql = " AND severity = ANY(CAST(:severities AS TEXT[]))"
+        sql = text(
+            f"""
+            SELECT id, metric, severity, structured_data, created_at
+              FROM analysis_findings
+             WHERE finding_type = 'anomaly'
+               AND created_at > :after
+               AND created_at <= :until
+               AND id <> ALL(CAST(:exclude AS BIGINT[])){severity_sql}
+             ORDER BY created_at ASC, id ASC
+             LIMIT :limit
+            """
+        )
+        rows = (await session.execute(sql, params)).fetchall()
+        return [
+            FindingRow(
+                id=row.id,
+                metric=row.metric,
+                severity=getattr(row, "severity", None),
+                structured_data=_parse_structured_data(row.structured_data),
+                created_at=row.created_at,
+            )
+            for row in rows
+        ]
+
     async def fetch_anomalies_after(
         self,
         session: AsyncSession,

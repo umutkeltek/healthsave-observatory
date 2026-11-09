@@ -119,10 +119,29 @@ async def test_the_feed_pages_every_finding_once_oldest_first_across_shared_time
                 occurred = [obs.occurred_at for obs in observations]
                 assert occurred == sorted(occurred)
                 seen.extend(obs.subject_id for obs in observations)
-                cursor = max(occurred)
+                cursor = max(cursor, *occurred)
+                feed.acknowledge(observations)  # what the supervisor does after commit
 
             assert len(seen) == len(set(seen)), "a finding was fed twice"
             assert seen == expected, f"{len(set(expected) - set(seen))} findings never surfaced"
+
+            # A briefing transaction that began before the last run commits
+            # now: its finding is stamped behind the cursor.
+            late_id = (
+                await session.execute(
+                    text(
+                        "INSERT INTO analysis_findings "
+                        "(finding_type, metric, severity, structured_data, created_at) "
+                        "VALUES ('anomaly', 'hrv', 'alert', '{}'::jsonb, :created_at) "
+                        "RETURNING id"
+                    ),
+                    {"created_at": cursor - timedelta(minutes=5)},
+                )
+            ).scalar_one()
+            late = await feed.fetch_since(owner_id=uuid4(), cursor=cursor)
+            assert [obs.subject_id for obs in late] == [str(late_id)]
+            feed.acknowledge(late)
+            assert await feed.fetch_since(owner_id=uuid4(), cursor=cursor) == []
             await session.rollback()
     finally:
         await engine.dispose()

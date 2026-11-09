@@ -94,6 +94,10 @@ class _FakeBriefingRepo:
         )
         return sorted(self._rows, key=lambda r: r.created_at, reverse=True)
 
+    async def fetch_anomalies_between(self, session: Any, **kwargs):
+        self.window_calls = getattr(self, "window_calls", []) + [kwargs]
+        return []
+
 
 class _FindingsTable:
     """In-memory ``analysis_findings`` with the production read semantics.
@@ -124,6 +128,18 @@ class _FindingsTable:
             return rows
         last_created_at = rows[limit - 1].created_at
         return [r for r in rows if r.created_at <= last_created_at]
+
+    async def fetch_anomalies_between(
+        self, session: Any, *, after, until, severities=None, exclude_ids=(), limit=1000
+    ):
+        excluded = set(exclude_ids)
+        rows = [
+            r
+            for r in self._matching(severities)
+            if after < r.created_at <= until and r.id not in excluded
+        ]
+        rows.sort(key=lambda r: (r.created_at, r.id))
+        return rows[:limit]
 
 
 def _engine_runs(*, runs: int, per_run: int) -> list[_FakeFindingRow]:
@@ -470,3 +486,48 @@ def test_anomaly_watcher_loads_via_plugin_sdk():
     plugin = load_plugin("hdh.agents.anomaly_watcher", kind="agent")
     assert isinstance(plugin, Agent)
     assert isinstance(plugin, AnomalyWatcherAgent)
+
+
+@pytest.mark.asyncio
+async def test_a_finding_committed_late_with_an_earlier_timestamp_is_still_observed():
+    """``created_at`` is the writing transaction's start. A daily briefing holds
+    its transaction through the LLM call, so its findings can commit after an
+    anomaly check's later-stamped ones the watcher has already passed."""
+    t2 = datetime(2026, 11, 1, 6, 5, tzinfo=UTC)
+    quick = _FakeFindingRow(id=2, metric="hrv", severity="alert", structured_data={}, created_at=t2)
+    table = _FindingsTable([quick])
+    feed = AnalysisFindingsAnomalyFeed(
+        session_factory=_session_factory(), briefing_repo=table, limit=100
+    )
+    ledger = _ProposalLedger()
+    ref = EnabledAgent(
+        plugin_id="hdh.agents.anomaly_watcher",
+        agent=_make_agent(),
+        observation_feed=feed,
+        settings=AgentSettings(
+            plugin_id="hdh.agents.anomaly_watcher",
+            tick_interval_seconds=60.0,
+            timeout_seconds=5.0,
+            restart_lookback_seconds=0.0,
+        ),
+    )
+    supervisor = Supervisor(session_factory=_session_factory(), agents_repo=ledger, enabled=[ref])
+    await supervisor.tick_once(ref)
+    assert ref.cursor == t2
+
+    # The briefing's finding, stamped two minutes earlier, commits now.
+    late = _FakeFindingRow(
+        id=1,
+        metric="heart_rate",
+        severity="watch",
+        structured_data={},
+        created_at=t2 - timedelta(minutes=2),
+    )
+    table._rows.append(late)
+    await supervisor.tick_once(ref)
+    await supervisor.tick_once(ref)
+
+    assert {key.rsplit(":", 1)[-1] for key in ledger.stored_keys} == {"1", "2"}
+    assert ref.cursor == t2, "the cursor never moves back"
+    # Each finding is fed once: an acknowledged late row is not re-observed.
+    assert sorted(ledger.attempted_keys, key=str) == sorted(ledger.stored_keys, key=str)

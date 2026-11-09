@@ -7,7 +7,7 @@ filters to operator-attention severities (``watch`` + ``alert``), and
 converts each :class:`storage.timescale.briefings.FindingRow` to an
 :class:`agents.supervisor.Observation`.
 
-Three contracts this feed enforces:
+Four contracts this feed enforces:
 
   1. **Severity allowlist.** The default is ``("watch", "alert")`` —
      ``info`` is intentionally excluded because that's the "noted but
@@ -26,6 +26,14 @@ Three contracts this feed enforces:
      extends the page to finish it), so the exclusive cursor can never
      skip the rest of a group, and a group bigger than ``limit`` cannot
      pin the cursor in place.
+  4. **Late commits.** ``created_at`` is the writing transaction's START.
+     A daily briefing holds its transaction through the LLM call, so its
+     findings can commit after later-stamped ones the cursor has passed.
+     Each fetch therefore also re-reads :data:`LATE_COMMIT_WINDOW` behind
+     the cursor and returns what it has not delivered yet. A finding counts
+     as delivered once the supervisor acknowledges the tick that carried it
+     (after its commit), so a failed tick loses nothing. A finding that
+     commits more than the window late is still missed.
 
 The feed opens its own short-lived session via the injected
 ``session_factory`` — the supervisor's tick reuses the factory for the
@@ -37,7 +45,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Iterable
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -49,6 +57,11 @@ log = logging.getLogger("healthsave.plugins.anomaly_watcher.feed")
 
 
 DEFAULT_SEVERITIES: tuple[str, ...] = ("watch", "alert")
+
+LATE_COMMIT_WINDOW = timedelta(hours=1)
+"""How far behind the cursor each fetch looks for findings committed late
+(contract 4). Far longer than any analysis transaction (an LLM call with its
+fallbacks), short enough to keep the re-read small."""
 """Default operator-attention severities. ``info`` is intentionally
 excluded — see the module docstring.
 """
@@ -66,6 +79,17 @@ class AnomalyPageReader(Protocol):
         after: datetime | None,
         severities: Iterable[str] | None = None,
         limit: int = 100,
+    ) -> list[FindingRow]: ...
+
+    async def fetch_anomalies_between(
+        self,
+        session: Any,
+        *,
+        after: datetime,
+        until: datetime,
+        severities: Iterable[str] | None = None,
+        exclude_ids: Iterable[int] = (),
+        limit: int = 1000,
     ) -> list[FindingRow]: ...
 
 
@@ -101,6 +125,9 @@ class AnalysisFindingsAnomalyFeed:
         self._briefing_repo: AnomalyPageReader = briefing_repo or default_briefing_repository
         self._severities = tuple(severities)
         self._limit = limit
+        # Findings the supervisor acknowledged inside the late-commit window:
+        # id -> created_at. Pruned as the cursor moves on.
+        self._delivered: dict[int, datetime] = {}
 
     async def fetch_since(
         self,
@@ -126,12 +153,38 @@ class AnalysisFindingsAnomalyFeed:
                 severities=self._severities,
                 limit=self._limit,
             )
+            if cursor is not None:
+                window_start = cursor - LATE_COMMIT_WINDOW
+                self._delivered = {
+                    finding_id: created_at
+                    for finding_id, created_at in self._delivered.items()
+                    if created_at > window_start
+                }
+                rows = list(rows) + list(
+                    await self._briefing_repo.fetch_anomalies_between(
+                        session,
+                        after=window_start,
+                        until=cursor,
+                        severities=self._severities,
+                        exclude_ids=self._delivered.keys(),
+                    )
+                )
 
         # The repo already returns oldest first; sorting again keeps the
         # supervisor's max(occurred_at) cursor correct even if a future
         # repo implementation changes its ORDER BY.
         ordered = sorted(rows, key=lambda r: (r.created_at, r.id))
         return [_row_to_observation(row) for row in ordered]
+
+    def acknowledge(self, observations: list[Observation]) -> None:
+        """The supervisor committed the tick that carried ``observations``.
+
+        Remembered so the late-commit re-read (contract 4) does not feed them
+        again. Called only after the commit, so a failed tick is re-fed.
+        """
+        for observation in observations:
+            if observation.subject_id is not None:
+                self._delivered[int(observation.subject_id)] = observation.occurred_at
 
 
 def _row_to_observation(row: Any) -> Observation:
