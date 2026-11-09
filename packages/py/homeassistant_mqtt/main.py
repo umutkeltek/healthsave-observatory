@@ -46,6 +46,26 @@ def _write_heartbeat(path: str) -> None:
         log.warning("could not write MQTT heartbeat file %s", path, exc_info=True)
 
 
+def build_session_messages(
+    publish_configs: tuple[HomeAssistantMQTTConfig, ...],
+) -> list[MQTTMessage]:
+    """Availability(online) + discovery to (re)assert on every connect.
+
+    Pure (config-only), so it is safe to call from paho's network thread in
+    the on_connect callback. State messages are intentionally *not* here:
+    they need a DB snapshot and flow on the periodic ``publish_once`` cycle
+    (and stay retained on the broker across reconnects).
+    """
+
+    messages: list[MQTTMessage] = []
+    for config in publish_configs:
+        specs = sensor_specs_for_config(config)
+        messages.append(build_availability_message(config))
+        messages.extend(build_legacy_availability_messages(config))
+        messages.extend(build_discovery_messages(config, specs))
+    return messages
+
+
 async def publish_once(
     repository: TimescaleHealthSnapshotRepository,
     publisher: PahoMQTTPublisher,
@@ -200,24 +220,10 @@ async def run() -> None:
     publish_configs = bridge_config.publish_configs
     _warn_for_reserved_prefixes(publish_configs)
 
-    def session_messages() -> list[MQTTMessage]:
-        """Availability(online) + discovery to (re)assert on every connect.
-
-        Pure (config-only), so it is safe to call from paho's network thread in
-        the on_connect callback. State messages are intentionally *not* here:
-        they need a DB snapshot and flow on the periodic ``publish_once`` cycle
-        (and stay retained on the broker across reconnects).
-        """
-
-        messages: list[MQTTMessage] = []
-        for config in publish_configs:
-            specs = sensor_specs_for_config(config)
-            messages.append(build_availability_message(config))
-            messages.extend(build_legacy_availability_messages(config))
-            messages.extend(build_discovery_messages(config, specs))
-        return messages
-
-    publisher = PahoMQTTPublisher(bridge_config.mqtt, on_connect_messages=session_messages)
+    publisher = PahoMQTTPublisher(
+        bridge_config.mqtt,
+        on_connect_messages=lambda: build_session_messages(publish_configs),
+    )
     publisher.connect()
     if not publisher.wait_until_connected(timeout=10.0):
         log.warning(

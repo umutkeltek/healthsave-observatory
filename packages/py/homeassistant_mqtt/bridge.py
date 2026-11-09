@@ -16,7 +16,10 @@ Two device layers ship side-by-side:
     ``homeassistant/sensor/<prefix>_<slug>/<metric>/config``.
 
 The two layers share the same availability topic so HA marks every
-sub-device offline together if the bridge goes down.
+sub-device offline together if the bridge goes down. That topic is the one the
+MQTT connection's Last Will covers: a legacy alias config publishes over the
+primary's connection (MQTT allows one will per connection), so its discovery
+names the primary's ``<prefix>/status`` too (see ``availability_prefix``).
 """
 
 from __future__ import annotations
@@ -47,6 +50,12 @@ class HomeAssistantMQTTConfig:
     device_identifier: str = "observatory"
     device_name: str = "HealthSave Observatory"
     publish_interval_seconds: int = 60
+    # State-topic prefix whose ``<prefix>/status`` this config's discovery names
+    # as the entities' availability. Empty means this config's own prefix. A
+    # legacy alias sets it to the primary prefix: it publishes over the
+    # primary's MQTT connection, MQTT allows one Last Will per connection, and
+    # only the will's topic is flipped to "offline" when the bridge dies.
+    availability_prefix: str = ""
 
 
 @dataclass(frozen=True)
@@ -238,7 +247,20 @@ def state_topic(config: HomeAssistantMQTTConfig, spec: SensorSpec | None = None)
 
 
 def availability_topic(config: HomeAssistantMQTTConfig) -> str:
+    """This config's own status topic: "online" on connect, "offline" on close."""
+
     return f"{config.state_topic_prefix.rstrip('/')}/status"
+
+
+def entity_availability_topic(config: HomeAssistantMQTTConfig) -> str:
+    """The availability topic discovery advertises to Home Assistant.
+
+    Always a topic the connection's Last Will covers, so a bridge that dies
+    turns every entity it published unavailable, legacy aliases included.
+    """
+
+    prefix = config.availability_prefix or config.state_topic_prefix
+    return f"{prefix.rstrip('/')}/status"
 
 
 def _device_payload(config: HomeAssistantMQTTConfig) -> dict[str, Any]:
@@ -261,7 +283,7 @@ def build_discovery_messages(
     messages: list[MQTTMessage] = []
     for spec in specs:
         payload: dict[str, Any] = {
-            "availability_topic": availability_topic(config),
+            "availability_topic": entity_availability_topic(config),
             "device": _device_payload(config),
             "enabled_by_default": True,
             # Re-fire HA state events on every 60s republish (even when the value is
@@ -493,7 +515,7 @@ def build_source_discovery_messages(
             continue
         unique_id = f"{_source_device_identifier(config, slug)}_{attr}"
         payload: dict[str, Any] = {
-            "availability_topic": availability_topic(config),
+            "availability_topic": entity_availability_topic(config),
             "device": device,
             "enabled_by_default": True,
             # Re-fire HA state events on every 60s republish (even when the value is

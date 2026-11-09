@@ -15,15 +15,24 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
+import types
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from homeassistant_mqtt.bridge import HomeAssistantMQTTConfig
+from homeassistant_mqtt.client import PahoMQTTPublisher
+from homeassistant_mqtt.config import load_config_from_env
 from homeassistant_mqtt.liveness import BridgeStalled, LivenessWatchdog
-from homeassistant_mqtt.main import _run_loop, _warn_for_reserved_prefixes, publish_once
+from homeassistant_mqtt.main import (
+    _run_loop,
+    _warn_for_reserved_prefixes,
+    build_session_messages,
+    publish_once,
+)
 from homeassistant_mqtt.snapshot import (
     HealthSnapshot,
     MetricReadinessSnapshot,
@@ -316,6 +325,99 @@ async def test_publish_once_filters_source_layer_with_slug_allowlist():
     assert "homeassistant/sensor/observatory_apple_watch/heart_rate/config" in topics
     assert "observatory/source/bug_c_probe/state" not in topics
     assert "homeassistant/sensor/observatory_bug_c_probe/heart_rate/config" not in topics
+
+
+def _will_topic_of(monkeypatch, config: HomeAssistantMQTTConfig) -> str:
+    """The topic the broker flips to "offline" when this config's connection dies."""
+
+    fake_client = MagicMock()
+    mqtt_mod = types.ModuleType("paho.mqtt.client")
+    mqtt_mod.CallbackAPIVersion = types.SimpleNamespace(VERSION2=2)  # type: ignore[attr-defined]
+    mqtt_mod.Client = MagicMock(return_value=fake_client)  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "paho", types.ModuleType("paho"))
+    monkeypatch.setitem(sys.modules, "paho.mqtt", types.ModuleType("paho.mqtt"))
+    monkeypatch.setitem(sys.modules, "paho.mqtt.client", mqtt_mod)
+
+    PahoMQTTPublisher(config).connect()
+    fake_client.will_set.assert_called_once()
+    return fake_client.will_set.call_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_every_discovered_entity_follows_the_connection_last_will(monkeypatch):
+    """M19: MQTT allows one Last Will per connection, and a legacy alias
+    publishes over the primary's connection. Legacy discovery used to name its
+    own ``healthtrack/status`` topic, which nothing flips to "offline", so a dead
+    bridge left every legacy entity showing its last value as live. Every
+    discovery payload the bridge emits (primary or legacy; aggregate, readiness
+    or per-source) must name the topic the will covers. Entity identity stays.
+    """
+
+    for var in (
+        "HA_MQTT_STATE_TOPIC_PREFIX",
+        "HA_MQTT_DEVICE_IDENTIFIER",
+        "HA_MQTT_DEVICE_NAME",
+        "HA_MQTT_DISCOVERY_PREFIX",
+        "HA_MQTT_LEGACY_DEVICE_IDENTIFIER",
+        "HA_MQTT_LEGACY_DEVICE_NAME",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("HA_MQTT_LEGACY_STATE_TOPIC_PREFIX", "healthtrack")
+    bridge_config = load_config_from_env()
+    will_topic = _will_topic_of(monkeypatch, bridge_config.mqtt)
+
+    aggregate = HealthSnapshot(
+        collected_at=datetime(2026, 11, 9, 9, 0, tzinfo=UTC),
+        heart_rate=72,
+        hrv_7d_avg=None,
+        steps_today=4200,
+        last_sleep_hours=None,
+        source_model="HealthSave",
+        room_health_state=None,
+        metric_readiness={
+            "step_count": MetricReadinessSnapshot(
+                metric="step_count", window_key="today_local", ready=True, status="ready"
+            )
+        },
+    )
+    per_source = [
+        SourceHealthSnapshot(
+            collected_at=aggregate.collected_at,
+            source_id="Apple Watch",
+            heart_rate=72,
+            hrv_latest_ms=58.0,
+        )
+    ]
+    publisher = _RecordingPublisher(config=bridge_config.mqtt)
+    with patch("homeassistant_mqtt.main.async_session", _FakeAsyncSessionFactory()):
+        await publish_once(
+            _StubRepository(aggregate=aggregate, per_source=per_source),
+            publisher,
+            publish_configs=bridge_config.publish_configs,
+            readiness_entities=True,
+        )
+    messages = build_session_messages(bridge_config.publish_configs) + publisher.published
+
+    discovery = {topic: payload for topic, payload, _ in messages if topic.endswith("/config")}
+    assert {
+        "homeassistant/sensor/observatory/heart_rate/config",
+        "homeassistant/sensor/healthtrack/heart_rate/config",
+        "homeassistant/binary_sensor/healthtrack/steps_today_ready/config",
+        "homeassistant/sensor/healthtrack_apple_watch/heart_rate/config",
+    } <= discovery.keys()
+    off_will = {
+        topic: payload["availability_topic"]
+        for topic, payload in discovery.items()
+        if payload["availability_topic"] != will_topic
+    }
+    assert off_will == {}, f"entities not covered by the will on {will_topic}"
+
+    # HA keys entities on unique_id and derives entity ids from object_id; both
+    # are unchanged for the legacy alias, so existing users keep their entities.
+    legacy_hr = discovery["homeassistant/sensor/healthtrack/heart_rate/config"]
+    assert legacy_hr["unique_id"] == "healthtrack_heart_rate"
+    assert legacy_hr["object_id"] == "heart_rate"
+    assert legacy_hr["state_topic"] == "healthtrack/sensor/state"
 
 
 def test_reserved_healthsave_prefix_logs_ios_app_collision_warning(caplog):

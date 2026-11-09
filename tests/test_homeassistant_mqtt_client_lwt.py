@@ -136,3 +136,31 @@ def test_close_announces_offline(monkeypatch) -> None:
 
     published_topics = [call.args[0] for call in fake_client.publish.call_args_list]
     assert availability_topic(config) in published_topics
+
+
+def test_close_marks_every_status_topic_the_session_asserts_offline(monkeypatch) -> None:
+    """The will covers one topic; legacy compat status topics (``<legacy>/status``
+    and ``healthtrack/availability``, which hand-written HA YAML may read) are
+    asserted "online" on connect too. A graceful stop must take each of them
+    offline, or they keep claiming a stopped bridge is live.
+    """
+
+    config = HomeAssistantMQTTConfig(broker="b", port=1883)
+    discovery_topic = "homeassistant/sensor/healthtrack/heart_rate/config"
+    session = [
+        (availability_topic(config), "online", True),
+        ("healthtrack/status", "online", True),
+        ("healthtrack/availability", "online", True),
+        (discovery_topic, {"name": "HR"}, True),
+    ]
+    fake_client = MagicMock()
+    _install_fake_paho(monkeypatch, fake_client)
+
+    publisher = PahoMQTTPublisher(config, on_connect_messages=lambda: list(session))
+    publisher.connect()
+    publisher.close()
+
+    offline = [c.args[0] for c in fake_client.publish.call_args_list if c.args[1] == "offline"]
+    assert offline == ["observatory/status", "healthtrack/status", "healthtrack/availability"]
+    assert all(c.kwargs["retain"] is True for c in fake_client.publish.call_args_list)
+    assert discovery_topic not in [c.args[0] for c in fake_client.publish.call_args_list]

@@ -136,6 +136,9 @@ def _legacy_mqtt_configs(
             ),
             device_name=_env_text("HA_MQTT_LEGACY_DEVICE_NAME", "Legacy Health Data"),
             publish_interval_seconds=base.publish_interval_seconds,
+            # The alias publishes over the primary's connection, whose Last Will
+            # covers only the primary's status topic: follow that one.
+            availability_prefix=base.state_topic_prefix,
         ),
     )
 
