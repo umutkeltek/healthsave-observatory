@@ -11,7 +11,14 @@ Plugins carry their own versions.
 
 ### Upgrade
 
-- Migrations 030, 031 and 032 are additive and run on boot.
+- Migrations 030 to 034 are additive and run on boot (the `migrate` service,
+  before `api` and `worker` start).
+- **Run the migrations before starting the new image.** The worker's source
+  polls and the connector authorize scripts (`scripts/whoop_authorize.py`
+  and the others) read and write the column migration 033 adds; against a
+  database without it every source poll fails and authorizing fails. `docker compose up` and
+  `healthsave update` already run `migrate` first; only a hand-run container
+  started without it is affected.
 - `HDH_KEYRING` now reaches the `api` and `worker` containers. The code read
   it before, but `docker-compose.yml` never passed it through, so a value in
   `.env` had no effect. Once it does, a non-empty ring decides which key seals
