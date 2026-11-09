@@ -357,3 +357,158 @@ async def test_handle_webhook_with_no_stored_token_is_noop():
 
     assert result == {"accepted": 0, "rejected": 0}
     assert http.get_calls == []
+
+
+# ── Deletions, vanished resources, and failure classification (M13) ────────
+
+
+class _CanonicalRepo:
+    def __init__(self, superseded: int = 1) -> None:
+        self.calls: list[dict[str, Any]] = []
+        self._superseded = superseded
+
+    async def supersede_source_records(self, session, **kwargs):
+        self.calls.append(kwargs)
+        return self._superseded
+
+
+@pytest.mark.asyncio
+async def test_a_deleted_workout_is_superseded_without_fetching_it():
+    http = _HttpClient()  # any GET would raise: the resource is gone
+    canonical = _CanonicalRepo()
+
+    result = await _plugin().handle_webhook(
+        {
+            "event": {"type": "workout.deleted", "id": "wk-9"},
+            "storage": _RecordingStorage(),
+            "session": object(),
+            "http_client": http,
+            "token_store": _TokenStore(initial_token=_fresh_token()),
+            "canonical_repository": canonical,
+        }
+    )
+
+    assert result == {"accepted": 0, "rejected": 0, "deleted": 1}
+    assert http.get_calls == []
+    assert canonical.calls == [
+        {
+            "owner_id": DEFAULT_OWNER_ID,
+            "normalizer_id": "whoop-healthsave",
+            "source_record_uids": ["wk-9"],
+        }
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("event_type", ["sleep.deleted", "recovery.deleted"])
+async def test_a_deleted_sleep_or_recovery_is_acknowledged_without_fetching(event_type):
+    http = _HttpClient()
+    canonical = _CanonicalRepo()
+
+    result = await _plugin().handle_webhook(
+        {
+            "event": {"type": event_type, "id": "res-9"},
+            "storage": _RecordingStorage(),
+            "session": object(),
+            "http_client": http,
+            "token_store": _TokenStore(initial_token=_fresh_token()),
+            "canonical_repository": canonical,
+        }
+    )
+
+    assert result == {"accepted": 0, "rejected": 0, "deleted": 0}
+    assert http.get_calls == []
+    assert canonical.calls == []
+
+
+@pytest.mark.asyncio
+async def test_an_updated_resource_that_is_gone_is_acknowledged_not_failed():
+    storage = _RecordingStorage()
+    http = _HttpClient(get_responses={PATH_SLEEP: _Response(404, {"message": "not found"})})
+
+    result = await _plugin().handle_webhook(
+        {
+            "event": {"type": "sleep.updated", "id": "slp-9"},
+            "storage": storage,
+            "session": object(),
+            "http_client": http,
+            "token_store": _TokenStore(initial_token=_fresh_token()),
+        }
+    )
+
+    assert result == {"accepted": 0, "rejected": 0, "missing": 1}
+    assert storage.ingest_calls == []
+
+
+def _route_client(monkeypatch, failure: BaseException):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from server.api import v2_sources
+    from server.api.deps import get_session
+
+    class _RouteSession:
+        def __init__(self) -> None:
+            self.rollbacks = 0
+
+        async def commit(self) -> None:
+            pass
+
+        async def rollback(self) -> None:
+            self.rollbacks += 1
+
+    async def failing(self, payload):
+        raise failure
+
+    monkeypatch.delenv("WHOOP_CLIENT_SECRET", raising=False)
+    monkeypatch.setattr(WhoopSource, "handle_webhook", failing)
+    app = FastAPI()
+    app.include_router(v2_sources.router)
+    session = _RouteSession()
+
+    async def _session():
+        yield session
+
+    app.dependency_overrides[get_session] = _session
+    return TestClient(app, raise_server_exceptions=False), session
+
+
+@pytest.mark.parametrize(
+    ("failure", "status"),
+    [
+        ("fetch-400", 422),
+        ("fetch-403", 422),
+        ("fetch-500", 503),
+        ("fetch-429", 503),
+        ("oauth-400", 422),
+        ("oauth-503", 503),
+        ("connect", 503),
+        ("data-error", 422),
+        ("key-error", 422),
+    ],
+)
+def test_the_webhook_route_answers_deterministic_failures_with_422_never_500(
+    monkeypatch, failure, status
+):
+    import httpx
+    from sqlalchemy.exc import DataError
+
+    from plugins.sources.whoop.fetch import WhoopFetchError
+    from plugins.sources.whoop.oauth import WhoopOAuthError
+
+    exc = {
+        "fetch-400": WhoopFetchError("HTTP 400", status_code=400),
+        "fetch-403": WhoopFetchError("HTTP 403", status_code=403),
+        "fetch-500": WhoopFetchError("HTTP 500", status_code=500),
+        "fetch-429": WhoopFetchError("HTTP 429", status_code=429),
+        "oauth-400": WhoopOAuthError("HTTP 400: invalid_grant", status_code=400),
+        "oauth-503": WhoopOAuthError("HTTP 503", status_code=503),
+        "connect": httpx.ConnectError("refused"),
+        "data-error": DataError("INSERT", {}, Exception("value out of range")),
+        "key-error": KeyError("score"),
+    }[failure]
+    client, session = _route_client(monkeypatch, exc)
+
+    response = client.post("/api/v2/sources/whoop/webhook", json={"type": "x.updated", "id": "1"})
+
+    assert response.status_code == status
+    assert session.rollbacks == 1

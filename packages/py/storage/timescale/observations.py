@@ -384,6 +384,41 @@ class CanonicalObservationRepository:
         await session.execute(_INSERT_SQL, rows)
         return len(observations)
 
+    async def supersede_source_records(
+        self,
+        session: AsyncSession,
+        *,
+        owner_id: UUID,
+        normalizer_id: str,
+        source_record_uids: list[str],
+    ) -> int:
+        """Mark one normalizer's active rows for these upstream record ids superseded.
+
+        For a vendor that reports a deletion by its own record id (a Whoop
+        ``workout.deleted`` webhook). Scoped to ``normalizer_id`` so another
+        source's identical id is never touched. Idempotent; returns rows changed.
+        """
+        if not source_record_uids:
+            return 0
+        result = await session.execute(
+            text(
+                """
+                UPDATE canonical_observations
+                   SET status = 'superseded'
+                 WHERE owner_id = :owner_id
+                   AND normalizer_id = :normalizer_id
+                   AND status = 'active'
+                   AND source_record_uid = ANY(:uids)
+                """
+            ),
+            {
+                "owner_id": str(owner_id),
+                "normalizer_id": normalizer_id,
+                "uids": list(source_record_uids),
+            },
+        )
+        return result.rowcount or 0
+
     async def query_series(
         self,
         session: AsyncSession,

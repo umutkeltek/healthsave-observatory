@@ -36,8 +36,11 @@ from plugin_sdk import find_plugin_manifest, load_manifest
 from storage.timescale.ingest import PostgresIngestStorage
 
 from plugins.sources.whoop import WhoopSource
+from plugins.sources.whoop.fetch import WhoopFetchError
+from plugins.sources.whoop.oauth import WhoopOAuthError
 
 from .deps import get_session
+from .ingest import _is_transient_write_error
 
 router = APIRouter(prefix="/api/v2")
 log = logging.getLogger("healthsave.api.v2_sources")
@@ -74,6 +77,31 @@ def _verify_whoop_signature(raw_body: bytes, headers: Any) -> None:
         raise HTTPException(status_code=401, detail="invalid Whoop signature")
 
 
+# Whoop answers with one of these when it is busy or failing; it retries a
+# webhook that gets a 5xx, so those are worth a retry.
+_WHOOP_RETRYABLE = frozenset({408, 425, 429})
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    """True when sending the same event again could succeed.
+
+    A Whoop outage or rate limit, a network failure talking to Whoop, or a
+    transient database error. Everything else (a 4xx about the resource, a
+    refresh token Whoop refused, a row our storage rejects) fails the same way
+    every time, so it is answered with a 4xx and Whoop stops retrying.
+    """
+    if isinstance(exc, WhoopFetchError):
+        status = exc.status_code
+        return status is None or status >= 500 or status in _WHOOP_RETRYABLE
+    if isinstance(exc, httpx.TransportError):
+        return True
+    if isinstance(exc, WhoopOAuthError):
+        # A token endpoint outage is retryable; a refused refresh token is not.
+        status = exc.status_code
+        return status is not None and (status >= 500 or status in _WHOOP_RETRYABLE)
+    return _is_transient_write_error(exc)
+
+
 def _whoop_plugin_yaml() -> Path:
     return find_plugin_manifest("whoop", kind="source", start=Path(__file__))
 
@@ -102,10 +130,17 @@ async def whoop_webhook(request: Request, session: Any = Depends(get_session)) -
         except ValueError as e:
             await session.rollback()
             raise HTTPException(status_code=400, detail=str(e)) from e
-        except Exception:
+        except Exception as e:
             await session.rollback()
             log.exception("whoop webhook failed")
-            raise
+            if _is_retryable(e):
+                raise HTTPException(
+                    status_code=503, detail="whoop webhook failed; retry later"
+                ) from e
+            # Deterministic: a retry repeats it, so never a 500.
+            raise HTTPException(
+                status_code=422, detail=f"whoop webhook could not be applied: {type(e).__name__}"
+            ) from e
 
     log.info("whoop webhook processed: %s", result)
     return {"status": "accepted", "result": result}

@@ -268,14 +268,26 @@ class WhoopSource(Source):
         return {"accepted": accepted, "rejected": 0}
 
     async def handle_webhook(self, payload: dict[str, Any]) -> dict[str, int]:
-        """Fetch + ingest the single Whoop resource referenced by a webhook event."""
+        """Apply one Whoop webhook event.
+
+        ``*.updated``: fetch the referenced resource and ingest it. If Whoop no
+        longer has it (404, deleted since the event was sent) there is nothing
+        to ingest, and the event is acknowledged with ``missing: 1``.
+
+        ``*.deleted``: nothing is fetched (the resource is gone). A deleted
+        workout's canonical session is marked superseded. The legacy
+        per-metric rows a Whoop record wrote carry no Whoop id, so they stay;
+        the result's ``deleted`` count says how many canonical rows changed.
+        """
         from .fetch import (
             PATH_RECOVERY,
             PATH_SLEEP,
             PATH_WORKOUT,
+            WhoopFetchError,
             fetch_one,
         )
         from .normalize import (
+            NORMALIZER_ID,
             normalize_recovery,
             normalize_sleep,
             normalize_workouts,
@@ -307,6 +319,32 @@ class WhoopSource(Source):
         http_client = payload["http_client"]
         owner_id = payload.get("owner_id", DEFAULT_OWNER_ID)
 
+        if event_type.endswith(".deleted"):
+            deleted = 0
+            if normalizer is normalize_workouts:
+                from storage.timescale.observations import (
+                    default_repository as default_canonical_repo,
+                )
+
+                canonical_repository = payload.get("canonical_repository") or (
+                    default_canonical_repo
+                )
+                deleted = await canonical_repository.supersede_source_records(
+                    session,
+                    owner_id=owner_id,
+                    normalizer_id=NORMALIZER_ID,
+                    source_record_uids=[str(resource_id)],
+                )
+            log.info(
+                "whoop webhook deletion owner=%s event_type=%s resource_id=%s superseded=%d "
+                "(legacy per-metric rows carry no Whoop id and stay)",
+                owner_id,
+                event_type,
+                resource_id,
+                deleted,
+            )
+            return {"accepted": 0, "rejected": 0, "deleted": deleted}
+
         token_store = payload.get("token_store")
         if token_store is None:
             from storage.timescale import oauth_tokens as token_store  # type: ignore[no-redef]
@@ -324,7 +362,17 @@ class WhoopSource(Source):
             log.warning("whoop webhook: no stored token for owner=%s — skip event", owner_id)
             return {"accepted": 0, "rejected": 0}
 
-        data = await fetch_one(http_client, access_token=token.access_token, path=resolved_path)
+        try:
+            data = await fetch_one(http_client, access_token=token.access_token, path=resolved_path)
+        except WhoopFetchError as exc:
+            if exc.status_code != 404:
+                raise
+            log.info(
+                "whoop webhook: %s %s is gone (404); nothing to ingest",
+                event_type,
+                resource_id,
+            )
+            return {"accepted": 0, "rejected": 0, "missing": 1}
         normalized = normalizer([data])
         device_id = await storage.get_or_create_device(session, DEVICE_NAME)
         accepted = 0
