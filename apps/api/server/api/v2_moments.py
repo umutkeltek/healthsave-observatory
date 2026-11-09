@@ -36,6 +36,20 @@ class MomentListResponse(V2Model):
     count: int
 
 
+def _in_utc(value: datetime, name: str) -> datetime:
+    """``value`` in UTC, or a ValueError (a 422) when UTC cannot hold it.
+
+    Year 1 at a positive offset, or year 9999 at a negative one, falls outside
+    what datetime can represent in UTC. The conversion raises OverflowError,
+    which pydantic does not turn into a validation error (a 500 here, and the
+    database driver would raise the same converting it to store).
+    """
+    try:
+        return value.astimezone(UTC)
+    except (OverflowError, ValueError, OSError) as exc:
+        raise ValueError(f"{name} is outside the supported date range") from exc
+
+
 class CreateMomentRequest(V2Model):
     kind: str
     title: str = Field(min_length=1, max_length=200)
@@ -64,7 +78,9 @@ class CreateMomentRequest(V2Model):
         # contract is unchanged. PUT replaces the whole row, so the body
         # alone decides the stored range. astimezone() compares naive and
         # aware values the way asyncpg stores a naive one (local time).
-        if self.end_at is not None and self.end_at.astimezone(UTC) < self.start_at.astimezone(UTC):
+        start = _in_utc(self.start_at, "start_at")
+        end = _in_utc(self.end_at, "end_at") if self.end_at is not None else None
+        if end is not None and end < start:
             raise ValueError("end_at must not be before start_at")
         return self
 

@@ -154,7 +154,7 @@ def client(monkeypatch):
 
     server.app.dependency_overrides[get_session] = fake_session
     try:
-        with TestClient(server.app) as c:
+        with TestClient(server.app, raise_server_exceptions=False) as c:
             yield c, repo
     finally:
         server.app.dependency_overrides.clear()
@@ -175,5 +175,27 @@ def test_end_before_start_is_422_on_create_and_update_and_never_written(client) 
     assert created.status_code == 422
     assert updated.status_code == 422
     assert "end_at must not be before start_at" in created.text
+    assert repo.create_args is None
+    assert repo.update_args is None
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # Year 1 at +05:00 is year 0 in UTC: datetime cannot hold it.
+        {"start_at": "0001-01-01T00:30:00+05:00", "end_at": "2026-07-20T12:00:00Z"},
+        {"start_at": "2026-07-20T12:00:00Z", "end_at": "9999-12-31T23:30:00-05:00"},
+        {"start_at": "0001-01-01T00:30:00+05:00"},
+    ],
+)
+def test_a_bound_outside_the_utc_range_is_422_not_500(client, body) -> None:
+    c, repo = client
+    payload = {"kind": "travel", "title": "Trip", **body}
+
+    created = c.post("/api/v2/moments", json=payload)
+    updated = c.put("/api/v2/moments/1", json=payload)
+
+    assert created.status_code == 422, created.text
+    assert updated.status_code == 422, updated.text
     assert repo.create_args is None
     assert repo.update_args is None
