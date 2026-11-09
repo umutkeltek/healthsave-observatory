@@ -126,3 +126,23 @@ async def record_backfill_failure(
         ),
         {"owner_id": str(owner_id), "provider": provider},
     )
+
+
+async def list_unfilled_gaps(session: AsyncSession) -> list[dict]:
+    """Every provider's last given-up backfill window, newest first.
+
+    The worker records the window it gave up on (``unfilled_gap_start`` /
+    ``unfilled_gap_end``); this is the read that makes it visible
+    (``GET /api/v2/sync/anomalies``, ``source_backfill_gaps``).
+    """
+    result = await session.execute(
+        text(
+            """
+            SELECT provider, owner_id, unfilled_gap_start, unfilled_gap_end, last_success_at
+              FROM source_poll_cursors
+             WHERE unfilled_gap_start IS NOT NULL
+             ORDER BY unfilled_gap_end DESC NULLS LAST, provider
+            """
+        )
+    )
+    return [dict(row) for row in result.mappings().all()]

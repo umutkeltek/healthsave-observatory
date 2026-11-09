@@ -1297,7 +1297,35 @@ async def sync_anomalies(session: AsyncSession, lookback_minutes: int = 15) -> d
             ),
         },
         "anomalies": anomalies,
+        # Additive: windows a source poll (Whoop, Amazfit, Polar, Google)
+        # could not backfill and gave up on. Not part of "status", which stays
+        # about overlapping phone syncs; a gap is history, not a live problem.
+        "source_backfill_gaps": await _source_backfill_gaps(session),
     }
+
+
+async def _source_backfill_gaps(session: AsyncSession) -> list[dict[str, Any]]:
+    from storage.timescale.source_poll_cursors import list_unfilled_gaps
+
+    return [
+        {
+            "type": "source_backfill_given_up",
+            "severity": "warning",
+            "provider": gap["provider"],
+            "unfilled_from": gap["unfilled_gap_start"],
+            "unfilled_to": gap["unfilled_gap_end"],
+            "last_successful_poll_at": gap["last_success_at"],
+            "message": (
+                f"{gap['provider']} did not serve the data between the two times above, "
+                "so the backfill was given up and that stretch is missing here."
+            ),
+            "recommended_action": (
+                "If you need it, export that stretch from the vendor's own app and "
+                "import it, or re-authorize the connection to try the backfill again."
+            ),
+        }
+        for gap in await list_unfilled_gaps(session)
+    ]
 
 
 class TimescaleSyncReceiptRepository:
