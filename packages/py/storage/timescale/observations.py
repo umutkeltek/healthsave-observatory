@@ -161,10 +161,22 @@ _INSERT_SQL = text(
         device_id = EXCLUDED.device_id,
         stream_id = EXCLUDED.stream_id,
         exact_ingest_key = EXCLUDED.exact_ingest_key,
-        semantic_key = EXCLUDED.semantic_key,
-        semantic_key_version = EXCLUDED.semantic_key_version,
+        -- Fusion owns semantic_key/is_primary once it assigned them (no
+        -- normalizer sets them): a re-sent copy of a fused row keeps its
+        -- fusion instead of counting twice until nothing re-fuses it.
+        semantic_key = COALESCE(EXCLUDED.semantic_key, canonical_observations.semantic_key),
+        semantic_key_version = CASE
+            WHEN EXCLUDED.semantic_key IS NULL
+            THEN canonical_observations.semantic_key_version
+            ELSE EXCLUDED.semantic_key_version
+        END,
         aggregation_scope = EXCLUDED.aggregation_scope,
-        is_primary = EXCLUDED.is_primary,
+        is_primary = CASE
+            WHEN EXCLUDED.semantic_key IS NULL
+                 AND canonical_observations.semantic_key IS NOT NULL
+            THEN canonical_observations.is_primary
+            ELSE EXCLUDED.is_primary
+        END,
         raw_payload_id = EXCLUDED.raw_payload_id,
         source_record_uid = EXCLUDED.source_record_uid,
         confidence = EXCLUDED.confidence,
