@@ -74,6 +74,7 @@ export default async function Home() {
                     id={panel.id}
                     label={panel.label}
                     encodedState={panel.state}
+                    emptyNote={dict.prefs.emptySaved}
                   />
                 </div>
               ))}

@@ -11,6 +11,8 @@ type Props = {
   id: string;
   label: string;
   encodedState: string;
+  // Shown when the saved view holds no panels (dict.prefs.emptySaved).
+  emptyNote: string;
 };
 
 async function removePanel(id: string) {
@@ -18,13 +20,23 @@ async function removePanel(id: string) {
   await removeSavedPanelAction(id);
 }
 
-export async function ExplorePanelCard({ id, label, encodedState }: Props) {
+export async function ExplorePanelCard({ id, label, encodedState, emptyNote }: Props) {
   const state = deserializeExploreState(encodedState);
-  if (!state) return null;
-
   // Collect all unique metrics across all panels
-  const metricIds = [...new Set(state.panels.flatMap((p) => p.metrics))];
-  if (metricIds.length === 0) return null;
+  const metricIds = state ? [...new Set(state.panels.flatMap((p) => p.metrics))] : [];
+  // A view with nothing to draw still shows, so it can be removed: rendering
+  // nothing left an invisible card holding one of Today's slots.
+  if (!state || metricIds.length === 0) {
+    return (
+      <article className="card explore-panel-card">
+        <div className="card-title">
+          <span>{label}</span>
+          <RemoveSavedPanel id={id} label={label} />
+        </div>
+        <p className="empty">{emptyNote}</p>
+      </article>
+    );
+  }
 
   const seriesMap = await safeSeriesMany(metricIds, fetchRange(state));
 
@@ -32,16 +44,7 @@ export async function ExplorePanelCard({ id, label, encodedState }: Props) {
     <article className="card explore-panel-card">
       <div className="card-title">
         <span>{label}</span>
-        <form action={removePanel.bind(null, id)}>
-          <button
-            type="submit"
-            className="btn-ghost panel-remove-btn"
-            aria-label={`Remove "${label}" from Today`}
-            style={{ fontSize: "0.8rem" }}
-          >
-            Remove
-          </button>
-        </form>
+        <RemoveSavedPanel id={id} label={label} />
       </div>
 
       <div className="explore-panel-metrics">
@@ -76,5 +79,20 @@ export async function ExplorePanelCard({ id, label, encodedState }: Props) {
         )}
       </div>
     </article>
+  );
+}
+
+function RemoveSavedPanel({ id, label }: { id: string; label: string }) {
+  return (
+    <form action={removePanel.bind(null, id)}>
+      <button
+        type="submit"
+        className="btn-ghost panel-remove-btn"
+        aria-label={`Remove "${label}" from Today`}
+        style={{ fontSize: "0.8rem" }}
+      >
+        Remove
+      </button>
+    </form>
   );
 }

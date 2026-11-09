@@ -78,6 +78,7 @@ const englishDictionary = {
     pinLimit: "You can pin up to {max} signals. Unpin one first.",
     todayRemoved: "Saved. To make room, Today no longer shows: {labels}.",
     emptyView: "Add a panel before saving this view to Today.",
+    emptySaved: "This saved view has no panels.",
   },
   live: {
     live: {
@@ -234,6 +235,7 @@ export const dictionaries = {
       pinLimit: "Puedes fijar hasta {max} señales. Quita una primero.",
       todayRemoved: "Guardado. Para hacer sitio, Hoy ya no muestra: {labels}.",
       emptyView: "Añade un panel antes de guardar esta vista en Hoy.",
+      emptySaved: "Esta vista guardada no tiene paneles.",
     },
     live: {
       live: {
@@ -377,6 +379,7 @@ export const dictionaries = {
       pinLimit: "Vous pouvez épingler jusqu'à {max} signaux. Retirez-en un d'abord.",
       todayRemoved: "Enregistré. Pour faire de la place, Aujourd'hui n'affiche plus : {labels}.",
       emptyView: "Ajoutez un panneau avant d'enregistrer cette vue dans Aujourd'hui.",
+      emptySaved: "Cette vue enregistrée n'a aucun panneau.",
     },
     live: {
       live: {
@@ -520,6 +523,7 @@ export const dictionaries = {
       pinLimit: "Du kannst bis zu {max} Signale anheften. Löse zuerst eines.",
       todayRemoved: "Gespeichert. Um Platz zu schaffen, zeigt Heute nicht mehr: {labels}.",
       emptyView: "Füge ein Panel hinzu, bevor du diese Ansicht in Heute speicherst.",
+      emptySaved: "Diese gespeicherte Ansicht hat keine Panels.",
     },
     live: {
       live: {
@@ -663,6 +667,7 @@ export const dictionaries = {
       pinLimit: "ピン留めできるシグナルは最大 {max} 件です。先にどれかのピン留めを外してください。",
       todayRemoved: "保存しました。空きを作るため、今日には次の項目が表示されなくなりました: {labels}。",
       emptyView: "このビューを今日に保存する前にパネルを追加してください。",
+      emptySaved: "この保存済みビューにはパネルがありません。",
     },
     live: {
       live: {
@@ -806,6 +811,7 @@ export const dictionaries = {
       pinLimit: "最多可釘選 {max} 個訊號。請先取消釘選一個。",
       todayRemoved: "已儲存。為了騰出空間，今日不再顯示：{labels}。",
       emptyView: "請先新增面板，再將此檢視儲存到今日。",
+      emptySaved: "此已儲存的檢視沒有任何面板。",
     },
     live: {
       live: {
