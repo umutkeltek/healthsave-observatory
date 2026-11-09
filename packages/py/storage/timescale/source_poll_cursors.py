@@ -3,8 +3,10 @@
 The worker reads it before a source poll to backfill a gap longer than the
 plugin's own lookback, and writes it in the same transaction that commits the
 poll's data, so the cursor never claims a poll whose writes rolled back. A
-widened poll that fails is counted (``backfill_failures``, migration 032) so
-the worker can stop retrying a window the vendor will not serve; the gap it
+widened poll that fails is counted so the worker can stop retrying a window
+the vendor will not serve: a rejected range in ``backfill_failures`` (032), a
+server error, timeout or rate limit while the vendor still answered the
+default window in ``backfill_outage_failures`` (033). The gap it
 gives up on is kept in ``unfilled_gap_start``/``unfilled_gap_end``. The caller
 owns the transaction boundary.
 """
@@ -24,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 class PollCursor:
     last_success_at: datetime
     backfill_failures: int = 0
+    backfill_outage_failures: int = 0
 
 
 async def get_poll_cursor(
@@ -37,7 +40,7 @@ async def get_poll_cursor(
         await session.execute(
             text(
                 """
-                SELECT last_success_at, backfill_failures
+                SELECT last_success_at, backfill_failures, backfill_outage_failures
                   FROM source_poll_cursors
                  WHERE owner_id = :owner_id AND provider = :provider
                 """
@@ -47,7 +50,11 @@ async def get_poll_cursor(
     ).first()
     if row is None:
         return None
-    return PollCursor(last_success_at=row.last_success_at, backfill_failures=row.backfill_failures)
+    return PollCursor(
+        last_success_at=row.last_success_at,
+        backfill_failures=row.backfill_failures,
+        backfill_outage_failures=row.backfill_outage_failures,
+    )
 
 
 async def record_successful_poll(
@@ -58,7 +65,7 @@ async def record_successful_poll(
     owner_id: UUID = DEFAULT_OWNER_ID,
     unfilled_gap: tuple[datetime, datetime] | None = None,
 ) -> None:
-    """Move the cursor to ``polled_at`` (the poll's start) and clear the failure count.
+    """Move the cursor to ``polled_at`` (the poll's start) and clear both failure counts.
 
     The cursor never moves back. ``unfilled_gap`` records the window a
     narrowed poll gave up on; without it the last recorded gap is kept.
@@ -75,6 +82,7 @@ async def record_successful_poll(
                        source_poll_cursors.last_success_at, EXCLUDED.last_success_at
                    ),
                    backfill_failures = 0,
+                   backfill_outage_failures = 0,
                    unfilled_gap_start = COALESCE(
                        EXCLUDED.unfilled_gap_start, source_poll_cursors.unfilled_gap_start
                    ),
@@ -99,13 +107,20 @@ async def record_backfill_failure(
     *,
     provider: str,
     owner_id: UUID = DEFAULT_OWNER_ID,
+    outage: bool = False,
 ) -> None:
-    """Count one failed widened poll. Only a cursor that exists can be widened."""
+    """Count one failed widened poll. Only a cursor that exists can be widened.
+
+    ``outage`` counts a server error, timeout or rate limit on the wide range
+    while the default window worked; it has a higher limit than a rejected
+    range.
+    """
+    column = "backfill_outage_failures" if outage else "backfill_failures"
     await session.execute(
         text(
-            """
+            f"""
             UPDATE source_poll_cursors
-               SET backfill_failures = backfill_failures + 1, updated_at = NOW()
+               SET {column} = {column} + 1, updated_at = NOW()
              WHERE owner_id = :owner_id AND provider = :provider
             """
         ),

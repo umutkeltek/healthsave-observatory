@@ -109,9 +109,10 @@ async def put_token(
             text(
                 """
                 UPDATE source_poll_cursors
-                   SET backfill_failures = 0, updated_at = NOW()
+                   SET backfill_failures = 0, backfill_outage_failures = 0,
+                       updated_at = NOW()
                  WHERE owner_id = :owner_id AND provider = :provider
-                   AND backfill_failures <> 0
+                   AND (backfill_failures <> 0 OR backfill_outage_failures <> 0)
                 """
             ),
             {"owner_id": str(token.owner_id), "provider": token.provider},

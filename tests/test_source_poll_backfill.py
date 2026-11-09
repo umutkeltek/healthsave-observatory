@@ -19,11 +19,17 @@ import contextlib
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import httpx
 import pytest
 import worker.sources as worker_sources
 from storage.timescale import source_poll_cursors
 from storage.timescale.source_poll_cursors import PollCursor
-from worker.sources import MAX_BACKFILL, MAX_BACKFILL_FAILURES, make_whoop_poll
+from worker.sources import (
+    MAX_BACKFILL,
+    MAX_BACKFILL_FAILURES,
+    MAX_BACKFILL_OUTAGE_FAILURES,
+    make_whoop_poll,
+)
 
 from plugins.sources.whoop import DEFAULT_LOOKBACK, WhoopSource
 from plugins.sources.whoop.fetch import WhoopFetchError
@@ -59,11 +65,11 @@ class _Http:
 @pytest.fixture
 def poll(monkeypatch):
     """Run the real Whoop poll seam with a recorded ingest and an in-memory cursor."""
-    import httpx
 
     state: dict[str, Any] = {
         "cursor": None,
         "failures": 0,
+        "outage_failures": 0,
         "recorded": [],
         "gaps": [],
         "payloads": [],
@@ -75,16 +81,21 @@ def poll(monkeypatch):
         assert provider == "whoop"
         if state["cursor"] is None:
             return None
-        return PollCursor(last_success_at=state["cursor"], backfill_failures=state["failures"])
+        return PollCursor(
+            last_success_at=state["cursor"],
+            backfill_failures=state["failures"],
+            backfill_outage_failures=state["outage_failures"],
+        )
 
     async def record_successful_poll(session, *, provider, owner_id, polled_at, unfilled_gap=None):
         state["recorded"].append(polled_at)
         state["gaps"].append(unfilled_gap)
         state["cursor"] = polled_at
         state["failures"] = 0
+        state["outage_failures"] = 0
 
-    async def record_backfill_failure(session, *, provider, owner_id):
-        state["failures"] += 1
+    async def record_backfill_failure(session, *, provider, owner_id, outage=False):
+        state["outage_failures" if outage else "failures"] += 1
 
     monkeypatch.setattr(source_poll_cursors, "get_poll_cursor", get_poll_cursor)
     monkeypatch.setattr(source_poll_cursors, "record_successful_poll", record_successful_poll)
@@ -96,6 +107,16 @@ def poll(monkeypatch):
             raise RuntimeError("whoop is down")
         if state["fail"] == "wide" and "since" in payload:
             raise WhoopFetchError("GET /v2/recovery returned HTTP 400: range", status_code=400)
+        if state["fail"] == "wide504" and "since" in payload:
+            raise WhoopFetchError("GET /v2/recovery returned HTTP 504: timeout", status_code=504)
+        if state["fail"] == "wide_read_timeout" and "since" in payload:
+            raise httpx.ReadTimeout("read timed out")
+        if state["fail"] == "wide429" and "since" in payload:
+            raise WhoopFetchError("GET /v2/recovery returned HTTP 429: slow down", status_code=429)
+        if state["fail"] == "down503":
+            raise WhoopFetchError("GET /v2/recovery returned HTTP 503: down", status_code=503)
+        if state["fail"] == "down_read_timeout":
+            raise httpx.ReadTimeout("read timed out")
         return dict(state["result"])
 
     async def no_fusion(*_args, **_kwargs):
@@ -108,7 +129,7 @@ def poll(monkeypatch):
     async def run() -> _Session:
         session = _Session()
         job = make_whoop_poll(lambda: session)
-        with contextlib.suppress(RuntimeError, WhoopFetchError):  # a failing poll re-raises
+        with contextlib.suppress(RuntimeError, WhoopFetchError, httpx.ReadTimeout):
             await job()
         return session
 
@@ -230,7 +251,6 @@ async def test_a_poll_skipped_for_want_of_a_token_does_not_move_the_cursor(poll)
     ],
 )
 def test_only_range_failures_count_against_a_widened_window(exc, counted) -> None:
-    import httpx
     from worker.sources import is_backfill_range_failure
 
     assert is_backfill_range_failure(exc, WhoopFetchError) is counted
@@ -266,3 +286,128 @@ def test_each_poll_keys_its_cursor_by_the_token_provider_it_authorizes() -> None
     assert AMAZFIT_SPEC.cursor_provider == AMAZFIT
     assert POLAR_SPEC.cursor_provider == POLAR_PROVIDER
     assert GOOGLE_HEALTH_SPEC.cursor_provider == GOOGLE_HEALTH_PROVIDER
+
+
+def test_the_outage_threshold_is_twelve_polls() -> None:
+    """About 6 h on the 30-minute cron; the e2e test runs exactly this many."""
+    assert MAX_BACKFILL_OUTAGE_FAILURES == 12
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["wide504", "wide_read_timeout", "wide429"])
+async def test_a_widened_window_that_keeps_timing_out_is_given_up_after_the_outage_threshold(
+    poll, mode
+):
+    """The vendor answers the default window but never the wide one."""
+    last_success = datetime.now(UTC) - timedelta(days=10)
+    poll["cursor"] = last_success
+    poll["fail"] = mode
+
+    for _ in range(MAX_BACKFILL_OUTAGE_FAILURES - 1):
+        await poll["run"]()
+    assert "since" in poll["payloads"][-2], "a short outage keeps its backfill"
+    await poll["run"]()
+    assert poll["failures"] == 0
+    assert poll["outage_failures"] == MAX_BACKFILL_OUTAGE_FAILURES
+    assert poll["recorded"] == []
+
+    await poll["run"]()
+
+    assert "since" not in poll["payloads"][-1]
+    [gap] = poll["gaps"]
+    assert gap is not None and gap[0] == last_success - DEFAULT_LOOKBACK
+    assert poll["outage_failures"] == 0
+
+
+@pytest.mark.asyncio
+async def test_a_failing_wide_window_still_brings_in_the_default_window(poll):
+    """While the backfill is retried, recent data keeps arriving; the cursor stays."""
+    last_success = datetime.now(UTC) - timedelta(days=10)
+    poll["cursor"] = last_success
+    poll["fail"] = "wide504"
+
+    session = await poll["run"]()
+
+    wide, probe = poll["payloads"]
+    assert "since" in wide
+    assert "since" not in probe, "the same run asks for the default window"
+    assert session.commits == 1, "the default window's data and the count commit together"
+    assert poll["outage_failures"] == 1
+    assert poll["cursor"] == last_success, "the gap is still open"
+    assert poll["recorded"] == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["down503", "down_read_timeout"])
+async def test_a_vendor_that_is_down_never_uses_up_the_backfill(poll, mode):
+    """Neither window answers: an outage of any length keeps its backfill."""
+    last_success = datetime.now(UTC) - timedelta(days=10)
+    poll["cursor"] = last_success
+    poll["fail"] = mode
+
+    for _ in range(MAX_BACKFILL_OUTAGE_FAILURES * 3):
+        session = await poll["run"]()
+
+    assert poll["outage_failures"] == 0
+    assert poll["failures"] == 0
+    assert session.commits == 0
+    assert "since" in poll["payloads"][-2], "every run still asks for the backfill"
+
+    poll["fail"] = False
+    await poll["run"]()
+    assert poll["payloads"][-1]["since"] == last_success - DEFAULT_LOOKBACK
+    assert poll["gaps"] == [None]
+
+
+@pytest.mark.asyncio
+async def test_a_default_window_skipped_for_want_of_a_token_counts_nothing(poll):
+    poll["cursor"] = datetime.now(UTC) - timedelta(days=10)
+    poll["fail"] = "wide504"
+    poll["result"] = {"accepted": 0, "rejected": 0, "skipped_no_token": 1}
+
+    session = await poll["run"]()
+
+    assert poll["outage_failures"] == 0
+    assert session.commits == 0
+
+
+@pytest.mark.parametrize(
+    ("exc", "outage"),
+    [
+        (WhoopFetchError("HTTP 500", status_code=500), True),
+        (WhoopFetchError("HTTP 503", status_code=503), True),
+        (WhoopFetchError("HTTP 504", status_code=504), True),
+        (WhoopFetchError("HTTP 408", status_code=408), True),
+        (WhoopFetchError("HTTP 429", status_code=429), True),
+        (WhoopFetchError("HTTP 400", status_code=400), False),
+        (WhoopFetchError("HTTP 401", status_code=401), False),
+        (WhoopFetchError("HTTP 403", status_code=403), False),
+        (WhoopFetchError("exceeded max_pages=100"), False),
+        (WhoopOAuthError("token endpoint returned HTTP 503"), False),
+        (RuntimeError("anything else"), False),
+    ],
+)
+def test_server_errors_timeouts_and_rate_limits_are_outage_failures(exc, outage) -> None:
+    from worker.sources import is_backfill_outage_failure
+
+    assert is_backfill_outage_failure(exc, WhoopFetchError) is outage
+    assert is_backfill_outage_failure(exc, None) is False
+
+
+def test_a_read_timeout_is_an_outage_failure_but_a_connect_failure_is_not() -> None:
+    from worker.sources import is_backfill_outage_failure
+
+    assert is_backfill_outage_failure(httpx.ReadTimeout("slow"), WhoopFetchError) is True
+    assert is_backfill_outage_failure(httpx.ConnectTimeout("down"), WhoopFetchError) is False
+    assert is_backfill_outage_failure(httpx.ConnectError("down"), WhoopFetchError) is False
+
+
+def test_a_failure_is_never_both_a_range_and_an_outage_failure() -> None:
+    from worker.sources import is_backfill_outage_failure, is_backfill_range_failure
+
+    for status in range(400, 600):
+        exc = WhoopFetchError(f"HTTP {status}", status_code=status)
+        assert not (
+            is_backfill_range_failure(exc, WhoopFetchError)
+            and is_backfill_outage_failure(exc, WhoopFetchError)
+        ), status

@@ -43,6 +43,9 @@ class _Whoop:
     def __init__(self) -> None:
         self.refresh_status = 400
         self.data_status = 200
+        # Status for a window starting more than two days back (a widened
+        # poll); None answers it like any other window.
+        self.wide_status: int | None = None
         self.starts: list[str | None] = []
 
     async def __aenter__(self) -> _Whoop:
@@ -66,7 +69,12 @@ class _Whoop:
         )
 
     async def get(self, url, *, params=None, headers=None):
-        self.starts.append((params or {}).get("start"))
+        start = (params or {}).get("start")
+        self.starts.append(start)
+        if self.wide_status is not None and start is not None:
+            begins = datetime.fromisoformat(start.replace("Z", "+00:00"))
+            if begins < datetime.now(UTC) - timedelta(days=2):
+                return _Response(self.wide_status, {"error": "gateway timeout"})
         if self.data_status != 200:
             return _Response(self.data_status, {"error": "rejected"})
         return _Response(200, {"records": []})
@@ -130,10 +138,19 @@ async def whoop_poll(monkeypatch):
 
 
 async def _failures(factory) -> int:
+    """Rejected-range failures (the 3-poll limit)."""
     from storage.timescale.source_poll_cursors import get_poll_cursor
 
     async with factory() as session:
         return (await get_poll_cursor(session, provider="whoop")).backfill_failures
+
+
+async def _outage_failures(factory) -> int:
+    """Server-error and read-timeout failures (the 12-poll limit)."""
+    from storage.timescale.source_poll_cursors import get_poll_cursor
+
+    async with factory() as session:
+        return (await get_poll_cursor(session, provider="whoop")).backfill_outage_failures
 
 
 @pytest.mark.asyncio
@@ -167,7 +184,7 @@ async def test_a_dead_token_for_three_days_then_re_auth_gets_the_full_backfill(w
 
 
 @pytest.mark.asyncio
-async def test_a_vendor_outage_does_not_use_up_the_backfill_attempts(whoop_poll):
+async def test_a_vendor_outage_of_any_length_keeps_its_backfill(whoop_poll):
     from storage.timescale import oauth_tokens
     from storage.timescale.source_poll_cursors import record_successful_poll
 
@@ -179,12 +196,23 @@ async def test_a_vendor_outage_does_not_use_up_the_backfill_attempts(whoop_poll)
         await oauth_tokens.put_token(session, _token(expired=False, refresh_token="RT"))
         await session.commit()
 
-    for status in (503, 502, 401, 429):
+    # The whole vendor is down, well past the outage threshold: neither the
+    # widened nor the default window answers, so nothing is held against the
+    # backfill.
+    for status in (503, 502, 401, 429, 504) * 3:
         whoop.data_status = status
         with pytest.raises(Exception, match=f"HTTP {status}"):
             await poll()
 
     assert await _failures(factory) == 0
+    assert await _outage_failures(factory) == 0
+
+    whoop.data_status = 200
+    whoop.starts.clear()
+    await poll()
+    windowed = [start for start in whoop.starts if start is not None]
+    oldest = min(datetime.fromisoformat(start.replace("Z", "+00:00")) for start in windowed)
+    assert oldest < datetime.now(UTC) - timedelta(days=3), "the backfill still runs"
 
 
 @pytest.mark.asyncio
@@ -220,7 +248,10 @@ async def test_re_authorizing_resets_the_backfill_attempts(whoop_poll):
         await record_successful_poll(session, provider="whoop", polled_at=last_success)
         # As if 3 widened polls had failed.
         await session.execute(
-            text("UPDATE source_poll_cursors SET backfill_failures = 3 WHERE provider = 'whoop'")
+            text(
+                "UPDATE source_poll_cursors SET backfill_failures = 3, "
+                "backfill_outage_failures = 12 WHERE provider = 'whoop'"
+            )
         )
         await session.commit()
 
@@ -228,6 +259,7 @@ async def test_re_authorizing_resets_the_backfill_attempts(whoop_poll):
         await oauth_tokens.put_token(session, _token(expired=False, refresh_token="RT-new"))
         await session.commit()
     assert await _failures(factory) == 0
+    assert await _outage_failures(factory) == 0
 
     await poll()
 
@@ -257,3 +289,67 @@ async def test_a_routine_refresh_does_not_reset_the_backfill_attempts(whoop_poll
         await session.commit()
 
     assert await _failures(factory) == 2
+
+
+# worker.sources.MAX_BACKFILL_OUTAGE_FAILURES (pinned in test_source_poll_backfill).
+OUTAGE_THRESHOLD = 12
+
+
+@pytest.mark.asyncio
+async def test_a_widened_window_that_always_times_out_is_given_up_after_the_threshold(
+    whoop_poll,
+):
+    """504 for the wide range every time, while the default range works.
+
+    A range that never succeeds is abandoned after OUTAGE_THRESHOLD polls with
+    the gap recorded, instead of being retried forever while the default
+    window would have worked.
+    """
+    from sqlalchemy import text
+    from storage.timescale import oauth_tokens
+    from storage.timescale.source_poll_cursors import record_successful_poll
+
+    whoop, factory, poll = whoop_poll
+    last_success = datetime.now(UTC) - timedelta(days=3)
+    async with factory() as session:
+        await record_successful_poll(session, provider="whoop", polled_at=last_success)
+        await oauth_tokens.put_token(session, _token(expired=False, refresh_token="RT"))
+        await session.commit()
+    whoop.wide_status = 504
+
+    for _ in range(OUTAGE_THRESHOLD - 1):
+        with pytest.raises(Exception, match="HTTP 504"):
+            await poll()
+    # Still inside the threshold: the poll keeps asking for the backfill.
+    with pytest.raises(Exception, match="HTTP 504"):
+        await poll()
+
+    # Each failed run also asked for the default window (and kept its data);
+    # the cursor stayed, so the gap was still open.
+    assert await _outage_failures(factory) == OUTAGE_THRESHOLD
+    async with factory() as session:
+        kept = (
+            await session.execute(
+                text("SELECT last_success_at FROM source_poll_cursors WHERE provider = 'whoop'")
+            )
+        ).scalar_one()
+    assert kept == last_success
+
+    whoop.starts.clear()
+    await poll()  # falls back to the default window, which succeeds
+
+    windowed = [start for start in whoop.starts if start is not None]
+    assert windowed
+    oldest = min(datetime.fromisoformat(start.replace("Z", "+00:00")) for start in windowed)
+    assert oldest > datetime.now(UTC) - timedelta(days=2)
+    async with factory() as session:
+        row = (
+            await session.execute(
+                text(
+                    "SELECT last_success_at, unfilled_gap_start FROM source_poll_cursors "
+                    "WHERE provider = 'whoop'"
+                )
+            )
+        ).one()
+    assert row.last_success_at > last_success
+    assert row.unfilled_gap_start == last_success - timedelta(days=1)

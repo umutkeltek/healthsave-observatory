@@ -34,6 +34,11 @@ MAX_BACKFILL = timedelta(days=30)
 # range the vendor rejects) is given up: the next poll uses the plugin's
 # default window again and the gap is recorded on the cursor and logged.
 MAX_BACKFILL_FAILURES = 3
+# A widened window that failed this many polls in a row with a server error, a
+# timeout or a rate limit, while the vendor answered the default window each
+# time, is given up too (about 6 h on the 30-minute cron). A vendor that is
+# down altogether answers neither window and uses up nothing.
+MAX_BACKFILL_OUTAGE_FAILURES = 12
 # A plugin that skipped the poll because no token is stored sets this key in
 # its result; nothing was polled, so the cursor must not move.
 SKIPPED_NO_TOKEN = "skipped_no_token"
@@ -109,15 +114,23 @@ def _plugin_lookback(entrypoint: str) -> timedelta | None:
     return lookback if isinstance(lookback, timedelta) else None
 
 
-# A fetch error with one of these statuses says nothing about the window: the
-# token is refused (401/403), or the vendor is busy or slow (408/429). A 5xx is
-# an outage. Only a 4xx outside this set, or a fetch error with no status (a
-# page-cap overflow, a malformed body), is held against a widened window.
-_NOT_A_RANGE_FAILURE = frozenset({401, 403, 408, 429})
+# How a failed widened poll is judged (only the plugin's own fetch error and a
+# read timeout are judged at all; refresh, auth and connect errors never are):
+# - 401/403: the token is refused. Never held against the window.
+# - any other 4xx, or a fetch error with no status (a page-cap overflow, a
+#   malformed body): the vendor rejected the range. Counted at once
+#   (is_backfill_range_failure, limit MAX_BACKFILL_FAILURES).
+# - 408, 429, any 5xx, a read timeout: the vendor was slow, busy or failing.
+#   That can be the wide range's fault or a plain outage, so the worker asks
+#   for the default window in the same run and counts the failure only when
+#   the vendor answers it (is_backfill_outage_failure, limit
+#   MAX_BACKFILL_OUTAGE_FAILURES).
+_AUTH_REFUSED = frozenset({401, 403})
+_BUSY_OR_SLOW = frozenset({408, 429})
 
 
 def is_backfill_range_failure(exc: BaseException, fetch_error: type | None) -> bool:
-    """True when a widened poll failed because of its window, not auth or an outage.
+    """True when the vendor rejected a widened poll's range.
 
     Refresh and auth errors, expired tokens and transport errors are never the
     plugin's fetch error, so a dead token cannot use up the backfill attempts.
@@ -127,7 +140,28 @@ def is_backfill_range_failure(exc: BaseException, fetch_error: type | None) -> b
     status = getattr(exc, "status_code", None)
     if status is None:
         return True
-    return 400 <= status < 500 and status not in _NOT_A_RANGE_FAILURE
+    return 400 <= status < 500 and status not in _AUTH_REFUSED | _BUSY_OR_SLOW
+
+
+def is_backfill_outage_failure(exc: BaseException, fetch_error: type | None) -> bool:
+    """True when a widened poll failed with a server error, a timeout or a rate limit.
+
+    The wide range can cause any of these (a slow or failing vendor query, a
+    rate limit hit while paging a long history), and so can an outage. The
+    caller tells the two apart by asking for the default window
+    (:func:`make_source_poll`). A connect failure never reached the vendor and
+    is not one of these, nor is a 401/403 or a refresh error.
+    """
+    if fetch_error is None:
+        return False
+    import httpx
+
+    if isinstance(exc, httpx.ReadTimeout):
+        return True
+    if not isinstance(exc, fetch_error):
+        return False
+    status = getattr(exc, "status_code", None)
+    return status is not None and (status >= 500 or status in _BUSY_OR_SLOW)
 
 
 def backfill_since(
@@ -234,14 +268,19 @@ def make_source_poll(
                     lookback=lookback,
                     now=polled_at,
                 )
-                if since is not None and cursor.backfill_failures >= MAX_BACKFILL_FAILURES:
+                if since is not None and (
+                    cursor.backfill_failures >= MAX_BACKFILL_FAILURES
+                    or cursor.backfill_outage_failures >= MAX_BACKFILL_OUTAGE_FAILURES
+                ):
                     unfilled_gap = (since, polled_at - lookback)
                     log.warning(
-                        "%s poll: backfill from %s failed %d times in a row; polling the "
-                        "default window instead. %s to %s stays unfilled.",
+                        "%s poll: backfill from %s failed in a row (%d rejected range, %d "
+                        "server error/timeout); polling the default window instead. "
+                        "%s to %s stays unfilled.",
                         spec.log_label,
                         since.isoformat(),
                         cursor.backfill_failures,
+                        cursor.backfill_outage_failures,
                         unfilled_gap[0].isoformat(),
                         unfilled_gap[1].isoformat(),
                     )
@@ -292,17 +331,62 @@ def make_source_poll(
                 await session.rollback()
                 log.exception("%s poll failed", spec.log_label)
                 fetch_error = _load_entrypoint(spec.fetch_error) if spec.fetch_error else None
-                if widened and is_backfill_range_failure(exc, fetch_error):
+                if widened and is_backfill_outage_failure(exc, fetch_error):
+                    await _probe_default_window(session, plugin, payload)
+                elif widened and is_backfill_range_failure(exc, fetch_error):
                     # Count it in its own transaction: the poll's rolled back.
-                    try:
-                        await source_poll_cursors.record_backfill_failure(
-                            session, provider=spec.cursor_provider, owner_id=DEFAULT_OWNER_ID
-                        )
-                        await session.commit()
-                    except Exception:
-                        await session.rollback()
-                        log.exception("%s: could not record the backfill failure", spec.log_label)
+                    await _record_backfill_failure(session, outage=False)
                 raise
+
+    async def _record_backfill_failure(session: Any, *, outage: bool) -> bool:
+        from storage.timescale import source_poll_cursors
+
+        try:
+            await source_poll_cursors.record_backfill_failure(
+                session,
+                provider=spec.cursor_provider,
+                owner_id=DEFAULT_OWNER_ID,
+                outage=outage,
+            )
+            await session.commit()
+            return True
+        except Exception:
+            await session.rollback()
+            log.exception("%s: could not record the backfill failure", spec.log_label)
+            return False
+
+    async def _probe_default_window(session: Any, plugin: Any, payload: dict[str, Any]) -> None:
+        """Ask for the default window after a widened poll was slow, busy or failing.
+
+        If the vendor answers it, the wide range is what fails: the failure is
+        counted (against MAX_BACKFILL_OUTAGE_FAILURES) in the same transaction
+        that keeps the default window's data, so recent data keeps arriving
+        while the backfill is retried. The cursor does not move: the gap is
+        still open. If the default window fails too, the vendor is down, and
+        nothing is counted, so an outage of any length keeps its backfill.
+        """
+        probe = {key: value for key, value in payload.items() if key != "since"}
+        try:
+            result = await plugin.ingest(probe)
+            if isinstance(result, dict) and result.get(SKIPPED_NO_TOKEN):
+                await session.rollback()
+                return
+        except Exception:
+            await session.rollback()
+            log.warning(
+                "%s poll: the default window failed too; the vendor looks down, so the "
+                "backfill keeps its attempts",
+                spec.log_label,
+                exc_info=True,
+            )
+            return
+        if await _record_backfill_failure(session, outage=True):
+            log.warning(
+                "%s poll: the vendor answered the default window but not the backfill; "
+                "kept the recent data and counted the failure (%s)",
+                spec.log_label,
+                result,
+            )
 
     return _run
 
