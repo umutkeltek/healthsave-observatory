@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  deserializeExploreState,
   encodeExploreState,
   encodePanels,
   fetchRange,
@@ -8,6 +9,7 @@ import {
   normalize,
   parseExploreState,
   parsePanels,
+  parseSavedViews,
   type ExplorePanel,
 } from "./explore";
 
@@ -20,9 +22,8 @@ describe("explore panel encoding", () => {
     expect(parsePanels(encodePanels(panels))).toEqual(panels);
   });
 
-  it("falls back to defaults on empty/garbage input", () => {
+  it("falls back to defaults when there is no panels param, or only garbage", () => {
     expect(parsePanels(undefined).length).toBeGreaterThan(0);
-    expect(parsePanels("").length).toBeGreaterThan(0);
     // a segment with no metrics is dropped, not kept as an empty panel
     expect(parsePanels("line:").length).toBeGreaterThan(0);
   });
@@ -112,5 +113,59 @@ describe("normalize", () => {
   });
   it("handles the empty series", () => {
     expect(normalize([])).toEqual([]);
+  });
+});
+
+// The bug (audit web #18): removing the last panel wrote "panels=" to the
+// URL, which parsed as "no param" and brought back the five default panels.
+describe("removing every panel", () => {
+  it("an explicitly empty panel list stays empty", () => {
+    expect(parsePanels("")).toEqual([]);
+    const emptied = parseExploreState({ panels: "" });
+    expect(emptied.panels).toEqual([]);
+    expect(deserializeExploreState(encodeExploreState(emptied))?.panels).toEqual([]);
+  });
+
+  it("no panels param at all is the curated default dashboard", () => {
+    expect(parseExploreState({}).panels.length).toBeGreaterThan(0);
+  });
+});
+
+// The bug (audit web #18): saved views were JSON.parse'd from localStorage and
+// used as-is; one malformed entry broke the Explore controls.
+describe("saved views from storage", () => {
+  it("keeps only well-formed views", () => {
+    const raw = JSON.stringify([
+      { name: "Recovery", qs: "range=30d" },
+      { name: "", qs: "range=7d" },
+      { name: "No query" },
+      "junk",
+      null,
+      { name: "Sleep", qs: "range=90d", extra: true },
+    ]);
+    expect(parseSavedViews(raw)).toEqual([
+      { name: "Recovery", qs: "range=30d" },
+      { name: "Sleep", qs: "range=90d" },
+    ]);
+  });
+
+  it("anything that is not a list of views is no views", () => {
+    expect(parseSavedViews(null)).toEqual([]);
+    expect(parseSavedViews("not json")).toEqual([]);
+    expect(parseSavedViews('{"name":"x","qs":"y"}')).toEqual([]);
+  });
+
+  it("duplicate names keep the last one", () => {
+    const views = parseSavedViews(
+      JSON.stringify([
+        { name: "A", qs: "n=1" },
+        { name: "B", qs: "n=2" },
+        { name: "A", qs: "n=3" },
+      ]),
+    );
+    expect(views).toEqual([
+      { name: "B", qs: "n=2" },
+      { name: "A", qs: "n=3" },
+    ]);
   });
 });

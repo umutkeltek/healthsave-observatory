@@ -11,9 +11,11 @@ import {
   MAX_EXPLORE_METRICS_PER_PANEL,
   MAX_EXPLORE_PANELS,
   encodeExploreState,
+  parseSavedViews,
   type ChartKind,
   type ExplorePanel,
   type ExploreState,
+  type SavedView,
 } from "../lib/explore";
 import { saveExplorePanelAction } from "../lib/actions";
 import { runAction } from "../lib/session";
@@ -63,7 +65,6 @@ function MetricSelect({
   );
 }
 
-type SavedView = { name: string; qs: string };
 const VIEWS_KEY = "explore_views";
 
 // Saved views persist in localStorage (per-browser; fine for a single-user
@@ -76,8 +77,7 @@ function SavedViews({ current }: { current: string }) {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(VIEWS_KEY);
-      if (raw) setViews(JSON.parse(raw));
+      setViews(parseSavedViews(localStorage.getItem(VIEWS_KEY)));
     } catch {
       // ignore malformed storage
     }
@@ -94,7 +94,7 @@ function SavedViews({ current }: { current: string }) {
   const save = () => {
     const n = name.trim();
     if (!n) return;
-    persist([...views.filter((v) => v.name !== n), { name: n, qs: current }]);
+    persist(parseSavedViews(JSON.stringify([...views, { name: n, qs: current }])));
     setName("");
   };
   const remove = (n: string) => persist(views.filter((v) => v.name !== n));

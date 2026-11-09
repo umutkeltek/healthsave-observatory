@@ -79,8 +79,12 @@ export function encodePanels(panels: ExplorePanel[]): string {
   return panels.map((p) => `${p.chart}:${p.metrics.join(",")}`).join(";");
 }
 
+// No panels param at all means the curated defaults. An explicitly empty one
+// ("panels=") is a dashboard the person emptied by removing every panel; it
+// stays empty. A param holding nothing usable is garbage and gets the defaults.
 export function parsePanels(raw: string | undefined): ExplorePanel[] {
-  if (!raw) return DEFAULT_PANELS;
+  if (raw === undefined) return DEFAULT_PANELS;
+  if (raw === "") return [];
   const panels = raw
     .split(";")
     .slice(0, MAX_EXPLORE_PANELS)
@@ -177,4 +181,34 @@ export function deserializeExploreState(raw: string): ExploreState | null {
   } catch {
     return null;
   }
+}
+
+// ─── Saved views (localStorage, ExploreControls) ───────────────────────────
+
+export type SavedView = { name: string; qs: string };
+const MAX_SAVED_VIEW_NAME = 60;
+const MAX_SAVED_VIEW_QS = 2000;
+
+// Storage is outside this app's control (older builds, other tabs, a person
+// editing it): keep only well-formed views, one per name (the last wins).
+export function parseSavedViews(raw: string | null): SavedView[] {
+  if (!raw) return [];
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(value)) return [];
+  const byName = new Map<string, SavedView>();
+  for (const item of value) {
+    if (typeof item !== "object" || item === null) continue;
+    const { name, qs } = item as { name?: unknown; qs?: unknown };
+    if (typeof name !== "string" || typeof qs !== "string") continue;
+    const clean = name.trim();
+    if (!clean || clean.length > MAX_SAVED_VIEW_NAME || qs.length > MAX_SAVED_VIEW_QS) continue;
+    byName.delete(clean);
+    byName.set(clean, { name: clean, qs });
+  }
+  return [...byName.values()];
 }
