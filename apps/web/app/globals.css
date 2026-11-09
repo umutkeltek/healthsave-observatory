@@ -2988,6 +2988,28 @@ input.filter-select {
   opacity: 0.5;
 }
 
+/* A refused or failed pin explains itself under the star without taking a
+   grid column from the row it sits in (Library, Settings, signal detail). */
+.pin-control {
+  position: relative;
+  display: inline-flex;
+}
+
+.pin-error {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 5;
+  padding: 6px 10px;
+  color: var(--down);
+  font-size: 12px;
+  white-space: nowrap;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card);
+}
+
 /* Detail page */
 
 .lib-detail-head {

@@ -29,6 +29,8 @@ import {
   updateAnalyticalTime,
 } from "./api";
 import {
+  type Dictionary,
+  fillTemplate,
   getDictionary,
   LOCALE_COOKIE,
   resolveAvailableLocale,
@@ -39,6 +41,7 @@ import {
   DENSITY_COOKIE,
   DASHBOARD_COOKIE,
   appendSavedPanel,
+  evictedPanels,
   type FocusGoal,
   FOCUS_GOAL_COOKIE,
   MAX_PINS,
@@ -57,6 +60,14 @@ import { PARTICIPANT_COOKIE, parseOwnerCookie } from "./participants";
 import { assertWebSession } from "./webSession.server";
 
 export type ActionResult = { ok: boolean; error?: string };
+
+// The catalog in the interface language, for messages an action returns.
+async function interfaceDictionary(): Promise<Dictionary> {
+  const jar = await cookies();
+  return getDictionary(
+    resolveAvailableLocale(jar.get(LOCALE_COOKIE)?.value, process.env.HEALTHSAVE_EXPERIMENTAL_LOCALES === "1"),
+  );
+}
 
 function failure(error: unknown, fallback: string): ActionResult {
   return { ok: false, error: error instanceof Error ? error.message : fallback };
@@ -193,9 +204,11 @@ export async function togglePinAction(metricId: string): Promise<ActionResult> {
   try {
     const jar = await cookies();
     const pinned = parsePinned(jar.get(PINNED_COOKIE)?.value);
-    const next = pinned.includes(metricId)
-      ? pinned.filter((id) => id !== metricId)
-      : [...pinned, metricId].slice(0, MAX_PINS);
+    if (!pinned.includes(metricId) && pinned.length >= MAX_PINS) {
+      // Refused out loud: the pin would otherwise not be kept.
+      return { ok: false, error: fillTemplate((await interfaceDictionary()).prefs.pinLimit, { max: MAX_PINS }) };
+    }
+    const next = pinned.includes(metricId) ? pinned.filter((id) => id !== metricId) : [...pinned, metricId];
     jar.set(PINNED_COOKIE, JSON.stringify(next), {
       path: "/",
       maxAge: 60 * 60 * 24 * 365,
@@ -368,10 +381,11 @@ export async function resetSectionsAction(): Promise<ActionResult> {
 
 // ── Saved Explore panels → Today bridge ─────────────────────────────────
 
+// `removed`: labels of older views this save pushed off Today to make room.
 export async function saveExplorePanelAction(
   state: string,
   label: string,
-): Promise<ActionResult> {
+): Promise<ActionResult & { removed?: string[] }> {
   await assertWebSession();
   try {
     const cleanLabel = label.trim().slice(0, MAX_SAVED_PANEL_LABEL);
@@ -382,7 +396,9 @@ export async function saveExplorePanelAction(
     const jar = await cookies();
     const panels = parseSavedPanels(jar.get(SAVED_PANELS_COOKIE)?.value);
     const id = `panel_${Date.now()}`;
-    const next = appendSavedPanel(panels, { id, label: cleanLabel, state });
+    const added = { id, label: cleanLabel, state };
+    const next = appendSavedPanel(panels, added);
+    const removed = evictedPanels(panels, next, added).map((panel) => panel.label);
     jar.set(SAVED_PANELS_COOKIE, JSON.stringify(next), {
       path: "/",
       maxAge: 60 * 60 * 24 * 365,
@@ -390,7 +406,7 @@ export async function saveExplorePanelAction(
       httpOnly: true,
     });
     revalidatePath("/");
-    return { ok: true };
+    return { ok: true, removed };
   } catch (error) {
     return failure(error, "Could not save this panel to Today.");
   }

@@ -74,6 +74,10 @@ const englishDictionary = {
     hint: "It is WEB_PASSWORD in the .env file on the machine that runs the Observatory.",
     submit: "Sign in",
   },
+  prefs: {
+    pinLimit: "You can pin up to {max} signals. Unpin one first.",
+    todayRemoved: "Saved. To make room, Today no longer shows: {labels}.",
+  },
   live: {
     live: {
       pill: "live",
@@ -225,6 +229,10 @@ export const dictionaries = {
       hint: "Es WEB_PASSWORD en el archivo .env del equipo que ejecuta el Observatory.",
       submit: "Iniciar sesión",
     },
+    prefs: {
+      pinLimit: "Puedes fijar hasta {max} señales. Quita una primero.",
+      todayRemoved: "Guardado. Para hacer sitio, Hoy ya no muestra: {labels}.",
+    },
     live: {
       live: {
         pill: "en vivo",
@@ -362,6 +370,10 @@ export const dictionaries = {
       password: "Mot de passe",
       hint: "C'est WEB_PASSWORD dans le fichier .env de la machine qui exécute l'Observatory.",
       submit: "Se connecter",
+    },
+    prefs: {
+      pinLimit: "Vous pouvez épingler jusqu'à {max} signaux. Retirez-en un d'abord.",
+      todayRemoved: "Enregistré. Pour faire de la place, Aujourd'hui n'affiche plus : {labels}.",
     },
     live: {
       live: {
@@ -501,6 +513,10 @@ export const dictionaries = {
       hint: "Es ist WEB_PASSWORD in der .env-Datei auf dem Rechner, auf dem das Observatory läuft.",
       submit: "Anmelden",
     },
+    prefs: {
+      pinLimit: "Du kannst bis zu {max} Signale anheften. Löse zuerst eines.",
+      todayRemoved: "Gespeichert. Um Platz zu schaffen, zeigt Heute nicht mehr: {labels}.",
+    },
     live: {
       live: {
         pill: "aktiv",
@@ -639,6 +655,10 @@ export const dictionaries = {
       hint: "Observatory を実行しているマシンの .env ファイルにある WEB_PASSWORD です。",
       submit: "サインイン",
     },
+    prefs: {
+      pinLimit: "ピン留めできるシグナルは最大 {max} 件です。先にどれかのピン留めを外してください。",
+      todayRemoved: "保存しました。空きを作るため、今日には次の項目が表示されなくなりました: {labels}。",
+    },
     live: {
       live: {
         pill: "ライブ",
@@ -776,6 +796,10 @@ export const dictionaries = {
       password: "密碼",
       hint: "即執行 Observatory 的機器上 .env 檔案中的 WEB_PASSWORD。",
       submit: "登入",
+    },
+    prefs: {
+      pinLimit: "最多可釘選 {max} 個訊號。請先取消釘選一個。",
+      todayRemoved: "已儲存。為了騰出空間，今日不再顯示：{labels}。",
     },
     live: {
       live: {

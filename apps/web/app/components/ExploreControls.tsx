@@ -18,7 +18,9 @@ import {
   type SavedView,
 } from "../lib/explore";
 import { saveExplorePanelAction } from "../lib/actions";
+import { fillTemplate } from "../lib/i18n";
 import { runAction } from "../lib/session";
+import { useI18n } from "./I18nProvider";
 
 // Client islands for the Explore dashboard. They hold no data — they read the
 // current dashboard from the URL (via the `state` prop the server parsed) and
@@ -144,15 +146,20 @@ function SaveToToday({ current }: { current: string }) {
   const [label, setLabel] = useState("");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Older views this save pushed off Today, named until the next save.
+  const [removed, setRemoved] = useState<string[]>([]);
+  const { dict } = useI18n();
 
   const save = () => {
     const name = label.trim();
     if (!name) return;
     setError(null);
+    setRemoved([]);
     startTransition(async () => {
       const result = await runAction(() => saveExplorePanelAction(current, name));
       if (result.ok) {
         setSaved(true);
+        setRemoved(result.removed ?? []);
         setLabel("");
         setTimeout(() => setSaved(false), 2000);
       } else {
@@ -192,6 +199,11 @@ function SaveToToday({ current }: { current: string }) {
       {error && (
         <span className="exp-error" role="status">
           {error}
+        </span>
+      )}
+      {removed.length > 0 && (
+        <span className="meta" role="status">
+          {fillTemplate(dict.prefs.todayRemoved, { labels: removed.join(", ") })}
         </span>
       )}
     </div>
