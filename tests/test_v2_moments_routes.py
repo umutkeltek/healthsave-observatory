@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
+import server
 import server.api.v2_moments as route
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
+from pydantic import ValidationError
+from server.api.deps import get_session
 from server.api.v2_moments import (
     CreateMomentRequest,
     UpdateMomentRequest,
@@ -104,3 +108,72 @@ async def test_delete_returns_404_for_unknown_moment(monkeypatch) -> None:
     monkeypatch.setattr(route, "default_repository", _Repo())
     with pytest.raises(HTTPException, match="moment not found"):
         await delete_moment(99, _Session())
+
+
+# ── a moment cannot end before it starts ──────────────────────────────
+
+START = datetime(2026, 7, 20, 12, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize("model", [CreateMomentRequest, UpdateMomentRequest])
+def test_end_before_start_is_rejected(model) -> None:
+    with pytest.raises(ValidationError, match="end_at must not be before start_at"):
+        model(kind="travel", title="Trip", start_at=START, end_at=START - timedelta(minutes=1))
+
+
+@pytest.mark.parametrize("model", [CreateMomentRequest, UpdateMomentRequest])
+@pytest.mark.parametrize("end_at", [None, START, START + timedelta(days=2)])
+def test_open_instant_and_forward_ranges_are_accepted(model, end_at) -> None:
+    body = model(kind="travel", title="Trip", start_at=START, end_at=end_at)
+    assert body.end_at == end_at
+
+
+def test_naive_and_aware_bounds_are_compared_not_crashed() -> None:
+    """A naive and an aware timestamp must compare (a TypeError would be a 500)."""
+    naive_two_days_earlier = (START - timedelta(days=2)).replace(tzinfo=None)
+    with pytest.raises(ValidationError, match="end_at must not be before start_at"):
+        CreateMomentRequest(
+            kind="travel", title="Trip", start_at=START, end_at=naive_two_days_earlier
+        )
+    accepted = CreateMomentRequest(
+        kind="travel",
+        title="Trip",
+        start_at=naive_two_days_earlier,
+        end_at=START,
+    )
+    assert accepted.end_at == START
+
+
+@pytest.fixture
+def client(monkeypatch):
+    repo = _Repo()
+    monkeypatch.setattr(route, "default_repository", repo)
+
+    async def fake_session():
+        yield _Session()
+
+    server.app.dependency_overrides[get_session] = fake_session
+    try:
+        with TestClient(server.app) as c:
+            yield c, repo
+    finally:
+        server.app.dependency_overrides.clear()
+
+
+def test_end_before_start_is_422_on_create_and_update_and_never_written(client) -> None:
+    c, repo = client
+    body = {
+        "kind": "illness",
+        "title": "Cold",
+        "start_at": "2026-07-20T12:00:00Z",
+        "end_at": "2026-07-19T12:00:00Z",
+    }
+
+    created = c.post("/api/v2/moments", json=body)
+    updated = c.put("/api/v2/moments/1", json=body)
+
+    assert created.status_code == 422
+    assert updated.status_code == 422
+    assert "end_at must not be before start_at" in created.text
+    assert repo.create_args is None
+    assert repo.update_args is None

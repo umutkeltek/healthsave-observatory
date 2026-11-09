@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated
 
 from contracts._base import V2Model
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import Field, StringConstraints, field_validator
+from pydantic import Field, StringConstraints, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.timescale.moments import GRADES, MOMENT_KINDS, default_repository
 
@@ -57,6 +57,16 @@ class CreateMomentRequest(V2Model):
         if value is not None and value not in GRADES:
             raise ValueError(f"grade must be one of: {', '.join(sorted(GRADES))}")
         return value
+
+    @model_validator(mode="after")
+    def validate_range(self) -> CreateMomentRequest:
+        # A model validator adds no JSON-schema constraint, so the OpenAPI
+        # contract is unchanged. PUT replaces the whole row, so the body
+        # alone decides the stored range. astimezone() compares naive and
+        # aware values the way asyncpg stores a naive one (local time).
+        if self.end_at is not None and self.end_at.astimezone(UTC) < self.start_at.astimezone(UTC):
+            raise ValueError("end_at must not be before start_at")
+        return self
 
 
 class UpdateMomentRequest(CreateMomentRequest):
