@@ -43,7 +43,7 @@ To run the same migration pass explicitly:
 docker compose run --rm migrate
 ```
 
-The runner records applied files in `schema_migrations`, so re-runs are safe. Migration files live in `db/migrations/` for review and manual recovery. The current set starts at `db/migrations/001_audit_hardening.sql` and includes later additive upgrades such as `db/migrations/002_analysis_tables.sql` and `db/migrations/008_oauth_tokens.sql`; files apply in filename order.
+The runner records applied files in `schema_migrations`, with the sha256 of each file as it was applied, so re-runs are safe. If an applied file is edited later, the runner logs an error naming the file on every run and carries on; restore the file and put the change in a new migration. Migration files live in `db/migrations/` for review and manual recovery. The current set starts at `db/migrations/001_audit_hardening.sql` and includes later additive upgrades such as `db/migrations/002_analysis_tables.sql` and `db/migrations/008_oauth_tokens.sql`; files apply in filename order.
 
 > Take a backup before a major upgrade. Migrations are additive and re-runnable, but a volume snapshot is your fast rollback path if a deploy goes sideways.
 
