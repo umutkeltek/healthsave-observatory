@@ -288,3 +288,52 @@ async def test_a_link_past_its_valid_to_is_unfused_by_the_next_pass(db) -> None:
             "apple_health": (None, True),
         }
         assert await _decisions(session, owner) == ["assigned", "revoked"]
+
+
+class _NoFetchHttp:
+    async def get(self, url, *, params=None, headers=None):
+        raise AssertionError(f"a deletion must not fetch {url}")
+
+
+class _Tokens:
+    def __init__(self, owner: UUID) -> None:
+        from auth import OAuthToken
+
+        self.token = OAuthToken(
+            owner_id=owner,
+            provider="whoop",
+            access_token="AT",
+            refresh_token="RT",
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        )
+
+    async def get_token(self, session, *, provider, owner_id):
+        return self.token
+
+
+@pytest.mark.asyncio
+async def test_deleting_the_fused_primary_makes_its_partner_primary_again(db) -> None:
+    """A Whoop workout deleted by webhook: the Apple copy must count again."""
+    from plugin_sdk import find_plugin_manifest, load_manifest
+
+    from plugins.sources.whoop import WhoopSource
+
+    factory, owner = db
+    whoop, _start, _end = await _fused_pair(factory, owner)
+    plugin = WhoopSource(load_manifest(find_plugin_manifest("whoop", kind="source")))
+
+    async with factory() as session:
+        await plugin.handle_webhook(
+            {
+                "event": {"type": "workout.deleted", "id": "whoop-workout-1"},
+                "storage": object(),
+                "session": session,
+                "http_client": _NoFetchHttp(),
+                "owner_id": owner,
+                "token_store": _Tokens(owner),
+            }
+        )
+        await session.commit()
+        # Only the Apple copy is still active, unfused and primary.
+        assert await _rows(session, owner) == {"apple_health": (None, True)}
+        assert await _decisions(session, owner) == ["assigned", "revoked"]

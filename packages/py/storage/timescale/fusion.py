@@ -230,11 +230,13 @@ _UPSERT_DEVICE_IDENTITY_LINK_SQL = text(
     """
 )
 
-# Undo the fusion of every pair whose latest decision is 'assigned' but whose
-# device link no longer qualifies (not confirmed, too weak, expired or gone):
-# the candidate query would never fuse it today, so it must not stay fused.
-# Only rows still carrying that decision's semantic key are touched, which
-# makes the sweep idempotent.
+# Undo the fusion of every pair whose latest decision is 'assigned' but that
+# no longer stands: its device link no longer qualifies (not confirmed, too
+# weak, expired or gone), or one of its rows is no longer active (deleted at
+# the vendor or in Apple Health). The candidate query would never fuse it
+# today, so it must not stay fused: the surviving copy is primary again. Only
+# rows still carrying that decision's semantic key are touched, which makes
+# the sweep idempotent.
 _REVOKE_UNQUALIFIED_ASSIGNMENTS_SQL = text(
     """
     WITH latest AS (
@@ -251,20 +253,31 @@ _REVOKE_UNQUALIFIED_ASSIGNMENTS_SQL = text(
            AND d.decision IN ('assigned', 'revoked')
          ORDER BY d.workspace_id, d.semantic_key, d.created_at DESC
     ),
-    unqualified AS (
-        SELECT latest.*
+    judged AS (
+        SELECT latest.*,
+               NOT EXISTS (
+                   SELECT 1
+                     FROM device_identity_links link
+                    WHERE link.owner_id = CAST(:owner_id AS UUID)
+                      AND link.direct_stream_id::text = latest.direct_stream_id
+                      AND link.relayed_stream_id::text = latest.relayed_stream_id
+                      AND link.status = 'confirmed'
+                      AND link.confidence IN ('medium', 'strong')
+                      AND (link.valid_to IS NULL OR link.valid_to > now())
+               ) AS link_gone,
+               EXISTS (
+                   SELECT 1
+                     FROM canonical_observations variant
+                    WHERE variant.owner_id = CAST(:owner_id AS UUID)
+                      AND variant.workspace_id = latest.workspace_id
+                      AND variant.id = ANY(latest.variant_observation_ids)
+                      AND variant.status <> 'active'
+               ) AS variant_gone
           FROM latest
          WHERE latest.decision = 'assigned'
-           AND NOT EXISTS (
-               SELECT 1
-                 FROM device_identity_links link
-                WHERE link.owner_id = CAST(:owner_id AS UUID)
-                  AND link.direct_stream_id::text = latest.direct_stream_id
-                  AND link.relayed_stream_id::text = latest.relayed_stream_id
-                  AND link.status = 'confirmed'
-                  AND link.confidence IN ('medium', 'strong')
-                  AND (link.valid_to IS NULL OR link.valid_to > now())
-           )
+    ),
+    unqualified AS (
+        SELECT * FROM judged WHERE link_gone OR variant_gone
     )
     UPDATE canonical_observations AS obs
        SET semantic_key = NULL,
@@ -279,7 +292,8 @@ _REVOKE_UNQUALIFIED_ASSIGNMENTS_SQL = text(
               unqualified.workspace_id,
               unqualified.semantic_key,
               unqualified.direct_stream_id,
-              unqualified.relayed_stream_id
+              unqualified.relayed_stream_id,
+              unqualified.link_gone
     """
 )
 
@@ -363,11 +377,13 @@ class FusionReconciliationRepository:
         owner_id: UUID,
         decided_by: str = "system",
     ) -> int:
-        """Unfuse pairs whose device link no longer qualifies; return pairs revoked.
+        """Unfuse pairs that no longer stand; return the number revoked.
 
-        Each unfused pair gets a ``revoked`` decision. Runs when a link is
-        saved and before each reconciliation pass (which also catches a link
-        whose ``valid_to`` has passed).
+        A pair no longer stands when its device link no longer qualifies or
+        one of its rows is no longer active (deleted). Each unfused pair gets
+        a ``revoked`` decision. Runs when a link is saved, before each
+        reconciliation pass (which also catches a link whose ``valid_to`` has
+        passed and an Apple deletion), and after a vendor deletion.
         """
         result = await session.execute(
             _REVOKE_UNQUALIFIED_ASSIGNMENTS_SQL,
@@ -382,6 +398,11 @@ class FusionReconciliationRepository:
                     "ids": [],
                     "direct_stream_id": row["direct_stream_id"],
                     "relayed_stream_id": row["relayed_stream_id"],
+                    "reason": (
+                        "device link no longer confirmed with medium or strong confidence"
+                        if row["link_gone"]
+                        else "a fused copy was deleted"
+                    ),
                 },
             )
             entry["ids"].append(_as_uuid(row["observation_id"]))  # type: ignore[union-attr]
@@ -397,7 +418,7 @@ class FusionReconciliationRepository:
                 variant_observation_ids=tuple(entry["ids"]),  # type: ignore[arg-type]
                 decided_by=decided_by,
                 evidence={
-                    "reason": "device link no longer confirmed with medium or strong confidence",
+                    "reason": str(entry["reason"]),
                     "direct_stream_id": str(entry["direct_stream_id"]),
                     "relayed_stream_id": str(entry["relayed_stream_id"]),
                 },

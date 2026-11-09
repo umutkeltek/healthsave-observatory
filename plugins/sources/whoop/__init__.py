@@ -365,6 +365,17 @@ class WhoopSource(Source):
                     normalizer_id=NORMALIZER_ID,
                     source_record_uids=[str(resource_id)],
                 )
+                if deleted:
+                    # A fused workout's other copy (Apple Health / Health
+                    # Connect) was hidden as non-primary: it counts again.
+                    from storage.timescale.fusion import (
+                        default_repository as default_fusion_repo,
+                    )
+
+                    fusion_repository = payload.get("fusion_repository") or default_fusion_repo
+                    await fusion_repository.revoke_unqualified_assignments(
+                        session, owner_id=owner_id, decided_by="whoop-webhook"
+                    )
             log.info(
                 "whoop webhook deletion owner=%s event_type=%s resource_id=%s superseded=%d "
                 "(legacy per-metric rows carry no Whoop id and stay)",

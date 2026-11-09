@@ -372,10 +372,20 @@ class _CanonicalRepo:
         return self._superseded
 
 
+class _FusionRepo:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    async def revoke_unqualified_assignments(self, session, **kwargs):
+        self.calls.append(kwargs)
+        return 1
+
+
 @pytest.mark.asyncio
 async def test_a_deleted_workout_is_superseded_without_fetching_it():
     http = _HttpClient()  # any GET would raise: the resource is gone
     canonical = _CanonicalRepo()
+    fusion = _FusionRepo()
 
     result = await _plugin().handle_webhook(
         {
@@ -385,6 +395,7 @@ async def test_a_deleted_workout_is_superseded_without_fetching_it():
             "http_client": http,
             "token_store": _TokenStore(initial_token=_fresh_token()),
             "canonical_repository": canonical,
+            "fusion_repository": fusion,
         }
     )
 
@@ -397,6 +408,8 @@ async def test_a_deleted_workout_is_superseded_without_fetching_it():
             "source_record_uids": ["wk-9"],
         }
     ]
+    # A fused partner of the deleted workout counts again.
+    assert fusion.calls == [{"owner_id": DEFAULT_OWNER_ID, "decided_by": "whoop-webhook"}]
 
 
 @pytest.mark.asyncio
