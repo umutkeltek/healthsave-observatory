@@ -36,3 +36,32 @@ export function liveAfterPoll(
   if (signal.refreshing > 0) return { updating: true, redraw: false };
   return { updating: false, redraw: signal.settled > renderedSettled };
 }
+
+// How often the live pill polls /api/changes (components/LiveStatus.tsx).
+export const POLL_MS = 30_000;
+// While cached values are being refreshed, and for a short while after the
+// page changed, look again soon so "updating" and the redraw follow closely.
+export const UPDATING_POLL_MS = 2_000;
+// A new page's sections can still be reading (and serving cached values) after
+// the URL changed, so one prompt poll is not enough: watch for this long.
+export const NAV_WATCH_MS = 10_000;
+
+/**
+ * Delay before the next poll, or null for none: a hidden tab does not poll
+ * (it polls at once when shown again). Fast while refreshing or just after a
+ * navigation (until watchUntil, same clock as now), slow otherwise.
+ */
+export function nextPollDelay({
+  hidden,
+  updating,
+  now,
+  watchUntil,
+}: {
+  hidden: boolean;
+  updating: boolean;
+  now: number;
+  watchUntil: number;
+}): number | null {
+  if (hidden) return null;
+  return updating || now < watchUntil ? UPDATING_POLL_MS : POLL_MS;
+}

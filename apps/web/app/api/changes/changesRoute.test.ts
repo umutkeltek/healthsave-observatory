@@ -2,7 +2,7 @@
 // that are being refreshed, so it can say "updating" and redraw when done.
 import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 
-import { liveAfterPoll, readCacheSignal } from "../../lib/liveSignal";
+import { liveAfterPoll, nextPollDelay, NAV_WATCH_MS, POLL_MS, readCacheSignal, UPDATING_POLL_MS } from "../../lib/liveSignal";
 import { fakeClocks } from "../../lib/testClock";
 import { clearSwrCache, inRenderScopeForTests, renderedSettledMark, staleRefreshStatus, swrCache } from "../../lib/ttlCache";
 import { GET } from "./route";
@@ -139,5 +139,31 @@ describe("the page's render mark", () => {
       await swrCache("a", 30_000, async () => 1);
       expect(renderedSettledMark()).toBe(first);
     });
+  });
+});
+
+describe("when the live pill polls", () => {
+  const base = { hidden: false, updating: false, now: 100_000, watchUntil: 0 };
+
+  test("a hidden tab does not poll at all", () => {
+    expect(nextPollDelay({ ...base, hidden: true })).toBeNull();
+    expect(nextPollDelay({ ...base, hidden: true, updating: true })).toBeNull();
+  });
+
+  test("a settled, visible tab polls at the slow cadence", () => {
+    expect(nextPollDelay(base)).toBe(POLL_MS);
+  });
+
+  // The bug: the poll ran on a fixed 30 s timer, so after a soft navigation
+  // that showed cached values the pill said "live" and the redraw came up to
+  // 30 s late.
+  test("right after a navigation it polls at the fast cadence for a while", () => {
+    const watchUntil = base.now + NAV_WATCH_MS;
+    expect(nextPollDelay({ ...base, watchUntil })).toBe(UPDATING_POLL_MS);
+    expect(nextPollDelay({ ...base, watchUntil, now: watchUntil + 1 })).toBe(POLL_MS);
+  });
+
+  test("while cached values are being refreshed it polls fast", () => {
+    expect(nextPollDelay({ ...base, updating: true })).toBe(UPDATING_POLL_MS);
   });
 });

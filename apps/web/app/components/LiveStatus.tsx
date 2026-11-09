@@ -1,17 +1,12 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { liveAfterPoll, readCacheSignal } from "../lib/liveSignal";
+import { liveAfterPoll, NAV_WATCH_MS, nextPollDelay, readCacheSignal } from "../lib/liveSignal";
 import type { Dictionary } from "../lib/i18n";
 import { type PollState, pollState, SIGNED_OUT_EVENT, signInPath } from "../lib/session";
 import { useI18n } from "./I18nProvider";
-
-const POLL_MS = 30_000;
-// While cached values are being refreshed, look again soon so the redraw
-// follows the refresh closely.
-const UPDATING_POLL_MS = 2_000;
 
 export type LiveState = PollState | "updating";
 
@@ -67,12 +62,18 @@ export function LivePill({ state, dict, signInHref }: { state: LiveState; dict: 
 // dashboard updates close to real time without a reload. The mint dot only
 // claims "live" while the poll is actually succeeding. A 401 means the web
 // session ended: that is "signed out" with a way to sign in, not "offline".
+// A hidden tab does not poll; it polls at once when shown again. After a
+// navigation it polls at once and then often for NAV_WATCH_MS, because the new
+// page may be showing cached values that are being refreshed.
 export function LiveStatus({ renderedSettled = 0 }: { renderedSettled?: number }) {
   const router = useRouter();
   const pathname = usePathname();
+  const search = useSearchParams()?.toString() ?? "";
   const { dict } = useI18n();
   const etag = useRef<string | null>(null);
   const wasLive = useRef(false);
+  const pollNow = useRef<() => void>(() => {});
+  const watchUntil = useRef(0);
   const [state, setState] = useState<LiveState>("unknown");
   // How many cache refreshes had landed when the server rendered this page:
   // one landing later means the page may show older values, so it redraws.
@@ -90,15 +91,21 @@ export function LiveStatus({ renderedSettled = 0 }: { renderedSettled?: number }
   useEffect(() => {
     let stopped = false;
     let inflight = false;
+    let updating = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const schedule = (ms: number) => {
+    const hidden = () => document.visibilityState === "hidden";
+    const schedule = () => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(tick, ms);
+      timer = null;
+      const delay = nextPollDelay({ hidden: hidden(), updating, now: performance.now(), watchUntil: watchUntil.current });
+      if (delay !== null) timer = setTimeout(tick, delay);
     };
     const tick = async () => {
       if (inflight) return; // a hung poll must not race the next one
+      if (timer) clearTimeout(timer);
+      timer = null;
       inflight = true;
-      let nextPoll = POLL_MS;
+      updating = false;
       try {
         const headers: Record<string, string> = {};
         if (etag.current) headers["If-None-Match"] = etag.current;
@@ -116,31 +123,54 @@ export function LiveStatus({ renderedSettled = 0 }: { renderedSettled?: number }
           // Cached values on this page being refreshed: say so, look again
           // soon, and redraw once the refresh has landed.
           const signal = readCacheSignal(res.headers);
-          const { updating, redraw } = liveAfterPoll(signal, renderedSettledRef.current);
-          if (updating) {
-            nextState = "updating";
-            nextPoll = UPDATING_POLL_MS;
-          }
+          const after = liveAfterPoll(signal, renderedSettledRef.current);
+          updating = after.updating;
+          if (after.updating) nextState = "updating";
+          const redraw = after.redraw;
           if (redraw && signal) {
             refresh = true;
             renderedSettledRef.current = signal.settled;
           }
         }
-        if (refresh) router.refresh();
+        if (refresh) {
+          // The redrawn page may again show cached values: watch it too.
+          watchUntil.current = performance.now() + NAV_WATCH_MS;
+          router.refresh();
+        }
         setState(nextState);
       } catch {
         if (!stopped) setState(pollState(null, wasLive.current));
       } finally {
         inflight = false;
-        if (!stopped) schedule(nextPoll);
+        if (!stopped) schedule();
       }
     };
-    tick();
+    pollNow.current = () => {
+      if (!stopped && !hidden()) void tick();
+    };
+    const onVisibility = () => (hidden() ? schedule() : pollNow.current());
+    document.addEventListener("visibilitychange", onVisibility);
+    if (!hidden()) tick();
     return () => {
       stopped = true;
+      pollNow.current = () => {};
+      document.removeEventListener("visibilitychange", onVisibility);
       if (timer) clearTimeout(timer);
     };
   }, [router]);
+
+  // A navigation (path or URL state): the new page may show cached values
+  // whose refresh is running or about to start, so look now and keep looking
+  // often for a while. Runs after the poll effect, so the first mount polls once.
+  const firstRender = useRef(true);
+  useEffect(() => {
+    watchUntil.current = performance.now() + NAV_WATCH_MS;
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    pollNow.current();
+  }, [pathname, search]);
 
   // Never claim "live" before the first successful poll - but once it HAS
   // been live, a silent disappearance isn't feedback: show offline instead.
