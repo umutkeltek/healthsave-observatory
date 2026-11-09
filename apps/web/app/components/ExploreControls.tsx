@@ -107,7 +107,7 @@ export function SavedViews({ current }: { current: string }) {
 
   return (
     <div className="saved-views">
-      <span className="saved-views-label">Views</span>
+      <span className="saved-views-label">{dict.explore.views}</span>
       {views.map((v) => (
         <span key={v.name} className="panel-chip saved-view-chip">
           <button
@@ -121,7 +121,7 @@ export function SavedViews({ current }: { current: string }) {
           <button
             type="button"
             className="panel-chip-x"
-            aria-label={`Delete view ${v.name}`}
+            aria-label={fillTemplate(dict.explore.deleteView, { name: v.name })}
             onClick={() => remove(v.name)}
           >
             ×
@@ -130,7 +130,7 @@ export function SavedViews({ current }: { current: string }) {
       ))}
       <input
         className="filter-select saved-view-input"
-        placeholder="Save this view as…"
+        placeholder={dict.explore.saveAsPlaceholder}
         maxLength={MAX_SAVED_VIEW_NAME}
         title={limitNote}
         value={name}
@@ -140,7 +140,7 @@ export function SavedViews({ current }: { current: string }) {
         }}
       />
       <button type="button" className="btn-ghost panel-remove-btn" onClick={save} disabled={!name.trim()}>
-        Save
+        {dict.explore.save}
       </button>
       {name.length >= MAX_SAVED_VIEW_NAME ? <span className="meta">{limitNote}</span> : null}
     </div>
@@ -149,7 +149,7 @@ export function SavedViews({ current }: { current: string }) {
 
 // Save-to-Today: persists the current explore dashboard as a compact card on
 // the Today page. Uses a server action (cookie-backed, revalidates /).
-function SaveToToday({ current, empty }: { current: string; empty: boolean }) {
+export function SaveToToday({ current, empty }: { current: string; empty: boolean }) {
   const [, startTransition] = useTransition();
   const [label, setLabel] = useState("");
   const [saved, setSaved] = useState(false);
@@ -171,23 +171,23 @@ function SaveToToday({ current, empty }: { current: string; empty: boolean }) {
         setLabel("");
         setTimeout(() => setSaved(false), 2000);
       } else {
-        setError(result.error ?? "Could not save this view to Today.");
+        setError(result.error ?? dict.explore.saveFailed);
       }
     });
   };
 
   return (
     <div className="saved-views" style={{ marginTop: 8 }}>
-      <span className="saved-views-label">Pin to Today</span>
+      <span className="saved-views-label">{dict.explore.pinToToday}</span>
       {saved ? (
         <span className="panel-chip" style={{ color: "var(--up)", borderColor: "var(--up)" }}>
-          ✓ Saved!
+          ✓ {dict.explore.saved}
         </span>
       ) : (
         <>
           <input
             className="filter-select saved-view-input"
-            placeholder="Label this view…"
+            placeholder={dict.explore.labelPlaceholder}
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             onKeyDown={(e) => {
@@ -201,7 +201,7 @@ function SaveToToday({ current, empty }: { current: string; empty: boolean }) {
             disabled={!label.trim() || empty}
             title={empty ? dict.prefs.emptyView : undefined}
           >
-            Pin
+            {dict.explore.pin}
           </button>
         </>
       )}

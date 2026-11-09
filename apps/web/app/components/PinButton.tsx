@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 
 import { togglePinAction } from "../lib/actions";
 import { runAction } from "../lib/session";
+import { useI18n } from "./I18nProvider";
 
 // Pin/unpin a metric onto the Today Signals grid. The server action writes the
 // cookie and revalidates; the row re-renders with the new state. A refused pin
@@ -12,6 +13,8 @@ import { runAction } from "../lib/session";
 export function PinButton({ metricId, pinned }: { metricId: string; pinned: boolean }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const { dict } = useI18n();
+  const label = pinned ? dict.explore.unpinFromToday : dict.explore.pinToToday;
   return (
     <span className="pin-control">
       <button
@@ -19,13 +22,13 @@ export function PinButton({ metricId, pinned }: { metricId: string; pinned: bool
         className={`pin-btn ${pinned ? "pinned" : ""}`}
         disabled={pending}
         aria-pressed={pinned}
-        aria-label={pinned ? "Unpin from Today" : "Pin to Today"}
-        title={pinned ? "Unpin from Today" : "Pin to Today"}
+        aria-label={label}
+        title={label}
         onClick={() => {
           setError(null);
           startTransition(async () => {
             const result = await runAction(() => togglePinAction(metricId));
-            if (!result.ok) setError(result.error ?? "Could not update pinned signals.");
+            if (!result.ok) setError(result.error ?? dict.explore.pinFailed);
           });
         }}
       >

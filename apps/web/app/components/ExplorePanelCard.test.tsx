@@ -4,6 +4,7 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { getDictionary } from "../lib/i18n";
 import { ExplorePanelCard } from "./ExplorePanelCard";
 
 describe("saved Explore view on Today", () => {
@@ -13,7 +14,7 @@ describe("saved Explore view on Today", () => {
         id: "panel_1",
         label: "Emptied",
         encodedState: "range=30d&grain=day&stat=mean&panels=",
-        emptyNote: "This saved view has no panels.",
+        dict: getDictionary("en"),
       }),
     );
     expect(html).toContain("Emptied");
