@@ -643,16 +643,23 @@ class TimescaleIntelligenceRepository:
         NOT egress until consent is granted here. The row must already exist
         (created by :meth:`update_settings`); consent is a decision *about* an
         existing posture, so we update, never insert.
+
+        Consent changes the effective posture, so like :meth:`update_settings`
+        it bumps ``revision`` in-SQL and audits before/after. With no head row
+        the UPDATE matches nothing and the audit carries no revision.
         """
         if granted:
-            await session.execute(
+            result = await session.execute(
                 text(
                     """
                     UPDATE intelligence_settings
                        SET allow_cloud_egress = TRUE,
                            consent_version = :version, consent_text_hash = :hash,
-                           consented_at = NOW(), consented_by = :by, updated_at = NOW()
+                           consented_at = NOW(), consented_by = :by,
+                           revision = intelligence_settings.revision + 1,
+                           updated_at = NOW()
                      WHERE owner_id = :owner_id
+                    RETURNING revision
                     """
                 ),
                 {
@@ -663,22 +670,29 @@ class TimescaleIntelligenceRepository:
                 },
             )
         else:
-            await session.execute(
+            result = await session.execute(
                 text(
                     """
                     UPDATE intelligence_settings
                        SET allow_cloud_egress = FALSE,
                            consent_version = NULL, consent_text_hash = NULL,
-                           consented_at = NULL, consented_by = NULL, updated_at = NOW()
+                           consented_at = NULL, consented_by = NULL,
+                           revision = intelligence_settings.revision + 1,
+                           updated_at = NOW()
                      WHERE owner_id = :owner_id
+                    RETURNING revision
                     """
                 ),
                 {"owner_id": str(owner_id)},
             )
+        row = result.first()
+        after = row.revision if row is not None else None
         await self.record_audit(
             session,
             owner_id=owner_id,
             actor=actor,
+            before_revision=(after - 1) if after is not None else None,
+            after_revision=after,
             event_type="consent_granted" if granted else "consent_revoked",
             metadata=(
                 {"consent_version": consent_version}

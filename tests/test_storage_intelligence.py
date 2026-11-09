@@ -353,3 +353,35 @@ async def test_revoking_consent_audits_the_reason(repo):
     _, audit = session.find("INSERT INTO intelligence_audit_events")
     assert audit["event_type"] == "consent_revoked"
     assert json.loads(audit["metadata"]) == {"reason": "egress_scope_changed"}
+
+
+# ── consent is a settings change: it bumps revision too ───────────────
+
+
+@pytest.mark.parametrize(
+    ("granted", "event_type"),
+    [(True, "consent_granted"), (False, "consent_revoked")],
+)
+async def test_consent_change_bumps_revision_and_audits_before_after(repo, granted, event_type):
+    session = _FakeSession().on("UPDATE intelligence_settings", row=SimpleNamespace(revision=7))
+
+    await repo.record_consent(session, granted=granted, consent_version="v1", actor="api")
+
+    update_sql, _ = session.find("UPDATE intelligence_settings")
+    # Bumped in-SQL like update_settings, never read-modify-write.
+    assert "revision = intelligence_settings.revision + 1" in update_sql
+    assert "RETURNING revision" in update_sql
+    _, audit = session.find("INSERT INTO intelligence_audit_events")
+    assert audit["event_type"] == event_type
+    assert audit["before_revision"] == 6
+    assert audit["after_revision"] == 7
+
+
+async def test_consent_change_without_a_head_row_audits_no_revision(repo):
+    session = _FakeSession()  # UPDATE matched no row
+
+    await repo.record_consent(session, granted=False, reason="egress_scope_changed")
+
+    _, audit = session.find("INSERT INTO intelligence_audit_events")
+    assert audit["before_revision"] is None
+    assert audit["after_revision"] is None

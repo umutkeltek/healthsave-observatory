@@ -190,6 +190,7 @@ class _FakeRepo:
             consent_text_hash=consent_text_hash if granted else None,
             consented_at=NOW if granted else None,
             consented_by=consented_by if granted else None,
+            revision=self.settings.revision + 1,  # consent is a settings change
         )
         self.audit.append("consent_granted" if granted else "consent_revoked")
 
