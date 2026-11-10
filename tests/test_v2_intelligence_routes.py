@@ -29,6 +29,7 @@ from storage.timescale.intelligence import (  # noqa: E402
     Connection,
     CredentialRef,
     FallbackRoute,
+    SavedKeyUnreadable,
     Settings,
 )
 
@@ -527,6 +528,40 @@ async def test_test_connection_stored_records_result(repo, monkeypatch):
     )
     assert out["ok"] is True
     assert repo.connections[0].last_test_status == "ok"
+    assert "provider_healthcheck" in repo.audit
+
+
+async def test_test_connection_says_plainly_when_the_saved_key_cannot_be_opened(repo, monkeypatch):
+    # The saved key exists but this server's keys cannot open it. The test
+    # must answer in the result the page already shows, not a server error,
+    # and must not call the provider without a key.
+    await mod.put_intelligence(
+        request=_request(),
+        body=mod.ApplyIntelligenceRequest(
+            mode="cloud", primary=mod.PrimaryInput(provider="deepseek", model="m", api_key="k")
+        ),
+        session=_FakeSession(),
+    )
+    conn_id = repo.connections[0].id
+
+    async def _cannot_open(session, *, connection_id, owner_id=OWNER):
+        raise SavedKeyUnreadable("no ring key matches")
+
+    def _no_provider_call(config):
+        raise AssertionError("the provider must not be called without the key")
+
+    monkeypatch.setattr(repo, "get_connection_secret", _cannot_open)
+    monkeypatch.setattr(mod, "_make_client", _no_provider_call)
+    out = await mod.test_connection(
+        request=_request(),
+        body=mod.TestConnectionRequest(connection_id=conn_id),
+        session=_FakeSession(),
+    )
+    assert out["ok"] is False
+    assert out["error"] == mod.SAVED_KEY_UNREADABLE_MESSAGE
+    assert "enter" in out["error"].lower() and "key" in out["error"].lower()
+    assert out["destination"] == "cloud"
+    assert repo.connections[0].last_test_status == "failed"
     assert "provider_healthcheck" in repo.audit
 
 

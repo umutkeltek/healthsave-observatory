@@ -354,6 +354,11 @@ async def post_consent(
     return await _build_view(session, env_provider=os.getenv("LLM_PROVIDER") or None)
 
 
+SAVED_KEY_UNREADABLE_MESSAGE = (
+    "This server can't open the saved API key. Enter the key again and save."
+)
+
+
 @router.post("/test-connection")
 async def test_connection(
     request: Request,
@@ -367,7 +372,22 @@ async def test_connection(
             raise HTTPException(status_code=404, detail="connection not found")
         provider, base_url = conn.provider, conn.base_url
         model = body.model or (await _stored_model(session, conn.id))
-        api_key = await _repo.get_connection_secret(session, connection_id=conn.id) or ""
+        try:
+            api_key = await _repo.get_connection_secret(session, connection_id=conn.id) or ""
+        except repo_module.SavedKeyUnreadable:
+            # The key is saved but this server cannot open it (its encryption
+            # keys changed). Say what fixes it; never call the provider keyless.
+            await _repo.default_repository.record_test_result(
+                session, connection_id=conn.id, status="failed"
+            )
+            await session.commit()
+            return {
+                "ok": False,
+                "destination": conn.destination,
+                "model": model,
+                "latency_ms": None,
+                "error": SAVED_KEY_UNREADABLE_MESSAGE,
+            }
     else:
         if not body.provider or not body.model:
             raise HTTPException(

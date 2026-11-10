@@ -22,13 +22,15 @@ Plugins carry their own versions.
 - `HDH_KEYRING` now reaches the `api` and `worker` containers. The code read
   it before, but `docker-compose.yml` never passed it through, so a value in
   `.env` had no effect. Once it does, a non-empty ring decides which key seals
-  and opens the saved AI provider keys.
-  - **Before you upgrade**, check whether `.env` has a non-empty
-    `HDH_KEYRING`. If it is empty or absent, nothing changes. If it is set,
-    make sure the key from `HDH_TOKEN_ENC_KEY` is in the ring as a trailing
-    `v0:` entry, or the provider keys saved so far will not open.
-  - **After you upgrade**, run one narrator connection test (Test connection
-    on the Intelligence settings page) to confirm the saved key still opens.
+  and opens the saved AI provider keys. Nothing to do before upgrading:
+  provider keys saved so far still open, because the key in
+  `HDH_TOKEN_ENC_KEY` is always kept as a fallback for opening them, even
+  when the ring does not list it. New keys are saved with the ring's first
+  key.
+  - If a saved key ever cannot be opened (for example, both keys were
+    changed), Test connection on the Intelligence settings page now says so
+    and asks you to enter the key again, instead of failing with a server
+    error.
 - New optional `WEB_TRUST_PROXY` (default `false`, passed to the `web`
   container). Set it to `true` only when a reverse proxy you trust is the only
   way to the web port: the sign-in limiter then counts wrong passwords per

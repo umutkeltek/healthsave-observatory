@@ -35,13 +35,29 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from auth import DEFAULT_OWNER_ID, active_key_version, last4, seal, unseal
+from auth import (
+    DEFAULT_OWNER_ID,
+    TokenEncryptionError,
+    active_key_version,
+    last4,
+    seal,
+    unseal,
+)
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # ──────────────────────────────────────────────────────────────────────
 # Frozen views — what callers get back. Credential views are key-free.
 # ──────────────────────────────────────────────────────────────────────
+
+
+class SavedKeyUnreadable(TokenEncryptionError):
+    """A saved provider key exists, but no key in this server's ring opens it.
+
+    Typed so the API can tell the person to enter the key again instead of
+    answering with a server error. Subclasses :class:`auth.TokenEncryptionError`,
+    so every existing handler of that error still catches it.
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -317,8 +333,9 @@ class TimescaleIntelligenceRepository:
 
         Returns the plaintext key for the resolver that must call the provider,
         or None when the connection has no credential. The API layer must NOT
-        serialize this. Raises :class:`auth.TokenEncryptionError` if no ring key
-        opens the ciphertext (e.g. a retired key was dropped too early).
+        serialize this. Raises :class:`SavedKeyUnreadable` (an
+        :class:`auth.TokenEncryptionError`) if no ring key opens the ciphertext
+        (e.g. a retired key was dropped too early).
         """
         row = (
             await session.execute(
@@ -335,7 +352,10 @@ class TimescaleIntelligenceRepository:
         ).first()
         if row is None or row.api_key_enc is None:
             return None
-        return unseal(bytes(row.api_key_enc), key_version=row.key_version)
+        try:
+            return unseal(bytes(row.api_key_enc), key_version=row.key_version)
+        except TokenEncryptionError as exc:
+            raise SavedKeyUnreadable(str(exc)) from exc
 
     # ── connections ─────────────────────────────────────────────────
 
