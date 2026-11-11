@@ -7548,7 +7548,7 @@ font-size: 17px;
   transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
 .labs-row:hover {
-  background: var(--hover);
+  background: var(--surface-3);
 }
 .labs-row.is-selected {
   border-color: var(--accent-line);
