@@ -182,7 +182,7 @@ async function EmptyToday({ state }: { state: "empty" | "unreachable" }) {
             <div>
               <strong>Pair HealthSave app.</strong>
               <span className="firstrun-hint">
-                Open <strong>HealthSave → Settings → Server Sync</strong> on your phone and enter this server&apos;s URL.
+                Open <strong>HealthSave → Settings → Server Sync</strong>{" "}on your phone and enter this server&apos;s URL.
               </span>
             </div>
           </li>

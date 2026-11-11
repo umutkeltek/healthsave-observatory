@@ -230,7 +230,7 @@ export default function ActivityPage() {
           <h2>How to read this</h2>
           <div className="activity-notes">
             <div className="activity-note">
-              <strong>Steps.</strong> Your daily step count from Apple Health. 7,000–10,000/day is a solid baseline for most adults. The trend ribbon shows whether you&apos;re moving more or less than usual.
+              <strong>Steps.</strong>{" "}Your daily step count from Apple Health. 7,000–10,000/day is a solid baseline for most adults. The trend ribbon shows whether you&apos;re moving more or less than usual.
             </div>
             <div className="activity-note">
               <strong>Exercise minutes.</strong> Apple Watch records this automatically when your heart rate indicates moderate activity. 150 minutes/week is the WHO guideline — the card shows your daily contribution.
@@ -239,7 +239,7 @@ export default function ActivityPage() {
               <strong>Resting heart rate.</strong> Lower is generally better (a fit heart pumps more blood per beat). A sustained rise can signal overtraining, stress, or illness — the ribbon catches those shifts.
             </div>
             <div className="activity-note">
-              <strong>Walking heart rate.</strong> Your heart rate during a typical walk. A drop over time means you&apos;re getting fitter (less effort for the same walk). A sudden rise is worth watching.
+              <strong>Walking heart rate.</strong>{" "}Your heart rate during a typical walk. A drop over time means you&apos;re getting fitter (less effort for the same walk). A sudden rise is worth watching.
             </div>
             <div className="activity-note">
               <strong>Cardiovascular load.</strong> The percentage gap between walking HR and resting HR. A wider gap means your heart works harder during daily activity. Trends show fitness changes — the absolute number matters less than the direction over weeks.
