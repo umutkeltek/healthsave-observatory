@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { LabImportReport } from "../lib/labImportTypes";
 import { reportSpecimenDate } from "../lib/labReview";
+import { DeleteLabDocument } from "./DeleteLabDocument";
 
 export function LabReport({ documentId }: { documentId: string }) {
   const [report, setReport] = useState<LabImportReport | null>(null);
@@ -39,5 +40,6 @@ export function LabReport({ documentId }: { documentId: string }) {
     <section className="card"><h3>Scientific sources and scope</h3>{report.sources.map(source => <div key={source.id}><p><a href={source.url} target="_blank" rel="noreferrer">{source.title}</a></p><p>{source.scope}</p><p>Source checked {source.accessed_on}. This does not constitute clinical validation.</p></div>)}
       <details><summary>Record provenance</summary><p>Imported {report.imported_at} · Report version {report.report_version}</p><p className="lab-report-hash">Original SHA-256: {report.sha256}</p></details>
     </section>
+    <DeleteLabDocument documentId={report.id} />
   </article>;
 }

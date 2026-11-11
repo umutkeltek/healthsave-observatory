@@ -816,7 +816,8 @@ export interface paths {
         get: operations["draft_api_v2_lab_imports__document_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Document */
+        delete: operations["delete_document_api_v2_lab_imports__document_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -833,6 +834,23 @@ export interface paths {
         put?: never;
         /** Commit */
         post: operations["commit_api_v2_lab_imports__document_id__commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/lab-imports/{document_id}/deletion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Deletion Preview */
+        get: operations["deletion_preview_api_v2_lab_imports__document_id__deletion_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1991,6 +2009,82 @@ export interface components {
             /** Markers */
             markers: components["schemas"]["LabImportMarker"][];
         };
+        /** LabImportDeletion */
+        LabImportDeletion: {
+            /**
+             * Confirmation
+             * Format: uuid
+             */
+            confirmation: string;
+            /**
+             * Delete Results
+             * @default false
+             */
+            delete_results: boolean;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** LabImportDeletionPreview */
+        LabImportDeletionPreview: {
+            /**
+             * Explanation
+             * @default Deletes this original and saved report. Optionally deletes results last written by this import; later corrections and other reports are preserved. Copies in your downloads or backups are separate.
+             */
+            explanation: string;
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Linked Result Count */
+            linked_result_count: number;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** LabImportDeletionReceipt */
+        LabImportDeletionReceipt: {
+            /** Deleted Results */
+            deleted_results: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
         /** LabImportDraft */
         LabImportDraft: {
             /**
@@ -2233,10 +2327,30 @@ export interface components {
             /** Unit */
             unit: string;
         };
+        /** LabReportComparison */
+        LabReportComparison: {
+            /** Absolute Change */
+            absolute_change: number;
+            /**
+             * Method
+             * @default Most recent earlier result from the same lab, test and normalized unit.
+             */
+            method: string;
+            /** Percent Change */
+            percent_change: number | null;
+            /**
+             * Previous Specimen At
+             * Format: date-time
+             */
+            previous_specimen_at: string;
+            /** Previous Value */
+            previous_value: number;
+        };
         /** LabReportResult */
         LabReportResult: {
             /** Comparator */
             comparator: string | null;
+            comparison?: components["schemas"]["LabReportComparison"] | null;
             /** Lab */
             lab: string;
             /** Loinc */
@@ -4490,6 +4604,43 @@ export interface operations {
             };
         };
     };
+    delete_document_api_v2_lab_imports__document_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabImportDeletion"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabImportDeletionReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     commit_api_v2_lab_imports__document_id__commit_post: {
         parameters: {
             query?: never;
@@ -4514,6 +4665,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LabImportReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deletion_preview_api_v2_lab_imports__document_id__deletion_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabImportDeletionPreview"];
                 };
             };
             /** @description Validation Error */

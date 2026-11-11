@@ -259,6 +259,8 @@ cannot call them. User data is never sent to a remote extraction or AI service.
 | `POST /api/v2/lab-imports` | Raw CSV/PDF bytes; URL-encoded simple file name in `X-File-Name`. Returns a draft (201). Bounded to 5 MB, 12 pages, and 250 rows. |
 | `GET /api/v2/lab-imports/catalog` | Supported LOINC test metadata. |
 | `GET /api/v2/lab-imports/{document_id}` | Draft with extracted pages, editable rows and warnings. |
+| `GET /api/v2/lab-imports/{document_id}/deletion` | Preview deletion and count observations last written by this document. |
+| `DELETE /api/v2/lab-imports/{document_id}` | JSON `{ "confirmation": "<document UUID>", "delete_results": false }`. Deletes the document/report; optionally deletes observations whose current provenance names this document. Later corrections survive. |
 | `POST /api/v2/lab-imports/{document_id}/commit` | Body `{ "rows": [...] }`, retaining draft `row_id` values; manually added rows use `manual-` followed by an alphanumeric/hyphen identifier. Every row requires `confirmed: true`. |
 | `GET /api/v2/lab-imports/{document_id}/original` | Original bytes as an attachment; private, no-store. |
 | `GET /api/v2/lab-imports/{document_id}/report` | Immutable report with provenance, reference-range descriptions, evidence limits, and source URLs. |

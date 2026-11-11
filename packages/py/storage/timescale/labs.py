@@ -283,6 +283,43 @@ class TimescaleLabRepository:
         )
         return [_row(row) for row in result.fetchall()]
 
+    async def previous_result(
+        self,
+        session: AsyncSession,
+        *,
+        loinc: str,
+        lab: str,
+        unit: str,
+        before: datetime,
+        excluded_dates: list[datetime] | None = None,
+        owner_id: UUID = DEFAULT_OWNER_ID,
+        workspace_id: UUID = DEFAULT_WORKSPACE_ID,
+    ) -> dict | None:
+        """Nearest comparable result, without the overview's oldest-first row cap."""
+        result = await session.execute(
+            text("""
+            SELECT interval_start AS specimen_at, numeric_value AS value
+            FROM lab_results WHERE owner_id = :owner AND workspace_id = :workspace
+                AND status = 'active' AND loinc_code = :loinc AND lab_name = :lab
+                AND canonical_unit = :unit AND interval_start < :before
+                AND NOT (interval_start = ANY(CAST(:excluded AS timestamptz[])))
+                AND value_comparator IS NULL
+                AND NOT ('unit_unreconciled' = ANY(quality_flags))
+            ORDER BY interval_start DESC LIMIT 1
+        """),
+            {
+                "owner": str(owner_id),
+                "workspace": str(workspace_id),
+                "loinc": loinc,
+                "lab": lab,
+                "unit": unit,
+                "before": before,
+                "excluded": excluded_dates or [],
+            },
+        )
+        row = result.mappings().first()
+        return dict(row) if row else None
+
 
 # Transient infra failures a retry can clear. Everything else that goes wrong
 # while writing a validated file is deterministic and must not be retried in a

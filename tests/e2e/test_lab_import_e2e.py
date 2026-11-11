@@ -51,3 +51,72 @@ def test_reviewed_document_round_trip_and_idempotence():
         assert result.json()["inserted"] == 0
         series = client.get("/api/v2/labs/2276-4").json()["results"]
         assert len([r for r in series if r["lab"] == lab]) == 1
+
+
+def test_deleting_an_older_document_preserves_a_later_correction():
+    lab = f"Synthetic deletion lab {uuid4()}"
+    with httpx.Client(base_url=BASE, headers={"X-API-Key": KEY}, timeout=120) as client:
+
+        def save(value):
+            raw = (
+                "specimen_datetime,loinc,value,unit,reference_low,reference_high,lab\n"
+                f"2026-01-02,2276-4,{value},ng/mL,20,200,{lab}\n"
+            ).encode()
+            upload = client.post(
+                "/api/v2/lab-imports", content=raw, headers={"X-File-Name": "synthetic.csv"}
+            )
+            assert upload.status_code == 201, upload.text
+            draft = upload.json()
+            draft["rows"][0]["confirmed"] = True
+            path = f"/api/v2/lab-imports/{draft['id']}"
+            saved = client.post(path + "/commit", json={"rows": draft["rows"]})
+            assert saved.status_code == 200, saved.text
+            return draft["id"], path
+
+        first_id, first = save(12)
+        second_id, second = save(14)
+        assert client.get(first + "/deletion").json()["linked_result_count"] == 0
+        response = client.request(
+            "DELETE", first, json={"confirmation": first_id, "delete_results": True}
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["deleted_results"] == 0
+        assert client.get(first + "/report").status_code == 404
+        series = client.get("/api/v2/labs/2276-4").json()["results"]
+        assert [r["value"] for r in series if r["lab"] == lab] == [14]
+        assert client.get(second + "/deletion").json()["linked_result_count"] == 1
+        response = client.request(
+            "DELETE", second, json={"confirmation": second_id, "delete_results": True}
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["deleted_results"] == 1
+        assert client.get(second + "/original").status_code == 404
+
+
+def test_reviewed_censored_correction_uses_the_next_comparable_historical_result():
+    lab = f"Synthetic comparison lab {uuid4()}"
+    with httpx.Client(base_url=BASE, headers={"X-API-Key": KEY}, timeout=120) as client:
+
+        def save(entries):
+            raw = (
+                "specimen_datetime,loinc,value,unit,reference_low,reference_high,lab\n"
+                + "".join(f"{date},2276-4,{value},ng/mL,20,200,{lab}\n" for date, value in entries)
+            ).encode()
+            response = client.post(
+                "/api/v2/lab-imports", content=raw, headers={"X-File-Name": "synthetic.csv"}
+            )
+            assert response.status_code == 201, response.text
+            draft = response.json()
+            for row in draft["rows"]:
+                row["confirmed"] = True
+            path = f"/api/v2/lab-imports/{draft['id']}"
+            response = client.post(path + "/commit", json={"rows": draft["rows"]})
+            assert response.status_code == 200, response.text
+            return client.get(path + "/report").json()
+
+        save([("2025-11-01", "8"), ("2025-12-01", "10")])
+        report = save([("2025-12-01", "<5"), ("2026-01-02", "12")])
+        current = report["results"][1]
+        assert current["comparison"]["previous_value"] == 8
+        assert current["comparison"]["absolute_change"] == 4
+        assert current["comparison"]["previous_specimen_at"].startswith("2025-11-01")

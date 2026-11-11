@@ -85,5 +85,33 @@ class LabDocumentRepository:
         )
         return [dict(row) for row in result.mappings().all()]
 
+    async def linked_result_count(self, session: Any, document_id: UUID) -> int:
+        result = await session.execute(
+            text("""SELECT count(*) FROM lab_results
+                WHERE owner_id = :owner AND workspace_id = :workspace
+                    AND provenance->>'document_id' = :id"""),
+            self._scope(document_id),
+        )
+        return int(result.scalar_one())
+
+    async def delete(self, session: Any, document_id: UUID, *, delete_results: bool) -> int:
+        # This predicate is the last writer, not merely a matching lab/date. A
+        # later correction changes provenance and must survive this deletion.
+        deleted = 0
+        if delete_results:
+            result = await session.execute(
+                text("""DELETE FROM lab_results
+                    WHERE owner_id = :owner AND workspace_id = :workspace
+                        AND provenance->>'document_id' = :id"""),
+                self._scope(document_id),
+            )
+            deleted = result.rowcount
+        await session.execute(
+            text("""DELETE FROM lab_documents
+                WHERE id = :id AND owner_id = :owner AND workspace_id = :workspace"""),
+            self._scope(document_id),
+        )
+        return deleted
+
 
 default_repository = LabDocumentRepository()

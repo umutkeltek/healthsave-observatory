@@ -1,0 +1,42 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "explanation": {
+      "default": "Deletes this original and saved report. Optionally deletes results last written by this import; later corrections and other reports are preserved. Copies in your downloads or backups are separate.",
+      "title": "Explanation",
+      "type": "string"
+    },
+    "file_name": {
+      "title": "File Name",
+      "type": "string"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "linked_result_count": {
+      "title": "Linked Result Count",
+      "type": "integer"
+    },
+    "owner_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "workspace_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "file_name",
+    "linked_result_count"
+  ],
+  "title": "LabImportDeletionPreview",
+  "type": "object"
+}

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { inRequest } from "../../lib/testRequest";
 import { clearSwrCache } from "../../lib/ttlCache";
 import { DEFAULT_OWNER_ID, PARTICIPANT_COOKIE } from "../../lib/participants";
-import { GET, POST } from "./[[...path]]/route";
+import { DELETE, GET, POST } from "./[[...path]]/route";
 
 const realFetch = globalThis.fetch;
 const ID = "11111111-1111-4111-8111-111111111111";
@@ -66,4 +66,16 @@ test("oversized request and unknown action are rejected without forwarding", asy
   expect(response.status).toBe(413);
   expect((await inRequest("", () => GET(new Request("http://box:4173/api/lab-imports/anything"), context(["anything"])))).status).toBe(404);
   expect(calls).toHaveLength(0);
+});
+
+test("deletion enforces origin and person before forwarding the confirmation", async () => {
+  const request = (origin: string) => new Request(`http://box:4173/api/lab-imports/${ID}`, {
+    method: "DELETE", headers: { origin, host: "box:4173" }, body: JSON.stringify({ confirmation: ID }),
+  });
+  expect((await inRequest("", () => DELETE(request("https://attacker.invalid"), context([ID])))).status).toBe(403);
+  expect((await inRequest(`${PARTICIPANT_COOKIE}=${ALICE}`, () => DELETE(request("http://box:4173"), context([ID])))).status).toBe(403);
+  expect(calls).toHaveLength(0);
+  expect((await inRequest("", () => DELETE(request("http://box:4173"), context([ID])))).status).toBe(201);
+  expect(calls[0].init?.method).toBe("DELETE");
+  expect(JSON.parse(new TextDecoder().decode(calls[0].init?.body as Uint8Array))).toEqual({ confirmation: ID });
 });

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { LabImportCatalog, LabImportDraft, LabImportIndex, LabImportReceipt, ReviewRow } from "../lib/labImportTypes";
 import { newReviewRow, REVIEW_DEFAULTS } from "../lib/labReview";
+import { DeleteLabDocument } from "./DeleteLabDocument";
 
 type Issue = { row: number; field: string | null; message: string };
 async function readResponse<T>(response: Response): Promise<T> {
@@ -148,6 +149,7 @@ export function LabImport({ documentId }: { documentId?: string }) {
         <button className="btn" disabled={!!busy || rows.length === 0 || confirmed !== rows.length} onClick={() => void save()}>Save {rows.length} result{rows.length === 1 ? "" : "s"}</button>
       </div>
       <p className="muted">Edited review fields remain in this browser until you save. The original draft remains available if you leave.</p>
+      <DeleteLabDocument documentId={draft.id} />
     </>}
   </div>;
 }

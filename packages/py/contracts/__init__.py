@@ -56,6 +56,9 @@ from .data import (
 from .findings import FindingCard
 from .lab_imports import (
     LabImportCatalog,
+    LabImportDeletion,
+    LabImportDeletionPreview,
+    LabImportDeletionReceipt,
     LabImportDraft,
     LabImportIndex,
     LabImportReceipt,
@@ -107,6 +110,9 @@ ALL_MODELS: tuple[type[V2Model], ...] = (
     # findings
     FindingCard,
     LabImportCatalog,
+    LabImportDeletion,
+    LabImportDeletionPreview,
+    LabImportDeletionReceipt,
     LabImportDraft,
     LabImportIndex,
     LabImportReceipt,

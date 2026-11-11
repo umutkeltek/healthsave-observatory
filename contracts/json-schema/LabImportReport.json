@@ -34,6 +34,48 @@
       "title": "LabEvidenceSource",
       "type": "object"
     },
+    "LabReportComparison": {
+      "additionalProperties": false,
+      "properties": {
+        "absolute_change": {
+          "title": "Absolute Change",
+          "type": "number"
+        },
+        "method": {
+          "default": "Most recent earlier result from the same lab, test and normalized unit.",
+          "title": "Method",
+          "type": "string"
+        },
+        "percent_change": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Percent Change"
+        },
+        "previous_specimen_at": {
+          "format": "date-time",
+          "title": "Previous Specimen At",
+          "type": "string"
+        },
+        "previous_value": {
+          "title": "Previous Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "previous_specimen_at",
+        "previous_value",
+        "absolute_change",
+        "percent_change"
+      ],
+      "title": "LabReportComparison",
+      "type": "object"
+    },
     "LabReportResult": {
       "additionalProperties": false,
       "properties": {
@@ -47,6 +89,17 @@
             }
           ],
           "title": "Comparator"
+        },
+        "comparison": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabReportComparison"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "lab": {
           "title": "Lab",

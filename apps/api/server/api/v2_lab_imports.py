@@ -10,10 +10,13 @@ from typing import Any
 from urllib.parse import quote, unquote
 from uuid import UUID, uuid4
 
-from analysis.statistical.lab_reports import build_report
+from analysis.statistical.lab_reports import LabHistoryPoint, build_report
 from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
 from contracts.lab_imports import (
     LabImportCatalog,
+    LabImportDeletion,
+    LabImportDeletionPreview,
+    LabImportDeletionReceipt,
     LabImportDraft,
     LabImportIndex,
     LabImportReceipt,
@@ -164,6 +167,39 @@ async def report(document_id: UUID, session: Any = Depends(get_session)) -> LabI
     return LabImportReport.model_validate(row["report"])
 
 
+@router.get("/{document_id}/deletion", response_model=LabImportDeletionPreview)
+async def deletion_preview(
+    document_id: UUID, session: Any = Depends(get_session)
+) -> LabImportDeletionPreview:
+    row = await _get(session, document_id)
+    return LabImportDeletionPreview(
+        id=document_id,
+        file_name=row["file_name"],
+        linked_result_count=await documents.linked_result_count(session, document_id),
+    )
+
+
+@router.delete("/{document_id}", response_model=LabImportDeletionReceipt)
+async def delete_document(
+    document_id: UUID, deletion: LabImportDeletion, session: Any = Depends(get_session)
+) -> LabImportDeletionReceipt:
+    if deletion.owner_id != DEFAULT_OWNER_ID or deletion.workspace_id != DEFAULT_WORKSPACE_ID:
+        raise HTTPException(403, "Lab imports belong to this Observatory's primary person only.")
+    if deletion.confirmation != document_id:
+        raise HTTPException(422, "Confirm the exact document before deleting it.")
+    try:
+        await _get(session, document_id, lock=True)
+        count = await documents.delete(session, document_id, delete_results=deletion.delete_results)
+        await session.commit()
+        return LabImportDeletionReceipt(id=document_id, deleted_results=count)
+    except HTTPException:
+        await session.rollback()
+        raise
+    except Exception as exc:
+        await session.rollback()
+        raise HTTPException(503, "The document could not be deleted. Try again.") from exc
+
+
 @router.post("/{document_id}/commit", response_model=LabImportReceipt)
 async def commit(
     document_id: UUID, review: LabImportReview, session: Any = Depends(get_session)
@@ -217,6 +253,32 @@ async def commit(
             )
             for result, reviewed in zip(parsed.results, review.rows, strict=True)
         ]
+        history = []
+        for item in results:
+            previous = await labs.previous_result(
+                session,
+                loinc=item.loinc_code,
+                lab=item.lab_name,
+                unit=item.canonical_unit,
+                before=item.specimen_at,
+                excluded_dates=[
+                    other.specimen_at
+                    for other in results
+                    if other.loinc_code == item.loinc_code and other.lab_name == item.lab_name
+                ],
+            )
+            if previous:
+                history.append(
+                    LabHistoryPoint(
+                        loinc=item.loinc_code,
+                        lab=item.lab_name,
+                        unit=item.canonical_unit,
+                        specimen_at=previous["specimen_at"],
+                        value=previous["value"],
+                        comparator=None,
+                        quality_flags=(),
+                    )
+                )
         summary = await labs.import_results(
             session,
             [LabResultWrite(**{k: getattr(r, k) for k in _WRITE_FIELDS}) for r in results],
@@ -236,6 +298,7 @@ async def commit(
             sha256=row["sha256"],
             imported_at=datetime.now(UTC),
             results=results,
+            history=history,
         )
         await documents.complete(
             session,

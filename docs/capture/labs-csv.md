@@ -45,6 +45,17 @@ personal-pattern evidence and medical evidence. The educational source is
 These reports have not been clinically validated and do not diagnose, prescribe,
 or assess urgency. A lab range is not a diagnostic threshold.
 
+New reports compare exact results with the most recent earlier result from the
+same lab, test and normalized unit, including earlier confirmed rows in the same
+import. The report stores that comparison as a snapshot. Censored values and
+unreconciled units are excluded; numerical changes do not establish a cause or
+medical importance. Later corrections do not rewrite older report snapshots.
+
+Use **Delete this document** on a draft or saved report to inspect what will be
+removed. The original and report are deleted together. You may also delete
+results last written by that import; a later correction from another import is
+preserved. Downloaded copies, other imported documents and backups are separate.
+
 The distributed API image includes Poppler and Tesseract for local extraction.
 Source installations need `pdfinfo`, `pdftotext`, `pdftoppm`, and `tesseract` on
 the API process's PATH. Failed or oversized documents produce an actionable

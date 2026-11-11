@@ -22,6 +22,13 @@ def setup(monkeypatch):
     data = {}
 
     class Documents:
+        async def linked_result_count(self, _session, identifier):
+            return 1 if data[identifier]["committed_at"] else 0
+
+        async def delete(self, _session, identifier, *, delete_results):
+            row = data.pop(identifier)
+            return int(bool(row["committed_at"]) and delete_results)
+
         async def create(self, _session, **kwargs):
             row = {
                 **kwargs,
@@ -54,7 +61,14 @@ def setup(monkeypatch):
 
     writer = AsyncMock(return_value=SimpleNamespace(inserted=1, updated=0, unchanged=0))
     monkeypatch.setattr(routes, "documents", Documents())
-    monkeypatch.setattr(routes, "labs", SimpleNamespace(import_results=writer))
+    monkeypatch.setattr(
+        routes,
+        "labs",
+        SimpleNamespace(
+            import_results=writer,
+            previous_result=AsyncMock(return_value=None),
+        ),
+    )
     monkeypatch.setattr(deps, "API_KEY", "synthetic-lab-key")
     monkeypatch.setattr(deps, "ALLOW_NO_AUTH", False)
 
@@ -163,3 +177,43 @@ def test_file_limits_and_failed_storage_are_safe(setup, monkeypatch):
     assert response.status_code == 422
     assert "private diagnostic text" not in response.text
     assert session.rollback.await_count == 1
+
+
+def test_document_deletion_requires_exact_confirmation_and_primary_ownership(setup):
+    client, _, _, _ = setup
+    uploaded = client.post("/api/v2/lab-imports", content=CSV, headers=HEADERS).json()
+    path = f"/api/v2/lab-imports/{uploaded['id']}"
+    preview = client.get(path + "/deletion", headers=HEADERS)
+    assert preview.status_code == 200
+    assert preview.json()["linked_result_count"] == 0
+    assert (
+        client.request(
+            "DELETE",
+            path,
+            headers=HEADERS,
+            json={
+                "confirmation": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            },
+        ).status_code
+        == 422
+    )
+    assert (
+        client.request(
+            "DELETE",
+            path,
+            headers=HEADERS,
+            json={
+                "confirmation": uploaded["id"],
+                "owner_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            },
+        ).status_code
+        == 403
+    )
+    assert client.request("DELETE", path, json={"confirmation": uploaded["id"]}).status_code == 401
+    response = client.request(
+        "DELETE", path, headers=HEADERS, json={"confirmation": uploaded["id"]}
+    )
+    assert response.status_code == 200
+    assert response.json()["deleted_results"] == 0
+    assert client.get(path + "/original", headers=HEADERS).status_code == 404
+    assert client.get(path + "/report", headers=HEADERS).status_code == 404

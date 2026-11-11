@@ -83,6 +83,14 @@ class LabEvidenceSource(V2Model):
     scope: str
 
 
+class LabReportComparison(V2Model):
+    previous_specimen_at: datetime
+    previous_value: float
+    absolute_change: float
+    percent_change: float | None
+    method: str = "Most recent earlier result from the same lab, test and normalized unit."
+
+
 class LabReportResult(V2Model):
     marker: str
     loinc: str
@@ -101,6 +109,7 @@ class LabReportResult(V2Model):
     source_excerpt: str | None
     quality_flags: list[str]
     source_ids: list[str]
+    comparison: LabReportComparison | None = None
 
 
 class LabImportReport(WithOwnership):
@@ -113,3 +122,24 @@ class LabImportReport(WithOwnership):
     limitations: list[str]
     results: list[LabReportResult]
     sources: list[LabEvidenceSource]
+
+
+class LabImportDeletionPreview(WithOwnership):
+    id: UUID
+    file_name: str
+    linked_result_count: int
+    explanation: str = (
+        "Deletes this original and saved report. Optionally deletes results last written "
+        "by this import; later corrections and other reports are preserved. "
+        "Copies in your downloads or backups are separate."
+    )
+
+
+class LabImportDeletion(WithOwnership):
+    confirmation: UUID
+    delete_results: bool = False
+
+
+class LabImportDeletionReceipt(WithOwnership):
+    id: UUID
+    deleted_results: int

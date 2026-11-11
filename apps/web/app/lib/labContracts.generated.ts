@@ -11,10 +11,24 @@ export type Loinc = string;
 export type Name = string;
 export type Unit = string;
 export type Markers = LabImportMarker[];
-export type CreatedAt = string;
+export type Confirmation = string;
+export type DeleteResults = boolean;
+export type OwnerId = string;
+export type WorkspaceId = string;
+export type Explanation = string;
 export type FileName = string;
 export type Id = string;
-export type OwnerId = string;
+export type LinkedResultCount = number;
+export type OwnerId1 = string;
+export type WorkspaceId1 = string;
+export type DeletedResults = number;
+export type Id1 = string;
+export type OwnerId2 = string;
+export type WorkspaceId2 = string;
+export type CreatedAt = string;
+export type FileName1 = string;
+export type Id2 = string;
+export type OwnerId3 = string;
 export type Method = "text" | "ocr" | "csv";
 export type Page = number;
 export type Text = string;
@@ -34,30 +48,35 @@ export type Rows = LabReviewRow[];
 export type Sha256 = string;
 export type Status = "draft" | "committed";
 export type Warnings = string[];
-export type WorkspaceId = string;
+export type WorkspaceId3 = string;
 export type CommittedAt = string | null;
 export type CreatedAt1 = string;
-export type FileName1 = string;
-export type Id1 = string;
+export type FileName2 = string;
+export type Id3 = string;
 export type Sha2561 = string;
 export type Documents = LabImportIndexItem[];
-export type OwnerId1 = string;
-export type WorkspaceId1 = string;
-export type Id2 = string;
+export type OwnerId4 = string;
+export type WorkspaceId4 = string;
+export type Id4 = string;
 export type Inserted = number;
-export type OwnerId2 = string;
+export type OwnerId5 = string;
 export type ReportUrl = string;
 export type ResultCount = number;
 export type Unchanged = number;
 export type Updated = number;
-export type WorkspaceId2 = string;
-export type FileName2 = string;
-export type Id3 = string;
+export type WorkspaceId5 = string;
+export type FileName3 = string;
+export type Id5 = string;
 export type ImportedAt = string;
 export type Limitations = string[];
-export type OwnerId3 = string;
+export type OwnerId6 = string;
 export type ReportVersion = string;
 export type Comparator = string | null;
+export type AbsoluteChange = number;
+export type Method1 = string;
+export type PercentChange = number | null;
+export type PreviousSpecimenAt = string;
+export type PreviousValue = number;
 export type Lab1 = string;
 export type Loinc2 = string;
 export type Marker = string;
@@ -78,19 +97,19 @@ export type Results = LabReportResult[];
 export type ReviewStatus = string;
 export type Sha2562 = string;
 export type AccessedOn = string;
-export type Id4 = string;
+export type Id6 = string;
 export type Scope = string;
 export type Title = string;
 export type Url = string;
 export type Sources = LabEvidenceSource[];
-export type WorkspaceId3 = string;
-export type OwnerId4 = string;
+export type WorkspaceId6 = string;
+export type OwnerId7 = string;
 /**
  * @minItems 1
  * @maxItems 250
  */
 export type Rows1 = [LabReviewRow, ...LabReviewRow[]];
-export type WorkspaceId4 = string;
+export type WorkspaceId7 = string;
 
 
 export interface LabImportCatalog {
@@ -101,17 +120,37 @@ export interface LabImportMarker {
   name: Name;
   unit: Unit;
 }
-export interface LabImportDraft {
-  created_at: CreatedAt;
+export interface LabImportDeletion {
+  confirmation: Confirmation;
+  delete_results?: DeleteResults;
+  owner_id?: OwnerId;
+  workspace_id?: WorkspaceId;
+}
+export interface LabImportDeletionPreview {
+  explanation?: Explanation;
   file_name: FileName;
   id: Id;
-  owner_id?: OwnerId;
+  linked_result_count: LinkedResultCount;
+  owner_id?: OwnerId1;
+  workspace_id?: WorkspaceId1;
+}
+export interface LabImportDeletionReceipt {
+  deleted_results: DeletedResults;
+  id: Id1;
+  owner_id?: OwnerId2;
+  workspace_id?: WorkspaceId2;
+}
+export interface LabImportDraft {
+  created_at: CreatedAt;
+  file_name: FileName1;
+  id: Id2;
+  owner_id?: OwnerId3;
   pages: Pages;
   rows: Rows;
   sha256: Sha256;
   status: Status;
   warnings: Warnings;
-  workspace_id?: WorkspaceId;
+  workspace_id?: WorkspaceId3;
 }
 export interface LabDocumentPage {
   method: Method;
@@ -133,41 +172,42 @@ export interface LabReviewRow {
 }
 export interface LabImportIndex {
   documents: Documents;
-  owner_id?: OwnerId1;
-  workspace_id?: WorkspaceId1;
+  owner_id?: OwnerId4;
+  workspace_id?: WorkspaceId4;
 }
 export interface LabImportIndexItem {
   committed_at: CommittedAt;
   created_at: CreatedAt1;
-  file_name: FileName1;
-  id: Id1;
+  file_name: FileName2;
+  id: Id3;
   sha256: Sha2561;
 }
 export interface LabImportReceipt {
-  id: Id2;
+  id: Id4;
   inserted: Inserted;
-  owner_id?: OwnerId2;
+  owner_id?: OwnerId5;
   report_url: ReportUrl;
   result_count: ResultCount;
   unchanged: Unchanged;
   updated: Updated;
-  workspace_id?: WorkspaceId2;
+  workspace_id?: WorkspaceId5;
 }
 export interface LabImportReport {
-  file_name: FileName2;
-  id: Id3;
+  file_name: FileName3;
+  id: Id5;
   imported_at: ImportedAt;
   limitations: Limitations;
-  owner_id?: OwnerId3;
+  owner_id?: OwnerId6;
   report_version: ReportVersion;
   results: Results;
   review_status: ReviewStatus;
   sha256: Sha2562;
   sources: Sources;
-  workspace_id?: WorkspaceId3;
+  workspace_id?: WorkspaceId6;
 }
 export interface LabReportResult {
   comparator: Comparator;
+  comparison?: LabReportComparison | null;
   lab: Lab1;
   loinc: Loinc2;
   marker: Marker;
@@ -185,15 +225,22 @@ export interface LabReportResult {
   unit: Unit2;
   value: Value1;
 }
+export interface LabReportComparison {
+  absolute_change: AbsoluteChange;
+  method?: Method1;
+  percent_change: PercentChange;
+  previous_specimen_at: PreviousSpecimenAt;
+  previous_value: PreviousValue;
+}
 export interface LabEvidenceSource {
   accessed_on: AccessedOn;
-  id: Id4;
+  id: Id6;
   scope: Scope;
   title: Title;
   url: Url;
 }
 export interface LabImportReview {
-  owner_id?: OwnerId4;
+  owner_id?: OwnerId7;
   rows: Rows1;
-  workspace_id?: WorkspaceId4;
+  workspace_id?: WorkspaceId7;
 }

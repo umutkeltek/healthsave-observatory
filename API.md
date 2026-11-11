@@ -792,7 +792,8 @@ read key may name only its own. See [Participants](docs/operations/participants.
 | `/api/v2/labs/{loinc}` | GET | key | one marker's results, oldest first (`422` for a malformed LOINC code, `404` when there are none) |
 | `/api/v2/lab-imports` | GET, POST | admin key | list private documents; upload raw CSV/PDF bytes with `X-File-Name` for local extraction and review (5 MB, 12 pages) |
 | `/api/v2/lab-imports/catalog` | GET | admin key | supported test codes, names and units |
-| `/api/v2/lab-imports/{document_id}` | GET | admin key | reopen an extracted draft |
+| `/api/v2/lab-imports/{document_id}` | GET, DELETE | admin key | reopen a draft; delete an explicitly confirmed document and optionally its last-written results |
+| `/api/v2/lab-imports/{document_id}/deletion` | GET | admin key | preview the document and count results still owned by this import |
 | `/api/v2/lab-imports/{document_id}/commit` | POST | admin key | validate explicitly confirmed rows; atomically save observations and an immutable receipt/report |
 | `/api/v2/lab-imports/{document_id}/original` | GET | admin key | original private attachment, with no-store and nosniff headers |
 | `/api/v2/lab-imports/{document_id}/report` | GET | admin key | source-backed descriptive report; 409 until the draft is confirmed |
