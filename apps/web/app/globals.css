@@ -4598,7 +4598,7 @@ color: var(--accent);
   --line-glow: rgba(10, 132, 255, 0.36);
   --ink: #f5f5f7;
   --muted: #98989d;
-  --faint: #8e8e93;
+  --faint: #98989d; /* #8e8e93 read 4.3:1 on cards; this clears 4.5:1 on --surface */
   --ghost: #636366;
   --accent: #0a84ff;
   --brand: #0a84ff;
