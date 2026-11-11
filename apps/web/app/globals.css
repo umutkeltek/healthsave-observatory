@@ -8376,6 +8376,8 @@ font-size: 17px;
 @media (max-width: 720px) {
   .lab-review-fields, .lab-import-bulk { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lab-import-bulk button { grid-column: 1 / -1; }
+  .lab-import-error ul { padding-left: 0; list-style: none; display: grid; gap: 8px; }
+  .lab-import-error li .btn { width: 100%; text-align: left; justify-content: flex-start; }
   .lab-report-evidence { grid-template-columns: 1fr; gap: 8px; }
   .lab-report-evidence dd { margin-bottom: 12px; }
 }
