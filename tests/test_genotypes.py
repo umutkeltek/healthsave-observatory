@@ -108,3 +108,26 @@ def test_sample_filter_failure_excludes_calls_even_when_site_passes():
     assert parsed.counts["filtered_rows"] == 3
     assert parsed.counts["accepted_loci"] == 1
     assert parsed.loci[0].position == 11
+
+
+@pytest.mark.parametrize("build", ["GRCh19", "hg37", "build19", "GRCh37 GRCh38"])
+def test_invalid_or_conflicting_build_names_cannot_be_confirmed_away(build):
+    with pytest.raises(ValueError, match="assembly"):
+        parse(vcf(["1\t10\trs1\tA\tG\t.\tPASS\t.\tGT\t0/1"], build=build), assembly="GRCh37")
+
+
+@pytest.mark.parametrize(
+    "declaration", ["# strand=negative", "# negative strand", "# negative (-) strand"]
+)
+def test_negative_strand_metadata_is_rejected(declaration):
+    with pytest.raises(ValueError, match="reverse-strand"):
+        parse(declaration.encode() + b"\n" + vcf(["1\t10\trs1\tA\tG\t.\tPASS\t.\tGT\t0/1"]))
+
+
+def test_concatenated_vcfs_and_reordered_columns_are_rejected():
+    first = vcf(["1\t10\trs1\tA\tG\t.\tPASS\t.\tGT\t0/1"])
+    second = vcf(["1\t11\trs2\tC\tT\t.\tPASS\t.\tGT\t0/1"])
+    with pytest.raises(ValueError, match="single format header"):
+        parse(first + second)
+    with pytest.raises(ValueError, match="standard column header"):
+        parse(first.replace(b"REF\tALT", b"ALT\tREF"))

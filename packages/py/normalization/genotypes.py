@@ -56,14 +56,15 @@ def chromosome(raw: str) -> str | None:
     return value if value in {*(str(i) for i in range(1, 23)), "X", "Y", "MT"} else None
 
 
-def _declared_build(line: str) -> str | None:
-    match = re.search(r"(?:GRCh|build\s*|hg)(\d+)", line, re.IGNORECASE)
-    if not match:
-        return None
-    version = {"19": "37", "38": "38", "37": "37"}.get(match[1])
-    if not version:
-        raise ValueError("The file declares an unsupported genome assembly.")
-    return "GRCh" + version
+def _declared_builds(line: str) -> set[str]:
+    builds = set()
+    for match in re.finditer(r"\b(GRCh|build\s*|hg)(\d+)", line, re.IGNORECASE):
+        family, version = match[1].strip().lower(), match[2]
+        supported = {"19": "37", "38": "38"} if family == "hg" else {"37": "37", "38": "38"}
+        if version not in supported:
+            raise ValueError("The file declares an unsupported genome assembly.")
+        builds.add("GRCh" + supported[version])
+    return builds
 
 
 def _vcf_locus(cells: list[str], line_number: int) -> tuple[GenotypeLocus | None, str]:
@@ -179,7 +180,7 @@ def parse_genotypes(
                     raise ValueError("The file contains binary data.")
                 if line.startswith("#"):
                     if re.search(
-                        r"strand\s*[:=]\s*(?:reverse|minus|-)|(?:reverse|minus)\s+strand",
+                        r"strand\s*[:=]\s*(?:reverse|minus|negative|-)|(?:reverse|minus|negative)\s+(?:\(-\)\s+)?strand",
                         line,
                         re.IGNORECASE,
                     ):
@@ -187,19 +188,50 @@ def parse_genotypes(
                             "The file declares reverse-strand data; "
                             "automatic strand conversion is not supported."
                         )
-                    if line.startswith("##fileformat=VCFv4"):
+                    if line.startswith("##fileformat="):
+                        if (
+                            result.format
+                            or result.counts["total_rows"]
+                            or not re.fullmatch(r"##fileformat=VCFv4\.[0-9]+", line)
+                        ):
+                            raise ValueError("Use one complete VCF with a single format header.")
                         result.format = "vcf"
                     if any(name in line.lower() for name in ("23andme", "ancestrydna")):
                         provider = True
-                    if build := _declared_build(line):
-                        declared.add(build)
+                    declared.update(_declared_builds(line))
                     if line.startswith("#CHROM"):
-                        if len(line.split("\t")) != 10:
+                        columns = line.split("\t")
+                        if len(columns) != 10:
                             raise ValueError("Use a VCF with exactly one person/sample.")
+                        if (
+                            result.format != "vcf"
+                            or header
+                            or columns[:9]
+                            != [
+                                "#CHROM",
+                                "POS",
+                                "ID",
+                                "REF",
+                                "ALT",
+                                "QUAL",
+                                "FILTER",
+                                "INFO",
+                                "FORMAT",
+                            ]
+                        ):
+                            raise ValueError(
+                                "Use one VCF with the standard column header; "
+                                "concatenated files are not supported."
+                            )
                         header = True
                     continue
                 cells = [cell.strip() for cell in line.split("\t")]
                 if cells[:3] == ["rsid", "chromosome", "position"]:
+                    if header or result.format == "vcf" or result.counts["total_rows"]:
+                        raise ValueError(
+                            "Use one genotype table; "
+                            "concatenated or mixed file formats are not supported."
+                        )
                     if cells[3:] not in (["genotype"], ["allele1", "allele2"]):
                         raise ValueError("Unsupported genotype table columns.")
                     result.format, header = "genotype_table", True

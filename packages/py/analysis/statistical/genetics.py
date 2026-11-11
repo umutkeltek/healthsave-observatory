@@ -6,7 +6,7 @@ from uuid import UUID, uuid5
 from contracts.genetics import GeneticAnnotation, GeneticReference, GeneticReport
 from normalization.genotypes import GenotypeFile
 
-ENGINE_VERSION = "genetic-evidence-1"
+ENGINE_VERSION = "genetic-evidence-2"
 MAX_ANNOTATIONS = 15000
 
 
