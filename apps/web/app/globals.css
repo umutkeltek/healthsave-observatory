@@ -2341,6 +2341,10 @@ input.filter-select {
   color: var(--muted);
 }
 @media (max-width: 620px) {
+  /* Room for the unit label, which sits above the shrunken plot's top edge. */
+  .multi-chart {
+    padding-top: 8px;
+  }
   .cmp-cols {
     grid-template-columns: 1fr;
     gap: 10px;
@@ -3741,12 +3745,17 @@ label.field-label {
   color: var(--faint);
   white-space: nowrap;
 }
-.chart-y-label,
-.chart-axis-unit {
+/* The unit sits a fixed gap above the top tick and the dates a fixed gap below
+   the plot (both anchored inline to the plot edge), so a panel scaled down to
+   phone width never stacks them on the first/last value tick. */
+.chart-y-label {
   transform: translate(-100%, -50%);
 }
+.chart-axis-unit {
+  transform: translate(-100%, calc(-100% - 7px));
+}
 .chart-x-label {
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, 8px);
 }
 /* End-labels live fully in the right margin gutter: `left` (set inline to the
    plot's right edge) plus `right` fixes their box to the gutter, so a long name

@@ -154,7 +154,7 @@ export function MultiSeriesChart({
           {unit ? (
             <span
               className="chart-tick-label chart-axis-unit"
-              style={{ left: `${((M.l - 7) / RW) * 100}%`, top: `${((M.t - 9) / RH) * 100}%` }}
+              style={{ left: `${((M.l - 7) / RW) * 100}%`, top: `${(M.t / RH) * 100}%` }}
             >
               {unit}
             </span>
@@ -174,7 +174,7 @@ export function MultiSeriesChart({
               className="chart-tick-label chart-x-label"
               style={{
                 left: `${((M.l + t.frac * PLOT_W) / RW) * 100}%`,
-                top: `${((RH - M.b + 13) / RH) * 100}%`,
+                top: `${((M.t + PLOT_H) / RH) * 100}%`,
               }}
             >
               {t.label}
