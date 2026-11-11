@@ -7546,6 +7546,13 @@ font-size: 17px;
   grid-area: spark;
   min-width: 0;
 }
+/* A marker that cannot be charted shows LabChart's note in the sparkline slot: keep it row-sized. */
+.labs-row-spark > p {
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+  color: var(--muted);
+}
 .labs-verdict {
   display: inline-block;
   font-size: var(--fs-2xs);
