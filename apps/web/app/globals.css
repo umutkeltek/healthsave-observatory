@@ -8245,6 +8245,11 @@ font-size: 17px;
   .genetics input:not([type="checkbox"]), .genetics select { font-size: 16px; min-height: 44px; }
   :is(.lab-import, .lab-report, .genetics) :is(button, summary, .lab-review-confirm, .genetic-check) { min-height: 44px; touch-action: manipulation; }
   .lab-review-confirm, .genetics .genetic-check { align-items: center; }
+  /* No hover on touch, so the coverage row's title tooltip never shows: give the
+     source name its own line and wrap it instead of truncating it to "Appl…". */
+  .cov-row { grid-template-columns: minmax(0, 1fr) 40px; row-gap: 8px; }
+  .cov-label { grid-column: 1 / -1; }
+  .cov-name, .cov-rel { white-space: normal; overflow-wrap: break-word; }
 }
 @media (max-width: 720px) {
   .lab-review-fields, .lab-import-bulk { grid-template-columns: repeat(2, minmax(0, 1fr)); }
