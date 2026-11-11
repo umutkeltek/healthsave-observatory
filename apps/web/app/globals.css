@@ -8148,7 +8148,7 @@ font-size: 17px;
 }
 
 /* Lab document review extends the existing Observatory tokens. */
-.lab-import, .lab-report { display: grid; gap: 20px; max-width: 1080px; }
+.lab-import, .lab-report { display: grid; gap: 20px; max-width: 1080px; min-width: 0; }
 .genetics { display: grid; gap: 20px; max-width: 1080px; min-width: 0; }
 .genetics .card, .genetics .prov-intro { display: grid; gap: 12px; min-width: 0; }
 .genetics p, .genetics h3, .genetics h4 { margin: 0; overflow-wrap: anywhere; }
@@ -8174,18 +8174,18 @@ font-size: 17px;
   .genetic-annotation { break-inside: avoid; }
 }
 .lab-import .labs-intro, .lab-report .labs-intro { display: grid; gap: 12px; }
-.lab-import-upload, .lab-import-source { display: grid; gap: 12px; }
+.lab-import-upload, .lab-import-source { display: grid; gap: 12px; min-width: 0; overflow-wrap: anywhere; }
 .lab-import-heading, .lab-import-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .lab-import-heading h3 { margin: 0; }
 .lab-import-file, .lab-import-bulk label, .lab-review-fields label { display: grid; gap: 8px; font-size: 13px; font-weight: 500; min-width: 0; }
 .lab-import input:not([type="checkbox"]), .lab-import select { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; }
-.lab-import input:focus-visible, .lab-import button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.lab-import :is(input, button, summary, a, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .lab-import input[type="file"] { padding: 16px; }
 .lab-import-bulk { display: grid; grid-template-columns: 1fr 1fr auto; gap: 16px; align-items: end; }
 .lab-import-bulk p { grid-column: 1 / -1; margin: 0; color: var(--muted); }
 .lab-import legend { padding: 0 8px; font-weight: 600; }
 .lab-review-list { display: grid; gap: 20px; }
-.lab-review-row { display: grid; gap: 16px; min-width: 0; }
+.lab-review-row { display: grid; gap: 16px; min-width: 0; scroll-margin-block: 80px; }
 .lab-review-row.is-confirmed { border-color: var(--accent); }
 .lab-review-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .lab-review-confirm { display: flex; align-items: flex-start; gap: 12px; font-size: 14px; cursor: pointer; }
@@ -8202,6 +8202,12 @@ font-size: 17px;
 .lab-report blockquote { margin: 20px 0; border-left: 2px solid var(--line); padding-left: 16px; overflow-wrap: anywhere; }
 .lab-report blockquote footer { color: var(--muted); font-size: 12px; }
 .lab-report-hash { overflow-wrap: anywhere; font-family: var(--font-mono, monospace); }
+@media (pointer: coarse) {
+  .lab-import input:not([type="checkbox"]), .lab-import select,
+  .genetics input:not([type="checkbox"]), .genetics select { font-size: 16px; min-height: 44px; }
+  :is(.lab-import, .lab-report, .genetics) :is(button, summary, .lab-review-confirm, .genetic-check) { min-height: 44px; touch-action: manipulation; }
+  .lab-review-confirm, .genetics .genetic-check { align-items: center; }
+}
 @media (max-width: 720px) {
   .lab-review-fields, .lab-import-bulk { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lab-import-bulk button { grid-column: 1 / -1; }
