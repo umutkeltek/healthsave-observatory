@@ -455,6 +455,9 @@ a {
     width: 200px;
     flex-basis: 200px;
   }
+  .brand {
+    flex-wrap: wrap;
+  }
   .topbar,
   .content {
     padding-left: 24px;
