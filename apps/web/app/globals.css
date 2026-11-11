@@ -7618,6 +7618,10 @@ font-size: 17px;
   color: var(--faint);
   background: var(--surface-3);
 }
+/* In dark --surface-3 is lighter than the card and pulls the grey label under 4:1; an inset well keeps it legible. */
+[data-theme="dark"] :is(.labs-verdict-ok, .labs-verdict-none) {
+  background: var(--raise);
+}
 
 /* Chart */
 .labs-chart {
