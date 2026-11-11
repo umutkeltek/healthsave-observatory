@@ -1620,6 +1620,14 @@ html {
 /* Streams table - hairline rows, mono numerals, scrolls on narrow screens. */
 .prov-scroll {
   overflow-x: auto;
+  /* Scroll cue: a soft edge shadow shows on whichever side still hides
+     columns. The surface-coloured covers travel with the content (local) and
+     hide each shadow once that edge is reached. */
+  background:
+    linear-gradient(to right, var(--surface) 40%, transparent) left / 32px 100% no-repeat local,
+    linear-gradient(to left, var(--surface) 40%, transparent) right / 32px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, var(--line-strong), transparent) left / 12px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--line-strong), transparent) right / 12px 100% no-repeat scroll;
 }
 table.prov {
   width: 100%;
@@ -3625,6 +3633,9 @@ label.field-label {
   font-size: var(--fs-sm);
   color: var(--muted);
   max-width: 64ch;
+}
+.rel-table td:first-child {
+  min-width: 9em;
 }
 .rel-pair {
   color: var(--ink);
