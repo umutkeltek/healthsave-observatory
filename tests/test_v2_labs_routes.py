@@ -252,7 +252,8 @@ def test_cross_match_card_reads_one_wearable_stream_before_each_draw(client, obs
     assert card["metric"] == "loinc:2276-4"
     # Sep 8 and Sep 17 windows overlap, so three independent draws remain.
     assert card["effect_size"]["kind"] == "cohens_d"
-    assert card["confidence"] == "low"
+    assert card["confidence"] is None
+    assert any("not calibrated confidence" in item for item in card["limitations"])
     assert "from 41 to 19 ng/mL" in card["claim"]
     assert any("counted twice" in item for item in card["limitations"])
     assert card["coverage"]["days_with_data"] == 30

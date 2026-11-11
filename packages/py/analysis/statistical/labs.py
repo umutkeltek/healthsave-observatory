@@ -50,7 +50,6 @@ WINDOW_DAYS = 30
 # 21 of 30 days: the 70 % overlap floor the correlation gate already uses.
 MIN_WINDOW_DAYS = 21
 SPEARMAN_MIN_DRAWS = 4
-UNCAPPED_CONFIDENCE_DRAWS = 8
 EXACT_P_MAX_DRAWS = 8
 FINDING_TYPE = "lab_wearable_cross_match"
 
@@ -348,16 +347,6 @@ def _day(moment: datetime) -> str:
     return moment.date().isoformat()
 
 
-def _p_confidence(p_value: float | None) -> str:
-    if p_value is None or math.isnan(p_value):
-        return "low"
-    if p_value < 0.01:
-        return "high"
-    if p_value < 0.05:
-        return "medium"
-    return "low"
-
-
 def _rho_label(rho: float) -> str:
     a = abs(rho)
     if a >= 0.7:
@@ -548,7 +537,6 @@ def cross_match_card(
 
     delta = None
     effect = None
-    confidence = "low"
     if previous is not None:
         assert previous.mean is not None
         change = current.mean - previous.mean
@@ -568,9 +556,6 @@ def cross_match_card(
                 label=f"{_rho_label(rho)}, across {k} draws",
                 p_value=round(p_value, 4),
             )
-            confidence = _p_confidence(p_value)
-            if k < UNCAPPED_CONFIDENCE_DRAWS and confidence == "high":
-                confidence = "medium"
     elif previous is not None:
         d = _cohens_d(previous.daily_means, current.daily_means)
         if d is not None:
@@ -581,6 +566,8 @@ def cross_match_card(
             )
 
     limitations = [
+        "Exploratory comparison; p-values are not calibrated confidence or medical evidence. "
+        "Repeated testing and serial dependence are not accounted for.",
         "Read together, not cause and effect: two measurements are placed side by side.",
         f"Blood draws are sparse: {k} of {len(ordered)} have their own {WINDOW_DAYS}-day "
         f"window with {MIN_WINDOW_DAYS}+ days of {pairing.label}.",
@@ -646,7 +633,7 @@ def cross_match_card(
             ),
             SourceRef(source_plugin_id=plugins.get(stream_id), label=stream_label),
         ],
-        confidence=confidence,
+        confidence=None,
         limitations=limitations,
         next_question=NextQuestion(
             prose=(

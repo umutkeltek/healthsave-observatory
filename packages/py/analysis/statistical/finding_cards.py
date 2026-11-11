@@ -56,22 +56,6 @@ def _short(metric_id: str | None) -> str:
     return readiness._short(metric_id)
 
 
-def _severity_confidence(severity: str | None) -> str | None:
-    """Map a finding's severity band onto card confidence (statistical certainty)."""
-    return {"alert": "high", "watch": "medium", "info": "low"}.get(severity or "")
-
-
-def _p_confidence(p_value: float | None) -> str | None:
-    """Confidence from a significance level (p<0.01 high, p<0.05 medium, else low)."""
-    if p_value is None:
-        return None
-    if p_value < 0.01:
-        return "high"
-    if p_value < 0.05:
-        return "medium"
-    return "low"
-
-
 def _z_label(z: float) -> str:
     az = abs(z)
     if az >= 3.0:
@@ -149,7 +133,8 @@ def _anomaly_card(
                 f"≥{int(req['min_days'])} days of baseline"
             ),
         ),
-        confidence=_severity_confidence(severity),
+        confidence=None,
+        limitations=["Deviation size is not a calibrated confidence or medical-risk estimate."],
         confounders=confounders,
         next_question=NextQuestion(
             prose=(
@@ -187,10 +172,12 @@ def _trend_card(metric: str | None, sd: dict[str, Any]) -> FindingCard | None:
                 f"≥{int(req['min_days'])} days"
             ),
         ),
-        confidence=sd.get("confidence")
-        if sd.get("confidence") in ("low", "medium", "high")
-        else _p_confidence(p_value),
-        limitations=["linear fit — a changepoint or plateau within the window is not modeled"],
+        confidence=None,
+        limitations=[
+            "linear fit — a changepoint or plateau within the window is not modeled",
+            "Exploratory p-value; repeated tests and serial dependence are not accounted for. "
+            "Medical significance is not assessed.",
+        ],
         next_question=NextQuestion(
             prose=(
                 f"Is this {_short(metric)} trend tied to a recent change "
@@ -246,8 +233,12 @@ def _correlation_card(metric: str | None, sd: dict[str, Any]) -> FindingCard | N
             label=_rho_label(coefficient),
             p_value=p_value,
         ),
-        confidence=_p_confidence(p_value),
-        limitations=["correlation is not causation; same-day alignment only (no lag modeled yet)"],
+        confidence=None,
+        limitations=[
+            "correlation is not causation; same-day alignment only (no lag modeled yet)",
+            "Exploratory p-value; repeated tests and serial dependence are not accounted for. "
+            "Medical significance is not assessed.",
+        ],
         next_question=next_q,
     )
 
@@ -267,7 +258,6 @@ def _recovery_card(metric: str | None, sd: dict[str, Any]) -> FindingCard | None
         or formula_version != 2
     ):
         return None
-    evidence_level = sd.get("evidence_level")
     return FindingCard(
         claim=f"Recovery score {score:.0f}",
         metric=metric or "recovery",
@@ -277,8 +267,9 @@ def _recovery_card(metric: str | None, sd: dict[str, Any]) -> FindingCard | None
             observation_count=input_count,
             note=f"{input_count} of {input_total} recovery inputs available",
         ),
-        confidence="high" if evidence_level == "complete" else "medium",
-        limitations=[f"{name} unavailable" for name in missing if isinstance(name, str)],
+        confidence=None,
+        limitations=[f"{name} unavailable" for name in missing if isinstance(name, str)]
+        + ["Input completeness does not establish clinical validity or calibrated confidence."],
         next_question=NextQuestion(
             prose="Which input is moving recovery most — sleep, HRV, or resting heart rate?"
         ),

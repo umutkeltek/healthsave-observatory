@@ -169,14 +169,14 @@ def test_cross_match_card_compares_the_two_latest_windows_on_one_stream() -> Non
     assert card.delta is not None and card.delta.direction == "up"
     assert card.delta.absolute == pytest.approx(4.0)
     assert card.effect_size is not None and card.effect_size.kind == "cohens_d"
-    assert card.confidence == "low"  # three draws
+    assert card.confidence is None  # sparse draws are not calibrated confidence
     assert card.coverage is not None and card.coverage.days_with_data == 30
     assert card.current_window is not None and card.current_window.n == 30
     assert [s.source_plugin_id for s in card.sources] == ["labs-csv", "apple-healthkit-ios"]
     assert any("not cause and effect" in item for item in card.limitations)
 
 
-def test_cross_match_uses_spearman_from_four_draws_and_caps_confidence() -> None:
+def test_cross_match_uses_spearman_without_promoting_p_value_to_confidence() -> None:
     draws = [
         _p(day, value)
         for day, value in (
@@ -200,7 +200,7 @@ def test_cross_match_uses_spearman_from_four_draws_and_caps_confidence() -> None
     assert card.effect_size.kind == "spearman_rho"
     assert card.effect_size.value == pytest.approx(-1.0)
     assert card.effect_size.p_value is not None and card.effect_size.p_value < 0.01
-    assert card.confidence == "medium"  # p < 0.01 but fewer than 8 draws
+    assert card.confidence is None  # p < 0.01 is not a confidence grade
 
 
 def test_other_streams_are_named_not_averaged() -> None:
@@ -320,7 +320,7 @@ def test_four_draws_in_perfect_order_are_not_significant() -> None:
     assert card is not None and card.effect_size is not None
     assert card.effect_size.value == pytest.approx(-1.0)
     assert card.effect_size.p_value == pytest.approx(2 / 24, abs=1e-4)
-    assert card.confidence == "low"
+    assert card.confidence is None
 
 
 def test_draws_with_overlapping_windows_are_not_counted_twice() -> None:

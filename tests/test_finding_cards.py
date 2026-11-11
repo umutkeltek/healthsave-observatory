@@ -12,7 +12,7 @@ from analysis.statistical.finding_cards import build_card
 from contracts.findings import FINDING_CARD_SCHEMA_VERSION, FindingCard
 
 
-def test_anomaly_card_carries_zscore_delta_and_confidence():
+def test_anomaly_card_carries_zscore_without_confusing_severity_with_confidence():
     sd = {
         "magnitude": 3.2,
         "direction": "up",
@@ -28,7 +28,7 @@ def test_anomaly_card_carries_zscore_delta_and_confidence():
     assert card.effect_size.label == "large"
     assert card.delta.absolute == 72.0 - 55.0
     assert card.delta.direction == "up"
-    assert card.confidence == "high"  # alert → high
+    assert card.confidence is None  # alert severity is not certainty
     assert card.coverage.is_sufficient is True
     assert card.next_question is not None
 
@@ -45,7 +45,7 @@ def test_anomaly_card_post_workout_suppression_becomes_confounder():
     assert "below" in card.claim
 
 
-def test_trend_card_uses_slope_effect_and_confidence_passthrough():
+def test_trend_card_does_not_promote_legacy_heuristic_confidence():
     sd = {
         "slope": -0.8,
         "direction": "down",
@@ -61,7 +61,7 @@ def test_trend_card_uses_slope_effect_and_confidence_passthrough():
     # count, and the span would overstate coverage — a 30-day fit ≈ 21 points).
     assert card.current_window.label == "last 30 days"
     assert card.current_window.n is None
-    assert card.confidence == "high"
+    assert card.confidence is None
     assert card.limitations  # linear-fit caveat present
 
 
@@ -86,7 +86,7 @@ def test_correlation_card_testable_pair_carries_experiment_candidate():
     assert ec.verdict == "testable"
     assert ec.metric_a == "activity.steps" and ec.metric_b == "vital.resting_heart_rate"
     assert ec.required_days == 28
-    assert card.confidence == "high"  # p < 0.01
+    assert card.confidence is None  # a small p-value does not establish confidence
 
 
 def test_correlation_card_non_controllable_pair_has_prose_only():
@@ -119,7 +119,7 @@ def test_recovery_card_exposes_evidence_completeness_and_missing_inputs():
     assert card.claim == "Recovery score 63"
     assert card.coverage.observation_count == 3
     assert card.coverage.note == "3 of 5 recovery inputs available"
-    assert card.confidence == "medium"
+    assert card.confidence is None  # coverage remains in its own field
     assert "temperature unavailable" in card.limitations
     assert "sleep_efficiency unavailable" in card.limitations
 
