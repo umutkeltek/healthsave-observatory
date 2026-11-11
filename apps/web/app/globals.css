@@ -2389,6 +2389,13 @@ input.filter-select {
 .heatmap-scroll {
   overflow-x: auto;
   padding-bottom: 4px;
+  /* Same edge-shadow scroll cue as .prov-scroll: the later hours sit
+     off-screen on a phone and the cut otherwise reads as the end of the day. */
+  background:
+    linear-gradient(to right, var(--surface) 40%, transparent) left / 32px 100% no-repeat local,
+    linear-gradient(to left, var(--surface) 40%, transparent) right / 32px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, var(--line-strong), transparent) left / 12px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--line-strong), transparent) right / 12px 100% no-repeat scroll;
 }
 .heat-row {
   display: flex;
