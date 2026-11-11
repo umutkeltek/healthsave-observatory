@@ -1,0 +1,2 @@
+specimen_datetime,loinc,marker_name,value,unit,reference_low,reference_high,lab,panel
+2026-01-02,2276-4,Ferritin,41,ng/mL,30,400,Example Lab,Example only - replace before importing

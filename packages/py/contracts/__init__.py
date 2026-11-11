@@ -54,6 +54,14 @@ from .data import (
     SourceCapability,
 )
 from .findings import FindingCard
+from .lab_imports import (
+    LabImportCatalog,
+    LabImportDraft,
+    LabImportIndex,
+    LabImportReceipt,
+    LabImportReport,
+    LabImportReview,
+)
 from .narrative import (
     Claim,
     EvidenceRef,
@@ -98,6 +106,12 @@ ALL_MODELS: tuple[type[V2Model], ...] = (
     NarrativeArtifact,
     # findings
     FindingCard,
+    LabImportCatalog,
+    LabImportDraft,
+    LabImportIndex,
+    LabImportReceipt,
+    LabImportReport,
+    LabImportReview,
     # ui
     Annotation,
     SeriesResponse,

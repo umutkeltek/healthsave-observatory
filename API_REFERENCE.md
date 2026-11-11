@@ -248,6 +248,36 @@ Personal-context moments: illness, travel, lifestyle events that may explain or 
 ### `PUT /api/v2/moments/{id}` · `DELETE /api/v2/moments/{id}` — keyed
 Update or delete one personal-context moment by id.
 
+### Private reviewed lab imports — admin key
+
+These routes operate on the primary person's record. Participant ingest/read keys
+cannot call them. User data is never sent to a remote extraction or AI service.
+
+| Route | Behavior |
+|---|---|
+| `GET /api/v2/lab-imports` | Latest 100 documents, including draft/committed timestamps. |
+| `POST /api/v2/lab-imports` | Raw CSV/PDF bytes; URL-encoded simple file name in `X-File-Name`. Returns a draft (201). Bounded to 5 MB, 12 pages, and 250 rows. |
+| `GET /api/v2/lab-imports/catalog` | Supported LOINC test metadata. |
+| `GET /api/v2/lab-imports/{document_id}` | Draft with extracted pages, editable rows and warnings. |
+| `POST /api/v2/lab-imports/{document_id}/commit` | Body `{ "rows": [...] }`, retaining draft `row_id` values; manually added rows use `manual-` followed by an alphanumeric/hyphen identifier. Every row requires `confirmed: true`. |
+| `GET /api/v2/lab-imports/{document_id}/original` | Original bytes as an attachment; private, no-store. |
+| `GET /api/v2/lab-imports/{document_id}/report` | Immutable report with provenance, reference-range descriptions, evidence limits, and source URLs. |
+
+Review fields are `specimen_datetime`, `loinc`, `marker_name`, `value`, `unit`,
+`reference_low`, `reference_high`, `lab`, and `panel`; they are revalidated on the
+server. Unknown/missing values must be corrected before confirmation. Optional
+ownership fields must match the default owner/workspace. The response receipt
+includes inserted/updated/unchanged counts and the report URL. Save uses a row
+lock and one transaction; an identical retry returns the saved receipt. A changed
+retry returns 409 and requires a new draft. Missing documents return 404;
+invalid files/rows return 422, oversized uploads 413, busy extraction 429,
+and unavailable extraction tools or transient storage failures 503.
+
+The browser proxy requires a signed-in web session when sign-in is enabled,
+checks same-origin mutation metadata, and rejects non-primary person views.
+The original is retained, and no cache or external AI receives its bytes.
+See [lab import and review](docs/capture/labs-csv.md).
+
 ### `GET /api/v2/labs` — keyed
 Blood test results imported with `healthsave labs import` (docs/capture/labs-csv.md). One entry per marker (LOINC code), newest first, each result with the reference range its lab printed and the lab stream it came from. Results from different labs are separate rows, never averaged. Host-local — raw lab rows never egress.
 

@@ -56,6 +56,7 @@ NON_OWNERSHIP_TYPES: frozenset[type[V2Model]] = frozenset(
         contracts.Claim,
         contracts.Insight,
         contracts.FindingCard,
+        contracts.LabImportCatalog,  # test-code metadata; no person's measurements
         contracts.SuggestedAction,
         contracts.PluginCapability,
         contracts.PluginPermissions,

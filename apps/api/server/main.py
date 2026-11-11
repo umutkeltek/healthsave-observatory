@@ -51,6 +51,7 @@ from .api import (
     v2_identity,
     v2_insights,
     v2_intelligence,
+    v2_lab_imports,
     v2_labs,
     v2_meta,
     v2_metrics,
@@ -216,6 +217,7 @@ app.include_router(v2_identity.router)
 app.include_router(v2_insights.router)
 app.include_router(v2_intelligence.router)
 app.include_router(v2_labs.router)
+app.include_router(v2_lab_imports.router)
 app.include_router(v2_meta.router)
 app.include_router(v2_metrics.router)
 app.include_router(v2_moments.router)

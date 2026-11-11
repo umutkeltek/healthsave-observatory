@@ -241,6 +241,7 @@ export default async function LabsPage({ searchParams }: { searchParams: Promise
         Each marker against the range your lab printed and against your own earlier results. Results from
         different labs stay separate and are never averaged. This is a record, not a diagnosis.
       </p>
+      <a className="btn" href="/labs/import">Import a lab report</a>
     </div>
   );
 
@@ -260,8 +261,7 @@ export default async function LabsPage({ searchParams }: { searchParams: Promise
         <div className="card labs-empty">
           <h3>No lab results yet</h3>
           <p>
-            Import a CSV export of your results with <code>healthsave labs import results.csv</code>. The
-            columns are described in <code>docs/capture/labs-csv.md</code>; the file stays on this machine.
+            Bring a CSV or PDF from your lab. Review the values before saving them to your private record.
           </p>
         </div>
       </>

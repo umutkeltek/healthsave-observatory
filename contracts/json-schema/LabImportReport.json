@@ -1,0 +1,249 @@
+{
+  "$defs": {
+    "LabEvidenceSource": {
+      "additionalProperties": false,
+      "properties": {
+        "accessed_on": {
+          "title": "Accessed On",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "scope": {
+          "title": "Scope",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "url",
+        "accessed_on",
+        "scope"
+      ],
+      "title": "LabEvidenceSource",
+      "type": "object"
+    },
+    "LabReportResult": {
+      "additionalProperties": false,
+      "properties": {
+        "comparator": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Comparator"
+        },
+        "lab": {
+          "title": "Lab",
+          "type": "string"
+        },
+        "loinc": {
+          "title": "Loinc",
+          "type": "string"
+        },
+        "marker": {
+          "title": "Marker",
+          "type": "string"
+        },
+        "measurement_quality": {
+          "title": "Measurement Quality",
+          "type": "string"
+        },
+        "medical_evidence": {
+          "title": "Medical Evidence",
+          "type": "string"
+        },
+        "observation": {
+          "title": "Observation",
+          "type": "string"
+        },
+        "personal_pattern": {
+          "title": "Personal Pattern",
+          "type": "string"
+        },
+        "quality_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Quality Flags",
+          "type": "array"
+        },
+        "reference_high": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reference High"
+        },
+        "reference_low": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reference Low"
+        },
+        "source_excerpt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Excerpt"
+        },
+        "source_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "source_page": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Page"
+        },
+        "specimen_at": {
+          "format": "date-time",
+          "title": "Specimen At",
+          "type": "string"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "marker",
+        "loinc",
+        "specimen_at",
+        "lab",
+        "value",
+        "comparator",
+        "unit",
+        "reference_low",
+        "reference_high",
+        "observation",
+        "measurement_quality",
+        "personal_pattern",
+        "medical_evidence",
+        "source_page",
+        "source_excerpt",
+        "quality_flags",
+        "source_ids"
+      ],
+      "title": "LabReportResult",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "file_name": {
+      "title": "File Name",
+      "type": "string"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "imported_at": {
+      "format": "date-time",
+      "title": "Imported At",
+      "type": "string"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "owner_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "report_version": {
+      "title": "Report Version",
+      "type": "string"
+    },
+    "results": {
+      "items": {
+        "$ref": "#/$defs/LabReportResult"
+      },
+      "title": "Results",
+      "type": "array"
+    },
+    "review_status": {
+      "title": "Review Status",
+      "type": "string"
+    },
+    "sha256": {
+      "title": "Sha256",
+      "type": "string"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/LabEvidenceSource"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "workspace_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "file_name",
+    "sha256",
+    "imported_at",
+    "report_version",
+    "review_status",
+    "limitations",
+    "results",
+    "sources"
+  ],
+  "title": "LabImportReport",
+  "type": "object"
+}

@@ -790,6 +790,12 @@ read key may name only its own. See [Participants](docs/operations/participants.
 | `/api/v2/moments/{moment_id}` | PUT, DELETE | key | update / delete one moment |
 | `/api/v2/labs` | GET | key | blood test results per marker (LOINC), each with the lab's own reference range and its lab stream; the labs that sent them |
 | `/api/v2/labs/{loinc}` | GET | key | one marker's results, oldest first (`422` for a malformed LOINC code, `404` when there are none) |
+| `/api/v2/lab-imports` | GET, POST | admin key | list private documents; upload raw CSV/PDF bytes with `X-File-Name` for local extraction and review (5 MB, 12 pages) |
+| `/api/v2/lab-imports/catalog` | GET | admin key | supported test codes, names and units |
+| `/api/v2/lab-imports/{document_id}` | GET | admin key | reopen an extracted draft |
+| `/api/v2/lab-imports/{document_id}/commit` | POST | admin key | validate explicitly confirmed rows; atomically save observations and an immutable receipt/report |
+| `/api/v2/lab-imports/{document_id}/original` | GET | admin key | original private attachment, with no-store and nosniff headers |
+| `/api/v2/lab-imports/{document_id}/report` | GET | admin key | source-backed descriptive report; 409 until the draft is confirmed |
 | `/api/v2/year/{year}` | GET | key | Year in Health: one calendar year read as coverage, in the person's analytical days (months covered, sources per month, each source's first/last observation, every run of days with no data per kind of data, headline numbers computed per source and never averaged across sources, limitation codes; `?owner=`; `422` for a year that has not started) |
 | `/api/v2/export/metrics` | GET | key | list exportable metrics with counts + date ranges |
 | `/api/v2/export` | GET | key | export one metric (or `all`) as JSON or CSV |

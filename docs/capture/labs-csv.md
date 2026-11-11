@@ -1,18 +1,56 @@
-# Blood test results (CSV import)
+# Blood test results
 
 Bring your blood test results into the Observatory next to your wearable data.
 Each result keeps the reference range **your lab printed**, the time the sample
 was taken, and which lab ran it. Results from different labs are kept apart and
 never averaged.
 
-The file is read on your machine and handed to the API container of your own
-stack. It does not cross the network, and lab rows never leave the host.
+The web importer sends your file to your own Observatory. Extraction, OCR and
+analysis run there; no cloud AI receives the report. The command-line importer
+reads the file on the host and hands it to the local API container.
 
 > HealthSave Observatory shows your numbers against the lab's own range and your
 > own history. It does not diagnose, name conditions, or give treatment advice.
 > Talk to a clinician about what a result means for you.
 
-## Import a file
+## Import and review in the browser
+
+Open **Labs → Import a lab report**. Choose a CSV, text PDF, or scanned PDF up to
+5 MB and 12 pages. Originals are retained privately with the record. Access uses
+your Observatory's existing sign-in; imports belong to the primary person.
+
+1. Inspect the extracted source text or download the original.
+2. Enter the sample date and performing lab. Choose the matching test code and
+   correct values, units, reference ranges, or missed results.
+3. Confirm each row after comparing it with the original, then save. Editing a
+   confirmed row clears its confirmation. Nothing enters Labs before this step.
+4. Open the saved report, compare a marker with its history, or download JSON
+   and use **Print / Save PDF** for an appointment summary.
+
+PDF extraction recognizes a limited set of English marker names and printed
+codes; unfamiliar layouts can require manual entry. OCR can misread decimal
+points and units. Never treat extracted values as verified. A marker without a
+range remains without a range. Text results such as `positive` are not supported.
+
+Edits remain in the browser until saved; the original draft can be reopened from
+the document list. Repeating a successful save returns its existing receipt.
+To correct an already saved review, import a new draft. Existing observations
+with the same lab, test and sample time are updated, while the earlier import
+report remains an immutable record of that earlier review.
+
+Reports keep the original file hash, page/excerpt, normalized values and a
+versioned explanation of lab ranges. They distinguish transcription review,
+personal-pattern evidence and medical evidence. The educational source is
+[MedlinePlus](https://medlineplus.gov/lab-tests/how-to-understand-your-lab-results/).
+These reports have not been clinically validated and do not diagnose, prescribe,
+or assess urgency. A lab range is not a diagnostic threshold.
+
+The distributed API image includes Poppler and Tesseract for local extraction.
+Source installations need `pdfinfo`, `pdftotext`, `pdftoppm`, and `tesseract` on
+the API process's PATH. Failed or oversized documents produce an actionable
+error; no cloud fallback runs. Original files are served as private attachments.
+
+## Import a CSV from the command line
 
 ```bash
 healthsave labs import results.csv --dry-run   # check the file, write nothing
@@ -96,8 +134,8 @@ conversion depends on the substance. If your unit does not fit the code you
 gave, the row is rejected with a hint. For a code that is not in the starting
 set, the value is stored in the unit you gave.
 
-## What is not here yet
+## Limits
 
-- Lab report PDFs, and clinical records from Apple Health.
-- Entering a result by hand in the web app.
+- Clinical records imported directly from Apple Health.
+- Clinician-reviewed diagnostic rules, medication recommendations, or genetic interpretation.
 - Text results (`positive`, `trace`).

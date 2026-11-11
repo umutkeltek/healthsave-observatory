@@ -24,6 +24,7 @@ RUN useradd --create-home --uid 10001 appuser \
 # Next standalone output: a minimal server.js + traced node_modules + static.
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
+COPY --from=build /app/public ./public
 USER appuser
 EXPOSE 4173
 # Probe the lightweight /api/health route, not `/`: the Today page SSR fans out

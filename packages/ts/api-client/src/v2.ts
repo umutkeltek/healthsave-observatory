@@ -149,14 +149,98 @@ export type Claims = Claim[];
 export type Metric3 = string | null;
 export type Severity = "info" | "watch" | "alert";
 export type Summary = string;
+export type Method = "text" | "ocr" | "csv";
+export type Page = number;
+export type Text2 = string;
+export type AccessedOn = string;
+export type Id9 = string;
+export type Scope = string;
+export type Title = string;
+export type Url = string;
+export type Loinc = string;
+export type Name2 = string;
+export type Unit1 = string;
+export type Markers = LabImportMarker[];
+export type CreatedAt1 = string;
+export type FileName = string;
+export type Id10 = string;
+export type OwnerId9 = string;
+export type Pages = LabDocumentPage[];
+export type Confirmed = boolean;
+export type Lab = string;
+export type Loinc1 = string;
+export type MarkerName = string;
+export type Panel = string;
+export type ReferenceHigh = string;
+export type ReferenceLow = string;
+export type RowId = string;
+export type SpecimenDatetime = string;
+export type Unit2 = string;
+export type Value1 = string;
+export type Rows = LabReviewRow[];
+export type Sha256 = string;
+export type Status3 = "draft" | "committed";
+export type Warnings = string[];
+export type WorkspaceId9 = string;
+export type CommittedAt = string | null;
+export type CreatedAt2 = string;
+export type FileName1 = string;
+export type Id11 = string;
+export type Sha2561 = string;
+export type Documents = LabImportIndexItem[];
+export type OwnerId10 = string;
+export type WorkspaceId10 = string;
+export type Id12 = string;
+export type Inserted = number;
+export type OwnerId11 = string;
+export type ReportUrl = string;
+export type ResultCount = number;
+export type Unchanged = number;
+export type Updated = number;
+export type WorkspaceId11 = string;
+export type FileName2 = string;
+export type Id13 = string;
+export type ImportedAt = string;
+export type Limitations1 = string[];
+export type OwnerId12 = string;
+export type ReportVersion = string;
+export type Comparator = string | null;
+export type Lab1 = string;
+export type Loinc2 = string;
+export type Marker = string;
+export type MeasurementQuality = string;
+export type MedicalEvidence = string;
+export type Observation = string;
+export type PersonalPattern = string;
+export type QualityFlags = string[];
+export type ReferenceHigh1 = number | null;
+export type ReferenceLow1 = number | null;
+export type SourceExcerpt = string | null;
+export type SourceIds = string[];
+export type SourcePage = number | null;
+export type SpecimenAt = string;
+export type Unit3 = string;
+export type Value2 = number;
+export type Results = LabReportResult[];
+export type ReviewStatus = string;
+export type Sha2562 = string;
+export type Sources1 = LabEvidenceSource[];
+export type WorkspaceId12 = string;
+export type OwnerId13 = string;
+/**
+ * @minItems 1
+ * @maxItems 250
+ */
+export type Rows1 = [LabReviewRow, ...LabReviewRow[]];
+export type WorkspaceId13 = string;
 export type Confidence2 = number | null;
 export type DeviceId = string | null;
-export type Id9 = string;
+export type Id14 = string;
 export type IntervalEnd = string;
 export type IntervalStart = string;
 export type Metric4 = string;
 export type NormalizationVersion = string;
-export type OwnerId9 = string;
+export type OwnerId14 = string;
 export type CapturedAt = string;
 export type MotionContext = string | null;
 export type RawPayloadRef = string | null;
@@ -164,47 +248,47 @@ export type SdkVersion = string;
 export type SourcePluginId1 = string;
 export type TzOffsetMinutes = number | null;
 export type SourceId2 = string;
-export type Unit1 = string;
-export type Value1 = number;
-export type WorkspaceId9 = string;
-export type Id10 = string;
+export type Unit4 = string;
+export type Value3 = number;
+export type WorkspaceId14 = string;
+export type Id15 = string;
 export type Insights = Insight[];
 export type Kind6 = "daily_briefing" | "weekly_summary" | "anomaly_explanation" | "intervention_proposal";
 export type NarratorPluginId = string;
 export type NarratorVersion = string;
-export type OwnerId10 = string;
+export type OwnerId15 = string;
 export type RenderedAt = string;
 export type Rationale2 = string | null;
 export type RequiresApproval = boolean;
-export type Text2 = string;
-export type SuggestedActions = SuggestedAction[];
 export type Text3 = string;
-export type WorkspaceId10 = string;
+export type SuggestedActions = SuggestedAction[];
+export type Text4 = string;
+export type WorkspaceId15 = string;
 export type Annotations = Annotation[];
 export type Metric5 = string;
-export type OwnerId11 = string;
+export type OwnerId16 = string;
 export type Points = [unknown, unknown][];
-export type Unit2 = string;
-export type WorkspaceId11 = string;
-export type OwnerId12 = string;
+export type Unit5 = string;
+export type WorkspaceId16 = string;
+export type OwnerId17 = string;
 export type RawPayloadId = string;
-export type WorkspaceId12 = string;
+export type WorkspaceId17 = string;
 export type CapturedAt1 = string;
-export type Id11 = string;
+export type Id16 = string;
 export type Metric6 = string | null;
-export type OwnerId13 = string;
+export type OwnerId18 = string;
 export type RunId4 = string;
-export type WorkspaceId13 = string;
+export type WorkspaceId18 = string;
 export type Description2 = string | null;
-export type Name2 = string;
+export type Name3 = string;
 export type ConfigSchema = string | null;
 export type Consumes = string[];
 export type Emits = string[];
 export type Entrypoint = string;
-export type Id12 = string;
+export type Id17 = string;
 export type Kind7 = "source" | "narrator" | "agent";
 export type Language = "python" | "typescript";
-export type Name3 = string;
+export type Name4 = string;
 export type Capabilities1 = PluginCapability[];
 export type Network = boolean;
 export type Secrets = string[];
@@ -239,18 +323,18 @@ export type RateLimitPerMinute = number | null;
 export type RecordShape = ("sample" | "interval" | "session" | "daily_total" | "aggregate") | null;
 export type SourceCapabilities = SourceCapability[];
 export type Version1 = string;
-export type Id13 = string;
-export type OwnerId14 = string;
+export type Id18 = string;
+export type OwnerId19 = string;
 export type PayloadHash = string;
 export type ReceivedAt = string;
 export type SourceId3 = string;
-export type WorkspaceId14 = string;
+export type WorkspaceId19 = string;
 export type DisplayName = string;
-export type Id14 = string;
+export type Id19 = string;
 export type Kind8 = "sensor" | "manual" | "computed" | "external_api";
-export type OwnerId15 = string;
+export type OwnerId20 = string;
 export type PluginId3 = string;
-export type WorkspaceId15 = string;
+export type WorkspaceId20 = string;
 
 
 /**
@@ -573,6 +657,110 @@ export interface Insight {
   severity?: Severity;
   summary: Summary;
 }
+export interface LabDocumentPage {
+  method: Method;
+  page: Page;
+  text: Text2;
+}
+export interface LabEvidenceSource {
+  accessed_on: AccessedOn;
+  id: Id9;
+  scope: Scope;
+  title: Title;
+  url: Url;
+}
+export interface LabImportCatalog {
+  markers: Markers;
+}
+export interface LabImportMarker {
+  loinc: Loinc;
+  name: Name2;
+  unit: Unit1;
+}
+export interface LabImportDraft {
+  created_at: CreatedAt1;
+  file_name: FileName;
+  id: Id10;
+  owner_id?: OwnerId9;
+  pages: Pages;
+  rows: Rows;
+  sha256: Sha256;
+  status: Status3;
+  warnings: Warnings;
+  workspace_id?: WorkspaceId9;
+}
+export interface LabReviewRow {
+  confirmed?: Confirmed;
+  lab?: Lab;
+  loinc?: Loinc1;
+  marker_name?: MarkerName;
+  panel?: Panel;
+  reference_high?: ReferenceHigh;
+  reference_low?: ReferenceLow;
+  row_id: RowId;
+  specimen_datetime?: SpecimenDatetime;
+  unit?: Unit2;
+  value?: Value1;
+}
+export interface LabImportIndex {
+  documents: Documents;
+  owner_id?: OwnerId10;
+  workspace_id?: WorkspaceId10;
+}
+export interface LabImportIndexItem {
+  committed_at: CommittedAt;
+  created_at: CreatedAt2;
+  file_name: FileName1;
+  id: Id11;
+  sha256: Sha2561;
+}
+export interface LabImportReceipt {
+  id: Id12;
+  inserted: Inserted;
+  owner_id?: OwnerId11;
+  report_url: ReportUrl;
+  result_count: ResultCount;
+  unchanged: Unchanged;
+  updated: Updated;
+  workspace_id?: WorkspaceId11;
+}
+export interface LabImportReport {
+  file_name: FileName2;
+  id: Id13;
+  imported_at: ImportedAt;
+  limitations: Limitations1;
+  owner_id?: OwnerId12;
+  report_version: ReportVersion;
+  results: Results;
+  review_status: ReviewStatus;
+  sha256: Sha2562;
+  sources: Sources1;
+  workspace_id?: WorkspaceId12;
+}
+export interface LabReportResult {
+  comparator: Comparator;
+  lab: Lab1;
+  loinc: Loinc2;
+  marker: Marker;
+  measurement_quality: MeasurementQuality;
+  medical_evidence: MedicalEvidence;
+  observation: Observation;
+  personal_pattern: PersonalPattern;
+  quality_flags: QualityFlags;
+  reference_high: ReferenceHigh1;
+  reference_low: ReferenceLow1;
+  source_excerpt: SourceExcerpt;
+  source_ids: SourceIds;
+  source_page: SourcePage;
+  specimen_at: SpecimenAt;
+  unit: Unit3;
+  value: Value2;
+}
+export interface LabImportReview {
+  owner_id?: OwnerId13;
+  rows: Rows1;
+  workspace_id?: WorkspaceId13;
+}
 /**
  * The canonical health measurement.
  *
@@ -582,17 +770,17 @@ export interface Insight {
 export interface Measurement {
   confidence?: Confidence2;
   device_id?: DeviceId;
-  id?: Id9;
+  id?: Id14;
   interval_end: IntervalEnd;
   interval_start: IntervalStart;
   metric: Metric4;
   normalization_version?: NormalizationVersion;
-  owner_id?: OwnerId9;
+  owner_id?: OwnerId14;
   provenance: Provenance;
   source_id: SourceId2;
-  unit: Unit1;
-  value: Value1;
-  workspace_id?: WorkspaceId9;
+  unit: Unit4;
+  value: Value3;
+  workspace_id?: WorkspaceId14;
 }
 /**
  * Always-attached "where did this come from" capsule.
@@ -626,16 +814,16 @@ export interface Provenance {
  * in this shape. The dashboard's ``BriefingCard`` reads this.
  */
 export interface NarrativeArtifact {
-  id: Id10;
+  id: Id15;
   insights?: Insights;
   kind: Kind6;
   narrator_plugin_id: NarratorPluginId;
   narrator_version: NarratorVersion;
-  owner_id?: OwnerId10;
+  owner_id?: OwnerId15;
   rendered_at: RenderedAt;
   suggested_actions?: SuggestedActions;
-  text: Text3;
-  workspace_id?: WorkspaceId10;
+  text: Text4;
+  workspace_id?: WorkspaceId15;
 }
 /**
  * A user-visible suggestion. Defaults to requiring approval —
@@ -644,7 +832,7 @@ export interface NarrativeArtifact {
 export interface SuggestedAction {
   rationale?: Rationale2;
   requires_approval?: RequiresApproval;
-  text: Text2;
+  text: Text3;
 }
 /**
  * A composed UI card — chart + briefing inline.
@@ -667,10 +855,10 @@ export interface NarrativeCard {
 export interface SeriesResponse {
   annotations?: Annotations;
   metric: Metric5;
-  owner_id?: OwnerId11;
+  owner_id?: OwnerId16;
   points: Points;
-  unit: Unit2;
-  workspace_id?: WorkspaceId11;
+  unit: Unit5;
+  workspace_id?: WorkspaceId16;
 }
 /**
  * One canonical sample after a Source plugin has parsed it.
@@ -681,9 +869,9 @@ export interface SeriesResponse {
  */
 export interface NormalizedMeasurement {
   measurement: Measurement;
-  owner_id?: OwnerId12;
+  owner_id?: OwnerId17;
   raw_payload_id: RawPayloadId;
-  workspace_id?: WorkspaceId12;
+  workspace_id?: WorkspaceId17;
 }
 /**
  * What the agent observed during a run. Append-only.
@@ -692,14 +880,14 @@ export interface NormalizedMeasurement {
  * contract stable across narrators evolving their statistical
  * output shape.
  */
-export interface Observation {
+export interface Observation1 {
   captured_at: CapturedAt1;
   findings: Findings;
-  id: Id11;
+  id: Id16;
   metric?: Metric6;
-  owner_id?: OwnerId13;
+  owner_id?: OwnerId18;
   run_id: RunId4;
-  workspace_id?: WorkspaceId13;
+  workspace_id?: WorkspaceId18;
 }
 export interface Findings {}
 /**
@@ -711,7 +899,7 @@ export interface Findings {}
  */
 export interface PluginCapability {
   description?: Description2;
-  name: Name2;
+  name: Name3;
 }
 /**
  * Every plugin's plugin.yaml validates against this.
@@ -727,10 +915,10 @@ export interface PluginManifest {
   consumes?: Consumes;
   emits?: Emits;
   entrypoint: Entrypoint;
-  id: Id12;
+  id: Id17;
   kind: Kind7;
   language?: Language;
-  name: Name3;
+  name: Name4;
   permissions?: PluginPermissions;
   requires?: Requires;
   sdk_version: SdkVersion1;
@@ -779,13 +967,13 @@ export interface PluginPermissions1 {
  * JSON form for dedup + idempotency.
  */
 export interface RawSourcePayload {
-  id: Id13;
-  owner_id?: OwnerId14;
+  id: Id18;
+  owner_id?: OwnerId19;
   payload: Payload3;
   payload_hash: PayloadHash;
   received_at: ReceivedAt;
   source_id: SourceId3;
-  workspace_id?: WorkspaceId14;
+  workspace_id?: WorkspaceId19;
 }
 export interface Payload3 {}
 /**
@@ -793,9 +981,9 @@ export interface Payload3 {}
  */
 export interface Source {
   display_name: DisplayName;
-  id: Id14;
+  id: Id19;
   kind: Kind8;
-  owner_id?: OwnerId15;
+  owner_id?: OwnerId20;
   plugin_id: PluginId3;
-  workspace_id?: WorkspaceId15;
+  workspace_id?: WorkspaceId20;
 }

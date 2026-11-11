@@ -22,7 +22,9 @@ const nextConfig = {
   // directly; this rewrite lets any client-side fetch hit same-origin /api/*.
   async rewrites() {
     const api = process.env.API_BASE ?? "http://localhost:8000";
-    return [{ source: "/api/:path*", destination: `${api}/api/:path*` }];
+    // Dynamic local route handlers (including reviewed document imports) must
+    // run before the generic backend proxy, just like static local handlers.
+    return { fallback: [{ source: "/api/:path*", destination: `${api}/api/:path*` }] };
   },
 };
 

@@ -5,6 +5,8 @@ ENV PIP_ROOT_USER_ACTION=ignore \
 
 WORKDIR /app
 RUN adduser --disabled-password --gecos "" appuser
+RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils tesseract-ocr \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

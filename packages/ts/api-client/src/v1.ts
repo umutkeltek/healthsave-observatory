@@ -770,6 +770,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/lab-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Index */
+        get: operations["index_api_v2_lab_imports_get"];
+        put?: never;
+        /** Upload */
+        post: operations["upload_api_v2_lab_imports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/lab-imports/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Catalog */
+        get: operations["catalog_api_v2_lab_imports_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/lab-imports/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Draft */
+        get: operations["draft_api_v2_lab_imports__document_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/lab-imports/{document_id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commit */
+        post: operations["commit_api_v2_lab_imports__document_id__commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/lab-imports/{document_id}/original": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Original */
+        get: operations["original_api_v2_lab_imports__document_id__original_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/lab-imports/{document_id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report */
+        get: operations["report_api_v2_lab_imports__document_id__report_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/labs": {
         parameters: {
             query?: never;
@@ -1813,6 +1916,31 @@ export interface components {
             /** Stream Label */
             stream_label: string | null;
         };
+        /** LabDocumentPage */
+        LabDocumentPage: {
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "text" | "ocr" | "csv";
+            /** Page */
+            page: number;
+            /** Text */
+            text: string;
+        };
+        /** LabEvidenceSource */
+        LabEvidenceSource: {
+            /** Accessed On */
+            accessed_on: string;
+            /** Id */
+            id: string;
+            /** Scope */
+            scope: string;
+            /** Title */
+            title: string;
+            /** Url */
+            url: string;
+        };
         /** LabGapView */
         LabGapView: {
             /** Bands Disagree */
@@ -1857,6 +1985,182 @@ export interface components {
             later_value: number;
             /** Unit */
             unit: string;
+        };
+        /** LabImportCatalog */
+        LabImportCatalog: {
+            /** Markers */
+            markers: components["schemas"]["LabImportMarker"][];
+        };
+        /** LabImportDraft */
+        LabImportDraft: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /** Pages */
+            pages: components["schemas"]["LabDocumentPage"][];
+            /** Rows */
+            rows: components["schemas"]["LabReviewRow"][];
+            /** Sha256 */
+            sha256: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "committed";
+            /** Warnings */
+            warnings: string[];
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** LabImportIndex */
+        LabImportIndex: {
+            /** Documents */
+            documents: components["schemas"]["LabImportIndexItem"][];
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** LabImportIndexItem */
+        LabImportIndexItem: {
+            /** Committed At */
+            committed_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Sha256 */
+            sha256: string;
+        };
+        /** LabImportMarker */
+        LabImportMarker: {
+            /** Loinc */
+            loinc: string;
+            /** Name */
+            name: string;
+            /** Unit */
+            unit: string;
+        };
+        /** LabImportReceipt */
+        LabImportReceipt: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Inserted */
+            inserted: number;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /** Report Url */
+            report_url: string;
+            /** Result Count */
+            result_count: number;
+            /** Unchanged */
+            unchanged: number;
+            /** Updated */
+            updated: number;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** LabImportReport */
+        LabImportReport: {
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Imported At
+             * Format: date-time
+             */
+            imported_at: string;
+            /** Limitations */
+            limitations: string[];
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /** Report Version */
+            report_version: string;
+            /** Results */
+            results: components["schemas"]["LabReportResult"][];
+            /** Review Status */
+            review_status: string;
+            /** Sha256 */
+            sha256: string;
+            /** Sources */
+            sources: components["schemas"]["LabEvidenceSource"][];
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** LabImportReview */
+        LabImportReview: {
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /** Rows */
+            rows: components["schemas"]["LabReviewRow"][];
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
         };
         /** LabMarkerDetail */
         LabMarkerDetail: {
@@ -1929,6 +2233,46 @@ export interface components {
             /** Unit */
             unit: string;
         };
+        /** LabReportResult */
+        LabReportResult: {
+            /** Comparator */
+            comparator: string | null;
+            /** Lab */
+            lab: string;
+            /** Loinc */
+            loinc: string;
+            /** Marker */
+            marker: string;
+            /** Measurement Quality */
+            measurement_quality: string;
+            /** Medical Evidence */
+            medical_evidence: string;
+            /** Observation */
+            observation: string;
+            /** Personal Pattern */
+            personal_pattern: string;
+            /** Quality Flags */
+            quality_flags: string[];
+            /** Reference High */
+            reference_high: number | null;
+            /** Reference Low */
+            reference_low: number | null;
+            /** Source Excerpt */
+            source_excerpt: string | null;
+            /** Source Ids */
+            source_ids: string[];
+            /** Source Page */
+            source_page: number | null;
+            /**
+             * Specimen At
+             * Format: date-time
+             */
+            specimen_at: string;
+            /** Unit */
+            unit: string;
+            /** Value */
+            value: number;
+        };
         /** LabResultView */
         LabResultView: {
             /** Band */
@@ -1972,6 +2316,61 @@ export interface components {
             unit: string;
             /** Value */
             value: number;
+        };
+        /** LabReviewRow */
+        LabReviewRow: {
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /**
+             * Lab
+             * @default
+             */
+            lab: string;
+            /**
+             * Loinc
+             * @default
+             */
+            loinc: string;
+            /**
+             * Marker Name
+             * @default
+             */
+            marker_name: string;
+            /**
+             * Panel
+             * @default
+             */
+            panel: string;
+            /**
+             * Reference High
+             * @default
+             */
+            reference_high: string;
+            /**
+             * Reference Low
+             * @default
+             */
+            reference_low: string;
+            /** Row Id */
+            row_id: string;
+            /**
+             * Specimen Datetime
+             * @default
+             */
+            specimen_datetime: string;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+            /**
+             * Value
+             * @default
+             */
+            value: string;
         };
         /** LabSourceView */
         LabSourceView: {
@@ -3952,6 +4351,235 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    index_api_v2_lab_imports_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabImportIndex"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_api_v2_lab_imports_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabImportDraft"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    catalog_api_v2_lab_imports_catalog_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabImportCatalog"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_api_v2_lab_imports__document_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabImportDraft"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_api_v2_lab_imports__document_id__commit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabImportReview"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabImportReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    original_api_v2_lab_imports__document_id__original_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_api_v2_lab_imports__document_id__report_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabImportReport"];
                 };
             };
             /** @description Validation Error */

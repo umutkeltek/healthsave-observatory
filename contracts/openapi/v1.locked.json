@@ -1529,6 +1529,69 @@
         "title": "LabCrossMatchView",
         "type": "object"
       },
+      "LabDocumentPage": {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "enum": [
+              "text",
+              "ocr",
+              "csv"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "page",
+          "text",
+          "method"
+        ],
+        "title": "LabDocumentPage",
+        "type": "object"
+      },
+      "LabEvidenceSource": {
+        "additionalProperties": false,
+        "properties": {
+          "accessed_on": {
+            "title": "Accessed On",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "url",
+          "accessed_on",
+          "scope"
+        ],
+        "title": "LabEvidenceSource",
+        "type": "object"
+      },
       "LabGapView": {
         "additionalProperties": false,
         "properties": {
@@ -1629,6 +1692,356 @@
           "bands_disagree"
         ],
         "title": "LabGapView",
+        "type": "object"
+      },
+      "LabImportCatalog": {
+        "additionalProperties": false,
+        "properties": {
+          "markers": {
+            "items": {
+              "$ref": "#/components/schemas/LabImportMarker"
+            },
+            "title": "Markers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "markers"
+        ],
+        "title": "LabImportCatalog",
+        "type": "object"
+      },
+      "LabImportDraft": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "pages": {
+            "items": {
+              "$ref": "#/components/schemas/LabDocumentPage"
+            },
+            "title": "Pages",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/LabReviewRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "committed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "file_name",
+          "sha256",
+          "created_at",
+          "status",
+          "pages",
+          "rows",
+          "warnings"
+        ],
+        "title": "LabImportDraft",
+        "type": "object"
+      },
+      "LabImportIndex": {
+        "additionalProperties": false,
+        "properties": {
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/LabImportIndexItem"
+            },
+            "title": "Documents",
+            "type": "array"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "documents"
+        ],
+        "title": "LabImportIndex",
+        "type": "object"
+      },
+      "LabImportIndexItem": {
+        "additionalProperties": false,
+        "properties": {
+          "committed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Committed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "file_name",
+          "sha256",
+          "created_at",
+          "committed_at"
+        ],
+        "title": "LabImportIndexItem",
+        "type": "object"
+      },
+      "LabImportMarker": {
+        "additionalProperties": false,
+        "properties": {
+          "loinc": {
+            "title": "Loinc",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loinc",
+          "name",
+          "unit"
+        ],
+        "title": "LabImportMarker",
+        "type": "object"
+      },
+      "LabImportReceipt": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "inserted": {
+            "title": "Inserted",
+            "type": "integer"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "report_url": {
+            "title": "Report Url",
+            "type": "string"
+          },
+          "result_count": {
+            "title": "Result Count",
+            "type": "integer"
+          },
+          "unchanged": {
+            "title": "Unchanged",
+            "type": "integer"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "inserted",
+          "updated",
+          "unchanged",
+          "result_count",
+          "report_url"
+        ],
+        "title": "LabImportReceipt",
+        "type": "object"
+      },
+      "LabImportReport": {
+        "additionalProperties": false,
+        "properties": {
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "imported_at": {
+            "format": "date-time",
+            "title": "Imported At",
+            "type": "string"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Limitations",
+            "type": "array"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "report_version": {
+            "title": "Report Version",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/LabReportResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "review_status": {
+            "title": "Review Status",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/LabEvidenceSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "file_name",
+          "sha256",
+          "imported_at",
+          "report_version",
+          "review_status",
+          "limitations",
+          "results",
+          "sources"
+        ],
+        "title": "LabImportReport",
+        "type": "object"
+      },
+      "LabImportReview": {
+        "additionalProperties": false,
+        "properties": {
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/LabReviewRow"
+            },
+            "maxItems": 250,
+            "minItems": 1,
+            "title": "Rows",
+            "type": "array"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rows"
+        ],
+        "title": "LabImportReview",
         "type": "object"
       },
       "LabMarkerDetail": {
@@ -1834,6 +2247,142 @@
         "title": "LabMarkerView",
         "type": "object"
       },
+      "LabReportResult": {
+        "additionalProperties": false,
+        "properties": {
+          "comparator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparator"
+          },
+          "lab": {
+            "title": "Lab",
+            "type": "string"
+          },
+          "loinc": {
+            "title": "Loinc",
+            "type": "string"
+          },
+          "marker": {
+            "title": "Marker",
+            "type": "string"
+          },
+          "measurement_quality": {
+            "title": "Measurement Quality",
+            "type": "string"
+          },
+          "medical_evidence": {
+            "title": "Medical Evidence",
+            "type": "string"
+          },
+          "observation": {
+            "title": "Observation",
+            "type": "string"
+          },
+          "personal_pattern": {
+            "title": "Personal Pattern",
+            "type": "string"
+          },
+          "quality_flags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Quality Flags",
+            "type": "array"
+          },
+          "reference_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference High"
+          },
+          "reference_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Low"
+          },
+          "source_excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Excerpt"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          },
+          "source_page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Page"
+          },
+          "specimen_at": {
+            "format": "date-time",
+            "title": "Specimen At",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "marker",
+          "loinc",
+          "specimen_at",
+          "lab",
+          "value",
+          "comparator",
+          "unit",
+          "reference_low",
+          "reference_high",
+          "observation",
+          "measurement_quality",
+          "personal_pattern",
+          "medical_evidence",
+          "source_page",
+          "source_excerpt",
+          "quality_flags",
+          "source_ids"
+        ],
+        "title": "LabReportResult",
+        "type": "object"
+      },
       "LabResultView": {
         "additionalProperties": false,
         "properties": {
@@ -1962,6 +2511,81 @@
           "band_fraction"
         ],
         "title": "LabResultView",
+        "type": "object"
+      },
+      "LabReviewRow": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "lab": {
+            "default": "",
+            "maxLength": 160,
+            "title": "Lab",
+            "type": "string"
+          },
+          "loinc": {
+            "default": "",
+            "maxLength": 20,
+            "title": "Loinc",
+            "type": "string"
+          },
+          "marker_name": {
+            "default": "",
+            "maxLength": 160,
+            "title": "Marker Name",
+            "type": "string"
+          },
+          "panel": {
+            "default": "",
+            "maxLength": 160,
+            "title": "Panel",
+            "type": "string"
+          },
+          "reference_high": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Reference High",
+            "type": "string"
+          },
+          "reference_low": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Reference Low",
+            "type": "string"
+          },
+          "row_id": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Row Id",
+            "type": "string"
+          },
+          "specimen_datetime": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Specimen Datetime",
+            "type": "string"
+          },
+          "unit": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "row_id"
+        ],
+        "title": "LabReviewRow",
         "type": "object"
       },
       "LabSourceView": {
@@ -6336,6 +6960,332 @@
           }
         },
         "summary": "Test Connection"
+      }
+    },
+    "/api/v2/lab-imports": {
+      "get": {
+        "operationId": "index_api_v2_lab_imports_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabImportIndex"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Index"
+      },
+      "post": {
+        "operationId": "upload_api_v2_lab_imports_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabImportDraft"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload"
+      }
+    },
+    "/api/v2/lab-imports/catalog": {
+      "get": {
+        "operationId": "catalog_api_v2_lab_imports_catalog_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabImportCatalog"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Catalog"
+      }
+    },
+    "/api/v2/lab-imports/{document_id}": {
+      "get": {
+        "operationId": "draft_api_v2_lab_imports__document_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabImportDraft"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Draft"
+      }
+    },
+    "/api/v2/lab-imports/{document_id}/commit": {
+      "post": {
+        "operationId": "commit_api_v2_lab_imports__document_id__commit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabImportReview"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabImportReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Commit"
+      }
+    },
+    "/api/v2/lab-imports/{document_id}/original": {
+      "get": {
+        "operationId": "original_api_v2_lab_imports__document_id__original_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Original"
+      }
+    },
+    "/api/v2/lab-imports/{document_id}/report": {
+      "get": {
+        "operationId": "report_api_v2_lab_imports__document_id__report_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabImportReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Report"
       }
     },
     "/api/v2/labs": {
