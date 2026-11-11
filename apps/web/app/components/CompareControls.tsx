@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useOptimistic, useTransition } from "react";
 
 import type { MetricOption } from "./FilterBar";
 
@@ -21,18 +22,34 @@ export function CompareControls({
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const { metric, mode, range } = selected;
+  // Show the pick at once and mark the bar busy while the page re-renders
+  // (FilterBar idiom).
+  const [pending, startTransition] = useTransition();
+  const [shown, setShown] = useOptimistic(selected, (current, patch: Partial<typeof selected>) => ({
+    ...current,
+    ...patch,
+  }));
+  const { metric, mode, range } = shown;
 
-  function set(key: string, value: string) {
+  function set(key: keyof typeof selected, value: string) {
     const next = new URLSearchParams(params.toString());
     if (value) next.set(key, value);
     else next.delete(key);
     const qs = next.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    startTransition(() => {
+      setShown({ [key]: value } as Partial<typeof selected>);
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    });
   }
 
   return (
-    <div className="filter-bar" role="search" aria-label="Comparison controls">
+    <div
+      className="filter-bar"
+      role="search"
+      aria-label="Comparison controls"
+      aria-busy={pending}
+      data-pending={pending || undefined}
+    >
       <label className="filter-field">
         <span className="filter-label">Metric</span>
         <select className="filter-select" value={metric} onChange={(e) => set("metric", e.target.value)}>

@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useOptimistic, useTransition } from "react";
 
 // A thin client island: it holds NO data. It reads the current selection from
 // the URL and writes the next selection back to the URL via router.replace
@@ -52,23 +53,40 @@ export function FilterBar({
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  // The server re-render behind router.replace can take seconds on a slow
+  // link: show the picked value at once and mark the bar busy until it lands.
+  const [pending, startTransition] = useTransition();
+  const [shown, setShown] = useOptimistic(selected, (current, patch: Partial<FilterSelection>) => ({
+    ...current,
+    ...patch,
+  }));
 
-  const { range, category, metric, source, device, sort } = selected;
+  const { range, category, metric, source, device, sort } = shown;
 
-  function update(mutate: (next: URLSearchParams) => void) {
+  function navigate(href: string, patch: Partial<FilterSelection>) {
+    startTransition(() => {
+      setShown(patch);
+      router.replace(href, { scroll: false });
+    });
+  }
+
+  function update(mutate: (next: URLSearchParams) => void, patch: Partial<FilterSelection>) {
     const next = new URLSearchParams(params.toString());
     mutate(next);
     const qs = next.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    navigate(qs ? `${pathname}?${qs}` : pathname, patch);
   }
 
-  function set(key: string, value: string) {
-    update((next) => {
-      if (value) next.set(key, value);
-      else next.delete(key);
-      // Changing the category clears a now-inconsistent specific metric.
-      if (key === "category") next.delete("metric");
-    });
+  function set(key: keyof FilterSelection, value: string) {
+    update(
+      (next) => {
+        if (value) next.set(key, value);
+        else next.delete(key);
+        // Changing the category clears a now-inconsistent specific metric.
+        if (key === "category") next.delete("metric");
+      },
+      key === "category" ? { category: value, metric: "" } : { [key]: value },
+    );
   }
 
   // Only offer metrics within the chosen category (if any), so the two facets stay coherent.
@@ -76,7 +94,13 @@ export function FilterBar({
   const active = Boolean(metric || category || source || device || sort || range !== defaultRange);
 
   return (
-    <div className="filter-bar" role="search" aria-label="Filter metrics">
+    <div
+      className="filter-bar"
+      role="search"
+      aria-label="Filter metrics"
+      aria-busy={pending}
+      data-pending={pending || undefined}
+    >
       <label className="filter-field">
         <span className="filter-label">Category</span>
         <select className="filter-select" value={category} onChange={(e) => set("category", e.target.value)}>
@@ -153,7 +177,9 @@ export function FilterBar({
         <button
           type="button"
           className="btn-ghost filter-clear"
-          onClick={() => router.replace(pathname, { scroll: false })}
+          onClick={() =>
+            navigate(pathname, { range: defaultRange, category: "", metric: "", source: "", device: "", sort: "" })
+          }
         >
           Clear
         </button>

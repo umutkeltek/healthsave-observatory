@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useOptimistic, useTransition } from "react";
 
 import type { MetricOption } from "./FilterBar";
 
@@ -21,14 +22,24 @@ export function RelateControls({
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const { a, b, range } = selected;
+  // Show the pick at once and mark the bar busy while the page re-renders
+  // (FilterBar idiom).
+  const [pending, startTransition] = useTransition();
+  const [shown, setShown] = useOptimistic(selected, (current, patch: Partial<typeof selected>) => ({
+    ...current,
+    ...patch,
+  }));
+  const { a, b, range } = shown;
 
-  function set(key: string, value: string) {
+  function set(key: keyof typeof selected, value: string) {
     const next = new URLSearchParams(params.toString());
     if (value) next.set(key, value);
     else next.delete(key);
     const qs = next.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    startTransition(() => {
+      setShown({ [key]: value });
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    });
   }
 
   const picker = (label: string, key: "a" | "b", value: string) => (
@@ -46,7 +57,13 @@ export function RelateControls({
   );
 
   return (
-    <div className="filter-bar" role="search" aria-label="Relationship controls">
+    <div
+      className="filter-bar"
+      role="search"
+      aria-label="Relationship controls"
+      aria-busy={pending}
+      data-pending={pending || undefined}
+    >
       {picker("Signal A", "a", a)}
       {picker("Signal B", "b", b)}
       <label className="filter-field">

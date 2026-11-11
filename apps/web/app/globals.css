@@ -1972,6 +1972,15 @@ table.prov {
   border: 1px solid var(--line);
   border-radius: var(--radius);
 }
+/* URL-driven control bars (Data, Compare, Relationships, Explore) while the
+   server re-render behind a pick is in flight. filter, not opacity: these bars
+   can be `.content > *`, whose finished `rise` entrance pins opacity at 1. */
+.filter-bar[data-pending],
+.explore-controls[data-pending],
+.panel-toolbar[data-pending] {
+  filter: opacity(0.6);
+  pointer-events: none;
+}
 .filter-field {
   display: flex;
   flex-direction: column;

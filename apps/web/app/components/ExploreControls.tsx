@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useOptimistic, useState, useTransition } from "react";
 import {
   CHART_KINDS,
   EXPLORE_GRAINS,
@@ -31,11 +31,19 @@ import { useI18n } from "./I18nProvider";
 
 export type MetricOpt = { id: string; display_name: string; category: string };
 
-function useExploreNav() {
+// `shown` is the dashboard as just picked; `pending` holds until the server
+// re-render behind router.replace lands (seconds on a slow link).
+function useExploreNav(state: ExploreState) {
   const router = useRouter();
   const pathname = usePathname();
-  return (next: ExploreState) =>
-    router.replace(`${pathname}?${encodeExploreState(next)}`, { scroll: false });
+  const [pending, startTransition] = useTransition();
+  const [shown, setShown] = useOptimistic(state);
+  const nav = (next: ExploreState) =>
+    startTransition(() => {
+      setShown(next);
+      router.replace(`${pathname}?${encodeExploreState(next)}`, { scroll: false });
+    });
+  return { shown, pending, nav };
 }
 
 function MetricSelect({
@@ -220,8 +228,8 @@ export function SaveToToday({ current, empty }: { current: string; empty: boolea
 }
 
 // Global dashboard controls + add-panel.
-export function ExploreControls({ state, metrics }: { state: ExploreState; metrics: MetricOpt[] }) {
-  const nav = useExploreNav();
+export function ExploreControls({ state: serverState, metrics }: { state: ExploreState; metrics: MetricOpt[] }) {
+  const { shown: state, pending, nav } = useExploreNav(serverState);
   const set = (patch: Partial<ExploreState>) => nav({ ...state, ...patch });
   const addPanel = (metricId: string) => {
     if (state.panels.length >= MAX_EXPLORE_PANELS) return;
@@ -229,7 +237,7 @@ export function ExploreControls({ state, metrics }: { state: ExploreState; metri
   };
 
   return (
-    <div className="explore-controls card">
+    <div className="explore-controls card" aria-busy={pending} data-pending={pending || undefined}>
       <div className="explore-control">
         <label>Range</label>
         <select
@@ -321,7 +329,9 @@ export function PanelToolbar({
   index: number;
   metrics: MetricOpt[];
 }) {
-  const nav = useExploreNav();
+  // Only the busy state is used here: an optimistic move or removal would
+  // redraw this toolbar for a different panel than the chart under it.
+  const { pending, nav } = useExploreNav(state);
   const panel = state.panels[index];
   const nameById = new Map(metrics.map((m) => [m.id, m.display_name] as const));
 
@@ -350,7 +360,7 @@ export function PanelToolbar({
   const canOverlay = panel.chart === "line";
 
   return (
-    <div className="panel-toolbar">
+    <div className="panel-toolbar" aria-busy={pending} data-pending={pending || undefined}>
       <div className="panel-metrics">
         {panel.metrics.map((id) => (
           <span key={id} className="panel-chip">
