@@ -8287,13 +8287,15 @@ font-size: 17px;
   .yr-months {
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
+  /* Below this width the content pane (beside the sidebar) is too narrow for
+     the 540px card plus a readable controls column, so stack them. */
+  .yr-share-layout {
+    grid-template-columns: minmax(0, 540px);
+  }
 }
 @media (max-width: 620px) {
   .yr-months {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .yr-share-layout {
-    grid-template-columns: minmax(0, 1fr);
   }
   .yr-source {
     grid-template-columns: auto minmax(0, 1fr);
