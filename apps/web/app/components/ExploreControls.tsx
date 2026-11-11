@@ -150,7 +150,7 @@ export function SavedViews({ current }: { current: string }) {
 // Save-to-Today: persists the current explore dashboard as a compact card on
 // the Today page. Uses a server action (cookie-backed, revalidates /).
 export function SaveToToday({ current, empty }: { current: string; empty: boolean }) {
-  const [, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
   const [label, setLabel] = useState("");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -177,7 +177,7 @@ export function SaveToToday({ current, empty }: { current: string; empty: boolea
   };
 
   return (
-    <div className="saved-views" style={{ marginTop: 8 }}>
+    <div className="saved-views" style={{ marginTop: 8 }} data-pending={pending || undefined} aria-busy={pending}>
       <span className="saved-views-label">{dict.explore.pinToToday}</span>
       {saved ? (
         <span className="panel-chip" style={{ color: "var(--up)", borderColor: "var(--up)" }}>
@@ -198,7 +198,7 @@ export function SaveToToday({ current, empty }: { current: string; empty: boolea
             type="button"
             className="btn-ghost panel-remove-btn"
             onClick={save}
-            disabled={!label.trim() || empty}
+            disabled={pending || !label.trim() || empty}
             title={empty ? dict.prefs.emptyView : undefined}
           >
             {dict.explore.pin}

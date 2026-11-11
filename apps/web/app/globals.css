@@ -2117,6 +2117,10 @@ table.prov {
   padding-top: 14px;
   border-top: 1px solid var(--line-soft);
 }
+.saved-views[data-pending] {
+  opacity: 0.6;
+  pointer-events: none;
+}
 .saved-views-label {
   font-size: var(--fs-2xs);
   font-weight: 600;
