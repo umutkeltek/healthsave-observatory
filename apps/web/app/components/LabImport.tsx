@@ -138,8 +138,8 @@ export function LabImport({ documentId }: { documentId?: string }) {
   return <div className="lab-import">
     <div className="prov-intro labs-intro">
       <a href="/labs">← Blood tests</a>
-      <h2>{draft ? "Review your blood tests" : "Bring your blood tests together"}</h2>
-      <p>{draft ? "Compare each result with the original. Nothing enters your health record until you confirm and save." : "Import a CSV or PDF from your lab. Extraction and review happen on your own Observatory."}</p>
+      <h2>{draft || documentId ? "Review your blood tests" : "Bring your blood tests together"}</h2>
+      <p>{draft || documentId ? "Compare each result with the original. Nothing enters your health record until you confirm and save." : "Import a CSV or PDF from your lab. Extraction and review happen on your own Observatory."}</p>
     </div>
     {error && <div ref={errorBox} tabIndex={-1} className="card lab-import-error" role="alert"><strong>{error}</strong>
       {issues.length > 0 && <ul>{issues.map((issue, i) => <li key={i}><button className="btn btn-ghost" onClick={() => focusResult(issue.row, issue.field ?? "loinc")}>Result {issue.row + 1}{issue.field ? `, ${issue.field.replaceAll("_", " ")}` : ""}: {issue.message}</button></li>)}</ul>}
