@@ -268,7 +268,8 @@ def test_conversion_overflow_rejects_the_entire_file(column):
     cells[column] = "1e308"
     errors = _errors(
         HEADER
-        + f"2026-01-01,2276-4,{cells['value']},g/L,{cells['reference_low']},{cells['reference_high']},Lab\n"
+        + f"2026-01-01,2276-4,{cells['value']},g/L,"
+        + f"{cells['reference_low']},{cells['reference_high']},Lab\n"
     )
     assert any(column in error for error in errors)
 

@@ -148,7 +148,7 @@ export function labChartGeometry(results: LabResult[], streamOrder: string[]): L
   if (results.length === 0) return null;
   const all = [...results].sort((a, b) => Date.parse(a.specimen_at) - Date.parse(b.specimen_at));
   const exact = (r: LabResult) => !r.comparator && !r.quality_flags.includes("unit_unreconciled") && Number.isFinite(r.value);
-  const unit = all.findLast(exact)?.unit;
+  const unit = [...all].reverse().find(exact)?.unit;
   const sorted = all.filter(r => exact(r) && r.unit === unit);
   if (!sorted.length) return null;
   // Domain follows the values; a printed bound joins it only when it is near
