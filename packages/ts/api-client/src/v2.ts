@@ -198,6 +198,7 @@ export type ReferenceRelease = string;
 export type Reports = GeneticReportVersion[];
 export type WorkspaceId11 = string;
 export type Documents = GeneticDocument[];
+export type NextCursor = string | null;
 export type OwnerId12 = string;
 export type WorkspaceId12 = string;
 export type Confirmed = boolean;
@@ -288,6 +289,7 @@ export type FileName4 = string;
 export type Id17 = string;
 export type Sha2563 = string;
 export type Documents1 = LabImportIndexItem[];
+export type NextCursor1 = string | null;
 export type OwnerId21 = string;
 export type WorkspaceId21 = string;
 export type Id18 = string;
@@ -817,6 +819,7 @@ export interface GeneticReportVersion {
 }
 export interface GeneticIndex {
   documents: Documents;
+  next_cursor?: NextCursor;
   owner_id?: OwnerId12;
   workspace_id?: WorkspaceId12;
 }
@@ -949,6 +952,7 @@ export interface LabReviewRow {
 }
 export interface LabImportIndex {
   documents: Documents1;
+  next_cursor?: NextCursor1;
   owner_id?: OwnerId21;
   workspace_id?: WorkspaceId21;
 }

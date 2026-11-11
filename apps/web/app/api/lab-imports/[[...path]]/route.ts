@@ -54,9 +54,13 @@ async function forward(request: Request, context: Context): Promise<Response> {
     if (mutation) {
       headers["Content-Type"] = path.length ? "application/json" : "application/octet-stream";
       headers["X-File-Name"] = request.headers.get("x-file-name") ?? "";
+      const uploadId = request.headers.get("x-upload-id");
+      if (!path.length && uploadId !== null) headers["X-Upload-ID"] = uploadId;
     }
     const body = mutation ? await boundedBody(request) : undefined;
-    const response = await fetch(`${API_BASE}/api/v2/lab-imports${path.length ? "/" + path.join("/") : ""}`, {
+    const cursor = !mutation && path.length === 0 ? new URL(request.url).searchParams.get("cursor") : null;
+    const query = cursor ? `?${new URLSearchParams({ cursor })}` : "";
+    const response = await fetch(`${API_BASE}/api/v2/lab-imports${path.length ? "/" + path.join("/") : ""}${query}`, {
       method: request.method, headers, body: body as BodyInit | undefined,
       cache: "no-store", signal: AbortSignal.timeout(120_000),
     });

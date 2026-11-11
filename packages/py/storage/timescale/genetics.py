@@ -10,6 +10,8 @@ from uuid import UUID
 from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
 from sqlalchemy import text
 
+from storage.document_pages import PAGE_SIZE
+
 
 def _scope(document_id: UUID | None = None) -> dict:
     return {
@@ -29,11 +31,12 @@ class GeneticRepository:
         sha256: str,
         assembly: str,
         content: bytes | None,
-    ) -> None:
-        await session.execute(
+    ) -> bool:
+        result = await session.execute(
             text("""INSERT INTO genetic_documents
             (id, owner_id, workspace_id, file_name, sha256, assembly, source_content)
-            VALUES (:id, :owner, :workspace, :name, :sha, :assembly, :content)"""),
+            VALUES (:id, :owner, :workspace, :name, :sha, :assembly, :content)
+            ON CONFLICT (id) DO NOTHING RETURNING id"""),
             {
                 **_scope(document_id),
                 "name": file_name,
@@ -42,6 +45,8 @@ class GeneticRepository:
                 "content": content,
             },
         )
+
+        return result.scalar_one_or_none() is not None
 
     async def get(
         self, session: Any, document_id: UUID, *, content: bool = False, lock: bool = False
@@ -63,13 +68,22 @@ class GeneticRepository:
         row = result.mappings().first()
         return dict(row) if row else None
 
-    async def list(self, session: Any) -> list[dict]:
+    async def list(self, session: Any, *, before=None) -> list[dict]:
         result = await session.execute(
             text("""SELECT id, file_name, sha256, assembly,
             created_at, source_content IS NOT NULL AS original_retained
             FROM genetic_documents WHERE owner_id = :owner AND workspace_id = :workspace
-            ORDER BY created_at DESC LIMIT 100"""),
-            _scope(),
+            AND (CAST(:before_date AS timestamptz) IS NULL OR (created_at, id) <
+                (CAST(:before_date AS timestamptz), CAST(:before_id AS uuid)))
+            ORDER BY created_at DESC, id DESC LIMIT :limit"""),
+            {
+                **_scope(),
+                **{
+                    "before_date": before[0] if before else None,
+                    "before_id": str(before[1]) if before else None,
+                    "limit": PAGE_SIZE + 1,
+                },
+            },
         )
         return [dict(row) for row in result.mappings().all()]
 

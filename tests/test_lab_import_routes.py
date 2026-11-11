@@ -53,7 +53,7 @@ def setup(monkeypatch):
                 committed_at=datetime.now(UTC),
             )
 
-        async def list_documents(self, _session):
+        async def list_documents(self, _session, **_kwargs):
             return [
                 {k: row[k] for k in ("id", "file_name", "sha256", "created_at", "committed_at")}
                 for row in data.values()
@@ -88,6 +88,7 @@ def test_upload_confirm_read_export_and_retry(setup):
     client, writer, session, _ = setup
     uploaded = client.post("/api/v2/lab-imports", content=CSV, headers=HEADERS)
     assert uploaded.status_code == 201, uploaded.text
+    session.rollback.reset_mock()  # Upload releases its identity lookup before extraction.
     draft = uploaded.json()
     identifier = draft["id"]
     assert writer.await_count == 0
@@ -169,6 +170,7 @@ def test_file_limits_and_failed_storage_are_safe(setup, monkeypatch):
     )
     monkeypatch.setattr(routes, "MAX_DOCUMENT_BYTES", 5 * 1024 * 1024)
     draft = client.post("/api/v2/lab-imports", content=CSV, headers=HEADERS).json()
+    session.rollback.reset_mock()
     row = {**draft["rows"][0], "confirmed": True}
     writer.side_effect = ValueError("private diagnostic text must not be returned")
     response = client.post(
@@ -217,3 +219,24 @@ def test_document_deletion_requires_exact_confirmation_and_primary_ownership(set
     assert response.json()["deleted_results"] == 0
     assert client.get(path + "/original", headers=HEADERS).status_code == 404
     assert client.get(path + "/report", headers=HEADERS).status_code == 404
+
+
+def test_upload_retry_keeps_one_original_and_rejects_changed_content(setup):
+    client, _, _, data = setup
+    from tests.test_lab_document_review import CSV
+
+    headers = {
+        "X-API-Key": "synthetic-lab-key",
+        "X-File-Name": "synthetic.csv",
+        "X-Upload-ID": "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff",
+    }
+    first = client.post("/api/v2/lab-imports", content=CSV, headers=headers)
+    assert first.status_code == 201, first.text
+    repeated = client.post("/api/v2/lab-imports", content=CSV, headers=headers)
+    assert repeated.status_code == 201, repeated.text
+    assert repeated.json() == first.json()
+    assert len(data) == 1
+    assert (
+        client.post("/api/v2/lab-imports", content=CSV + b"\n", headers=headers).status_code == 409
+    )
+    assert client.get("/api/v2/lab-imports?cursor=invalid", headers=headers).status_code == 422

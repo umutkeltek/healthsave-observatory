@@ -54,6 +54,18 @@
       "title": "Documents",
       "type": "array"
     },
+    "next_cursor": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Next Cursor"
+    },
     "owner_id": {
       "default": "00000000-0000-0000-0000-000000000001",
       "format": "uuid",

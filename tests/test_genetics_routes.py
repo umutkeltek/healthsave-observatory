@@ -40,6 +40,8 @@ def setup(monkeypatch, tmp_path):
                 "created_at": datetime.now(UTC),
             }
 
+            return True
+
         async def get(self, _session, identifier, **_kwargs):
             row = data.get(identifier)
             if row is None:
@@ -50,7 +52,7 @@ def setup(monkeypatch, tmp_path):
                 else {k: v for k, v in row.items() if k != "source_content"}
             )
 
-        async def list(self, _session):
+        async def list(self, _session, **_kwargs):
             return [
                 {k: v for k, v in row.items() if k != "source_content"} for row in data.values()
             ]
@@ -215,3 +217,30 @@ def test_foreign_owner_invalid_build_and_missing_record_are_rejected(setup):
         ).status_code
         == 404
     )
+
+
+def test_upload_identity_retries_without_duplicate_reports_and_rejects_reuse(setup):
+    client, data, reports, _ = setup
+    identifier = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+    headers = {**HEADERS, "X-Upload-ID": identifier}
+    first = client.post("/api/v2/genetics", content=GENOTYPES, headers=headers)
+    assert first.status_code == 201, first.text
+    again = client.post("/api/v2/genetics", content=GENOTYPES, headers=headers)
+    assert again.status_code == 201, again.text
+    assert again.json() == first.json()
+    assert len(data) == len(reports) == 1
+    changed = client.post("/api/v2/genetics", content=GENOTYPES + b"\n", headers=headers)
+    assert changed.status_code == 409
+    assert (
+        client.post(
+            "/api/v2/genetics", content=GENOTYPES, headers={**headers, "X-Retain-Original": "true"}
+        ).status_code
+        == 409
+    )
+    assert (
+        client.post(
+            "/api/v2/genetics", content=GENOTYPES, headers={**HEADERS, "X-Upload-ID": "invalid"}
+        ).status_code
+        == 422
+    )
+    assert client.get("/api/v2/genetics?cursor=invalid", headers=HEADERS).status_code == 422

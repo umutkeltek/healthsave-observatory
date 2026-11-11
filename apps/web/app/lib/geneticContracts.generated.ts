@@ -77,6 +77,7 @@ export type ReferenceRelease = string;
 export type Reports = GeneticReportVersion[];
 export type WorkspaceId4 = string;
 export type Documents = GeneticDocument[];
+export type NextCursor = string | null;
 export type OwnerId5 = string;
 export type WorkspaceId5 = string;
 export type Confirmed = boolean;
@@ -189,6 +190,7 @@ export interface GeneticReportVersion {
 }
 export interface GeneticIndex {
   documents: Documents;
+  next_cursor?: NextCursor;
   owner_id?: OwnerId5;
   workspace_id?: WorkspaceId5;
 }

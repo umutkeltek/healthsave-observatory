@@ -53,6 +53,7 @@ class LabImportIndexItem(V2Model):
 
 
 class LabImportIndex(WithOwnership):
+    next_cursor: str | None = None
     documents: list[LabImportIndexItem]
 
 

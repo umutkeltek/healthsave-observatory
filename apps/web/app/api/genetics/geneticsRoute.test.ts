@@ -19,6 +19,15 @@ beforeEach(() => {
   }) as typeof fetch;
 });
 afterEach(() => { globalThis.fetch = realFetch; clearSwrCache(); });
+test("upload retries preserve request identity and history cursors survive the proxy", async () => {
+  const request = post("http://box:4173");
+  request.headers.set("x-upload-id", ID);
+  await inRequest("", () => POST(request, context()));
+  expect(new Headers(calls[0].init?.headers).get("x-upload-id")).toBe(ID);
+  const cursor = "synthetic+/cursor==";
+  await inRequest("", () => GET(new Request(`http://box:4173/api/genetics?${new URLSearchParams({ cursor })}`), context()));
+  expect(new URL(calls[1].url).searchParams.get("cursor")).toBe(cursor);
+});
 const context = (path: string[] = []) => ({ params: Promise.resolve({ path }) });
 const post = (origin: string, body: BodyInit = "synthetic") => new Request("http://box:4173/api/genetics", {
   method: "POST", headers: { origin, host: "box:4173", "x-file-name": "synthetic.vcf" }, body,

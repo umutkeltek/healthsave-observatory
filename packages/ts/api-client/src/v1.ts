@@ -2132,6 +2132,8 @@ export interface components {
         GeneticIndex: {
             /** Documents */
             documents: components["schemas"]["GeneticDocument"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
             /**
              * Owner Id
              * Format: uuid
@@ -2581,6 +2583,8 @@ export interface components {
         LabImportIndex: {
             /** Documents */
             documents: components["schemas"]["LabImportIndexItem"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
             /**
              * Owner Id
              * Format: uuid
@@ -4594,7 +4598,9 @@ export interface operations {
     };
     index_api_v2_genetics_get: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: string | null;
+            };
             header?: {
                 "x-api-key"?: string;
             };
@@ -5271,7 +5277,9 @@ export interface operations {
     };
     index_api_v2_lab_imports_get: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: string | null;
+            };
             header?: {
                 "x-api-key"?: string;
             };

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { newUploadId } from "../lib/uploadIdentity";
 import type {
   GeneticDocument, GeneticDocumentDetail, GeneticIndex, GeneticReference,
   GeneticReferenceStatus, GeneticReport,
@@ -47,7 +48,7 @@ export function GeneticReferencePanel({ onReferences = ignoreReferences }: { onR
   return <section className="card genetic-reference lab-no-print">
     <h3>Public scientific reference</h3>
     <p>ClinVar annotations are matched on your Observatory. Reference downloads contain public data; your DNA is never included in the request.</p>
-    {error && <p role="alert">{error}</p>}
+    {error && <p role="alert">{error} <button className="btn btn-ghost" onClick={() => void load()}>Retry reference check</button></p>}
     {!status && !error && <p role="status">Checking installed references…</p>}
     {status?.references.length === 0 && <p>Install the reference for your file’s genome build before importing.</p>}
     {status?.references.map(reference => <p key={reference.assembly}><strong>{reference.assembly}</strong> · release {reference.release_date} · {reference.record_count.toLocaleString()} supported annotations</p>)}
@@ -70,20 +71,33 @@ export function GeneticHome() {
   const router = useRouter();
   const [references, setReferences] = useState<GeneticReference[]>([]);
   const [documents, setDocuments] = useState<GeneticDocument[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [assembly, setAssembly] = useState("");
   const [forward, setForward] = useState(false);
   const [consent, setConsent] = useState(false);
   const [retain, setRetain] = useState(false);
+  const attempt = useRef<{ file: File; assembly: string; retain: boolean; id: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const available = references.some(reference => reference.assembly === assembly);
   useEffect(() => {
     const abort = new AbortController();
-    get<GeneticIndex>("", abort.signal).then(value => setDocuments(value.documents))
+    get<GeneticIndex>("", abort.signal).then(value => { setDocuments(value.documents); setNextCursor(value.next_cursor ?? null); })
       .catch(e => { if (!abort.signal.aborted) setError(e.message); });
     return () => abort.abort();
   }, []);
+  async function loadMore() {
+    if (!nextCursor || loadingHistory) return;
+    setLoadingHistory(true); setError("");
+    try {
+      const value = await get<GeneticIndex>(`?${new URLSearchParams({ cursor: nextCursor })}`);
+      setDocuments(current => [...new Map([...current, ...value.documents].map(item => [item.id, item])).values()]);
+      setNextCursor(value.next_cursor ?? null);
+    } catch (e) { setError((e as Error).message); }
+    finally { setLoadingHistory(false); }
+  }
   async function upload(event: FormEvent) {
     event.preventDefault();
     if (!file || !available || !forward || !consent || busy) return;
@@ -92,7 +106,11 @@ export function GeneticHome() {
     }
     setBusy(true); setError("");
     try {
+      if (!attempt.current || attempt.current.file !== file || attempt.current.assembly !== assembly || attempt.current.retain !== retain) {
+        attempt.current = { file, assembly, retain, id: newUploadId() };
+      }
       const result = await fetch("/api/genetics", { method: "POST", body: file, headers: {
+        "X-Upload-ID": attempt.current.id,
         "Content-Type": "application/octet-stream", "X-File-Name": encodeURIComponent(file.name),
         "X-Genome-Assembly": assembly, "X-Forward-Strand": "confirmed", "X-Genetic-Consent": "accepted",
         "X-Retain-Original": String(retain),
@@ -126,7 +144,7 @@ export function GeneticHome() {
     {documents.length > 0 && <section className="card"><h3>Your genetic records</h3><ul className="lab-import-history">
       {documents.map(document => <li key={document.id}><a href={`/genetics/${document.id}`}>{document.file_name}</a>
         <span>{document.assembly} · {document.original_retained ? "Original retained" : "Reports only"}</span></li>)}
-    </ul></section>}
+    </ul>{nextCursor && <button className="btn btn-ghost" disabled={loadingHistory} onClick={() => void loadMore()}>{loadingHistory ? "Loading older records…" : "Load older records"}</button>}</section>}
   </div>;
 }
 

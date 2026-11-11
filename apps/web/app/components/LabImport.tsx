@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { LabImportCatalog, LabImportDraft, LabImportIndex, LabImportReceipt, ReviewRow } from "../lib/labImportTypes";
 import { newReviewRow, REVIEW_DEFAULTS } from "../lib/labReview";
 import { DeleteLabDocument } from "./DeleteLabDocument";
+import { newUploadId } from "../lib/uploadIdentity";
 
 type Issue = { row: number; field: string | null; message: string };
 async function readResponse<T>(response: Response): Promise<T> {
@@ -23,11 +24,15 @@ export function LabImport({ documentId }: { documentId?: string }) {
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [catalog, setCatalog] = useState<LabImportCatalog["markers"]>([]);
   const [history, setHistory] = useState<LabImportIndex["documents"]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [busy, setBusy] = useState<string | null>(documentId ? "Opening your draft…" : null);
   const [error, setError] = useState("");
   const [issues, setIssues] = useState<Issue[]>([]);
   const [date, setDate] = useState("");
   const [lab, setLab] = useState("");
+  const attempt = useRef<{ file: File; id: string } | null>(null);
+  const [canRetry, setCanRetry] = useState(false);
 
   useEffect(() => {
     const abort = new AbortController();
@@ -35,27 +40,39 @@ export function LabImport({ documentId }: { documentId?: string }) {
     fetch("/api/lab-imports/catalog", options).then(readResponse<LabImportCatalog>).then(v => setCatalog(v.markers)).catch(() => {});
     const request = documentId ? `/api/lab-imports/${encodeURIComponent(documentId)}` : "/api/lab-imports";
     fetch(request, options).then(readResponse<LabImportDraft | LabImportIndex>).then(value => {
-      if ("documents" in value) setHistory(value.documents);
+      if ("documents" in value) { setHistory(value.documents); setNextCursor(value.next_cursor ?? null); }
       else if (value.status === "committed") router.replace(`/labs/import/${value.id}/report`);
       else { setDraft(value); setRows(value.rows.map(row => ({ ...REVIEW_DEFAULTS, ...row, confirmed: false }))); }
       setBusy(null);
     }).catch(e => { if (!abort.signal.aborted) { setError(e.message); setBusy(null); } });
     return () => abort.abort();
   }, [documentId, router]);
+  async function loadMore() {
+    if (!nextCursor || loadingHistory) return;
+    setLoadingHistory(true); setError("");
+    try {
+      const value = await fetch(`/api/lab-imports?${new URLSearchParams({ cursor: nextCursor })}`, { cache: "no-store" }).then(readResponse<LabImportIndex>);
+      setHistory(current => [...new Map([...current, ...value.documents].map(item => [item.id, item])).values()]);
+      setNextCursor(value.next_cursor ?? null);
+    } catch (e) { setError((e as Error).message); }
+    finally { setLoadingHistory(false); }
+  }
 
   async function upload(file?: File) {
+    file ??= attempt.current?.file;
     if (!file) return;
-    setError(""); setIssues([]);
+    setError(""); setIssues([]); setCanRetry(false);
     if (file.size === 0 || file.size > 5 * 1024 * 1024 || !/\.(csv|pdf)$/i.test(file.name)) {
       setError("Choose a non-empty CSV or PDF no larger than 5 MB."); return;
     }
     setBusy("Reading your report on this Observatory. Scanned pages can take up to 90 seconds…");
     try {
+      if (!attempt.current || attempt.current.file !== file) attempt.current = { file, id: newUploadId() };
       const value = await readResponse<LabImportDraft>(await fetch("/api/lab-imports", {
-        method: "POST", headers: { "X-File-Name": encodeURIComponent(file.name), "Content-Type": "application/octet-stream" }, body: file,
+        method: "POST", headers: { "X-Upload-ID": attempt.current.id, "X-File-Name": encodeURIComponent(file.name), "Content-Type": "application/octet-stream" }, body: file,
       }));
       router.push(`/labs/import/${value.id}`);
-    } catch (e) { setError(e instanceof Error ? e.message : "The document could not be read."); }
+    } catch (e) { setError(e instanceof Error ? e.message : "The document could not be read."); setCanRetry(true); }
     finally { setBusy(null); }
   }
 
@@ -91,6 +108,7 @@ export function LabImport({ documentId }: { documentId?: string }) {
     </div>
     {error && <div className="card lab-import-error" role="alert"><strong>{error}</strong>
       {issues.length > 0 && <ul>{issues.map((issue, i) => <li key={i}>Result {issue.row + 1}{issue.field ? `, ${issue.field.replaceAll("_", " ")}` : ""}: {issue.message}</li>)}</ul>}
+      {canRetry && <button className="btn btn-ghost" disabled={!!busy} onClick={() => void upload()}>Retry this upload</button>}
     </div>}
     {busy && <p className="card" role="status" aria-live="polite">{busy}</p>}
     {!draft && !documentId && <>
@@ -105,7 +123,7 @@ export function LabImport({ documentId }: { documentId?: string }) {
       </section>
       {history.length > 0 && <section className="card"><h3>Your documents</h3><ul className="lab-import-history">
         {history.map(item => <li key={item.id}><a href={`/labs/import/${item.id}${item.committed_at ? "/report" : ""}`}>{item.file_name}</a><span>{item.committed_at ? "Saved report" : "Review needed"}</span></li>)}
-      </ul></section>}
+      </ul>{nextCursor && <button className="btn btn-ghost" disabled={loadingHistory} onClick={() => void loadMore()}>{loadingHistory ? "Loading older documents…" : "Load older documents"}</button>}</section>}
     </>}
     {draft && <>
       <section className="card lab-import-source">

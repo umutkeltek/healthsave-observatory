@@ -1581,6 +1581,17 @@
             "title": "Documents",
             "type": "array"
           },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "owner_id": {
             "default": "00000000-0000-0000-0000-000000000001",
             "format": "uuid",
@@ -2578,6 +2589,17 @@
             },
             "title": "Documents",
             "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
           },
           "owner_id": {
             "default": "00000000-0000-0000-0000-000000000001",
@@ -7246,6 +7268,22 @@
         "operationId": "index_api_v2_genetics_get",
         "parameters": [
           {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -8300,6 +8338,22 @@
       "get": {
         "operationId": "index_api_v2_lab_imports_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
           {
             "in": "header",
             "name": "x-api-key",

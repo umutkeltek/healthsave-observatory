@@ -109,6 +109,7 @@ class GeneticDocumentDetail(WithOwnership):
 
 
 class GeneticIndex(WithOwnership):
+    next_cursor: str | None = None
     documents: list[GeneticDocument]
 
 

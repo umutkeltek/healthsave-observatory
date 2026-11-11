@@ -61,6 +61,15 @@ Source installations need `pdfinfo`, `pdftotext`, `pdftoppm`, and `tesseract` on
 the API process's PATH. Failed or oversized documents produce an actionable
 error; no cloud fallback runs. Original files are served as private attachments.
 
+Use **Load older documents** to browse beyond the first 100. If an upload's
+response is lost, **Retry this upload** reuses the same request identity and
+recovers the saved draft. After reloading the page, check your documents before
+selecting the file again.
+
+API clients can send an optional UUID in `X-Upload-ID`, reused with the same
+filename and bytes. A reused ID with different content returns 409. The document
+index includes `next_cursor`; pass it as `?cursor=...` to fetch older records.
+
 ## Import a CSV from the command line
 
 ```bash

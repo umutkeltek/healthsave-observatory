@@ -8,7 +8,7 @@ from dataclasses import fields, replace
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import quote, unquote
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from analysis.statistical.lab_reports import LabHistoryPoint, build_report
 from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from normalization.lab_documents import MAX_DOCUMENT_BYTES, extract_document, validate_review
 from normalization.labs import LABS_CSV_PLUGIN, MARKER_CATALOG, LabCsvValidationError
 from starlette.concurrency import run_in_threadpool
+from storage.document_pages import PAGE_SIZE, decode_cursor, next_cursor
 from storage.timescale.lab_documents import default_repository as documents
 from storage.timescale.labs import (
     LabResultWrite,
@@ -37,6 +38,7 @@ from storage.timescale.labs import (
 )
 
 from .deps import get_session, verify_api_key
+from .upload_identity import upload_id, verify_retry
 
 
 def private_response(response: Response) -> None:
@@ -79,8 +81,13 @@ def _storage_failure(exc: Exception) -> HTTPException:
 
 
 @router.get("", response_model=LabImportIndex)
-async def index(session: Any = Depends(get_session)) -> LabImportIndex:
-    return LabImportIndex(documents=await documents.list_documents(session))
+async def index(session: Any = Depends(get_session), cursor: str | None = None) -> LabImportIndex:
+    try:
+        before = decode_cursor(cursor)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    rows = await documents.list_documents(session, before=before)
+    return LabImportIndex(documents=rows[:PAGE_SIZE], next_cursor=next_cursor(rows))
 
 
 @router.get("/catalog", response_model=LabImportCatalog)
@@ -101,11 +108,18 @@ async def upload(request: Request, session: Any = Depends(get_session)) -> LabIm
         raise HTTPException(422, "Supply a simple CSV or PDF file name.")
     if not name.lower().endswith((".csv", ".pdf")):
         raise HTTPException(422, "Choose a CSV or PDF file.")
+    identifier = upload_id(request)
     content = bytearray()
     async for chunk in request.stream():
         if len(content) + len(chunk) > MAX_DOCUMENT_BYTES:
             raise HTTPException(413, "Choose a file no larger than 5 MB.")
         content.extend(chunk)
+    expected = {"file_name": name, "sha256": hashlib.sha256(content).hexdigest()}
+    existing = await documents.get(session, identifier)
+    if existing:
+        verify_retry(existing, **expected)
+        return _draft(existing)
+    await session.rollback()
     if _extraction_slots.locked():
         raise HTTPException(429, "Two documents are already being read. Try again shortly.")
     try:
@@ -124,14 +138,20 @@ async def upload(request: Request, session: Any = Depends(get_session)) -> LabIm
     try:
         row = await documents.create(
             session,
-            document_id=uuid4(),
+            document_id=identifier,
             file_name=name,
             media_type="application/pdf" if name.lower().endswith(".pdf") else "text/csv",
-            sha256=hashlib.sha256(content).hexdigest(),
+            sha256=expected["sha256"],
             content=bytes(content),
             extraction=extraction,
         )
+        if row is None:
+            row = await documents.get(session, identifier)
+            verify_retry(row, **expected)
         await session.commit()
+    except HTTPException:
+        await session.rollback()
+        raise
     except Exception as exc:
         await session.rollback()
         raise _storage_failure(exc) from exc

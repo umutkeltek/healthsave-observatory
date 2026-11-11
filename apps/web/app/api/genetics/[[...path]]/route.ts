@@ -49,11 +49,14 @@ async function forward(request: Request, context: Context) {
     const headers: Record<string, string> = {};
     if (API_KEY) headers["X-API-Key"] = API_KEY;
     if (mutation) headers["Content-Type"] = upload ? "application/octet-stream" : "application/json";
-    if (upload) for (const name of ["x-file-name", "x-genome-assembly", "x-genetic-consent", "x-forward-strand", "x-retain-original"]) {
-      headers[name] = request.headers.get(name) ?? "";
+    if (upload) for (const name of ["x-file-name", "x-upload-id", "x-genome-assembly", "x-genetic-consent", "x-forward-strand", "x-retain-original"]) {
+      const value = request.headers.get(name);
+      if (value !== null) headers[name] = value;
     }
     const bytes = mutation ? await bodyBytes(request, upload ? LIMIT : 4096) : undefined;
-    const response = await fetch(`${API_BASE}/api/v2/genetics${path.length ? "/" + path.join("/") : ""}`, {
+    const cursor = !mutation && path.length === 0 ? new URL(request.url).searchParams.get("cursor") : null;
+    const query = cursor ? `?${new URLSearchParams({ cursor })}` : "";
+    const response = await fetch(`${API_BASE}/api/v2/genetics${path.length ? "/" + path.join("/") : ""}${query}`, {
       method, headers, body: bytes as BodyInit | undefined, cache: "no-store", signal: AbortSignal.timeout(120_000),
     });
     const output = new Headers(PRIVATE);

@@ -8,6 +8,7 @@ import gzip
 import os
 import time
 from pathlib import Path
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -60,9 +61,19 @@ def test_private_genetics_versions_retention_and_cascade(tmp_path):
             ).status_code
             == 422
         )
-        default = client.post("/api/v2/genetics", content=GENOTYPES)
+        retry_headers = {"X-Upload-ID": str(uuid4())}
+        default = client.post("/api/v2/genetics", content=GENOTYPES, headers=retry_headers)
         assert default.status_code == 201, default.text
         plain = default.json()
+        retry = client.post("/api/v2/genetics", content=GENOTYPES, headers=retry_headers)
+        assert retry.status_code == 201, retry.text
+        assert retry.json() == plain
+        assert (
+            client.post(
+                "/api/v2/genetics", content=GENOTYPES + b"\n", headers=retry_headers
+            ).status_code
+            == 409
+        )
         plain_id = plain["document"]["id"]
         assert not plain["document"]["original_retained"]
         assert client.get(f"/api/v2/genetics/{plain_id}/original").status_code == 409

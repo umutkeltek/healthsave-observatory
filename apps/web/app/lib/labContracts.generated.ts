@@ -55,6 +55,7 @@ export type FileName2 = string;
 export type Id3 = string;
 export type Sha2561 = string;
 export type Documents = LabImportIndexItem[];
+export type NextCursor = string | null;
 export type OwnerId4 = string;
 export type WorkspaceId4 = string;
 export type Id4 = string;
@@ -172,6 +173,7 @@ export interface LabReviewRow {
 }
 export interface LabImportIndex {
   documents: Documents;
+  next_cursor?: NextCursor;
   owner_id?: OwnerId4;
   workspace_id?: WorkspaceId4;
 }

@@ -6,7 +6,7 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import quote, unquote
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from analysis.statistical.genetics import build_genetic_report
 from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
@@ -25,12 +25,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from normalization.genotypes import ASSEMBLIES, MAX_UPLOAD, parse_genotypes
 from starlette.concurrency import run_in_threadpool
 from storage.clinvar_reference import ReferenceUnavailable, reference_store
+from storage.document_pages import PAGE_SIZE, decode_cursor, next_cursor
 from storage.timescale.genetics import default_repository as documents
 from storage.timescale.labs import is_transient_db_error
 
 from server.services import clinvar_reference as installer
 
 from .deps import get_session, verify_api_key
+from .upload_identity import upload_id, verify_retry
 
 
 def _private(response: Response) -> None:
@@ -115,8 +117,13 @@ async def update_reference(body: GeneticReferenceUpdate) -> GeneticReferenceStat
 
 
 @router.get("", response_model=GeneticIndex)
-async def index(session: Any = Depends(get_session)) -> GeneticIndex:
-    return GeneticIndex(documents=await documents.list(session))
+async def index(session: Any = Depends(get_session), cursor: str | None = None) -> GeneticIndex:
+    try:
+        before = decode_cursor(cursor)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    rows = await documents.list(session, before=before)
+    return GeneticIndex(documents=rows[:PAGE_SIZE], next_cursor=next_cursor(rows))
 
 
 @router.post("", response_model=GeneticDocumentDetail, status_code=201)
@@ -136,6 +143,7 @@ async def upload(request: Request, session: Any = Depends(get_session)) -> Genet
     name = unquote(request.headers.get("x-file-name", ""))
     if not name or len(name) > 180 or re.search(r"[\x00-\x1f\x7f/\\]", name):
         raise HTTPException(422, "Supply a simple genotype file name.")
+    identifier = upload_id(request)
     if _slots.locked():
         raise HTTPException(429, "A genetic file is already being processed. Try again shortly.")
     async with _slots:
@@ -144,12 +152,22 @@ async def upload(request: Request, session: Any = Depends(get_session)) -> Genet
             if len(content) + len(chunk) > MAX_UPLOAD:
                 raise HTTPException(413, "Choose a genotype file no larger than 50 MB.")
             content.extend(chunk)
-        identifier = uuid4()
         payload = bytes(content)
         del content
+        expected = {
+            "file_name": name,
+            "sha256": hashlib.sha256(payload).hexdigest(),
+            "assembly": assembly,
+            "original_retained": request.headers.get("x-retain-original") == "true",
+        }
+        existing = await documents.get(session, identifier)
+        if existing:
+            verify_retry(existing, **expected)
+            return await detail(identifier, session)
+        await session.rollback()
         result = await _calculate(identifier, name, payload, assembly)
         try:
-            await documents.create(
+            created = await documents.create(
                 session,
                 document_id=identifier,
                 file_name=name,
@@ -157,8 +175,14 @@ async def upload(request: Request, session: Any = Depends(get_session)) -> Genet
                 assembly=assembly,
                 content=payload if request.headers.get("x-retain-original") == "true" else None,
             )
-            await documents.add_report(session, result.model_dump(mode="json"))
+            if created:
+                await documents.add_report(session, result.model_dump(mode="json"))
+            else:
+                verify_retry(await documents.get(session, identifier), **expected)
             await session.commit()
+        except HTTPException:
+            await session.rollback()
+            raise
         except Exception as exc:
             await session.rollback()
             raise _storage_error(exc) from exc

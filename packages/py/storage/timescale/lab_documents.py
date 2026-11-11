@@ -7,6 +7,8 @@ from uuid import UUID
 from contracts._base import DEFAULT_OWNER_ID, DEFAULT_WORKSPACE_ID
 from sqlalchemy import text
 
+from storage.document_pages import PAGE_SIZE
+
 
 class LabDocumentRepository:
     @staticmethod
@@ -27,14 +29,14 @@ class LabDocumentRepository:
         sha256: str,
         content: bytes,
         extraction: dict,
-    ) -> dict:
+    ) -> dict | None:
         result = await session.execute(
             text("""
             INSERT INTO lab_documents
                 (id, owner_id, workspace_id, file_name, media_type, sha256, content, extraction)
             VALUES (:id, :owner, :workspace, :name, :media, :sha,
                     :content, CAST(:extraction AS JSONB))
-            RETURNING *
+            ON CONFLICT (id) DO NOTHING RETURNING *
         """),
             {
                 **self._scope(document_id),
@@ -45,7 +47,8 @@ class LabDocumentRepository:
                 "extraction": json.dumps(extraction),
             },
         )
-        return dict(result.mappings().one())
+        row = result.mappings().first()
+        return dict(row) if row is not None else None
 
     async def get(self, session: Any, document_id: UUID, *, lock: bool = False) -> dict | None:
         query = """SELECT * FROM lab_documents
@@ -74,14 +77,24 @@ class LabDocumentRepository:
             },
         )
 
-    async def list_documents(self, session: Any) -> list[dict]:
+    async def list_documents(self, session: Any, *, before=None) -> list[dict]:
         result = await session.execute(
             text("""
             SELECT id, file_name, sha256, created_at, committed_at
             FROM lab_documents WHERE owner_id = :owner AND workspace_id = :workspace
-            ORDER BY created_at DESC LIMIT 100
+                AND (CAST(:before_date AS timestamptz) IS NULL OR (created_at, id) <
+                    (CAST(:before_date AS timestamptz), CAST(:before_id AS uuid)))
+            ORDER BY created_at DESC, id DESC LIMIT :limit
         """),
-            {"owner": str(DEFAULT_OWNER_ID), "workspace": str(DEFAULT_WORKSPACE_ID)},
+            {
+                "owner": str(DEFAULT_OWNER_ID),
+                "workspace": str(DEFAULT_WORKSPACE_ID),
+                **{
+                    "before_date": before[0] if before else None,
+                    "before_id": str(before[1]) if before else None,
+                    "limit": PAGE_SIZE + 1,
+                },
+            },
         )
         return [dict(row) for row in result.mappings().all()]
 
