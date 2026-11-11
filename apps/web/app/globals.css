@@ -4583,6 +4583,9 @@ color: var(--accent);
 ───────────────────────────────────────────────────────────────────── */
 
 [data-theme="dark"] {
+  /* Native controls (date/select popups, checkboxes, scrollbars) and UA
+     defaults such as button text follow the theme, not the light default. */
+  color-scheme: dark;
   --bg: #000000;
   --bg-radial: #1c1c1e;
   --surface: #2c2c2e;
