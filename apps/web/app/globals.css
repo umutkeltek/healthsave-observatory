@@ -6981,8 +6981,10 @@ font-size: 17px;
     grid-template-columns: 1fr 1fr;
   }
 
+  /* 64px, as on wide screens: "302m 68%" needs ~58px, and at 52px every
+     value broke onto two lines except the shortest. */
   .sleep-breakdown-row {
-    grid-template-columns: 10px minmax(0, 1fr) 52px;
+    grid-template-columns: 10px minmax(0, 1fr) 64px;
     gap: 6px;
   }
   .sleep-breakdown-bar-wrap {
