@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { createPortal } from "react-dom";
 
 import { applyTemplateAction, resetSectionsAction, toggleSectionAction } from "../lib/actions";
 import { runAction } from "../lib/session";
@@ -136,7 +137,7 @@ export function DashboardCustomizer({
     );
   }
 
-  return (
+  const sheet = (
     <>
       <button
         type="button"
@@ -183,6 +184,10 @@ export function DashboardCustomizer({
       </div>
     </>
   );
+  // Rendered into <body>: inside the page, the sticky top bar stacks above the
+  // scrim and stays tappable. The server (and the markup tests) has no
+  // document; the sheet only ever opens on the client.
+  return typeof document === "undefined" ? sheet : createPortal(sheet, document.body);
 }
 
 // The sheet's writing controls. While a save is in flight (`pending`) every one

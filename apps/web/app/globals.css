@@ -7180,6 +7180,12 @@ font-size: 17px;
 /* The sheet: slides up from the bottom on desktop, full-screen drawer on mobile. */
 .dashboard-scrim {
   z-index: 50;
+  display: block;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .dashboard-sheet {
