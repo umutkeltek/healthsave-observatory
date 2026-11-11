@@ -7,6 +7,7 @@ inferred from a result or from a user confirming an extraction.
 
 from dataclasses import dataclass
 from datetime import datetime
+from math import isfinite
 from uuid import UUID
 
 from contracts.lab_imports import (
@@ -15,6 +16,7 @@ from contracts.lab_imports import (
     LabReportComparison,
     LabReportResult,
 )
+from normalization.identity import normalize_origin
 from normalization.labs import NormalizedLabResult
 
 SOURCES = [
@@ -48,7 +50,7 @@ def _comparison(
         item
         for item in history
         if item.loinc == row.loinc_code
-        and item.lab == row.lab_name
+        and normalize_origin(item.lab) == normalize_origin(row.lab_name)
         and item.unit == row.canonical_unit
         and item.specimen_at < row.specimen_at
         and item.comparator is None
@@ -60,11 +62,14 @@ def _comparison(
     # same sample time when computing the report's comparison.
     previous = max(enumerate(prior), key=lambda pair: (pair[1].specimen_at, pair[0]))[1]
     change = row.numeric_value - previous.value
+    if not isfinite(change):
+        return None
+    percent = change / abs(previous.value) * 100 if previous.value != 0 else None
     return LabReportComparison(
         previous_specimen_at=previous.specimen_at,
         previous_value=previous.value,
         absolute_change=change,
-        percent_change=change / abs(previous.value) * 100 if previous.value != 0 else None,
+        percent_change=percent if percent is not None and isfinite(percent) else None,
     )
 
 
@@ -92,7 +97,9 @@ def build_report(
     # Persistence identity excludes unit/value. A corrected censored or unknown-
     # unit row must remove the former exact value before eligibility filtering.
     comparison_history = list(
-        {(item.loinc, item.lab, item.specimen_at): item for item in candidates}.values()
+        {
+            (item.loinc, normalize_origin(item.lab), item.specimen_at): item for item in candidates
+        }.values()
     )
     items = []
     for row in results:
@@ -148,7 +155,7 @@ def build_report(
         file_name=file_name,
         sha256=sha256,
         imported_at=imported_at,
-        report_version="lab-record-2",
+        report_version="lab-record-3",
         review_status="Descriptive record; not clinically validated.",
         limitations=[
             "An out-of-range value alone does not establish disease; "

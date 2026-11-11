@@ -258,13 +258,13 @@ async def commit(
             previous = await labs.previous_result(
                 session,
                 loinc=item.loinc_code,
-                lab=item.lab_name,
+                stream_id=item.stream_id,
                 unit=item.canonical_unit,
                 before=item.specimen_at,
                 excluded_dates=[
                     other.specimen_at
                     for other in results
-                    if other.loinc_code == item.loinc_code and other.lab_name == item.lab_name
+                    if other.loinc_code == item.loinc_code and other.stream_id == item.stream_id
                 ],
             )
             if previous:

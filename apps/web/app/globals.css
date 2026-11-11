@@ -7537,6 +7537,7 @@ font-size: 17px;
   font-size: 10.5px;
   color: var(--faint);
 }
+.labs-chart-note { grid-column: 1 / -1; color: var(--muted); font-size: 12px; line-height: 1.5; }
 /* Lab identity colours: the non-semantic hues first (blue, purple, cyan), so
    the first three labs never look like the orange "outside the range" ring. */
 .labs-s0 { --lab-color: var(--series-1); }

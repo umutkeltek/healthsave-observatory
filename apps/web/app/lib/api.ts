@@ -982,7 +982,7 @@ export function fetchDevices(): Promise<DevicesResponse> {
 // Labs - blood test results (GET /api/v2/labs*). Mirrors server/api/v2_labs.py.
 // Every result carries its own lab's printed range; results from different
 // labs are separate rows and the server never averages them.
-export type LabBand = "below" | "within" | "above" | "no_range" | "censored";
+export type LabBand = "below" | "within" | "above" | "no_range" | "censored" | "unverified";
 
 export type LabResult = {
   id: string;

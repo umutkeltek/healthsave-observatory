@@ -260,3 +260,24 @@ def test_empty_and_unreadable_files_are_rejected(data, expected) -> None:
     with pytest.raises(LabCsvValidationError) as caught:
         parse_lab_csv(data, owner_id=OWNER, now=NOW)
     assert expected in str(caught.value.errors[0])
+
+
+@pytest.mark.parametrize("column", ["value", "reference_low", "reference_high"])
+def test_conversion_overflow_rejects_the_entire_file(column):
+    cells = {"value": "1", "reference_low": "0", "reference_high": "2"}
+    cells[column] = "1e308"
+    errors = _errors(
+        HEADER
+        + f"2026-01-01,2276-4,{cells['value']},g/L,{cells['reference_low']},{cells['reference_high']},Lab\n"
+    )
+    assert any(column in error for error in errors)
+
+
+def test_utc_date_overflow_is_a_validation_error():
+    errors = _errors(HEADER + "0001-01-01T00:00:00+14:00,2276-4,10,ng/mL,1,20,Lab\n")
+    assert any("specimen_datetime" in error for error in errors)
+
+
+def test_catalog_units_accept_their_own_canonical_spelling():
+    for marker in MARKER_CATALOG.values():
+        assert normalize_unit(marker.canonical_unit) == marker.canonical_unit

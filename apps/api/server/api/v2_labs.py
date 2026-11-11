@@ -145,6 +145,7 @@ def _point(row: LabResultRow) -> engine.LabPoint:
         comparator=row.value_comparator,
         reference_low=row.reference_low,
         reference_high=row.reference_high,
+        quality_flags=row.quality_flags,
     )
 
 
@@ -305,12 +306,15 @@ async def _cross_match(
     seen: set[tuple[str, datetime]] = set()
     window = timedelta(days=engine.WINDOW_DAYS)
     for row in rows:
+        if not _point(row).interpretable or row.value_comparator:
+            continue
         points = await observation_repository.query_series(
             session,
             owner_id=DEFAULT_OWNER_ID,
             workspace_id=DEFAULT_WORKSPACE_ID,
             metric_id=pairing.metric_id,
-            start=row.specimen_at - window,
+            start=row.specimen_at
+            - min(window, row.specimen_at - datetime.min.replace(tzinfo=row.specimen_at.tzinfo)),
             end=row.specimen_at,
         )
         for point in points:

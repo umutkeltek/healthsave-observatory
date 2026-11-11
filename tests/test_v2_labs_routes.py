@@ -273,3 +273,15 @@ def test_unpaired_markers_have_no_cross_match(client) -> None:
     body = client.get("/api/v2/labs/4548-4").json()
     assert body["cross_match"] is None
     assert body["related_metric_id"] is None
+
+
+def test_route_preserves_unit_uncertainty_in_all_read_models():
+    from dataclasses import replace
+
+    row = replace(
+        _sample_rows()[0], quality_flags=("unit_unreconciled",), canonical_unit="unverified"
+    )
+    view = v2_labs._result_view(row)
+    assert view.band == "unverified"
+    assert view.band_fraction is None
+    assert not v2_labs._point(row).interpretable

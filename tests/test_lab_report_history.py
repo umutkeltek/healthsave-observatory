@@ -91,3 +91,31 @@ def test_same_import_corrections_remove_obsolete_comparable_values(changes):
         history=[obsolete],
     )
     assert report.results[1].comparison is None
+
+
+def test_lab_spelling_uses_the_same_identity_for_corrections_and_comparisons():
+    row = extract_document(CSV, "example.csv").rows[0].model_copy(update={"confirmed": True})
+    latest = validate_review([row], now=NOW).results[0]
+    previous = replace(
+        latest,
+        lab_name="  EXAMPLE   LAB ",
+        specimen_at=datetime(2025, 12, 1, tzinfo=UTC),
+        numeric_value=10,
+    )
+    report = build_report(
+        document_id=uuid4(),
+        file_name="example.csv",
+        sha256="a" * 64,
+        imported_at=NOW,
+        results=[previous, latest],
+    )
+    assert report.results[1].comparison.previous_value == 10
+    correction = replace(previous, lab_name="Example Lab", value_comparator="<", numeric_value=5)
+    report = build_report(
+        document_id=uuid4(),
+        file_name="example.csv",
+        sha256="a" * 64,
+        imported_at=NOW,
+        results=[previous, correction, latest],
+    )
+    assert report.results[-1].comparison is None

@@ -120,3 +120,47 @@ def test_reviewed_censored_correction_uses_the_next_comparable_historical_result
         assert current["comparison"]["previous_value"] == 8
         assert current["comparison"]["absolute_change"] == 4
         assert current["comparison"]["previous_specimen_at"].startswith("2025-11-01")
+
+
+def test_precision_correction_survives_older_document_deletion_and_lab_case_is_stable():
+    lab = f"Synthetic precision lab {uuid4()}"
+    with httpx.Client(base_url=BASE, headers={"X-API-Key": KEY}, timeout=120) as client:
+
+        def save(date, value, unit, name):
+            content = (
+                "specimen_datetime,loinc,value,unit,lab\n"
+                + f"{date},3016-3,{value},{unit},{name}\n"
+            ).encode()
+            response = client.post(
+                "/api/v2/lab-imports", content=content, headers={"X-File-Name": "synthetic.csv"}
+            )
+            assert response.status_code == 201, response.text
+            draft = response.json()
+            draft["rows"][0]["confirmed"] = True
+            path = f"/api/v2/lab-imports/{draft['id']}"
+            saved = client.post(path + "/commit", json={"rows": draft["rows"]})
+            assert saved.status_code == 200, saved.text
+            return draft["id"], path, saved.json()
+
+        older_id, older, _ = save("2026-01-01", 2, "mIU/L", lab)
+        corrected_id, corrected, saved = save("2026-01-01T00:00:00Z", 2, "mIU/L", lab.upper())
+        assert saved["updated"] == 1
+        assert client.get(older + "/deletion").json()["linked_result_count"] == 0
+        assert client.get(corrected + "/deletion").json()["linked_result_count"] == 1
+        assert (
+            client.request(
+                "DELETE", older, json={"confirmation": older_id, "delete_results": True}
+            ).status_code
+            == 200
+        )
+        later_id, later, _ = save("2026-02-01", 3, "m[IU]/L", lab)
+        report = client.get(later + "/report").json()
+        assert report["results"][0]["comparison"]["previous_value"] == 2
+        assert client.get(corrected + "/report").status_code == 200
+        for identifier, path in [(corrected_id, corrected), (later_id, later)]:
+            assert (
+                client.request(
+                    "DELETE", path, json={"confirmation": identifier, "delete_results": True}
+                ).status_code
+                == 200
+            )

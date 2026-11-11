@@ -174,3 +174,16 @@ describe("lab chart geometry", () => {
     expect(labChartGeometry([], [])).toBeNull();
   });
 });
+
+test("chart excludes limits and incompatible or unverified units without joining across the gap", () => {
+  const a = result({ value: 10, specimen_at: "2026-01-01" });
+  const limit = result({ value: 20, comparator: "<", specimen_at: "2026-02-01" });
+  const b = result({ value: 30, specimen_at: "2026-03-01" });
+  const geometry = labChartGeometry([a, limit, b], [NORTH])!;
+  expect(geometry.points).toHaveLength(2);
+  expect(geometry.lines).toHaveLength(0);
+  expect(geometry.omitted).toBe(1);
+  expect(labChartGeometry([a, result({ unit: "mg/L", specimen_at: "2026-04-01" })], [NORTH])!.points).toHaveLength(1);
+  expect(labChartGeometry([result({ quality_flags: ["unit_unreconciled"] })], [NORTH])).toBeNull();
+  expect(labChartGeometry([limit], [NORTH])).toBeNull();
+});

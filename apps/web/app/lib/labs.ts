@@ -13,6 +13,7 @@ export function labDate(iso: string): string {
 
 export function labNumber(value: number): string {
   const abs = Math.abs(value);
+  if (abs >= 1e12 || (abs > 0 && abs < 0.001)) return value.toExponential(3);
   if (abs >= 100) return String(Math.round(value * 10) / 10);
   if (abs >= 10) return String(Math.round(value * 100) / 100);
   return String(Math.round(value * 1000) / 1000);
@@ -36,6 +37,7 @@ export const BAND_LABEL: Record<LabBand, string> = {
   above: "Above the lab's range",
   no_range: "No range printed",
   censored: "Reported as a limit",
+  unverified: "Interpretation withheld",
 };
 
 // Short form for chips and gap lines.
@@ -45,6 +47,7 @@ export const BAND_SHORT: Record<LabBand, string> = {
   above: "above its range",
   no_range: "no range",
   censored: "a limit",
+  unverified: "unverified unit or value",
 };
 
 export type BandTone = "ok" | "out" | "none";
@@ -128,6 +131,7 @@ export type LabChartGeometry = {
   lines: ChartLine[];
   min: number;
   max: number;
+  omitted: number;
 };
 
 export const CHART_W = 1000;
@@ -142,7 +146,11 @@ export function labSeriesIndex(streamIds: string[], streamId: string): number {
 
 export function labChartGeometry(results: LabResult[], streamOrder: string[]): LabChartGeometry | null {
   if (results.length === 0) return null;
-  const sorted = [...results].sort((a, b) => Date.parse(a.specimen_at) - Date.parse(b.specimen_at));
+  const all = [...results].sort((a, b) => Date.parse(a.specimen_at) - Date.parse(b.specimen_at));
+  const exact = (r: LabResult) => !r.comparator && !r.quality_flags.includes("unit_unreconciled") && Number.isFinite(r.value);
+  const unit = all.findLast(exact)?.unit;
+  const sorted = all.filter(r => exact(r) && r.unit === unit);
+  if (!sorted.length) return null;
   // Domain follows the values; a printed bound joins it only when it is near
   // them (within 1.5x the values' spread), so one wide range (ferritin 30-400)
   // cannot flatten the trace into the floor.
@@ -158,6 +166,7 @@ export function labChartGeometry(results: LabResult[], streamOrder: string[]): L
   const pad = (max - min || Math.abs(max) || 1) * 0.12;
   min -= pad;
   max += pad;
+  if (![min, max, max - min].every(Number.isFinite)) return null;
   const clamp = (v: number) => Math.min(max, Math.max(min, v));
   const t0 = Date.parse(sorted[0].specimen_at);
   const t1 = Date.parse(sorted.at(-1)!.specimen_at);
@@ -191,18 +200,27 @@ export function labChartGeometry(results: LabResult[], streamOrder: string[]): L
   });
 
   const lines: ChartLine[] = [];
-  const byStream = new Map<string, ChartPoint[]>();
-  for (const point of points) {
-    const list = byStream.get(point.result.stream_id) ?? [];
-    list.push(point);
-    byStream.set(point.result.stream_id, list);
+  const byStream = new Map<string, (ChartPoint | null)[]>();
+  const plotted = new Map(points.map(p => [p.result.id, p]));
+  for (const result of all) {
+    const list = byStream.get(result.stream_id) ?? [];
+    list.push(plotted.get(result.id) ?? null);
+    byStream.set(result.stream_id, list);
   }
-  for (const list of byStream.values()) {
-    if (list.length < 2) continue;
+  function addSegment(list: ChartPoint[]) {
+    if (list.length < 2) return;
     lines.push({
       d: list.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" "),
       series: list[0].series,
     });
   }
-  return { points, bands, lines, min, max };
+  for (const list of byStream.values()) {
+    let segment: ChartPoint[] = [];
+    for (const point of list) {
+      if (point) segment.push(point);
+      else { addSegment(segment); segment = []; }
+    }
+    addSegment(segment);
+  }
+  return { points, bands, lines, min, max, omitted: all.length - sorted.length };
 }

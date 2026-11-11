@@ -26,11 +26,11 @@ type Props = {
 
 export function LabChart({ results, streamOrder, height = 180, compact = false, ariaLabel }: Props) {
   const geometry = labChartGeometry(results, streamOrder);
-  if (!geometry) return null;
+  if (!geometry) return results.length ? <p className="muted">These results cannot be plotted on a comparable numeric axis. Read the recorded values below.</p> : null;
   const { points, bands, lines, min, max } = geometry;
   const toPct = (v: number) => ((CHART_H - 10 - (CHART_H - 20) * ((v - min) / (max - min))) / CHART_H) * 100;
   const ticks = compact ? [] : valueTicks(min, max, 4);
-  const unit = results.at(-1)?.display_unit ?? "";
+  const unit = points.at(-1)?.result.display_unit ?? "";
 
   return (
     <div className={`labs-chart${compact ? " is-compact" : ""}`}>
@@ -92,10 +92,11 @@ export function LabChart({ results, streamOrder, height = 180, compact = false, 
       </div>
       {!compact && results.length > 0 && (
         <div className="labs-chart-xaxis" aria-hidden>
-          <span>{labDate(results[0].specimen_at)}</span>
-          {results.length > 1 && <span>{labDate(results.at(-1)!.specimen_at)}</span>}
+          <span>{labDate(points[0].result.specimen_at)}</span>
+          {points.length > 1 && <span>{labDate(points.at(-1)!.result.specimen_at)}</span>}
         </div>
       )}
+      {geometry.omitted > 0 && <p className="labs-chart-note">{geometry.omitted} result{geometry.omitted === 1 ? " is" : "s are"} omitted from the chart: limits, unverified units, or different units. Recorded values remain in the table.</p>}
     </div>
   );
 }

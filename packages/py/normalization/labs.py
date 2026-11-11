@@ -24,6 +24,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
@@ -34,7 +35,7 @@ from . import identity
 
 LABS_CSV_PLUGIN = "labs-csv"
 NORMALIZER_ID = "labs-csv"
-NORMALIZER_VERSION = "1"
+NORMALIZER_VERSION = "2"
 METRIC_PREFIX = "loinc:"
 MAX_ROWS = 10_000
 
@@ -199,6 +200,8 @@ _DISPLAY_UNITS = {
 def normalize_unit(raw: str) -> str | None:
     """UCUM code for a known spelling, else ``None``."""
     spelled = " ".join(raw.strip().split())
+    if spelled in _DIMENSION_OF:
+        return spelled
     if spelled in _CASE_SENSITIVE_UNITS:
         return _CASE_SENSITIVE_UNITS[spelled]
     return _UNIT_ALIASES.get(spelled.lower())
@@ -398,7 +401,10 @@ def _parse_specimen(raw: str) -> tuple[datetime | None, bool, str | None]:
                 "or give the date only"
             ),
         )
-    return instant.astimezone(UTC), False, None
+    try:
+        return instant.astimezone(UTC), False, None
+    except (OverflowError, ValueError):
+        return None, False, "is outside the supported datetime range after UTC conversion"
 
 
 def _sha256(*parts: object) -> str:
@@ -632,6 +638,19 @@ def _normalize_row(
     stream_id = identity.stream_id(owner_id, plugin_id, origin)
     specimen_iso = specimen_at.isoformat()
     canonical_value = value * factor
+    canonical_low = None if low is None else low * factor
+    canonical_high = None if high is None else high * factor
+    for column, converted in (
+        ("value", canonical_value),
+        ("reference_low", canonical_low),
+        ("reference_high", canonical_high),
+    ):
+        if converted is not None and not math.isfinite(converted):
+            errors.append(
+                LabRowError(row, column, "is outside the numeric range after unit conversion")
+            )
+    if errors:
+        return None, errors
     dedup_key = _sha256("labs:v1", stream_id, loinc, specimen_iso)
     semantic_key = _sha256(
         "labs-semantic:v1",
@@ -654,8 +673,8 @@ def _normalize_row(
         numeric_value=canonical_value,
         value_comparator=comparator,
         canonical_unit=canonical_unit,
-        reference_low=None if low is None else low * factor,
-        reference_high=None if high is None else high * factor,
+        reference_low=canonical_low,
+        reference_high=canonical_high,
         reference_text=reference_text,
         specimen_at=specimen_at,
         lab_name=lab,

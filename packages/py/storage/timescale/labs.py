@@ -135,12 +135,14 @@ _UPSERT_SQL = text(
         lab_results.marker_name, lab_results.numeric_value,
         lab_results.value_comparator, lab_results.canonical_unit,
         lab_results.reference_low, lab_results.reference_high,
-        lab_results.reference_text, lab_results.panel, lab_results.status
+        lab_results.reference_text, lab_results.panel, lab_results.status,
+        lab_results.quality_flags, lab_results.normalizer_id, lab_results.normalizer_version
     ) IS DISTINCT FROM (
         EXCLUDED.marker_name, EXCLUDED.numeric_value,
         EXCLUDED.value_comparator, EXCLUDED.canonical_unit,
         EXCLUDED.reference_low, EXCLUDED.reference_high,
-        EXCLUDED.reference_text, EXCLUDED.panel, 'active'
+        EXCLUDED.reference_text, EXCLUDED.panel, 'active',
+        EXCLUDED.quality_flags, EXCLUDED.normalizer_id, EXCLUDED.normalizer_version
     )
     RETURNING (xmax = 0) AS inserted
     """
@@ -288,7 +290,7 @@ class TimescaleLabRepository:
         session: AsyncSession,
         *,
         loinc: str,
-        lab: str,
+        stream_id: UUID,
         unit: str,
         before: datetime,
         excluded_dates: list[datetime] | None = None,
@@ -300,7 +302,7 @@ class TimescaleLabRepository:
             text("""
             SELECT interval_start AS specimen_at, numeric_value AS value
             FROM lab_results WHERE owner_id = :owner AND workspace_id = :workspace
-                AND status = 'active' AND loinc_code = :loinc AND lab_name = :lab
+                AND status = 'active' AND loinc_code = :loinc AND stream_id = :stream
                 AND canonical_unit = :unit AND interval_start < :before
                 AND NOT (interval_start = ANY(CAST(:excluded AS timestamptz[])))
                 AND value_comparator IS NULL
@@ -311,7 +313,7 @@ class TimescaleLabRepository:
                 "owner": str(owner_id),
                 "workspace": str(workspace_id),
                 "loinc": loinc,
-                "lab": lab,
+                "stream": str(stream_id),
                 "unit": unit,
                 "before": before,
                 "excluded": excluded_dates or [],

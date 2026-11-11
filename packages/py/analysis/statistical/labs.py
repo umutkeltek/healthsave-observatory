@@ -41,7 +41,7 @@ from contracts.findings import (
     WindowRef,
 )
 
-BandStatus = Literal["below", "within", "above", "no_range", "censored"]
+BandStatus = Literal["below", "within", "above", "no_range", "censored", "unverified"]
 Direction = Literal["up", "down", "flat"]
 HistoryPosition = Literal["below_prior_range", "within_prior_range", "above_prior_range"]
 
@@ -66,6 +66,11 @@ class LabPoint:
     comparator: str | None = None
     reference_low: float | None = None
     reference_high: float | None = None
+    quality_flags: tuple[str, ...] = ()
+
+    @property
+    def interpretable(self) -> bool:
+        return "unit_unreconciled" not in self.quality_flags and math.isfinite(self.value)
 
     @property
     def censored(self) -> bool:
@@ -88,15 +93,25 @@ class BandPosition:
 
 
 def band_position(point: LabPoint) -> BandPosition:
+    if not point.interpretable:
+        return BandPosition("unverified")
     low, high, value = point.reference_low, point.reference_high, point.value
     if low is None and high is None:
         return BandPosition("no_range")
     if point.censored:
         # "<0.5" means the true value is at most 0.5; ">90" at least 90.
         at_most = point.comparator in ("<", "<=")
-        if at_most and low is not None and value <= low:
+        if (
+            at_most
+            and low is not None
+            and (value < low or (value == low and point.comparator == "<"))
+        ):
             return BandPosition("below")
-        if not at_most and high is not None and value >= high:
+        if (
+            not at_most
+            and high is not None
+            and (value > high or (value == high and point.comparator == ">"))
+        ):
             return BandPosition("above")
         if at_most and low is None and high is not None and value <= high:
             return BandPosition("within")
@@ -106,10 +121,14 @@ def band_position(point: LabPoint) -> BandPosition:
     fraction = None
     if low is not None and high is not None and high > low:
         fraction = (value - low) / (high - low)
+        if not math.isfinite(fraction):
+            fraction = None
     if low is not None and value < low:
-        return BandPosition("below", fraction, low - value)
+        distance = low - value
+        return BandPosition("below", fraction, distance if math.isfinite(distance) else None)
     if high is not None and value > high:
-        return BandPosition("above", fraction, value - high)
+        distance = value - high
+        return BandPosition("above", fraction, distance if math.isfinite(distance) else None)
     return BandPosition("within", fraction)
 
 
@@ -156,6 +175,8 @@ def assess_marker(points: Sequence[LabPoint]) -> MarkerAssessment | None:
     withheld: str | None = None
     if previous is None:
         withheld = "first result"
+    elif not latest.interpretable or not previous.interpretable:
+        withheld = "a result has an unverified unit or numeric value"
     elif latest.censored or previous.censored:
         withheld = "a result is a limit (< or >), not an exact value"
     elif latest.unit != previous.unit:
@@ -163,13 +184,21 @@ def assess_marker(points: Sequence[LabPoint]) -> MarkerAssessment | None:
     else:
         change = latest.value - previous.value
         change_pct = None if previous.value == 0 else change / abs(previous.value) * 100
-        direction = _direction(change)
+        if math.isfinite(change):
+            direction = _direction(change)
+            if change_pct is not None and not math.isfinite(change_pct):
+                change_pct = None
+        else:
+            change = change_pct = None
+            withheld = "the difference exceeds the supported numeric range"
 
-    comparable = [p.value for p in prior if not p.censored and p.unit == latest.unit]
+    comparable = [
+        p.value for p in prior if p.interpretable and not p.censored and p.unit == latest.unit
+    ]
     prior_min = min(comparable) if comparable else None
     prior_max = max(comparable) if comparable else None
     versus: HistoryPosition | None = None
-    if len(comparable) >= 2 and not latest.censored:
+    if len(comparable) >= 2 and latest.interpretable and not latest.censored:
         assert prior_min is not None and prior_max is not None
         if latest.value < prior_min:
             versus = "below_prior_range"
@@ -229,10 +258,19 @@ def lab_gaps(points: Sequence[LabPoint], *, max_days: int = GAP_MAX_DAYS) -> lis
             if later.stream_id == earlier.stream_id:
                 continue
             difference = difference_pct = None
-            if not (earlier.censored or later.censored) and earlier.unit == later.unit:
+            if (
+                earlier.interpretable
+                and later.interpretable
+                and not (earlier.censored or later.censored)
+                and earlier.unit == later.unit
+            ):
                 difference = later.value - earlier.value
                 if earlier.value != 0:
                     difference_pct = difference / abs(earlier.value) * 100
+                if not math.isfinite(difference):
+                    difference = difference_pct = None
+                elif difference_pct is not None and not math.isfinite(difference_pct):
+                    difference_pct = None
             gaps.append(
                 LabGap(
                     earlier=earlier,
@@ -302,7 +340,7 @@ class CrossMatch:
 
 def _window(draw: LabPoint, samples: Sequence[WearableSample]) -> WindowSummary:
     end = draw.specimen_at
-    start = end - timedelta(days=WINDOW_DAYS)
+    start = end - min(timedelta(days=WINDOW_DAYS), end - datetime.min.replace(tzinfo=end.tzinfo))
     by_day: dict[date, list[float]] = defaultdict(list)
     count = 0
     for sample in samples:
@@ -465,6 +503,13 @@ def cross_match_card(
     if not ordered:
         return CrossMatch(pairing, None, "No results for this marker yet.", None)
     latest = ordered[-1]
+    if not latest.interpretable:
+        return CrossMatch(
+            pairing,
+            None,
+            "The latest result has an unverified unit or numeric value and is not compared.",
+            None,
+        )
     if latest.censored:
         return CrossMatch(
             pairing,
@@ -499,7 +544,7 @@ def cross_match_card(
     windows = tuple(
         _window(point, samples)
         for point in ordered
-        if not point.censored and point.unit == latest.unit
+        if point.interpretable and not point.censored and point.unit == latest.unit
     )
     # Independent windows only: walking back from the latest draw, a draw whose
     # 30-day window overlaps the one already kept is left out, so no wearable

@@ -333,3 +333,37 @@ def test_draws_with_overlapping_windows_are_not_counted_twice() -> None:
     assert card is not None
     assert "from 41 to 19" in card.claim  # Sep 8 overlaps Sep 17 and is left out
     assert any("left out, so no wearable day is counted twice" in item for item in card.limitations)
+
+
+@pytest.mark.parametrize(
+    "value,comparator,expected",
+    [(30, "<=", "censored"), (30, "<", "below"), (400, ">=", "censored"), (400, ">", "above")],
+)
+def test_inclusive_censored_boundary_is_not_definitely_outside(value, comparator, expected):
+    assert band_position(_p("2026-01-01", value, comparator=comparator)).status == expected
+
+
+def test_unverified_units_are_excluded_from_all_interpretation():
+    from dataclasses import replace
+
+    bad = replace(_p("2026-03-01", 10), quality_flags=("unit_unreconciled",))
+    good = _p("2026-01-01", 40)
+    assert band_position(bad).status == "unverified"
+    assessment = assess_marker([good, bad])
+    assert assessment.change is None
+    assert assessment.versus_history is None
+    assert assessment.outside_streak == 0
+    assert assess_marker([bad, _p("2026-04-01", 40)]).prior_min is None
+    assert (
+        lab_gaps([good, replace(bad, stream_id=HARBOR, specimen_at=good.specimen_at)])[0].difference
+        is None
+    )
+    match = cross_match_card(
+        loinc="2276-4",
+        marker_name="Ferritin",
+        points=[bad],
+        pairing=RHR,
+        wearable={WATCH: _daily("2026-03-01", 30, lambda _: 60)},
+    )
+    assert match.card is None
+    assert "unverified" in match.reason
