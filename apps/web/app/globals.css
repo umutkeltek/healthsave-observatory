@@ -8226,6 +8226,7 @@ font-size: 17px;
 .lab-report blockquote footer { color: var(--muted); font-size: 12px; }
 .lab-report-hash { overflow-wrap: anywhere; font-family: var(--font-mono, monospace); }
 @media (pointer: coarse) {
+  .field-input { font-size: 16px; min-height: 44px; }
   .lab-import input:not([type="checkbox"]), .lab-import select,
   .genetics input:not([type="checkbox"]), .genetics select { font-size: 16px; min-height: 44px; }
   :is(.lab-import, .lab-report, .genetics) :is(button, summary, .lab-review-confirm, .genetic-check) { min-height: 44px; touch-action: manipulation; }
