@@ -5367,6 +5367,11 @@ body {
     justify-self: start;
   }
 
+  /* The desktop min-height only evens out a multi-column row; stacked, it is dead space. */
+  .intg-card {
+    min-height: 0;
+  }
+
   .cluster-list li {
     display: grid;
     gap: 2px;
