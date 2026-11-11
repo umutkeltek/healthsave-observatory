@@ -129,7 +129,6 @@ export function GeneticHome() {
     <form className="card genetic-upload" onSubmit={event => void upload(event)}>
       <h3>Import a genetic file</h3>
       <p>23andMe/Ancestry-style TXT or TSV, or a VCF with one sample. Gzip is supported; ZIP archives must be extracted first. Up to 50 MB compressed and 1,000,000 rows.</p>
-      {error && <p role="alert">{error}</p>}
       <label>Genotype file<input type="file" accept=".txt,.tsv,.vcf,.gz" disabled={busy} onChange={event => setFile(event.target.files?.[0] ?? null)} /></label>
       <label>Genome build as reported by your source<select value={assembly} disabled={busy} onChange={event => setAssembly(event.target.value)} required>
         <option value="">Choose the file’s build</option><option value="GRCh37">GRCh37 / hg19 / Build 37</option><option value="GRCh38">GRCh38 / Build 38</option>
@@ -140,6 +139,8 @@ export function GeneticHome() {
       <label className="genetic-check"><input type="checkbox" checked={retain} disabled={busy} onChange={event => setRetain(event.target.checked)} />Retain the original privately for future reanalysis. I can remove it later while keeping my reports.</label>
       <p className="muted">Reports are retained on your Observatory. With retention off, the original file is processed in memory and is not stored. Phase, structural variants and polygenic risk are not interpreted.</p>
       <button className="btn" type="submit" disabled={busy || !file || !available || !forward || !consent}>{busy ? "Matching locally…" : "Create evidence report"}</button>
+      {/* Next to the button: at phone width the top of this form is a screen away. */}
+      {error && <p role="alert" className="exp-error">{error}</p>}
       {busy && <p role="status" aria-live="polite">Reading the file and matching supported alleles against the local reference. This can take up to two minutes.</p>}
     </form>
     {documents.length > 0 && <section className="card"><h3>Your genetic records</h3><ul className="lab-import-history">
