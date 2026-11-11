@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { ConnectionTest } from "./useConnectionTest";
 import type { IntelligenceForm } from "./useIntelligenceForm";
 
@@ -11,6 +12,10 @@ export function ConnectionTestPanel({
   form: IntelligenceForm;
   test: ConnectionTest;
 }) {
+  // Test, save, detect and consent share the form's one pending flag; only the
+  // button that started the request says so ("Testing…" must not read "Saving…").
+  const [started, setStarted] = useState<"test" | "save" | null>(null);
+  if (!form.pending && started) setStarted(null);
   return (
     <>
       <div className="intel-actions">
@@ -18,12 +23,23 @@ export function ConnectionTestPanel({
           type="button"
           className="btn btn-ghost"
           disabled={form.pending}
-          onClick={() => test.runTest(form.buildConnectionInput())}
+          onClick={() => {
+            setStarted("test");
+            test.runTest(form.buildConnectionInput());
+          }}
         >
-          {form.pending ? "Testing…" : "Test connection"}
+          {form.pending && started === "test" ? "Testing…" : "Test connection"}
         </button>
-        <button type="button" className="btn" disabled={form.pending} onClick={form.save}>
-          {form.pending ? "Saving…" : "Save"}
+        <button
+          type="button"
+          className="btn"
+          disabled={form.pending}
+          onClick={() => {
+            setStarted("save");
+            form.save();
+          }}
+        >
+          {form.pending && started === "save" ? "Saving…" : "Save"}
         </button>
       </div>
 
