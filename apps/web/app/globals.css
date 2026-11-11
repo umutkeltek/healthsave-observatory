@@ -469,6 +469,12 @@ a {
   .topbar-status .live-mini {
     display: inline-flex;
   }
+  /* Only the dot is left: drop the capsule around it, as phones do. */
+  .topbar-status .topbar-health {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
 }
 
 @media (max-width: 760px) {
@@ -8336,6 +8342,8 @@ font-size: 17px;
   .field-input,
   .filter-select { font-size: 16px; min-height: 44px; }
   .btn { min-height: 44px; }
+  .topbar-search,
+  .topbar-health { min-height: 44px; }
   summary { min-height: 44px; padding-block: 12px; box-sizing: border-box; }
   .density-toggle button { min-height: 44px; }
   /* 44px to the finger, still 26px in the layout. */
