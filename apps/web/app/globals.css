@@ -8334,6 +8334,8 @@ font-size: 17px;
   .filter-select { font-size: 16px; min-height: 44px; }
   .btn { min-height: 44px; }
   .density-toggle button { min-height: 44px; }
+  /* 44px to the finger, still 26px in the layout. */
+  .pin-btn { width: 44px; height: 44px; flex-basis: 44px; margin: -9px; }
   .today-range button { min-height: 44px; min-width: 44px; }
   .today-metric-picker select { min-height: 44px; font-size: 16px; }
   .today-recovery-evidence,
