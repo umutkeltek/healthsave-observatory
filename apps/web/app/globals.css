@@ -39,7 +39,7 @@
   --accent-weak: rgba(0, 122, 255, 0.1);
   --accent-line: rgba(0, 122, 255, 0.3);
   --brand-weak: rgba(0, 122, 255, 0.1);
-  --on-accent: #ffffff; /* text on filled accent — always white */
+  --on-accent: #1d1d1f; /* text on a filled accent (primary .btn) */
 
   /* Signal = physiology / live / local proof — kept on-accent (one blue, no second language). */
   --signal: #007aff;
@@ -1028,7 +1028,7 @@ a {
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--on-accent);
   background: var(--accent);
   border: 1px solid var(--accent);
   border-radius: var(--radius-sm);
@@ -4600,12 +4600,15 @@ color: var(--accent);
   --muted: #98989d;
   --faint: #98989d; /* #8e8e93 read 4.3:1 on cards; this clears 4.5:1 on --surface */
   --ghost: #636366;
-  --accent: #0a84ff;
-  --brand: #0a84ff;
+  /* Apple's increased-contrast dark system blue: #0a84ff read 3.8:1 as
+     link text on cards; this reads 4.9:1. Filled accent takes dark text. */
+  --accent: #409cff;
+  --brand: #409cff;
+  --on-accent: #000000;
   --accent-weak: rgba(10, 132, 255, 0.16);
   --accent-line: rgba(10, 132, 255, 0.34);
   --brand-weak: rgba(10, 132, 255, 0.16);
-  --signal: #0a84ff;
+  --signal: #409cff;
   --signal-weak: rgba(10, 132, 255, 0.16);
   --signal-line: rgba(10, 132, 255, 0.3);
   --neutral: #98989d;
@@ -4618,9 +4621,9 @@ color: var(--accent);
   --baseline-line: rgba(10, 132, 255, 0.32);
   --sleep-awake: #ffb340;
   --sleep-rem: #70d7ff;
-  --sleep-core: #0a84ff;
+  --sleep-core: #409cff;
   --sleep-deep: #7d7aff;
-  --series-1: #0a84ff;
+  --series-1: #409cff;
   --series-2: #ff9f0a;
   --series-3: #bf5af2;
   --series-4: #30d158;
