@@ -173,6 +173,7 @@ a {
   top: 0;
   height: 100vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   width: 224px;
   flex: 0 0 224px;
   display: flex;
@@ -484,6 +485,7 @@ a {
     background: rgba(0, 0, 0, 0.5);
     opacity: 0;
     pointer-events: none;
+    touch-action: none;
     transition: opacity var(--dur-1) var(--ease-io);
   }
   .app.nav-open .nav-scrim {
