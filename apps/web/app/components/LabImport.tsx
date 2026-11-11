@@ -71,8 +71,10 @@ export function LabImport({ documentId }: { documentId?: string }) {
       if ("documents" in value) { setHistory(value.documents); setNextCursor(value.next_cursor ?? null); }
       else if (value.status === "committed") router.replace(`/labs/import/${value.id}/report`);
       else { setDraft(value); setRows(value.rows.map(row => ({ ...REVIEW_DEFAULTS, ...row, confirmed: false }))); }
-      setBusy(null);
-    }).catch(e => { if (!abort.signal.aborted) { setError(e.message); setBusy(null); } });
+      // Only the draft screen starts busy; on the upload screen the document list can land
+      // mid-upload and must not wipe the upload's busy state.
+      if (documentId) setBusy(null);
+    }).catch(e => { if (!abort.signal.aborted) { setError(e.message); if (documentId) setBusy(null); } });
     return () => abort.abort();
   }, [documentId, router]);
   async function loadMore() {
@@ -99,9 +101,9 @@ export function LabImport({ documentId }: { documentId?: string }) {
       const value = await readResponse<LabImportDraft>(await fetch("/api/lab-imports", {
         method: "POST", headers: { "X-Upload-ID": attempt.current.id, "X-File-Name": encodeURIComponent(file.name), "Content-Type": "application/octet-stream" }, body: file,
       }));
+      // Stay busy until the review screen replaces this one (seconds on a slow connection).
       router.push(`/labs/import/${value.id}`);
-    } catch (e) { setError(e instanceof Error ? e.message : "The document could not be read."); setCanRetry(true); }
-    finally { setBusy(null); }
+    } catch (e) { setError(e instanceof Error ? e.message : "The document could not be read."); setCanRetry(true); setBusy(null); }
   }
 
   function update(index: number, field: keyof ReviewRow, value: string | boolean) {
