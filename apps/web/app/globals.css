@@ -1111,6 +1111,15 @@ a {
   border-color: var(--faint);
 }
 
+/* Moon offers dark in light mode, sun offers light in dark mode. */
+.theme-toggle .theme-icon-sun,
+[data-theme="dark"] .theme-toggle .theme-icon-moon {
+  display: none;
+}
+[data-theme="dark"] .theme-toggle .theme-icon-sun {
+  display: inline;
+}
+
 /* Accessibility: a visible focus ring on every interactive element. */
 a:focus-visible,
 button:focus-visible,
