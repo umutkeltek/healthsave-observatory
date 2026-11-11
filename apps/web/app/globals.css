@@ -2233,7 +2233,7 @@ input.filter-select {
   }
   .panel-tools .filter-select {
     width: auto;
-    flex: 1 1 auto;
+    flex: 1 1 0;
   }
   .explore-control {
     flex: 1 1 40%;
@@ -8330,7 +8330,8 @@ font-size: 17px;
 .lab-report blockquote footer { color: var(--muted); font-size: 12px; }
 .lab-report-hash { overflow-wrap: anywhere; font-family: var(--font-mono, monospace); }
 @media (pointer: coarse) {
-  .field-input { font-size: 16px; min-height: 44px; }
+  .field-input,
+  .filter-select { font-size: 16px; min-height: 44px; }
   .btn { min-height: 44px; }
   .density-toggle button { min-height: 44px; }
   .today-range button { min-height: 44px; min-width: 44px; }
