@@ -6242,18 +6242,8 @@ body {
 }
 @media (max-width: 560px) {
   .today-trend > .today-section-heading { align-items: start; flex-wrap: wrap; }
-  .today-range button { min-height: 44px; min-width: 44px; }
   .today-metric-picker { flex: 1 1 100%; }
-  .today-metric-picker select { flex: 1; min-height: 44px; font-size: 16px; }
-  .today-recovery-evidence,
-  .today-section-heading > a,
-  .today-trend-controls > a,
-  .today-trend-note > a {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-  }
-  .today-trend-data > summary { padding-block: 14px; }
+  .today-metric-picker select { flex: 1; }
 }
 @media (max-width: 380px) {
   .today-overview .today-hero-main { grid-template-columns: minmax(0, 1fr); }
@@ -8239,6 +8229,18 @@ font-size: 17px;
   .field-input { font-size: 16px; min-height: 44px; }
   .btn { min-height: 44px; }
   .density-toggle button { min-height: 44px; }
+  .today-range button { min-height: 44px; min-width: 44px; }
+  .today-metric-picker select { min-height: 44px; font-size: 16px; }
+  .today-recovery-evidence,
+  .today-section-heading > a,
+  .today-trend-controls > a,
+  .today-trend-note > a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .today-trend-data > summary,
+  .today-recovery-context summary { padding-block: 14px; }
   .lab-import input:not([type="checkbox"]), .lab-import select,
   .genetics input:not([type="checkbox"]), .genetics select { font-size: 16px; min-height: 44px; }
   :is(.lab-import, .lab-report, .genetics) :is(button, summary, .lab-review-confirm, .genetic-check) { min-height: 44px; touch-action: manipulation; }
