@@ -42,7 +42,14 @@ export function DashboardCustomizer({
   const router = useRouter();
   const [open, setOpen] = useState(initiallyOpen);
   const [gate] = useState(() => givenGate ?? new WriteGate());
-  const pending = useSyncExternalStore(gate.subscribe, gate.isBusy, gate.isBusy);
+  const writing = useSyncExternalStore(gate.subscribe, gate.isBusy, gate.isBusy);
+  // A save lands in two steps: the action, then the refreshed server render
+  // that carries the new sections. On a slow link the second step takes
+  // seconds, and the controls must not look ready while they still show the
+  // old state. Busy until new sections arrive (or the sheet closes).
+  const [awaitingRender, setAwaitingRender] = useState(false);
+  useEffect(() => setAwaitingRender(false), [sections]);
+  const pending = writing || awaitingRender;
   // Writes still run inside a transition, so an unexpected failure reaches the
   // error boundary as before (runAction rethrows anything but a signed-out
   // answer) instead of becoming an unhandled rejection.
@@ -55,6 +62,7 @@ export function DashboardCustomizer({
 
   const close = useCallback(() => {
     setOpen(false);
+    setAwaitingRender(false);
     requestAnimationFrame(() => triggerRef.current?.focus());
   }, []);
 
@@ -94,12 +102,17 @@ export function DashboardCustomizer({
     return () => sheet.removeEventListener("keydown", onKeyDown);
   }, [open, close]);
 
+  const refresh = () => {
+    setAwaitingRender(true);
+    router.refresh();
+  };
+
   const applyTemplate = (id: string) => {
     setError(null);
     write(async () => {
       const result = await runAction(() => applyTemplateAction(id as Template["id"]));
       if (!result.ok) setError(result.error ?? "Could not apply this template.");
-      else router.refresh();
+      else refresh();
     });
   };
 
@@ -108,7 +121,7 @@ export function DashboardCustomizer({
     write(async () => {
       const result = await runAction(() => toggleSectionAction(key));
       if (!result.ok) setError(result.error ?? "Could not update this section.");
-      else router.refresh();
+      else refresh();
     });
   };
 
@@ -117,7 +130,7 @@ export function DashboardCustomizer({
     write(async () => {
       const result = await runAction(() => resetSectionsAction());
       if (!result.ok) setError(result.error ?? "Could not reset the dashboard.");
-      else router.refresh();
+      else refresh();
     });
   };
 
