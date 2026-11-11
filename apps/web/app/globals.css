@@ -1205,7 +1205,7 @@ html {
 }
 
 .content > * {
-  animation: rise var(--dur-3) var(--ease-out) both;
+  animation: rise var(--dur-3) var(--ease-out) backwards;
 }
 
 /* Staggered entrance: each top-level section lands a beat after the last. */
