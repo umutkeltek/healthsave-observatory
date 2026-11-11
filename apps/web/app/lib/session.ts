@@ -25,6 +25,20 @@ export function isSignInRequired(error: unknown): boolean {
   return error instanceof Error && error.message === SIGN_IN_REQUIRED;
 }
 
+// What a fetch rejects with when the request never got an answer (offline, the
+// connection dropped or was reset): a TypeError whose message each engine words
+// its own way. Next's action client passes it through unchanged. Matched
+// exactly, so any other TypeError is still a bug for the error boundary.
+const NETWORK_FAILURE_MESSAGES = new Set([
+  "Failed to fetch", // Chromium
+  "Load failed", // Safari / WebKit
+  "NetworkError when attempting to fetch resource.", // Firefox
+]);
+
+export function isNetworkFailure(error: unknown): boolean {
+  return error instanceof TypeError && NETWORK_FAILURE_MESSAGES.has(error.message);
+}
+
 export function signInPath(next: string): string {
   return next && next !== "/" ? `/login?next=${encodeURIComponent(next)}` : "/login";
 }
@@ -34,9 +48,12 @@ export function announceSignedOut(): void {
 }
 
 /**
- * Runs a server action. A sign-in rejection comes back as an ordinary failed
- * result, so the caller shows it like any other failure and keeps what was
- * typed; every other rejection is rethrown for the error boundary.
+ * Runs a server action. Two rejections come back as ordinary failed results,
+ * so the caller shows its own failure line and keeps what was typed:
+ * - sign-in required: `{ ok: false, error: signedOutMessage }`;
+ * - the request never got an answer (isNetworkFailure): `{ ok: false }` with
+ *   no `error`, so the caller's own fallback wording is shown.
+ * Every other rejection is rethrown for the error boundary.
  *
  * The cast holds because every action result beyond `ok`/`error` is optional.
  */
@@ -47,6 +64,7 @@ export async function runAction<T extends { ok: boolean; error?: string }>(
   try {
     return await action();
   } catch (error) {
+    if (isNetworkFailure(error)) return { ok: false } as T;
     if (!isSignInRequired(error)) throw error;
     announceSignedOut();
     return { ok: false, error: signedOutMessage } as T;

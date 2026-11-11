@@ -110,7 +110,7 @@ export function ParticipantSelect({
             setShown(next);
             const result = await switchParticipant(next, dict);
             if (!result.ok) {
-              setError(result.error ?? null);
+              setError(result.error ?? dict.participants.switchFailed);
               return;
             }
             if (typeof BroadcastChannel !== "undefined") {

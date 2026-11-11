@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  isNetworkFailure,
   isSignInRequired,
   pollState,
   runAction,
@@ -31,6 +32,30 @@ describe("expired session", () => {
         throw new Error("boom");
       }),
     ).rejects.toThrow("boom");
+  });
+
+  // A dropped connection used to replace the whole page with the UI-bug card
+  // and lose what was typed. The request never got an answer: a plain failed
+  // result, so each caller shows its own failure line.
+  test("an action whose request never got an answer becomes a failed result without error text", async () => {
+    for (const message of ["Failed to fetch", "Load failed", "NetworkError when attempting to fetch resource."]) {
+      const result = await runAction(async (): Promise<{ ok: boolean; error?: string }> => {
+        throw new TypeError(message);
+      });
+      expect(result).toEqual({ ok: false });
+    }
+  });
+
+  test("only the engines' own network TypeErrors count as a dropped connection", async () => {
+    expect(isNetworkFailure(new TypeError("Failed to fetch"))).toBe(true);
+    expect(isNetworkFailure(new Error("Failed to fetch"))).toBe(false);
+    expect(isNetworkFailure(new TypeError("Cannot read properties of undefined (reading 'ok')"))).toBe(false);
+    expect(isNetworkFailure("Failed to fetch")).toBe(false);
+    await expect(
+      runAction(async (): Promise<{ ok: boolean }> => {
+        throw new TypeError("x is not a function");
+      }),
+    ).rejects.toThrow("x is not a function");
   });
 
   test("results pass through untouched", async () => {
