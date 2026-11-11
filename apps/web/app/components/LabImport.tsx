@@ -35,6 +35,10 @@ export function LabImport({ documentId }: { documentId?: string }) {
   const [canRetry, setCanRetry] = useState(false);
   const dirty = useRef(false);
   const errorBox = useRef<HTMLDivElement>(null);
+  // The server-rendered picker can be tapped before this script runs; a file chosen then
+  // would never upload, so keep it disabled until the page can handle the choice.
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -142,7 +146,7 @@ export function LabImport({ documentId }: { documentId?: string }) {
         <h3>Choose a lab report</h3>
         <p>CSV, text PDF, or scanned PDF · up to 5 MB and 12 pages</p>
         <label className="lab-import-file">Report file
-          <input type="file" accept=".csv,.pdf,text/csv,application/pdf" disabled={!!busy} onChange={e => { void upload(e.target.files?.[0]); e.target.value = ""; }} />
+          <input type="file" accept=".csv,.pdf,text/csv,application/pdf" disabled={!!busy || !ready} onChange={e => { void upload(e.target.files?.[0]); e.target.value = ""; }} />
         </label>
         <p className="muted">The original is retained privately with your records. No cloud AI service receives it. A scan may need corrections.</p>
         <a href="/labs/template.csv" download>Download the CSV template</a>
