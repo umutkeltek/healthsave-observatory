@@ -7755,6 +7755,9 @@ font-size: 17px;
    One year of the record read as coverage: a 12-month strip of mini
    calendars, one day strip per kind of data with every gap drawn, sources
    in their series colours, and the share card preview. Tokens only. */
+.yr-intro {
+  margin-bottom: var(--s5);
+}
 .yr-intro-head {
   display: flex;
   align-items: baseline;
