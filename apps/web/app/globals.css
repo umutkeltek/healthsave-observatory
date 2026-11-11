@@ -8305,6 +8305,7 @@ font-size: 17px;
 .lab-import-heading h3 { margin: 0; }
 .lab-import-file, .lab-import-bulk label, .lab-review-fields label { display: grid; gap: 8px; font-size: 13px; font-weight: 500; min-width: 0; }
 .lab-import input:not([type="checkbox"]), .lab-import select { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; }
+.lab-import input[aria-invalid="true"] { border-color: var(--down); box-shadow: 0 0 0 1px var(--down); }
 .lab-import :is(input, button, summary, a, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .lab-import input[type="file"] { padding: 16px; }
 .lab-import-bulk { display: grid; grid-template-columns: 1fr 1fr auto; gap: 16px; align-items: end; }
