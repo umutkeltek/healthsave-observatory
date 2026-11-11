@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // The ONE client-side chart piece: an absolutely-positioned layer that adds a
 // crosshair + tooltip to any server-rendered chart. Charts stay server
@@ -38,14 +38,29 @@ export function HoverOverlay({ points }: { points: HoverPoint[] }) {
     [points],
   );
 
+  // Touch: a tap or a sideways finger drag picks a point (vertical swipes still
+  // scroll the page, see .hover-overlay touch-action). A finger "leaves" on
+  // lift, so only a mouse leaving clears the readout; a tap elsewhere does.
+  useEffect(() => {
+    if (!active) return;
+    const onDown = (event: PointerEvent) => {
+      if (!box.current?.contains(event.target as Node)) setActive(null);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [active]);
+
   if (points.length === 0) return null;
 
   return (
     <div
       ref={box}
       className="hover-overlay"
+      onPointerDown={onMove}
       onPointerMove={onMove}
-      onPointerLeave={() => setActive(null)}
+      onPointerLeave={(event) => {
+        if (event.pointerType === "mouse") setActive(null);
+      }}
     >
       {active && (
         <>
