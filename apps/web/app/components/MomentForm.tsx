@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import type { CreateMomentPayload } from "../lib/api";
 import { createMomentAction, type ActionResult } from "../lib/actions";
@@ -52,6 +52,20 @@ export function MomentForm() {
   const [grade, setGrade] = useState("");
   const [pending, startTransition] = useTransition();
   const [status, setStatus] = useState<MomentStatus | null>(null);
+  const kindRef = useRef<HTMLSelectElement>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const gradeRef = useRef<HTMLSelectElement>(null);
+  const noteRef = useRef<HTMLInputElement>(null);
+
+  // On a slow connection the form is on screen well before its script runs.
+  // Whatever was typed or picked in that window survives hydration in the DOM
+  // but not in state, so the next render would wipe it. Adopt it once mounted.
+  useEffect(() => {
+    if (kindRef.current) setKind(kindRef.current.value);
+    if (titleRef.current) setTitle(titleRef.current.value);
+    if (gradeRef.current) setGrade(gradeRef.current.value);
+    if (noteRef.current) setNote(noteRef.current.value);
+  }, []);
 
   return (
     <article className="card">
@@ -59,7 +73,7 @@ export function MomentForm() {
       <div className="field-grid">
         <label className="field-label">
           Kind
-          <select className="field-input" value={kind} onChange={(event) => setKind(event.target.value)}>
+          <select ref={kindRef} className="field-input" value={kind} onChange={(event) => setKind(event.target.value)}>
             {KINDS.map((k) => (
               <option value={k.key} key={k.key}>{k.label}</option>
             ))}
@@ -68,6 +82,7 @@ export function MomentForm() {
         <label className="field-label">
           Title
           <input
+            ref={titleRef}
             className="field-input"
             type="text"
             placeholder={`E.g. "Late flight home" for ${kindLabel(kind)}`}
@@ -77,7 +92,7 @@ export function MomentForm() {
         </label>
         <label className="field-label">
           Severity (optional)
-          <select className="field-input" value={grade} onChange={(event) => setGrade(event.target.value)}>
+          <select ref={gradeRef} className="field-input" value={grade} onChange={(event) => setGrade(event.target.value)}>
             <option value="">—</option>
             {GRADES.map((g) => (
               <option value={g} key={g}>{g}</option>
@@ -88,6 +103,7 @@ export function MomentForm() {
       <label className="field-label" style={{ marginTop: 12 }}>
         Note (optional)
         <input
+          ref={noteRef}
           className="field-input"
           type="text"
           placeholder="Any detail that helps explain the timing..."
