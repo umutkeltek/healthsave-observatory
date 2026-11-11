@@ -6775,7 +6775,7 @@ font-size: 17px;
 .explore-density {
   display: inline-block;
   padding: 4px 10px;
-  margin: 8px 0 0;
+  margin: 8px 0 12px;
   font-size: 12px;
   color: var(--muted);
   background: var(--surface-2);
