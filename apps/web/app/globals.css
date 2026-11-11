@@ -460,6 +460,12 @@ a {
     padding-left: 24px;
     padding-right: 24px;
   }
+  .topbar-status .pill {
+    display: none;
+  }
+  .topbar-status .live-mini {
+    display: inline-flex;
+  }
 }
 
 @media (max-width: 760px) {
