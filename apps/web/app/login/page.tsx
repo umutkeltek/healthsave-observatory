@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
+import { SignInSubmit } from "../components/SignInSubmit";
 import { getDictionary, LOCALE_COOKIE, type Locale, resolveAvailableLocale, signInBlockedMessage } from "../lib/i18n";
 import { safeNextPath } from "../lib/webAuth";
 
@@ -71,9 +72,7 @@ export default async function LoginPage({
           />
           <span className="field-hint">{dict.signIn.hint}</span>
         </label>
-        <button className="btn" type="submit">
-          {dict.signIn.submit}
-        </button>
+        <SignInSubmit>{dict.signIn.submit}</SignInSubmit>
       </form>
     </main>
   );
