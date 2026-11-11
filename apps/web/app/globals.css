@@ -8336,6 +8336,8 @@ font-size: 17px;
   .density-toggle button { min-height: 44px; }
   /* 44px to the finger, still 26px in the layout. */
   .pin-btn { width: 44px; height: 44px; flex-basis: 44px; margin: -9px; }
+  /* Chips that act (range links); status chips stay small. */
+  a.chip { display: inline-flex; align-items: center; min-height: 44px; }
   .today-range button { min-height: 44px; min-width: 44px; }
   .today-metric-picker select { min-height: 44px; font-size: 16px; }
   .today-recovery-evidence,
