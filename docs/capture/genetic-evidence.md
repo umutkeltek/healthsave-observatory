@@ -71,6 +71,16 @@ previously downloaded copies are separate and are not erased by these actions.
 The feature is admin-only and belongs to the primary person. Participant read
 and ingestion keys cannot access DNA records or manage references.
 
+Use **Load older records** to reach files beyond the first 100. A retry from the
+same upload form reuses its request identity, so a lost response does not create
+another document. After reloading or reopening the page, check your records
+before selecting the file again.
+
+API clients can send an optional UUID in `X-Upload-ID` and reuse it with the same
+file bytes, filename, assembly and retention option. Reusing it with different
+inputs returns 409. The index returns up to 100 documents and a `next_cursor`;
+pass that opaque value as `?cursor=...` to fetch the next page.
+
 ## Installation and operation
 
 The default Compose configuration stores public indexes in the
@@ -91,8 +101,11 @@ including temporary files, and more for retained private files and backups.
 Old references show a warning after 90 days; updates are always explicit.
 
 Reverse proxies must allow a 50 MB request and at least a 120-second upstream
-request for imports. The bundled Next.js proxy allows these uploads. Configure
-any additional ingress proxy accordingly.
+request for imports. The bundled nginx and Next.js proxies allow these uploads
+and route browser requests through the web session check. nginx streams these
+uploads without writing their request bodies to its temporary-file buffer.
+Configure any additional ingress proxy accordingly, including disabling
+temporary request-body files if originals must not be retained there.
 
 ## Scientific sources
 

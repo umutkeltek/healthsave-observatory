@@ -191,13 +191,18 @@ MAX_REQUEST_BODY_BYTES = int(os.getenv("MAX_REQUEST_BODY_BYTES", str(16 * 1024 *
 
 @app.middleware("http")
 async def limit_request_body_size(request: Request, call_next):
+    # The bounded genotype reader supports larger files than the frozen ingest
+    # endpoints. Keep the exception exact; every other endpoint keeps its cap.
+    limit = MAX_REQUEST_BODY_BYTES
+    if request.method == "POST" and request.url.path == "/api/v2/genetics":
+        limit = 50 * 1024 * 1024
     content_length = request.headers.get("content-length")
     if content_length is not None:
         try:
             declared = int(content_length)
         except ValueError:
             return JSONResponse(status_code=400, content={"detail": "invalid Content-Length"})
-        if declared > MAX_REQUEST_BODY_BYTES:
+        if declared > limit:
             return JSONResponse(status_code=413, content={"detail": "request body too large"})
     return await call_next(request)
 
