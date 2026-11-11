@@ -4763,7 +4763,7 @@ html,
 }
 
 .spark-band {
-  fill: rgba(66, 119, 232, 0.09);
+  fill: var(--baseline-fill);
 }
 
 .delta.up,
