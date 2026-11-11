@@ -1983,7 +1983,7 @@ table.prov {
 }
 /* URL-driven control bars (Data, Compare, Relationships, Explore) while the
    server re-render behind a pick is in flight. filter, not opacity: these bars
-   can be `.content > *`, whose finished `rise` entrance pins opacity at 1. */
+   can be `.content > *`, and the `rise` entrance animates opacity while it runs. */
 .filter-bar[data-pending],
 .explore-controls[data-pending],
 .panel-toolbar[data-pending] {
