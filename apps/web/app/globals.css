@@ -6117,8 +6117,7 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .prov-technical dl > div,
-  .lib-row {
+  .prov-technical dl > div {
     grid-template-columns: 1fr;
   }
 }
