@@ -27,9 +27,9 @@ export function DeleteLabDocument({ documentId }: { documentId: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmation: documentId, delete_results: deleteResults }) });
       if (!response.ok) throw new Error("The document could not be deleted. It can be retried.");
+      // Stay on "Deleting…" until the document list replaces this screen.
       router.push("/labs/import"); router.refresh();
-    } catch (e) { setError((e as Error).message); }
-    finally { setBusy(false); }
+    } catch (e) { setError((e as Error).message); setBusy(false); }
   }
   return <section className="card lab-no-print">
     {error && <p role="alert">{error}</p>}
