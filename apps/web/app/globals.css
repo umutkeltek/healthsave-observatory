@@ -622,9 +622,12 @@ a {
 
 /* ── Sleep ─────────────────────────────────────────────────────────── */
 
+/* A night is ~100 equal segments. They must all fit the card: with a 2px gap
+   and a 2px floor the row needed 390px, so a phone-width card cut the last
+   fifth to third of the night off behind overflow: hidden. */
 .hypnogram {
   display: flex;
-  gap: 2px;
+  gap: 1px;
   height: 38px;
   margin-top: 6px;
   border-radius: var(--radius-sm);
@@ -632,8 +635,8 @@ a {
 }
 
 .seg {
-  flex: 1 1 auto;
-  min-width: 2px;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .legend {
