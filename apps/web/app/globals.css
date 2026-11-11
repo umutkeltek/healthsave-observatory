@@ -8306,7 +8306,7 @@ font-size: 17px;
 .lab-review-list { display: grid; gap: 20px; }
 .lab-review-row { display: grid; gap: 16px; min-width: 0; scroll-margin-block: 80px; }
 .lab-review-row.is-confirmed { border-color: var(--accent); }
-.lab-review-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.lab-review-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-items: end; }
 .lab-review-confirm { display: flex; align-items: flex-start; gap: 12px; font-size: 14px; cursor: pointer; }
 .lab-review-confirm input { width: 18px; height: 18px; flex: 0 0 auto; margin: 1px 0 0; accent-color: var(--accent); }
 .lab-source-text { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 480px; overflow: auto; font-size: 12px; line-height: 1.6; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
@@ -8360,6 +8360,10 @@ font-size: 17px;
   .panel-move { min-width: 44px; min-height: 44px; touch-action: manipulation; }
   .panel-remove-btn { min-height: 44px; touch-action: manipulation; }
   .panel-chip-x { min-width: 40px; min-height: 40px; margin: -10px -8px -10px -6px; align-items: center; justify-content: center; touch-action: manipulation; }
+}
+/* Four columns only fit full dates and lab names once the sidebar leaves enough room. */
+@media (max-width: 1180px) {
+  .lab-review-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 720px) {
   .lab-review-fields, .lab-import-bulk { grid-template-columns: repeat(2, minmax(0, 1fr)); }
