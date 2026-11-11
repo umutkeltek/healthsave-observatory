@@ -494,6 +494,7 @@ a {
   }
   .menu-btn {
     display: inline-flex;
+    width: 44px;
   }
   .topbar {
     padding: 16px 18px 13px;
@@ -5250,7 +5251,7 @@ body {
 
 .topbar {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 16px;
@@ -5479,7 +5480,7 @@ body {
 }
 
 .theme-toggle {
-  min-width: 36px;
+  min-width: 44px;
 }
 
 .metric-card {
@@ -6036,6 +6037,10 @@ body {
 }
 
 @media (max-width: 620px) {
+  .topbar {
+    gap: 12px;
+  }
+
   .topbar-search,
   .topbar-health,
   .language-switcher.compact {
