@@ -47,6 +47,9 @@ _ALIASES.update(
         "ldl cholesterol": "13457-7",
     }
 )
+# A generic analyte label can accompany either explicitly printed measurement
+# code. This does not convert between their units or choose a missing code.
+_RELATED_CODES = ({"2345-7", "14749-6"}, {"4548-4", "59261-8"})
 
 
 @dataclass(frozen=True)
@@ -205,6 +208,7 @@ def _pdf_document(content: bytes) -> ExtractedDocument:
             if sum(len(p.text) for p in pages) > MAX_TEXT:
                 raise ValueError("The PDF contains too much text. Split it into smaller files.")
     rows, evidence = [], {}
+    conflicts = []
     for page in pages:
         for number, raw in enumerate(page.text.splitlines(), 1):
             line = " ".join(raw.split())
@@ -218,12 +222,22 @@ def _pdf_document(content: bytes) -> ExtractedDocument:
                     break
             if not loinc:
                 continue
+            if label and code and code[1] in MARKER_CATALOG:
+                named_code = _ALIASES[label]
+                if named_code != loinc and not any(
+                    {named_code, loinc} <= family for family in _RELATED_CODES
+                ):
+                    conflicts.append(f"Page {page.page}, line {number}")
+                    continue
             tail = line[len(label) :] if label else line[code.end() :]
             if code and code[1] in MARKER_CATALOG:
                 tail = tail.replace(code[1], "", 1)
             tail = tail.strip(" :\t")
             candidate = re.match(
-                rf"({_NUMBER})\s+([^\s]+)(?:\s+({_NUMBER})\s*[-–]\s*({_NUMBER}))?", tail
+                rf"({_NUMBER})\s+(?:(?:H|L|HIGH|LOW|\*{{1,2}})\s+)?"
+                rf"([^\s]+)(?:\s+({_NUMBER})\s*[-–]\s*({_NUMBER}))?",
+                tail,
+                re.IGNORECASE,
             )
             if not candidate:
                 continue
@@ -247,6 +261,12 @@ def _pdf_document(content: bytes) -> ExtractedDocument:
         "Enter the sample date and performing lab. Add missing markers manually.",
         "Some results may not be detected. Check that every result you want is included.",
     ]
+    if conflicts:
+        warnings.append(
+            "Skipped lines with conflicting test names and LOINC codes: "
+            + "; ".join(conflicts)
+            + ". Check the original and enter the correct test manually."
+        )
     if any(p.method == "ocr" for p in pages):
         warnings.append(
             "Local OCR was used. Pay particular attention to decimal points, signs and units."

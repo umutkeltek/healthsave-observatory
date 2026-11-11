@@ -124,6 +124,30 @@ def test_actual_text_pdf_preserves_comparators_and_explicit_codes():
     assert extracted.evidence[extracted.rows[-1].row_id]["source_page"] == 1
 
 
+@pytest.mark.skipif(not shutil.which("pdftotext"), reason="local Poppler required")
+@pytest.mark.parametrize("flag", ["L", "H", "LOW", "HIGH", "*", "**"])
+def test_pdf_result_flags_do_not_replace_units_or_ranges(flag):
+    extracted = extract_document(text_pdf([f"Ferritin 12 {flag} ng/mL 20-200"]), "flags.pdf")
+    row = extracted.rows[0]
+    assert (row.value, row.unit, row.reference_low, row.reference_high) == (
+        "12",
+        "ng/mL",
+        "20",
+        "200",
+    )
+    assert not row.confirmed
+
+
+@pytest.mark.skipif(not shutil.which("pdftotext"), reason="local Poppler required")
+def test_pdf_conflicting_test_identity_requires_manual_resolution():
+    extracted = extract_document(
+        text_pdf(["Hemoglobin 2276-4 12 ng/mL 20-200", "HbA1c 59261-8 42 mmol/mol 20-42"]),
+        "conflict.pdf",
+    )
+    assert [(row.loinc, row.value) for row in extracted.rows] == [("59261-8", "42")]
+    assert any("conflicting" in warning and "Page 1" in warning for warning in extracted.warnings)
+
+
 @pytest.mark.skipif(
     not shutil.which("tesseract") or not shutil.which("pdftoppm"), reason="local OCR tools required"
 )

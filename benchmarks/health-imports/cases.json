@@ -1,0 +1,61 @@
+{
+  "version": "health-imports-1",
+  "provenance": "Hand-authored synthetic engineering cases. No patient data. Expected values are fixed independently of parser output.",
+  "clinical_review": "not_performed",
+  "sources": [
+    {"id": "medlineplus", "url": "https://medlineplus.gov/lab-tests/how-to-understand-your-lab-results/", "scope": "Lab-specific ranges and limits of interpretation", "checked_on": "2026-11-11"},
+    {"id": "ucum", "url": "https://ucum.org/ucum", "scope": "Unit semantics and decimal prefixes, specification 2.2", "checked_on": "2026-11-11"},
+    {"id": "clinvar", "url": "https://www.ncbi.nlm.nih.gov/clinvar/docs/review_status/", "scope": "Review status describes source evidence, not genotype accuracy", "checked_on": null, "note": "Current refetch met a browser challenge; source link retained, no new access claim."}
+  ],
+  "labs": [
+    {"id": "hemoglobin-g-per-litre", "input": {"loinc": "718-7", "value": "130", "unit": "g/L", "reference_low": "120", "reference_high": "170"}, "expected": {"value": 13, "unit": "g/dL", "reference_low": 12, "reference_high": 17, "observation": "Within"}},
+    {"id": "ferritin-low", "input": {"value": "12"}, "expected": {"value": 12, "unit": "ng/mL", "observation": "Below"}},
+    {"id": "ferritin-upper-bound", "input": {"value": "200"}, "expected": {"value": 200, "observation": "Within"}},
+    {"id": "ferritin-high", "input": {"value": "201"}, "expected": {"value": 201, "observation": "Above"}},
+    {"id": "decimal-comma", "input": {"value": "25,5"}, "expected": {"value": 25.5, "observation": "Within"}},
+    {"id": "inclusive-low-limit", "input": {"value": "<=20"}, "expected": {"value": 20, "comparator": "<=", "observation": "Reported as a limit"}},
+    {"id": "inclusive-high-limit", "input": {"value": ">=200"}, "expected": {"value": 200, "comparator": ">=", "observation": "Reported as a limit"}},
+    {"id": "unknown-unit-withheld", "input": {"unit": "ng/cc"}, "expected": {"unit": "ng/cc", "flags": ["unit_unreconciled"], "observation": "Unit kept as written"}},
+    {"id": "no-range", "input": {"reference_low": "", "reference_high": ""}, "expected": {"observation": "No laboratory reference range"}},
+    {"id": "one-sided-range", "input": {"value": "30", "reference_high": ""}, "expected": {"observation": "Meets the one-sided reference limit"}},
+    {"id": "hematocrit-fraction", "input": {"loinc": "4544-3", "value": "0.42", "unit": "L/L", "reference_low": "0.36", "reference_high": "0.50"}, "expected": {"value": 42, "unit": "%", "reference_low": 36, "reference_high": 50}},
+    {"id": "platelet-count-equivalence", "input": {"loinc": "777-3", "value": "250", "unit": "10^3/uL", "reference_low": "150", "reference_high": "400"}, "expected": {"value": 250, "unit": "10*9/L"}},
+    {"id": "glucose-molar-separate", "input": {"loinc": "14749-6", "value": "5.2", "unit": "mmol/L", "reference_low": "3.9", "reference_high": "5.6"}, "expected": {"value": 5.2, "unit": "mmol/L"}},
+    {"id": "no-mass-molar-guess", "input": {"loinc": "2345-7", "value": "5.2", "unit": "mmol/L"}, "reject_field": "unit"},
+    {"id": "no-ifcc-ngsp-guess", "input": {"loinc": "4548-4", "value": "42", "unit": "mmol/mol"}, "reject_field": "unit"},
+    {"id": "reversed-range", "input": {"reference_low": "200", "reference_high": "20"}, "reject_field": "reference_low"},
+    {"id": "invalid-loinc", "input": {"loinc": "2276-5"}, "reject_field": "loinc"},
+    {"id": "unbounded-number", "input": {"value": "Infinity"}, "reject_field": "value"},
+    {"id": "conversion-overflow", "input": {"value": "1e308", "unit": "g/L"}, "reject_field": "value"},
+    {"id": "missing-sample-zone", "input": {"specimen_datetime": "2026-01-02T10:00:00"}, "reject_field": "specimen_datetime"}
+  ],
+  "extraction": [
+    {"id": "named-ferritin", "line": "Ferritin 12 ng/mL 20-200", "expected": [["2276-4", "12", "ng/mL", "20", "200"]]},
+    {"id": "explicit-molar-glucose", "line": "Glucose 14749-6 5.2 mmol/L 3.9-5.6", "expected": [["14749-6", "5.2", "mmol/L", "3.9", "5.6"]]},
+    {"id": "code-only-hemoglobin", "line": "718-7 130 g/L 120-170", "expected": [["718-7", "130", "g/L", "120", "170"]]},
+    {"id": "tsh-decimal-comma", "line": "TSH 2,4 mIU/L 0,4-4,0", "expected": [["3016-3", "2,4", "mIU/L", "0,4", "4,0"]]},
+    {"id": "censored-crp", "line": "CRP <=5 mg/L 0-5", "expected": [["1988-5", "<=5", "mg/L", "0", "5"]]},
+    {"id": "flag-after-result", "line": "Ferritin 12 L ng/mL 20-200", "expected": [["2276-4", "12", "ng/mL", "20", "200"]]},
+    {"id": "conflicting-name-code", "line": "Hemoglobin 2276-4 12 ng/mL 20-200", "expected": [], "warning": "conflicting"},
+    {"id": "do-not-truncate-exponent", "line": "CRP 1e2 mg/L 0-5", "expected": []},
+    {"id": "do-not-invent-test", "line": "Unrecognized test 12 ng/mL 20-200", "expected": []},
+    {"id": "pending-is-not-zero", "line": "Ferritin result pending", "expected": []},
+    {"id": "scan-ferritin", "line": "Ferritin 12 ng/mL 20-200", "scan": true, "expected": [["2276-4", "12", "ng/mL", "20", "200"]]},
+    {"id": "scan-hemoglobin", "line": "Hemoglobin 13.5 g/dL 12-17", "scan": true, "expected": [["718-7", "13.5", "g/dL", "12", "17"]]}
+  ],
+  "genetics": [
+    {"id": "alternate-heterozygous", "genotype": "0/1", "expected_matches": 1, "copies": 1},
+    {"id": "alternate-homozygous", "genotype": "1/1", "expected_matches": 1, "copies": 2},
+    {"id": "reference-only", "genotype": "0/0", "expected_matches": 0},
+    {"id": "no-call", "genotype": "./.", "expected_matches": 0, "count": {"no_calls": 1}},
+    {"id": "site-filter-failed", "genotype": "0/1", "filter": "LowQual", "expected_matches": 0, "count": {"filtered_rows": 1}},
+    {"id": "sample-filter-failed", "genotype": "0/1:FAIL", "format": "GT:FT", "expected_matches": 0, "count": {"filtered_rows": 1}},
+    {"id": "reference-allele-mismatch", "genotype": "0/1", "reference": "C", "expected_matches": 0, "mismatches": 1},
+    {"id": "alternate-allele-mismatch", "genotype": "0/1", "alternate": "T", "expected_matches": 0},
+    {"id": "indel-excluded", "genotype": "0/1", "alternate": "AG", "expected_matches": 0, "count": {"unsupported_rows": 1}},
+    {"id": "conflicting-source", "genotype": "0/1", "classification": "Conflicting_classifications_of_pathogenicity", "review": "criteria_provided,_conflicting_classifications", "expected_matches": 1, "category": "conflicting", "stars": 1},
+    {"id": "uncertain-source", "genotype": "0/1", "classification": "Uncertain_significance", "review": "criteria_provided,_single_submitter", "expected_matches": 1, "category": "uncertain", "stars": 1},
+    {"id": "no-genotype-confidence", "genotype": "0/1", "review": "no_assertion_criteria_provided", "expected_matches": 1, "stars": 0},
+    {"id": "wrong-genome-build", "genotype": "0/1", "assembly": "GRCh37", "reject": "assembly"}
+  ]
+}

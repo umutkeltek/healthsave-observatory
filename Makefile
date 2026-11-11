@@ -6,6 +6,7 @@ E2E_DB_HOST_PORT ?= 25434
 E2E_COMPOSE_ENV = COMPOSE_FILE=docker-compose.yml:docker-compose.build.override.yml DB_PASSWORD=$(TEST_DATABASE_PASSWORD) GRAFANA_PASSWORD=$(E2E_GRAFANA_PASSWORD) API_HOST_PORT=$(E2E_API_PORT) DB_HOST_PORT=$(E2E_DB_HOST_PORT)
 
 .PHONY: help release setup install-cli regen-lock check-lock regen-v2-schemas check-v2-schemas regen-ts-client check-ts-client typecheck-ts web-test web-typecheck regen-response-corpus check-response-corpus test e2e lint format verify-local doctor compose-up compose-down
+.PHONY: benchmark-health-imports
 
 help:
 	@echo "Targets:"
@@ -22,6 +23,7 @@ help:
 	@echo "  regen-response-corpus  Regenerate tests/fixtures/apple_healthsave_responses/ (iOS response corpus)"
 	@echo "  check-response-corpus  Verify the iOS response corpus matches the live handlers (no drift)"
 	@echo "  test               Run the full pytest suite"
+	@echo "  benchmark-health-imports  Run fixed synthetic lab/PDF/OCR/genetics correctness cases"
 	@echo "  e2e                Boot an ephemeral compose stack and run the e2e suite"
 	@echo "  lint               ruff check + ruff format --check"
 	@echo "  format             ruff format (writes)"
@@ -31,6 +33,10 @@ help:
 	@echo "  compose-up         docker compose up -d"
 	@echo "  compose-down       docker compose down"
 	@echo "  release            Tag a release: make release VERSION=X.Y.Z [DRY_RUN=1] (RELEASING.md)"
+
+# Requires local Poppler and Tesseract, matching the API image. Never skips PDF checks.
+benchmark-health-imports:
+	@$(PYTHON) -m scripts.benchmark_health_imports --require-pdf $(BENCHMARK_ARGS)
 
 regen-lock:
 	@echo "Building Docker image (pinned FastAPI/Pydantic/Python)..."

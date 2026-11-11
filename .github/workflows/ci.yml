@@ -19,6 +19,9 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -e ".[dev]"
 
+      - name: Install local document extraction tools
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils tesseract-ocr
+
       - name: Check formatting
         run: python -m ruff format --check .
 
@@ -59,6 +62,20 @@ jobs:
 
       - name: Test
         run: pytest -q
+
+      - name: Health import engineering benchmark
+        run: >-
+          python -m scripts.benchmark_health_imports --require-pdf
+          --json "${{ runner.temp }}/health-import-benchmark.json"
+          --markdown "${{ runner.temp }}/health-import-benchmark.md"
+
+      - name: Keep synthetic benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: health-import-benchmark
+          path: ${{ runner.temp }}/health-import-benchmark.*
+          if-no-files-found: ignore
 
       - name: Build Docker image
         run: docker build -t health-data-hub-ci .
