@@ -173,28 +173,30 @@ function MarkerDetail({
 
         <details className="labs-table-drill">
           <summary>All {detail.result_count} results</summary>
-          <table className="labs-table">
-            <thead>
-              <tr>
-                <th scope="col">Sample taken</th>
-                <th scope="col">Value</th>
-                <th scope="col">Lab range</th>
-                <th scope="col">Lab</th>
-                <th scope="col">Against its range</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...detail.results].reverse().map((result) => (
-                <tr key={result.id}>
-                  <td className="mono">{labDate(result.specimen_at)}</td>
-                  <td className="mono">{labValue(result)}</td>
-                  <td className="mono">{labRange(result)}</td>
-                  <td>{result.lab}</td>
-                  <td>{BAND_SHORT[result.band]}</td>
+          <div className="labs-table-scroll">
+            <table className="labs-table">
+              <thead>
+                <tr>
+                  <th scope="col">Sample taken</th>
+                  <th scope="col">Value</th>
+                  <th scope="col">Lab range</th>
+                  <th scope="col">Lab</th>
+                  <th scope="col">Against its range</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {[...detail.results].reverse().map((result) => (
+                  <tr key={result.id}>
+                    <td className="mono">{labDate(result.specimen_at)}</td>
+                    <td className="mono">{labValue(result)}</td>
+                    <td className="mono">{labRange(result)}</td>
+                    <td>{result.lab}</td>
+                    <td>{BAND_SHORT[result.band]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <p className="labs-code mono">
             LOINC {detail.loinc} · stored as {detail.metric_id}
           </p>

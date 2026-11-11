@@ -7768,6 +7768,10 @@ font-size: 17px;
   cursor: pointer;
   color: var(--accent);
 }
+/* The card clips overflow; on a phone the table scrolls inside this instead of losing columns. */
+.labs-table-scroll {
+  overflow-x: auto;
+}
 .labs-table {
   width: 100%;
   margin-top: var(--s3);
@@ -7809,6 +7813,18 @@ font-size: 17px;
 @media (max-width: 900px) {
   .labs-layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 420px) {
+  .labs-table th,
+  .labs-table td {
+    padding: 6px 4px;
+  }
+  .labs-table :is(th, td):first-child {
+    padding-left: 0;
+  }
+  .labs-table :is(th, td):last-child {
+    padding-right: 0;
   }
 }
 
