@@ -172,6 +172,7 @@ a {
   position: sticky;
   top: 0;
   height: 100vh;
+  overflow-y: auto;
   width: 224px;
   flex: 0 0 224px;
   display: flex;
