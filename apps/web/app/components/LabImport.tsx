@@ -8,6 +8,7 @@ import { DeleteLabDocument } from "./DeleteLabDocument";
 import { newUploadId } from "../lib/uploadIdentity";
 
 type Issue = { row: number; field: string | null; message: string };
+const SAVING = "Saving your confirmed results…";
 async function readResponse<T>(response: Response): Promise<T> {
   const value = await response.json();
   if (!response.ok) {
@@ -117,18 +118,20 @@ export function LabImport({ documentId }: { documentId?: string }) {
 
   async function save() {
     if (!draft) return;
-    setBusy("Saving your confirmed results…"); setError(""); setIssues([]);
+    setBusy(SAVING); setError(""); setIssues([]);
     try {
       const receipt = await readResponse<LabImportReceipt>(await fetch(`/api/lab-imports/${draft.id}/commit`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows }),
       }));
       dirty.current = false;
+      // Stay busy until the report replaces this screen, so Save cannot be pressed again.
       router.push(receipt.report_url);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "The results could not be saved.");
       setIssues((e as { issues?: Issue[] }).issues ?? []);
-    } finally { setBusy(null); }
+      setBusy(null);
+    }
   }
 
   const confirmed = rows.filter(r => r.confirmed).length;
@@ -207,7 +210,7 @@ export function LabImport({ documentId }: { documentId?: string }) {
       <div className="lab-import-actions">
         <button className="btn btn-ghost" disabled={!!busy || rows.length >= 250} onClick={() => { dirty.current = true; setRows(current => [...current, newReviewRow()]); }}>Add a result</button>
         <button className="btn btn-ghost" disabled={!!busy || confirmed === rows.length} onClick={() => focusResult(rows.findIndex(row => !row.confirmed))}>Next unchecked result</button>
-        <button className="btn" disabled={!!busy || rows.length === 0 || confirmed !== rows.length} onClick={() => void save()}>Save {rows.length} result{rows.length === 1 ? "" : "s"}</button>
+        <button className="btn" disabled={!!busy || rows.length === 0 || confirmed !== rows.length} onClick={() => void save()}>{busy === SAVING ? SAVING : <>Save {rows.length} result{rows.length === 1 ? "" : "s"}</>}</button>
       </div>
       <p className="muted">Edits are lost if you leave or reload before saving. Your original upload remains available to review again.</p>
       <DeleteLabDocument documentId={draft.id} />
