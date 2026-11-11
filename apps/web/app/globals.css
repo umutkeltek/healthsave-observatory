@@ -5362,7 +5362,8 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .policy-status {
+  .policy-status,
+  .intel-runtime .badge {
     justify-self: start;
   }
 
