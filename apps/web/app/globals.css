@@ -4591,55 +4591,59 @@ color: var(--accent);
    preserving the current component contracts and route structure.
 ───────────────────────────────────────────────────────────────────── */
 
-[data-theme="dark"] {
-  /* Native controls (date/select popups, checkboxes, scrollbars) and UA
-     defaults such as button text follow the theme, not the light default. */
-  color-scheme: dark;
-  --bg: #000000;
-  --bg-radial: #1c1c1e;
-  --surface: #2c2c2e;
-  --surface-2: rgba(28, 28, 30, 0.72);
-  --surface-3: #3a3a3c;
-  --raise: #1c1c1e;
-  --line: rgba(84, 84, 88, 0.65);
-  --line-soft: rgba(84, 84, 88, 0.42);
-  --line-strong: rgba(142, 142, 147, 0.42);
-  --line-glow: rgba(10, 132, 255, 0.36);
-  --ink: #f5f5f7;
-  --muted: #98989d;
-  --faint: #98989d; /* #8e8e93 read 4.3:1 on cards; this clears 4.5:1 on --surface */
-  --ghost: #636366;
-  /* Apple's increased-contrast dark system blue: #0a84ff read 3.8:1 as
-     link text on cards; this reads 4.9:1. Filled accent takes dark text. */
-  --accent: #409cff;
-  --brand: #409cff;
-  --on-accent: #000000;
-  --accent-weak: rgba(10, 132, 255, 0.16);
-  --accent-line: rgba(10, 132, 255, 0.34);
-  --brand-weak: rgba(10, 132, 255, 0.16);
-  --signal: #409cff;
-  --signal-weak: rgba(10, 132, 255, 0.16);
-  --signal-line: rgba(10, 132, 255, 0.3);
-  --neutral: #98989d;
-  --up: #30d158;
-  --down: #ff453a;
-  --warn: #ff9f0a;
-  --anomaly: #ff453a;
-  --experiment: #bf5af2;
-  --baseline-fill: rgba(10, 132, 255, 0.14);
-  --baseline-line: rgba(10, 132, 255, 0.32);
-  --sleep-awake: #ffb340;
-  --sleep-rem: #70d7ff;
-  --sleep-core: #409cff;
-  --sleep-deep: #7d7aff;
-  --series-1: #409cff;
-  --series-2: #ff9f0a;
-  --series-3: #bf5af2;
-  --series-4: #30d158;
-  --series-5: #ff375f;
-  --series-6: #64d2ff;
-  --hover: rgba(255, 255, 255, 0.08);
-  --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.32), 0 16px 36px rgba(0, 0, 0, 0.34);
+/* Dark is a screen theme only: printing (lab report, genetics) always uses
+   the light values, so text never comes out pale grey on white paper. */
+@media screen {
+  [data-theme="dark"] {
+    /* Native controls (date/select popups, checkboxes, scrollbars) and UA
+       defaults such as button text follow the theme, not the light default. */
+    color-scheme: dark;
+    --bg: #000000;
+    --bg-radial: #1c1c1e;
+    --surface: #2c2c2e;
+    --surface-2: rgba(28, 28, 30, 0.72);
+    --surface-3: #3a3a3c;
+    --raise: #1c1c1e;
+    --line: rgba(84, 84, 88, 0.65);
+    --line-soft: rgba(84, 84, 88, 0.42);
+    --line-strong: rgba(142, 142, 147, 0.42);
+    --line-glow: rgba(10, 132, 255, 0.36);
+    --ink: #f5f5f7;
+    --muted: #98989d;
+    --faint: #98989d; /* #8e8e93 read 4.3:1 on cards; this clears 4.5:1 on --surface */
+    --ghost: #636366;
+    /* Apple's increased-contrast dark system blue: #0a84ff read 3.8:1 as
+       link text on cards; this reads 4.9:1. Filled accent takes dark text. */
+    --accent: #409cff;
+    --brand: #409cff;
+    --on-accent: #000000;
+    --accent-weak: rgba(10, 132, 255, 0.16);
+    --accent-line: rgba(10, 132, 255, 0.34);
+    --brand-weak: rgba(10, 132, 255, 0.16);
+    --signal: #409cff;
+    --signal-weak: rgba(10, 132, 255, 0.16);
+    --signal-line: rgba(10, 132, 255, 0.3);
+    --neutral: #98989d;
+    --up: #30d158;
+    --down: #ff453a;
+    --warn: #ff9f0a;
+    --anomaly: #ff453a;
+    --experiment: #bf5af2;
+    --baseline-fill: rgba(10, 132, 255, 0.14);
+    --baseline-line: rgba(10, 132, 255, 0.32);
+    --sleep-awake: #ffb340;
+    --sleep-rem: #70d7ff;
+    --sleep-core: #409cff;
+    --sleep-deep: #7d7aff;
+    --series-1: #409cff;
+    --series-2: #ff9f0a;
+    --series-3: #bf5af2;
+    --series-4: #30d158;
+    --series-5: #ff375f;
+    --series-6: #64d2ff;
+    --hover: rgba(255, 255, 255, 0.08);
+    --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.32), 0 16px 36px rgba(0, 0, 0, 0.34);
+  }
 }
 
 html,
