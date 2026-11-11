@@ -3750,6 +3750,17 @@ label.field-label {
   font-size: 11px;
   fill: var(--faint);
 }
+/* The 520-wide scatter scales to about half size on a phone, taking its 11px
+   SVG tick labels down to 5-6px; draw them larger in viewBox units there and
+   let the widest x label spill into the card padding instead of clipping. */
+@media (max-width: 460px) {
+  .scatter-svg {
+    overflow: visible;
+  }
+  .scatter-tick {
+    font-size: 17px;
+  }
+}
 
 /* MultiSeriesChart HTML axis overlay. */
 .multi-plot {
