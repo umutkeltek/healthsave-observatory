@@ -8333,6 +8333,7 @@ font-size: 17px;
   .field-input,
   .filter-select { font-size: 16px; min-height: 44px; }
   .btn { min-height: 44px; }
+  summary { min-height: 44px; padding-block: 12px; box-sizing: border-box; }
   .density-toggle button { min-height: 44px; }
   /* 44px to the finger, still 26px in the layout. */
   .pin-btn { width: 44px; height: 44px; flex-basis: 44px; margin: -9px; }
@@ -8360,7 +8361,7 @@ font-size: 17px;
   .cov-label { grid-column: 1 / -1; }
   .cov-name, .cov-rel { white-space: normal; overflow-wrap: break-word; }
   /* The 11px "Stream details" toggle was a 13px-tall target; line-height keeps its disclosure marker. */
-  .prov-technical summary { line-height: 44px; margin-block: -10px; }
+  .prov-technical summary { line-height: 44px; margin-block: -10px; padding-block: 0; }
   .fb-del { width: 44px; height: 44px; }
   /* Year view: the year links were 15px tall, the gap drill-downs 15–30px and
      the share-card option rows 19–34px. */
