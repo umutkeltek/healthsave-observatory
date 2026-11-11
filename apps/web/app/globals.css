@@ -2085,6 +2085,7 @@ table.prov {
 }
 .panel-tools {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
@@ -2212,6 +2213,10 @@ input.filter-select {
     min-width: 0;
     width: 100%;
     max-width: none;
+  }
+  .panel-tools .filter-select {
+    width: auto;
+    flex: 1 1 auto;
   }
   .filter-clear {
     margin-left: 0;
@@ -8284,7 +8289,8 @@ font-size: 17px;
   .yr-drill summary { min-height: 44px; padding-block: 12px; box-sizing: border-box; }
   .lib-search, .lib-select { font-size: 16px; min-height: 44px; }
   .lib-toggle { min-height: 44px; }
-  .panel-move, .panel-remove-btn { min-width: 44px; min-height: 44px; touch-action: manipulation; }
+  .panel-move { min-width: 44px; min-height: 44px; touch-action: manipulation; }
+  .panel-remove-btn { min-height: 44px; touch-action: manipulation; }
   .panel-chip-x { min-width: 40px; min-height: 40px; margin: -10px -8px -10px -6px; align-items: center; justify-content: center; touch-action: manipulation; }
 }
 @media (max-width: 720px) {
