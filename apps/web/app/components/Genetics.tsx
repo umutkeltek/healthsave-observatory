@@ -197,9 +197,12 @@ export function GeneticDocumentView({ documentId }: { documentId: string }) {
     setBusy(true); setError("");
     try {
       await action(`/${documentId}${deleting === "original" ? "/original" : ""}`, { confirmation: documentId }, "DELETE");
-      if (deleting === "document") { router.push("/genetics"); router.refresh(); }
+      // The record is gone: stay busy until the list replaces this page, so the
+      // confirm button cannot come back while the navigation is still loading.
+      if (deleting === "document") { router.push("/genetics"); router.refresh(); return; }
       else { setDetail(await get<GeneticDocumentDetail>(`/${documentId}`)); setDeleting(null); setMessage("The retained original was removed. Your report versions remain."); }
-    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+    } catch (e) { setError((e as Error).message); }
+    setBusy(false);
   }
   function download() {
     if (!report) return;
@@ -264,7 +267,7 @@ export function GeneticDocumentView({ documentId }: { documentId: string }) {
       {!deleting ? <div className="lab-import-actions">{detail.document.original_retained && <button className="btn btn-ghost" disabled={busy} onClick={() => setDeleting("original")}>Remove retained original…</button>}<button className="btn btn-ghost" disabled={busy} onClick={() => setDeleting("document")}>Delete this genetic record…</button></div> : <>
         <p>{deleting === "original" ? "Remove the retained DNA file? Your reports remain, but reanalysis will require uploading the file again." : `Delete this genetic record, its retained original and all ${detail.reports.length} report versions?`}</p>
         <p>This cannot be undone here. Downloaded copies and backups are separate.</p>
-        <div className="lab-import-actions"><button className="btn btn-ghost" disabled={busy} onClick={() => setDeleting(null)}>Keep data</button><button className="btn" disabled={busy} onClick={() => void remove()}>Permanently delete {deleting === "original" ? "original" : "record"}</button></div>
+        <div className="lab-import-actions"><button className="btn btn-ghost" disabled={busy} onClick={() => setDeleting(null)}>Keep data</button><button className="btn" disabled={busy} onClick={() => void remove()}>{busy ? "Deleting…" : `Permanently delete ${deleting === "original" ? "original" : "record"}`}</button></div>
       </>}
     </section>
   </article>;
