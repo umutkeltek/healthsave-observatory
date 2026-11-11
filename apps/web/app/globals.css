@@ -2235,6 +2235,9 @@ input.filter-select {
     width: auto;
     flex: 1 1 auto;
   }
+  .explore-control {
+    flex: 1 1 40%;
+  }
   .filter-clear {
     margin-left: 0;
   }
