@@ -8048,14 +8048,16 @@ font-size: 17px;
   background: transparent;
   box-shadow: inset 0 0 0 1px var(--line-strong);
 }
+/* Mixed into the card surface, not transparent, so the legend swatches
+   (which sit on the page canvas) match the cells in both themes. */
 .yr-cell.yr-l1 {
-  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  background: color-mix(in srgb, var(--accent) 28%, var(--surface));
 }
 .yr-cell.yr-l2 {
-  background: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 50%, var(--surface));
 }
 .yr-cell.yr-l3 {
-  background: color-mix(in srgb, var(--accent) 74%, transparent);
+  background: color-mix(in srgb, var(--accent) 74%, var(--surface));
 }
 .yr-cell.yr-l4 {
   background: var(--accent);
