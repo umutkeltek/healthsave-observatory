@@ -3064,6 +3064,7 @@ label.field-label {
 
 .lib-ranges {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--s1);
 }
 
