@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 
 import type { CreateMomentPayload } from "../lib/api";
-import { createMomentAction } from "../lib/actions";
+import { createMomentAction, type ActionResult } from "../lib/actions";
 import { runAction } from "../lib/session";
 
 const KINDS: { key: string; label: string }[] = [
@@ -109,7 +109,12 @@ export function MomentForm() {
               };
               if (grade) payload.grade = grade;
               if (note.trim()) payload.note = note.trim();
-              const result = await runAction(() => createMomentAction(payload));
+              // A request that never gets an answer (the connection dropped)
+              // rejects instead of returning a result. Report it on the form,
+              // keeping what was typed, rather than letting it tear the page down.
+              const result = await runAction(() => createMomentAction(payload)).catch(
+                (): ActionResult => ({ ok: false }),
+              );
               if (result.ok) {
                 setTitle("");
                 setNote("");
