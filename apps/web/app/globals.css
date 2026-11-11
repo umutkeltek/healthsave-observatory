@@ -8341,7 +8341,7 @@ font-size: 17px;
 .genetic-stats dd { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; margin: 4px 0 0; }
 .genetic-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 16px; }
 .genetic-annotation { display: grid; gap: 8px; padding: 20px 0; border-top: 1px solid var(--line); }
-.genetic-hash { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; color: var(--muted); }
+.genetic-hash { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; color: var(--muted); }
 @media print {
   body:has(.genetics) :is(.sidebar, .topbar, .mobile-nav, .lab-no-print) { display: none !important; }
   body:has(.genetics) .main { margin: 0; padding: 0; }
@@ -8380,7 +8380,7 @@ font-size: 17px;
 .lab-report-observation { font-weight: 600; }
 .lab-report blockquote { margin: 20px 0; border-left: 2px solid var(--line); padding-left: 16px; overflow-wrap: anywhere; }
 .lab-report blockquote footer { color: var(--muted); font-size: 12px; }
-.lab-report-hash { overflow-wrap: anywhere; font-family: var(--font-mono, monospace); }
+.lab-report-hash { overflow-wrap: anywhere; font-family: var(--mono); }
 @media (pointer: coarse) {
   .field-input,
   .filter-select { font-size: 16px; min-height: 44px; }
