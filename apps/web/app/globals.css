@@ -2723,14 +2723,16 @@ label.field-label {
 /* fallbacks */
 .fb-row {
   display: grid;
-  grid-template-columns: 120px 1fr 150px 28px;
+  grid-template-columns: 120px 1fr 150px auto;
   gap: 8px;
   margin-bottom: 8px;
   align-items: center;
 }
+/* Narrow: provider, then the full-width model, then key + remove, in DOM order
+   (three equal-ish tracks left provider and key half-width with holes). */
 @media (max-width: 720px) {
   .fb-row {
-    grid-template-columns: 1fr 1fr 28px;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
   .fb-row .fb-model {
     grid-column: 1 / -1;
@@ -8256,6 +8258,7 @@ font-size: 17px;
   .cov-name, .cov-rel { white-space: normal; overflow-wrap: break-word; }
   /* The 11px "Stream details" toggle was a 13px-tall target; line-height keeps its disclosure marker. */
   .prov-technical summary { line-height: 44px; margin-block: -10px; }
+  .fb-del { width: 44px; height: 44px; }
 }
 @media (max-width: 720px) {
   .lab-review-fields, .lab-import-bulk { grid-template-columns: repeat(2, minmax(0, 1fr)); }
