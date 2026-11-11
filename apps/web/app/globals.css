@@ -8174,7 +8174,7 @@ font-size: 17px;
 .lab-import, .lab-report { display: grid; gap: 20px; max-width: 1080px; min-width: 0; }
 .genetics { display: grid; gap: 20px; max-width: 1080px; min-width: 0; }
 .genetics .card, .genetics .prov-intro { display: grid; gap: 12px; min-width: 0; }
-.genetics p, .genetics h3, .genetics h4 { margin: 0; overflow-wrap: anywhere; }
+.genetics p, .genetics h3, .genetics h4, .genetics li { margin: 0; overflow-wrap: anywhere; }
 .genetics label { display: grid; gap: 8px; font-size: 13px; font-weight: 500; min-width: 0; }
 .genetics input:not([type="checkbox"]), .genetics select { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; }
 .genetics :is(input, select, button, summary, a):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
