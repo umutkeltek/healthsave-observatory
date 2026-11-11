@@ -4947,7 +4947,10 @@ html,
   }
 
 .badges {
-justify-content: flex-start;
+/* A fixed right-hand column, so rows with and without a sparkline line up. */
+flex: 0 0 auto;
+flex-direction: column;
+align-items: flex-end;
 }
 }
 
