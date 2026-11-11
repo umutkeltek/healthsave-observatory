@@ -115,9 +115,10 @@ export function GeneticHome() {
         "X-Genome-Assembly": assembly, "X-Forward-Strand": "confirmed", "X-Genetic-Consent": "accepted",
         "X-Retain-Original": String(retain),
       }}).then(responseBody<GeneticDocumentDetail>);
+      // Stay busy until the report page replaces this form; on a slow link the
+      // navigation can take seconds after the upload already succeeded.
       router.push(`/genetics/${result.document.id}`);
-    } catch (e) { setError((e as Error).message); }
-    finally { setBusy(false); }
+    } catch (e) { setError((e as Error).message); setBusy(false); }
   }
   return <div className="genetics">
     <section className="prov-intro"><h2>Explore the evidence in your DNA file</h2>
