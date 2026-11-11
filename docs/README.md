@@ -26,6 +26,7 @@ New here? Start with [Zero To Ready](zero-to-ready.md), then [Connect HealthSave
 - [Apple Health](capture/apple-health.md) - how HealthSave iOS pushes HealthKit metrics into the frozen v1 ingest contract.
 - [Plugins: Whoop & Amazfit](capture/plugins-whoop-amazfit.md) - early direct plugin architecture and OAuth token storage.
 - [Importers: Garmin & Samsung](capture/importers-garmin-samsung.md) - file/importer path into the same canonical model.
+- [Private genetic evidence](capture/genetic-evidence.md) - local ClinVar matching, source review, immutable reports and data controls.
 - [Blood test results (CSV)](capture/labs-csv.md) - import lab results with the lab's own reference ranges, kept per lab and never averaged.
 - [Android & webhook roadmap](capture/roadmap-android-webhooks.md) - planned Health Connect and generic signed ingest.
 

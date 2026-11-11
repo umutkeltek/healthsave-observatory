@@ -92,3 +92,5 @@ Key facts for assistants:
 - [Licensing (plain-language)](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/licensing.md): Friendly explanation of the Apache-2.0 / Elastic-2.0 split.
 - [Licensing (authoritative)](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/LICENSING.md): Which license governs which path.
 - [Trademark policy](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/TRADEMARK.md): Use of the HealthSave and HealthSave Observatory names; forks use their own name.
+
+- [Private genetic evidence](https://raw.githubusercontent.com/umutkeltek/healthsave-observatory/main/docs/capture/genetic-evidence.md): Local ClinVar matching, scientific limits, immutable report versions and data controls.

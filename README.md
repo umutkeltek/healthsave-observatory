@@ -209,6 +209,8 @@ cd healthsave-observatory
 - npm uninstall removes only the npm bootstrapper, not the checkout, containers, volumes, config, or health data
 - Homebrew formula template: `packaging/homebrew/healthsave.rb.template`
 
+Private uploads: [blood-test reports](docs/capture/labs-csv.md) and [genetic evidence](docs/capture/genetic-evidence.md), processed on your Observatory.
+
 ## Documentation
 
 - [Overview](docs/overview.md) - product layers, data flow, and what ships today.

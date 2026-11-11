@@ -1,0 +1,322 @@
+{
+  "$defs": {
+    "GeneticAnnotation": {
+      "additionalProperties": false,
+      "properties": {
+        "alternate": {
+          "title": "Alternate",
+          "type": "string"
+        },
+        "alternate_copies": {
+          "title": "Alternate Copies",
+          "type": "integer"
+        },
+        "call_quality": {
+          "title": "Call Quality",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "pathogenic",
+            "benign",
+            "uncertain",
+            "conflicting",
+            "other"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "chromosome": {
+          "title": "Chromosome",
+          "type": "string"
+        },
+        "conditions": {
+          "title": "Conditions",
+          "type": "string"
+        },
+        "conflicting": {
+          "title": "Conflicting",
+          "type": "boolean"
+        },
+        "depth": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Depth"
+        },
+        "details_truncated": {
+          "title": "Details Truncated",
+          "type": "boolean"
+        },
+        "gene": {
+          "title": "Gene",
+          "type": "string"
+        },
+        "genotype": {
+          "title": "Genotype",
+          "type": "string"
+        },
+        "genotype_quality": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Genotype Quality"
+        },
+        "hgvs": {
+          "title": "Hgvs",
+          "type": "string"
+        },
+        "position": {
+          "title": "Position",
+          "type": "integer"
+        },
+        "reference": {
+          "title": "Reference",
+          "type": "string"
+        },
+        "review_stars": {
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Review Stars",
+          "type": "integer"
+        },
+        "source_classification": {
+          "title": "Source Classification",
+          "type": "string"
+        },
+        "source_review_status": {
+          "title": "Source Review Status",
+          "type": "string"
+        },
+        "source_url": {
+          "title": "Source Url",
+          "type": "string"
+        },
+        "variation_id": {
+          "title": "Variation Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "chromosome",
+        "position",
+        "genotype",
+        "reference",
+        "alternate",
+        "alternate_copies",
+        "variation_id",
+        "gene",
+        "conditions",
+        "source_classification",
+        "source_review_status",
+        "review_stars",
+        "conflicting",
+        "category",
+        "call_quality",
+        "depth",
+        "genotype_quality",
+        "hgvs",
+        "source_url",
+        "details_truncated"
+      ],
+      "title": "GeneticAnnotation",
+      "type": "object"
+    },
+    "GeneticReference": {
+      "additionalProperties": false,
+      "properties": {
+        "assembly": {
+          "enum": [
+            "GRCh37",
+            "GRCh38"
+          ],
+          "title": "Assembly",
+          "type": "string"
+        },
+        "excluded_reference_records": {
+          "title": "Excluded Reference Records",
+          "type": "integer"
+        },
+        "index_version": {
+          "title": "Index Version",
+          "type": "string"
+        },
+        "installed_at": {
+          "format": "date-time",
+          "title": "Installed At",
+          "type": "string"
+        },
+        "record_count": {
+          "title": "Record Count",
+          "type": "integer"
+        },
+        "release_date": {
+          "title": "Release Date",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "source_url": {
+          "title": "Source Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "assembly",
+        "release_date",
+        "sha256",
+        "source_url",
+        "installed_at",
+        "record_count",
+        "excluded_reference_records",
+        "index_version"
+      ],
+      "title": "GeneticReference",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "annotations": {
+      "items": {
+        "$ref": "#/$defs/GeneticAnnotation"
+      },
+      "title": "Annotations",
+      "type": "array"
+    },
+    "assembly": {
+      "enum": [
+        "GRCh37",
+        "GRCh38"
+      ],
+      "title": "Assembly",
+      "type": "string"
+    },
+    "assembly_in_file": {
+      "title": "Assembly In File",
+      "type": "boolean"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "document_id": {
+      "format": "uuid",
+      "title": "Document Id",
+      "type": "string"
+    },
+    "engine_version": {
+      "title": "Engine Version",
+      "type": "string"
+    },
+    "file_name": {
+      "title": "File Name",
+      "type": "string"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "input_counts": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Input Counts",
+      "type": "object"
+    },
+    "input_format": {
+      "title": "Input Format",
+      "type": "string"
+    },
+    "input_sha256": {
+      "title": "Input Sha256",
+      "type": "string"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "matched_annotations": {
+      "title": "Matched Annotations",
+      "type": "integer"
+    },
+    "matched_loci": {
+      "title": "Matched Loci",
+      "type": "integer"
+    },
+    "omitted_annotations": {
+      "title": "Omitted Annotations",
+      "type": "integer"
+    },
+    "owner_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "reference": {
+      "$ref": "#/$defs/GeneticReference"
+    },
+    "reference_mismatch_loci": {
+      "title": "Reference Mismatch Loci",
+      "type": "integer"
+    },
+    "unmatched_loci": {
+      "title": "Unmatched Loci",
+      "type": "integer"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "workspace_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "document_id",
+    "created_at",
+    "engine_version",
+    "file_name",
+    "input_sha256",
+    "input_format",
+    "assembly",
+    "assembly_in_file",
+    "input_counts",
+    "reference",
+    "annotations",
+    "matched_loci",
+    "matched_annotations",
+    "unmatched_loci",
+    "reference_mismatch_loci",
+    "omitted_annotations",
+    "warnings",
+    "limitations"
+  ],
+  "title": "GeneticReport",
+  "type": "object"
+}

@@ -5,6 +5,7 @@ ENV PIP_ROOT_USER_ACTION=ignore \
 
 WORKDIR /app
 RUN adduser --disabled-password --gecos "" appuser
+RUN mkdir -p /app/genetics && chown appuser:appuser /app/genetics
 RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*
 

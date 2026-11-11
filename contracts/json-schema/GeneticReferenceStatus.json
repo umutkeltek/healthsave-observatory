@@ -1,0 +1,142 @@
+{
+  "$defs": {
+    "GeneticReference": {
+      "additionalProperties": false,
+      "properties": {
+        "assembly": {
+          "enum": [
+            "GRCh37",
+            "GRCh38"
+          ],
+          "title": "Assembly",
+          "type": "string"
+        },
+        "excluded_reference_records": {
+          "title": "Excluded Reference Records",
+          "type": "integer"
+        },
+        "index_version": {
+          "title": "Index Version",
+          "type": "string"
+        },
+        "installed_at": {
+          "format": "date-time",
+          "title": "Installed At",
+          "type": "string"
+        },
+        "record_count": {
+          "title": "Record Count",
+          "type": "integer"
+        },
+        "release_date": {
+          "title": "Release Date",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "source_url": {
+          "title": "Source Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "assembly",
+        "release_date",
+        "sha256",
+        "source_url",
+        "installed_at",
+        "record_count",
+        "excluded_reference_records",
+        "index_version"
+      ],
+      "title": "GeneticReference",
+      "type": "object"
+    },
+    "GeneticReferenceJob": {
+      "additionalProperties": false,
+      "properties": {
+        "assembly": {
+          "anyOf": [
+            {
+              "enum": [
+                "GRCh37",
+                "GRCh38"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assembly"
+        },
+        "bytes_downloaded": {
+          "default": 0,
+          "title": "Bytes Downloaded",
+          "type": "integer"
+        },
+        "message": {
+          "default": "",
+          "title": "Message",
+          "type": "string"
+        },
+        "records_indexed": {
+          "default": 0,
+          "title": "Records Indexed",
+          "type": "integer"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Started At"
+        },
+        "state": {
+          "enum": [
+            "idle",
+            "downloading",
+            "indexing",
+            "complete",
+            "failed",
+            "interrupted"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "GeneticReferenceJob",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "job": {
+      "$ref": "#/$defs/GeneticReferenceJob"
+    },
+    "references": {
+      "items": {
+        "$ref": "#/$defs/GeneticReference"
+      },
+      "title": "References",
+      "type": "array"
+    }
+  },
+  "required": [
+    "references",
+    "job"
+  ],
+  "title": "GeneticReferenceStatus",
+  "type": "object"
+}

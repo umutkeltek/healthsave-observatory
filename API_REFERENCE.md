@@ -635,3 +635,18 @@ The Local Vault's inspectable chain of custody: the stored intelligence audit tr
 | **Worker / scheduler** | internal (writes findings consumed via `/api/v2/insights/*`) |
 | **Operator** | `GET /ready`, `GET /api/v2/setup/diagnostics`, `GET /api/v2/sync/coverage`, `GET /metrics` |
 | **Whoop** | `POST /api/v2/sources/whoop/webhook` |
+
+
+## Private genetic evidence
+
+Admin-only, primary-person uploads and immutable local ClinVar evidence.
+See [the workflow](docs/capture/genetic-evidence.md) and [request details](API.md#private-genetic-evidence-v2).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET, POST | `/api/v2/genetics` | List documents or import a private genotype file |
+| GET, POST | `/api/v2/genetics/reference` | Read reference status or confirm a public reference update |
+| GET, DELETE | `/api/v2/genetics/{document_id}` | Read a document or confirm deletion of all its versions |
+| GET, DELETE | `/api/v2/genetics/{document_id}/original` | Download or remove the optional retained original |
+| POST | `/api/v2/genetics/{document_id}/reanalyze` | Reanalyze a retained file using the installed reference |
+| GET | `/api/v2/genetics/{document_id}/reports/{report_id}` | Read an immutable saved report |

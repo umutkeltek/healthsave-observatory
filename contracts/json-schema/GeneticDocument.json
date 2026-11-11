@@ -1,0 +1,57 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "assembly": {
+      "enum": [
+        "GRCh37",
+        "GRCh38"
+      ],
+      "title": "Assembly",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "file_name": {
+      "title": "File Name",
+      "type": "string"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "original_retained": {
+      "title": "Original Retained",
+      "type": "boolean"
+    },
+    "owner_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "sha256": {
+      "title": "Sha256",
+      "type": "string"
+    },
+    "workspace_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "file_name",
+    "sha256",
+    "assembly",
+    "created_at",
+    "original_retained"
+  ],
+  "title": "GeneticDocument",
+  "type": "object"
+}

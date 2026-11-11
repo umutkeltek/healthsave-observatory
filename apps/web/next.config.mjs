@@ -14,6 +14,9 @@ const nextConfig = {
   // Next.js 16.2+; browsers that don't support it fall back to full navigation.
   experimental: {
     viewTransition: true,
+    // The authenticated import proxy applies its own 50 MB bound. Allow the
+    // middleware to forward these requests intact to that validation boundary.
+    proxyClientMaxBodySize: "52mb",
   },
   turbopack: {
     root: appRoot,

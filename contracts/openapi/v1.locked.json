@@ -1286,6 +1286,682 @@
         "title": "FindingResponse",
         "type": "object"
       },
+      "GeneticAnnotation": {
+        "additionalProperties": false,
+        "properties": {
+          "alternate": {
+            "title": "Alternate",
+            "type": "string"
+          },
+          "alternate_copies": {
+            "title": "Alternate Copies",
+            "type": "integer"
+          },
+          "call_quality": {
+            "title": "Call Quality",
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "pathogenic",
+              "benign",
+              "uncertain",
+              "conflicting",
+              "other"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "chromosome": {
+            "title": "Chromosome",
+            "type": "string"
+          },
+          "conditions": {
+            "title": "Conditions",
+            "type": "string"
+          },
+          "conflicting": {
+            "title": "Conflicting",
+            "type": "boolean"
+          },
+          "depth": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depth"
+          },
+          "details_truncated": {
+            "title": "Details Truncated",
+            "type": "boolean"
+          },
+          "gene": {
+            "title": "Gene",
+            "type": "string"
+          },
+          "genotype": {
+            "title": "Genotype",
+            "type": "string"
+          },
+          "genotype_quality": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Genotype Quality"
+          },
+          "hgvs": {
+            "title": "Hgvs",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "review_stars": {
+            "maximum": 4.0,
+            "minimum": 0.0,
+            "title": "Review Stars",
+            "type": "integer"
+          },
+          "source_classification": {
+            "title": "Source Classification",
+            "type": "string"
+          },
+          "source_review_status": {
+            "title": "Source Review Status",
+            "type": "string"
+          },
+          "source_url": {
+            "title": "Source Url",
+            "type": "string"
+          },
+          "variation_id": {
+            "title": "Variation Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "chromosome",
+          "position",
+          "genotype",
+          "reference",
+          "alternate",
+          "alternate_copies",
+          "variation_id",
+          "gene",
+          "conditions",
+          "source_classification",
+          "source_review_status",
+          "review_stars",
+          "conflicting",
+          "category",
+          "call_quality",
+          "depth",
+          "genotype_quality",
+          "hgvs",
+          "source_url",
+          "details_truncated"
+        ],
+        "title": "GeneticAnnotation",
+        "type": "object"
+      },
+      "GeneticDeletion": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmation": {
+            "format": "uuid",
+            "title": "Confirmation",
+            "type": "string"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirmation"
+        ],
+        "title": "GeneticDeletion",
+        "type": "object"
+      },
+      "GeneticDeletionReceipt": {
+        "additionalProperties": false,
+        "properties": {
+          "deleted_reports": {
+            "title": "Deleted Reports",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "deleted_reports"
+        ],
+        "title": "GeneticDeletionReceipt",
+        "type": "object"
+      },
+      "GeneticDocument": {
+        "additionalProperties": false,
+        "properties": {
+          "assembly": {
+            "enum": [
+              "GRCh37",
+              "GRCh38"
+            ],
+            "title": "Assembly",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "original_retained": {
+            "title": "Original Retained",
+            "type": "boolean"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "file_name",
+          "sha256",
+          "assembly",
+          "created_at",
+          "original_retained"
+        ],
+        "title": "GeneticDocument",
+        "type": "object"
+      },
+      "GeneticDocumentDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/GeneticDocument"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "report": {
+            "$ref": "#/components/schemas/GeneticReport"
+          },
+          "reports": {
+            "items": {
+              "$ref": "#/components/schemas/GeneticReportVersion"
+            },
+            "title": "Reports",
+            "type": "array"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document",
+          "report",
+          "reports"
+        ],
+        "title": "GeneticDocumentDetail",
+        "type": "object"
+      },
+      "GeneticIndex": {
+        "additionalProperties": false,
+        "properties": {
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/GeneticDocument"
+            },
+            "title": "Documents",
+            "type": "array"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "documents"
+        ],
+        "title": "GeneticIndex",
+        "type": "object"
+      },
+      "GeneticReanalysis": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "title": "GeneticReanalysis",
+        "type": "object"
+      },
+      "GeneticReference": {
+        "additionalProperties": false,
+        "properties": {
+          "assembly": {
+            "enum": [
+              "GRCh37",
+              "GRCh38"
+            ],
+            "title": "Assembly",
+            "type": "string"
+          },
+          "excluded_reference_records": {
+            "title": "Excluded Reference Records",
+            "type": "integer"
+          },
+          "index_version": {
+            "title": "Index Version",
+            "type": "string"
+          },
+          "installed_at": {
+            "format": "date-time",
+            "title": "Installed At",
+            "type": "string"
+          },
+          "record_count": {
+            "title": "Record Count",
+            "type": "integer"
+          },
+          "release_date": {
+            "title": "Release Date",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "source_url": {
+            "title": "Source Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assembly",
+          "release_date",
+          "sha256",
+          "source_url",
+          "installed_at",
+          "record_count",
+          "excluded_reference_records",
+          "index_version"
+        ],
+        "title": "GeneticReference",
+        "type": "object"
+      },
+      "GeneticReferenceJob": {
+        "additionalProperties": false,
+        "properties": {
+          "assembly": {
+            "anyOf": [
+              {
+                "enum": [
+                  "GRCh37",
+                  "GRCh38"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assembly"
+          },
+          "bytes_downloaded": {
+            "default": 0,
+            "title": "Bytes Downloaded",
+            "type": "integer"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "records_indexed": {
+            "default": 0,
+            "title": "Records Indexed",
+            "type": "integer"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "enum": [
+              "idle",
+              "downloading",
+              "indexing",
+              "complete",
+              "failed",
+              "interrupted"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "title": "GeneticReferenceJob",
+        "type": "object"
+      },
+      "GeneticReferenceStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/GeneticReferenceJob"
+          },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/GeneticReference"
+            },
+            "title": "References",
+            "type": "array"
+          }
+        },
+        "required": [
+          "references",
+          "job"
+        ],
+        "title": "GeneticReferenceStatus",
+        "type": "object"
+      },
+      "GeneticReferenceUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "assembly": {
+            "enum": [
+              "GRCh37",
+              "GRCh38"
+            ],
+            "title": "Assembly",
+            "type": "string"
+          },
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assembly"
+        ],
+        "title": "GeneticReferenceUpdate",
+        "type": "object"
+      },
+      "GeneticReport": {
+        "additionalProperties": false,
+        "properties": {
+          "annotations": {
+            "items": {
+              "$ref": "#/components/schemas/GeneticAnnotation"
+            },
+            "title": "Annotations",
+            "type": "array"
+          },
+          "assembly": {
+            "enum": [
+              "GRCh37",
+              "GRCh38"
+            ],
+            "title": "Assembly",
+            "type": "string"
+          },
+          "assembly_in_file": {
+            "title": "Assembly In File",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "document_id": {
+            "format": "uuid",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "engine_version": {
+            "title": "Engine Version",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "input_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Input Counts",
+            "type": "object"
+          },
+          "input_format": {
+            "title": "Input Format",
+            "type": "string"
+          },
+          "input_sha256": {
+            "title": "Input Sha256",
+            "type": "string"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Limitations",
+            "type": "array"
+          },
+          "matched_annotations": {
+            "title": "Matched Annotations",
+            "type": "integer"
+          },
+          "matched_loci": {
+            "title": "Matched Loci",
+            "type": "integer"
+          },
+          "omitted_annotations": {
+            "title": "Omitted Annotations",
+            "type": "integer"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "reference": {
+            "$ref": "#/components/schemas/GeneticReference"
+          },
+          "reference_mismatch_loci": {
+            "title": "Reference Mismatch Loci",
+            "type": "integer"
+          },
+          "unmatched_loci": {
+            "title": "Unmatched Loci",
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "document_id",
+          "created_at",
+          "engine_version",
+          "file_name",
+          "input_sha256",
+          "input_format",
+          "assembly",
+          "assembly_in_file",
+          "input_counts",
+          "reference",
+          "annotations",
+          "matched_loci",
+          "matched_annotations",
+          "unmatched_loci",
+          "reference_mismatch_loci",
+          "omitted_annotations",
+          "warnings",
+          "limitations"
+        ],
+        "title": "GeneticReport",
+        "type": "object"
+      },
+      "GeneticReportVersion": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "engine_version": {
+            "title": "Engine Version",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "reference_release": {
+            "title": "Reference Release",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "reference_release",
+          "engine_version"
+        ],
+        "title": "GeneticReportVersion",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -6563,6 +7239,506 @@
           }
         },
         "summary": "List Export Metrics"
+      }
+    },
+    "/api/v2/genetics": {
+      "get": {
+        "operationId": "index_api_v2_genetics_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneticIndex"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Index"
+      },
+      "post": {
+        "operationId": "upload_api_v2_genetics_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneticDocumentDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload"
+      }
+    },
+    "/api/v2/genetics/reference": {
+      "get": {
+        "operationId": "reference_status_api_v2_genetics_reference_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneticReferenceStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reference Status"
+      },
+      "post": {
+        "operationId": "update_reference_api_v2_genetics_reference_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeneticReferenceUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneticReferenceStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Reference"
+      }
+    },
+    "/api/v2/genetics/{document_id}": {
+      "delete": {
+        "operationId": "delete_document_api_v2_genetics__document_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeneticDeletion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneticDeletionReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Document"
+      },
+      "get": {
+        "operationId": "detail_api_v2_genetics__document_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneticDocumentDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Detail"
+      }
+    },
+    "/api/v2/genetics/{document_id}/original": {
+      "delete": {
+        "operationId": "discard_original_api_v2_genetics__document_id__original_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeneticDeletion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneticDocument"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Discard Original"
+      },
+      "get": {
+        "operationId": "original_api_v2_genetics__document_id__original_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Original"
+      }
+    },
+    "/api/v2/genetics/{document_id}/reanalyze": {
+      "post": {
+        "operationId": "reanalyze_api_v2_genetics__document_id__reanalyze_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeneticReanalysis"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneticReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reanalyze"
+      }
+    },
+    "/api/v2/genetics/{document_id}/reports/{report_id}": {
+      "get": {
+        "operationId": "report_version_api_v2_genetics__document_id__reports__report_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Report Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneticReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Report Version"
       }
     },
     "/api/v2/insights/correlations": {

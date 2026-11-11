@@ -55,6 +55,7 @@ services:
       # surface regardless; raw non-compose runs inherit the app's default-deny (503).
       ALLOW_NO_AUTH: ${ALLOW_NO_AUTH:-true}
       ALLOW_MULTI_USER: ${ALLOW_MULTI_USER:-}
+      GENETICS_REFERENCE_DIR: /app/genetics
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
@@ -104,6 +105,7 @@ services:
       ANALYSIS_RECOVERY_ENABLED: ${ANALYSIS_RECOVERY_ENABLED:-}
     volumes:
       - ${ANALYSIS_CONFIG_FILE:-./config.yaml.example}:/app/config.yaml:ro
+      - genetics_reference:/app/genetics
     ports:
       - "${API_HOST_PORT:-8000}:8000"
     healthcheck:
@@ -409,6 +411,7 @@ services:
       - ./deploy/tailscale/serve.json:/config/serve.json:ro
 
 volumes:
+  genetics_reference:
   db_data:
   web_data:
   grafana_data:

@@ -54,6 +54,17 @@ from .data import (
     SourceCapability,
 )
 from .findings import FindingCard
+from .genetics import (
+    GeneticDeletion,
+    GeneticDeletionReceipt,
+    GeneticDocument,
+    GeneticDocumentDetail,
+    GeneticIndex,
+    GeneticReanalysis,
+    GeneticReferenceStatus,
+    GeneticReferenceUpdate,
+    GeneticReport,
+)
 from .lab_imports import (
     LabImportCatalog,
     LabImportDeletion,
@@ -119,6 +130,15 @@ ALL_MODELS: tuple[type[V2Model], ...] = (
     LabImportReport,
     LabImportReview,
     # ui
+    GeneticDeletion,
+    GeneticDeletionReceipt,
+    GeneticDocument,
+    GeneticDocumentDetail,
+    GeneticIndex,
+    GeneticReanalysis,
+    GeneticReferenceStatus,
+    GeneticReferenceUpdate,
+    GeneticReport,
     Annotation,
     SeriesResponse,
     ChartSpec,

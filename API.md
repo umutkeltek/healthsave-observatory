@@ -1140,3 +1140,34 @@ For anyone implementing this route rather than running datahub:
   layer; no v1 routes are touched.
 - **Android adoption is a follow-up** (Slice 8 of Plan 2026-09-03) — Android
   does not emit the v2 wire yet.
+
+## Private genetic evidence (v2)
+
+Admin-only, primary-person records. All responses are private/no-store. See
+[the workflow and scientific limits](docs/capture/genetic-evidence.md).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/v2/genetics` | List private genetic documents |
+| POST | `/api/v2/genetics` | Import and match a genotype file locally |
+| GET | `/api/v2/genetics/reference` | Installed public references and update status |
+| POST | `/api/v2/genetics/reference` | Start explicit public ClinVar installation/update |
+| GET | `/api/v2/genetics/{document_id}` | Document, latest report and version list |
+| GET | `/api/v2/genetics/{document_id}/reports/{report_id}` | Immutable saved evidence report |
+| GET | `/api/v2/genetics/{document_id}/original` | Download a retained original |
+| DELETE | `/api/v2/genetics/{document_id}/original` | Remove the original, preserve reports |
+| POST | `/api/v2/genetics/{document_id}/reanalyze` | Analyze retained original using current reference |
+| DELETE | `/api/v2/genetics/{document_id}` | Delete document, original and all report versions |
+
+Upload raw bytes with `Content-Type: application/octet-stream`, a URL-encoded
+`X-File-Name`, `X-Genome-Assembly: GRCh37` or `GRCh38`,
+`X-Genetic-Consent: accepted`, and `X-Forward-Strand: confirmed`.
+`X-Retain-Original: true` opts into retaining the original; omission leaves it off.
+
+Reference updates accept `{"assembly":"GRCh38","confirmed":true}` and return
+202 with process status. Reanalysis accepts `{"confirmed":true}`. Deletion
+accepts `{"confirmation":"<exact document UUID>"}`. Wrong ownership is rejected.
+No public reference download occurs as a side effect of uploading private data.
+Unsupported or inconsistent input returns 422; missing reference/original 409;
+size overflow 413; another active analysis 429. The single analysis slot is per
+API process; reference installation uses a cross-process filesystem lock.

@@ -139,6 +139,7 @@ type NavKey =
   | "sleep"
   | "activity"
   | "labs"
+  | "genetics"
   | "year"
   | "findings"
   | "data"
@@ -165,6 +166,7 @@ const NAV: readonly NavItem[] = [
   { href: "/sources", labelKey: "sources", icon: "sources", group: "essentials" },
   { href: "/privacy", labelKey: "privacy", icon: "privacy", group: "essentials" },
   { href: "/explore", labelKey: "explore", icon: "explore", group: "explore" },
+  { href: "/genetics", labelKey: "genetics", icon: "relationships", group: "explore" },
   { href: "/library", labelKey: "library", icon: "library", group: "explore" },
   { href: "/compare", labelKey: "compare", icon: "compare", group: "explore" },
   { href: "/relationships", labelKey: "relationships", icon: "relationships", group: "explore" },

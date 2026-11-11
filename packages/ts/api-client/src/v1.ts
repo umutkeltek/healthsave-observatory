@@ -568,6 +568,112 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/genetics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Index */
+        get: operations["index_api_v2_genetics_get"];
+        put?: never;
+        /** Upload */
+        post: operations["upload_api_v2_genetics_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/genetics/reference": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reference Status */
+        get: operations["reference_status_api_v2_genetics_reference_get"];
+        put?: never;
+        /** Update Reference */
+        post: operations["update_reference_api_v2_genetics_reference_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/genetics/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detail */
+        get: operations["detail_api_v2_genetics__document_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Document */
+        delete: operations["delete_document_api_v2_genetics__document_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/genetics/{document_id}/original": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Original */
+        get: operations["original_api_v2_genetics__document_id__original_get"];
+        put?: never;
+        post?: never;
+        /** Discard Original */
+        delete: operations["discard_original_api_v2_genetics__document_id__original_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/genetics/{document_id}/reanalyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reanalyze */
+        post: operations["reanalyze_api_v2_genetics__document_id__reanalyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/genetics/{document_id}/reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report Version */
+        get: operations["report_version_api_v2_genetics__document_id__reports__report_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/insights/correlations": {
         parameters: {
             query?: never;
@@ -1878,6 +1984,352 @@ export interface components {
             severity?: string | null;
             /** Structured Data */
             structured_data?: Record<string, never> | null;
+        };
+        /** GeneticAnnotation */
+        GeneticAnnotation: {
+            /** Alternate */
+            alternate: string;
+            /** Alternate Copies */
+            alternate_copies: number;
+            /** Call Quality */
+            call_quality: string;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "pathogenic" | "benign" | "uncertain" | "conflicting" | "other";
+            /** Chromosome */
+            chromosome: string;
+            /** Conditions */
+            conditions: string;
+            /** Conflicting */
+            conflicting: boolean;
+            /** Depth */
+            depth: number | null;
+            /** Details Truncated */
+            details_truncated: boolean;
+            /** Gene */
+            gene: string;
+            /** Genotype */
+            genotype: string;
+            /** Genotype Quality */
+            genotype_quality: number | null;
+            /** Hgvs */
+            hgvs: string;
+            /** Position */
+            position: number;
+            /** Reference */
+            reference: string;
+            /** Review Stars */
+            review_stars: number;
+            /** Source Classification */
+            source_classification: string;
+            /** Source Review Status */
+            source_review_status: string;
+            /** Source Url */
+            source_url: string;
+            /** Variation Id */
+            variation_id: string;
+        };
+        /** GeneticDeletion */
+        GeneticDeletion: {
+            /**
+             * Confirmation
+             * Format: uuid
+             */
+            confirmation: string;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** GeneticDeletionReceipt */
+        GeneticDeletionReceipt: {
+            /** Deleted Reports */
+            deleted_reports: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** GeneticDocument */
+        GeneticDocument: {
+            /**
+             * Assembly
+             * @enum {string}
+             */
+            assembly: "GRCh37" | "GRCh38";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Original Retained */
+            original_retained: boolean;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /** Sha256 */
+            sha256: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** GeneticDocumentDetail */
+        GeneticDocumentDetail: {
+            document: components["schemas"]["GeneticDocument"];
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            report: components["schemas"]["GeneticReport"];
+            /** Reports */
+            reports: components["schemas"]["GeneticReportVersion"][];
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** GeneticIndex */
+        GeneticIndex: {
+            /** Documents */
+            documents: components["schemas"]["GeneticDocument"][];
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** GeneticReanalysis */
+        GeneticReanalysis: {
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** GeneticReference */
+        GeneticReference: {
+            /**
+             * Assembly
+             * @enum {string}
+             */
+            assembly: "GRCh37" | "GRCh38";
+            /** Excluded Reference Records */
+            excluded_reference_records: number;
+            /** Index Version */
+            index_version: string;
+            /**
+             * Installed At
+             * Format: date-time
+             */
+            installed_at: string;
+            /** Record Count */
+            record_count: number;
+            /** Release Date */
+            release_date: string;
+            /** Sha256 */
+            sha256: string;
+            /** Source Url */
+            source_url: string;
+        };
+        /** GeneticReferenceJob */
+        GeneticReferenceJob: {
+            /** Assembly */
+            assembly?: ("GRCh37" | "GRCh38") | null;
+            /**
+             * Bytes Downloaded
+             * @default 0
+             */
+            bytes_downloaded: number;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /**
+             * Records Indexed
+             * @default 0
+             */
+            records_indexed: number;
+            /** Started At */
+            started_at?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "idle" | "downloading" | "indexing" | "complete" | "failed" | "interrupted";
+        };
+        /** GeneticReferenceStatus */
+        GeneticReferenceStatus: {
+            job: components["schemas"]["GeneticReferenceJob"];
+            /** References */
+            references: components["schemas"]["GeneticReference"][];
+        };
+        /** GeneticReferenceUpdate */
+        GeneticReferenceUpdate: {
+            /**
+             * Assembly
+             * @enum {string}
+             */
+            assembly: "GRCh37" | "GRCh38";
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** GeneticReport */
+        GeneticReport: {
+            /** Annotations */
+            annotations: components["schemas"]["GeneticAnnotation"][];
+            /**
+             * Assembly
+             * @enum {string}
+             */
+            assembly: "GRCh37" | "GRCh38";
+            /** Assembly In File */
+            assembly_in_file: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Engine Version */
+            engine_version: string;
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Input Counts */
+            input_counts: {
+                [key: string]: number;
+            };
+            /** Input Format */
+            input_format: string;
+            /** Input Sha256 */
+            input_sha256: string;
+            /** Limitations */
+            limitations: string[];
+            /** Matched Annotations */
+            matched_annotations: number;
+            /** Matched Loci */
+            matched_loci: number;
+            /** Omitted Annotations */
+            omitted_annotations: number;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            reference: components["schemas"]["GeneticReference"];
+            /** Reference Mismatch Loci */
+            reference_mismatch_loci: number;
+            /** Unmatched Loci */
+            unmatched_loci: number;
+            /** Warnings */
+            warnings: string[];
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** GeneticReportVersion */
+        GeneticReportVersion: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Engine Version */
+            engine_version: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Reference Release */
+            reference_release: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -4127,6 +4579,345 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    index_api_v2_genetics_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneticIndex"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_api_v2_genetics_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneticDocumentDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reference_status_api_v2_genetics_reference_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneticReferenceStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_reference_api_v2_genetics_reference_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeneticReferenceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneticReferenceStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detail_api_v2_genetics__document_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneticDocumentDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_document_api_v2_genetics__document_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeneticDeletion"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneticDeletionReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    original_api_v2_genetics__document_id__original_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_original_api_v2_genetics__document_id__original_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeneticDeletion"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneticDocument"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reanalyze_api_v2_genetics__document_id__reanalyze_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeneticReanalysis"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneticReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_version_api_v2_genetics__document_id__reports__report_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneticReport"];
                 };
             };
             /** @description Validation Error */

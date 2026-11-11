@@ -21,7 +21,8 @@ devices.
 | **Amazfit / Zepp** | Direct poll plugin — see [Direct plugins: Whoop & Amazfit](./plugins-whoop-amazfit.md) | **Shipped** (early) |
 | **Garmin Connect** | CLI importer — see [Importers: Garmin & Samsung](./importers-garmin-samsung.md) | **Shipped** (via importer) |
 | **Samsung / Huawei Health** | CLI importer (via the Health Sync app) — see [Importers: Garmin & Samsung](./importers-garmin-samsung.md) | **Shipped** (via importer) |
-| **Blood test results** | CSV import (`healthsave labs import`) — see [Blood test results (CSV)](./labs-csv.md) | **Shipped** (CSV; PDF and Apple Health clinical records planned) |
+| **Blood test results** | Reviewed web CSV/PDF upload or CLI CSV import — see [Blood test results](./labs-csv.md) | Available; local OCR, reviewed values and source-backed reports |
+| **Genetic evidence** | Private TXT/TSV/VCF upload with local ClinVar matching — see [Genetic evidence](./genetic-evidence.md) | Available; supported single-nucleotide variants only |
 | **Android Health Connect** | Native capture into the generic ingest API — see [Roadmap: Android & webhooks](./roadmap-android-webhooks.md) | **Planned** |
 | **Generic webhook / native API** | Any registered source posting canonical observations (HMAC-signed) — see [Roadmap: Android & webhooks](./roadmap-android-webhooks.md) | **Planned** |
 | **Oura via Apple Health** | Any Oura data written into HealthKit is forwarded by HealthSave | Shipped indirectly |

@@ -8148,6 +8148,30 @@ font-size: 17px;
 
 /* Lab document review extends the existing Observatory tokens. */
 .lab-import, .lab-report { display: grid; gap: 20px; max-width: 1080px; }
+.genetics { display: grid; gap: 20px; max-width: 1080px; min-width: 0; }
+.genetics .card, .genetics .prov-intro { display: grid; gap: 12px; min-width: 0; }
+.genetics p, .genetics h3, .genetics h4 { margin: 0; overflow-wrap: anywhere; }
+.genetics label { display: grid; gap: 8px; font-size: 13px; font-weight: 500; min-width: 0; }
+.genetics input:not([type="checkbox"]), .genetics select { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; }
+.genetics :is(input, select, button, summary, a):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.genetics .genetic-check { display: flex; align-items: flex-start; gap: 12px; line-height: 1.6; }
+.genetic-check input { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 3px; accent-color: var(--accent); }
+.genetics details { padding: 12px 0; }
+.genetics summary { cursor: pointer; font-weight: 500; }
+.genetics details[open] > :not(summary) { margin-top: 12px; }
+.genetic-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin: 0; }
+.genetic-stats dt { color: var(--muted); font-size: 13px; }
+.genetic-stats dd { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; margin: 4px 0 0; }
+.genetic-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 16px; }
+.genetic-annotation { display: grid; gap: 8px; padding: 20px 0; border-top: 1px solid var(--line); }
+.genetic-hash { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; color: var(--muted); }
+@media print {
+  body:has(.genetics) :is(.sidebar, .topbar, .mobile-nav, .lab-no-print) { display: none !important; }
+  body:has(.genetics) .main { margin: 0; padding: 0; }
+  .genetics { display: block; max-width: none; }
+  .genetics .card { box-shadow: none; margin-bottom: 16px; }
+  .genetic-annotation { break-inside: avoid; }
+}
 .lab-import .labs-intro, .lab-report .labs-intro { display: grid; gap: 12px; }
 .lab-import-upload, .lab-import-source { display: grid; gap: 12px; }
 .lab-import-heading, .lab-import-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }

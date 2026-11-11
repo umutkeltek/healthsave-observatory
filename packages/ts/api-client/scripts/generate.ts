@@ -27,6 +27,7 @@ const V2_BUNDLE = join(REPO_ROOT, "contracts", "json-schema", "_bundle.json");
 const V1_OUT = join(PKG_ROOT, "src", "v1.ts");
 const V2_OUT = join(PKG_ROOT, "src", "v2.ts");
 const LAB_WEB_OUT = join(REPO_ROOT, "apps", "web", "app", "lib", "labContracts.generated.ts");
+const GENETIC_WEB_OUT = join(REPO_ROOT, "apps", "web", "app", "lib", "geneticContracts.generated.ts");
 
 function header(sourceLabel: string): string {
   return [
@@ -74,7 +75,7 @@ function rewriteDefsToDefinitions(node: unknown): unknown {
   return node;
 }
 
-async function generateV2(labsOnly = false): Promise<string> {
+async function generateV2(prefix?: string): Promise<string> {
   // The bundle is `{ "$defs": { TypeA: ..., TypeB: ... } }`. We
   // synthesize a Catalog wrapper whose properties $ref each definition,
   // so json-schema-to-typescript walks every type. The Catalog interface
@@ -86,7 +87,7 @@ async function generateV2(labsOnly = false): Promise<string> {
     definitions: Record<string, unknown>;
   };
   const defs = rewritten.definitions;
-  const names = Object.keys(defs).filter(n => !labsOnly || n.startsWith("LabImport")).sort();
+  const names = Object.keys(defs).filter(n => !prefix || n.startsWith(prefix)).sort();
 
   const catalog = {
     title: "_HdhV2Catalog",
@@ -121,7 +122,8 @@ async function main(): Promise<number> {
   const v2 = await generateV2();
   // The standalone web image has apps/web as its build context. Generate its
   // small lab contract projection here, at the existing schema owner.
-  const labWeb = await generateV2(true);
+  const labWeb = await generateV2("LabImport");
+  const geneticWeb = await generateV2("Genetic");
 
   if (check) {
     const drifted: string[] = [];
@@ -140,6 +142,9 @@ async function main(): Promise<number> {
     if (!existsSync(LAB_WEB_OUT) || readFileSync(LAB_WEB_OUT, "utf-8") !== labWeb) {
       drifted.push(`diff: ${LAB_WEB_OUT}`);
     }
+    if (!existsSync(GENETIC_WEB_OUT) || readFileSync(GENETIC_WEB_OUT, "utf-8") !== geneticWeb) {
+      drifted.push(`diff: ${GENETIC_WEB_OUT}`);
+    }
 
     if (drifted.length > 0) {
       console.error("ts-client drift detected:");
@@ -155,6 +160,7 @@ async function main(): Promise<number> {
   writeFileSync(V1_OUT, v1);
   writeFileSync(V2_OUT, v2);
   writeFileSync(LAB_WEB_OUT, labWeb);
+  writeFileSync(GENETIC_WEB_OUT, geneticWeb);
   console.log(`wrote ${V1_OUT}`);
   console.log(`wrote ${V2_OUT}`);
   return 0;
