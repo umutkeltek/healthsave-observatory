@@ -8340,6 +8340,7 @@ font-size: 17px;
   .yr-drill summary { min-height: 44px; padding-block: 12px; box-sizing: border-box; }
   .lib-search, .lib-select { font-size: 16px; min-height: 44px; }
   .lib-toggle { min-height: 44px; }
+  .lib-open { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; margin-block: -14px; }
   .panel-move { min-width: 44px; min-height: 44px; touch-action: manipulation; }
   .panel-remove-btn { min-height: 44px; touch-action: manipulation; }
   .panel-chip-x { min-width: 40px; min-height: 40px; margin: -10px -8px -10px -6px; align-items: center; justify-content: center; touch-action: manipulation; }
