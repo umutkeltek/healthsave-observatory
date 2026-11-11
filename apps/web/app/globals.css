@@ -2629,6 +2629,16 @@ input.filter-select {
   letter-spacing: 0.07em;
   color: var(--faint);
 }
+/* A label wrapping its control (Analytical day, Add a moment). */
+label.field-label {
+  display: grid;
+  gap: 8px;
+}
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
 .field-input {
   font-family: var(--sans);
   font-size: 13px;
