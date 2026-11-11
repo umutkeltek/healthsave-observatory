@@ -1612,6 +1612,10 @@ html {
 .prov-head h2 {
   margin: 0;
 }
+/* The count chip keeps "8 connections" on one line; the subtitle beside it wraps instead. */
+.prov-head .chip {
+  white-space: nowrap;
+}
 
 /* Streams table - hairline rows, mono numerals, scrolls on narrow screens. */
 .prov-scroll {
