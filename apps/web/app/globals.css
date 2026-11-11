@@ -6919,15 +6919,17 @@ font-size: 17px;
   font-family: var(--mono);
   font-size: 26px;
   font-weight: 650;
+  line-height: 1;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 
+/* Must fit inside the ring's 80px hole: in capitals the word was wider than
+   the hole at its height and ran into the stroke. */
 .sleep-gauge-cap {
   font-size: 10.5px;
   color: var(--faint);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
 }
 
 .sleep-debt {
