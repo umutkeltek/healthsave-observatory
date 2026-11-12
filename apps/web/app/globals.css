@@ -4625,9 +4625,10 @@ color: var(--accent);
     --signal-line: rgba(10, 132, 255, 0.3);
     --neutral: #98989d;
     --up: #30d158;
-    --down: #ff453a;
+    /* Apple's increased-contrast dark red: #ff453a read 4.1:1 as text on cards. */
+    --down: #ff6961;
     --warn: #ff9f0a;
-    --anomaly: #ff453a;
+    --anomaly: #ff6961;
     --experiment: #bf5af2;
     --baseline-fill: rgba(10, 132, 255, 0.14);
     --baseline-line: rgba(10, 132, 255, 0.32);
