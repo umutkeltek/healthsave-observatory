@@ -7263,6 +7263,15 @@ font-size: 17px;
   font-weight: 650;
 }
 
+.sleep-note-deep {
+  color: var(--sleep-deep);
+}
+/* The dark deep-sleep hue reads 4.05:1 as a word on a dark card. Mixed a
+   little toward ink it reads 4.9:1 and still matches the chart's deep bars. */
+[data-theme="dark"] .sleep-note-deep {
+  color: color-mix(in srgb, var(--sleep-deep) 85%, var(--ink));
+}
+
 /* ── Dashboard Customizer ─────────────────────────────────────────────────── */
 
 .dashboard-customizer-bar {
