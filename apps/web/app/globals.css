@@ -7421,6 +7421,11 @@ font-size: 17px;
   border-color: var(--accent);
   background: var(--accent-weak);
 }
+/* As .mode-card.sel: in dark the tint over the sheet pulls the muted line
+   to 4.05:1, so the active card keeps its well and takes the tint there. */
+[data-theme="dark"] .template-card.template-active {
+  background: color-mix(in srgb, var(--accent) 16%, var(--raise));
+}
 
 .template-card strong {
   color: var(--ink);
