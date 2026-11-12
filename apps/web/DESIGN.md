@@ -50,7 +50,15 @@ Dark mode uses the same hierarchy with macOS dark surfaces:
 - Primary text: `#F5F5F7`
 - Muted text: `#98989D`
 - Divider: `rgba(84, 84, 88, 0.65)`
-- System blue: `#0A84FF`
+- System blue: `#409CFF` (Apple's increased-contrast dark blue; `#0A84FF` read 3.8:1 as link text on an elevated surface)
+- Risk red: `#FF6961` (same reason; `#FF453A` read 4.1:1 as text)
+
+Dark rules (2026-11-12 dark pass):
+
+- Dark is a screen theme. The dark block sits inside `@media screen`, so printing a report always uses the light values.
+- The dark block sets `color-scheme: dark`, so native controls (checkboxes, file and date fields, select lists) follow the theme.
+- Text on a dark elevated surface must reach 4.5:1 (3:1 for large text). Fix a miss at the token, not per component.
+- Text on a filled accent uses `--on-accent`. Today that is dark ink in both themes, which is what the app has always rendered; the Components line below says white. That difference is an open decision, not a licence to mix the two.
 
 Use health colors only for semantic status and charts. System blue is the primary UI accent for navigation, links, primary actions, and focus.
 
