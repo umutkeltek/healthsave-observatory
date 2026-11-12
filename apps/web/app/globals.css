@@ -1841,8 +1841,8 @@ table.prov {
 }
 .cov-state.prime {
   color: var(--up);
-  background: rgba(56, 217, 150, 0.12);
-  border: 1px solid rgba(56, 217, 150, 0.3);
+  background: color-mix(in srgb, var(--up) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--up) 30%, transparent);
 }
 .cov-state.steady {
   color: var(--signal);
@@ -1851,13 +1851,13 @@ table.prov {
 }
 .cov-state.caution {
   color: var(--warn);
-  background: rgba(232, 180, 95, 0.12);
-  border: 1px solid rgba(232, 180, 95, 0.32);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 32%, transparent);
 }
 .cov-state.suppressed {
   color: var(--down);
-  background: rgba(255, 107, 138, 0.1);
-  border: 1px solid rgba(255, 107, 138, 0.3);
+  background: color-mix(in srgb, var(--down) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--down) 30%, transparent);
 }
 .cov-verdict {
   margin: 12px 0 0;
@@ -2777,11 +2777,11 @@ label.field-label {
 }
 .test-result.ok {
   color: var(--up);
-  background: rgba(56, 217, 150, 0.1);
+  background: color-mix(in srgb, var(--up) 10%, transparent);
 }
 .test-result.bad {
   color: var(--down);
-  background: rgba(255, 107, 138, 0.1);
+  background: color-mix(in srgb, var(--down) 10%, transparent);
 }
 
 /* fallbacks */
