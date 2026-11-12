@@ -4789,6 +4789,21 @@ html,
   border-color: var(--accent-line);
 }
 
+/* Blue-label chips on the blue tint read 4.1:1 in dark. Their label is mixed
+   a little toward ink (4.75:1) so it stays blue; the tint is untouched. */
+[data-theme="dark"] .badge.ready,
+[data-theme="dark"] .badge.both-kept,
+[data-theme="dark"] .vault-seal:not(.vault-egress *, .vault-unknown *),
+[data-theme="dark"] .state-steady,
+[data-theme="dark"] .cov-state.steady,
+[data-theme="dark"] .lib-status.ready,
+[data-theme="dark"] .intg-badge.intg-on,
+[data-theme="dark"] .intg-badge.intg-manage,
+[data-theme="dark"] .metric-state.up,
+[data-theme="dark"] .metric-state.good {
+  color: color-mix(in srgb, var(--accent) 85%, var(--ink));
+}
+
 .badge.waiting {
   color: var(--muted);
   background: var(--surface-3);
