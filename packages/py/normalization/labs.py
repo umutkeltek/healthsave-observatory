@@ -351,10 +351,32 @@ class LabCsvParse:
 
 _COMPARATORS = (("<=", "<="), (">=", ">="), ("≤", "<="), ("≥", ">="), ("<", "<"), (">", ">"))
 _DECIMAL_COMMA = re.compile(r"^[+-]?\d+,\d+$")
+# "1,250" is one thousand two hundred and fifty on a US report and 1.25 on a
+# German one. The shape cannot say which, so it is never parsed: reading it as a
+# decimal once stored ferritin 1,250 ng/mL as 1.25, "below" its range.
+_AMBIGUOUS_GROUPING = re.compile(r"^[+-]?[1-9]\d{0,2},\d{3}$")
+
+
+def _number_problem(raw: str, otherwise: str) -> str:
+    """Why a cell is not a number, naming both readings when it is the ambiguous shape."""
+    text = raw.strip()
+    for prefix, _ in _COMPARATORS:
+        if text.startswith(prefix):
+            text = text[len(prefix) :].strip()
+            break
+    if not _AMBIGUOUS_GROUPING.match(text):
+        return f"{raw!r} {otherwise}"
+    digits = text.lstrip("+-")
+    return (
+        f"{raw!r} could be {digits.replace(',', '')} or {digits.replace(',', '.')}; "
+        "write it without a thousands separator"
+    )
 
 
 def _parse_number(raw: str) -> float | None:
     text = raw.strip()
+    if _AMBIGUOUS_GROUPING.match(text):
+        return None
     if _DECIMAL_COMMA.match(text):
         text = text.replace(",", ".")
     try:
@@ -576,7 +598,11 @@ def _normalize_row(
         errors.append(LabRowError(row, "value", "is empty"))
     elif value is None:
         errors.append(
-            LabRowError(row, "value", f"{raw_value!r} is not a number (text results come later)")
+            LabRowError(
+                row,
+                "value",
+                _number_problem(raw_value, "is not a number (text results come later)"),
+            )
         )
     if comparator:
         flags.append(FLAG_CENSORED)
@@ -590,9 +616,13 @@ def _normalize_row(
     low = _parse_number(low_raw) if low_raw else None
     high = _parse_number(high_raw) if high_raw else None
     if low_raw and low is None:
-        errors.append(LabRowError(row, "reference_low", f"{low_raw!r} is not a number"))
+        errors.append(
+            LabRowError(row, "reference_low", _number_problem(low_raw, "is not a number"))
+        )
     if high_raw and high is None:
-        errors.append(LabRowError(row, "reference_high", f"{high_raw!r} is not a number"))
+        errors.append(
+            LabRowError(row, "reference_high", _number_problem(high_raw, "is not a number"))
+        )
     if low is not None and high is not None and low > high:
         errors.append(LabRowError(row, "reference_low", "is above reference_high"))
 
