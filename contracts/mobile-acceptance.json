@@ -195,6 +195,22 @@
         "visual"
       ]
     },
+    "health_age": {
+      "expected": "Same four inputs, 90-day window, 14-day evidence rule, weights and rounding; one-device resting heart rate and sleep; no total when an input is missing; the same reading guidance and wording limits.",
+      "ios_source": "Sources/HealthSync/HealthAge.swift",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
+    "health_age_two_futures": {
+      "expected": "Same ready-made options and what-if arithmetic from the person's own 90-day averages; resting heart rate held fixed; same Pro gate.",
+      "ios_source": "Sources/HealthSync/HealthAgeViews.swift",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
     "journey.onboarding": {
       "expected": "Same welcome, permission, first-export and post-value purchase/restore journey.",
       "ios_source": "Sources/HealthSync/OnboardingView.swift",
