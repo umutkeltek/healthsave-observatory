@@ -5509,6 +5509,11 @@ body {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.48) inset;
 }
 
+/* The white top highlight is a light-mode bevel; on a dark pill it glares. */
+[data-theme="dark"] .topbar-search {
+  box-shadow: none;
+}
+
 .topbar-search:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
