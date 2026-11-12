@@ -2644,6 +2644,12 @@ input.filter-select {
   background: var(--accent-weak);
   box-shadow: inset 0 0 0 1px var(--accent-line);
 }
+/* In dark the blue tint over the card lifts it enough to pull the muted
+   blurb to 4.05:1; the selected card keeps its well and takes the tint
+   there instead (4.6:1). */
+[data-theme="dark"] .mode-card.sel {
+  background: color-mix(in srgb, var(--accent) 16%, var(--raise));
+}
 .mode-card-title {
   font-size: 15px;
   font-weight: 650;
