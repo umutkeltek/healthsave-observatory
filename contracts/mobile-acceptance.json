@@ -211,6 +211,14 @@
         "visual"
       ]
     },
+    "lab_reports": {
+      "expected": "Same on-device PDF and CSV import, review against the original before saving, laboratory-printed ranges only, exports and delete; nothing uploaded.",
+      "ios_source": "Sources/HealthSync/LabRecordsView.swift",
+      "required_evidence": [
+        "behavior",
+        "visual"
+      ]
+    },
     "journey.onboarding": {
       "expected": "Same welcome, permission, first-export and post-value purchase/restore journey.",
       "ios_source": "Sources/HealthSync/OnboardingView.swift",
