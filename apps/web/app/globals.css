@@ -2866,9 +2866,9 @@ label.field-label {
 }
 
 /* Compact traces draw themselves in left-to-right (paths set pathLength={1}).
-   Baseline ribbons are excluded: their non-uniform SVG scaling can make a
-   normalized dash shorter than the visible jagged path and hide its tail. */
-.spark path,
+   Baseline ribbons and the signal sparkline (.spark) are excluded: their
+   non-uniform SVG scaling can make a normalized dash shorter than the visible
+   jagged path and hide its tail (the Data metric view and wide Today cards). */
 .multi-svg path {
   stroke-dasharray: 1;
   stroke-dashoffset: 0;
