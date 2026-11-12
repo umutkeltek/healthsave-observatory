@@ -11,7 +11,7 @@ from scripts import benchmark_health_imports as benchmark
 def test_fixed_non_pdf_cases_and_pdf_skips_are_reported(monkeypatch):
     monkeypatch.setattr(benchmark.shutil, "which", lambda name: None)
     report = benchmark.run_benchmark()
-    assert report["counts"] == {"passed": 33, "failed": 0, "skipped": 12}
+    assert report["counts"] == {"passed": 38, "failed": 0, "skipped": 12}
     assert report["clinical_review"] == "not_performed"
     assert "not measure diagnostic accuracy" in benchmark.markdown(report)
 

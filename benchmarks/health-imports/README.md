@@ -20,7 +20,7 @@ references. The command makes no external calls and uses temporary synthetic fil
 
 | Coverage | Cases | What is checked |
 | --- | ---: | --- |
-| Lab results | 20 | Fixed conversions, inclusive limits, lab-specific ranges, withholding unsupported interpretations, invalid units/codes/dates |
+| Lab results | 25 | Fixed conversions, inclusive limits, lab-specific ranges, withholding unsupported interpretations, invalid units/codes/dates, numbers that could be a thousands group or a decimal are refused, never guessed |
 | PDF extraction | 12 | Ten text PDFs and two raster-only scans, explicit codes, flags, conflicting identities, missing results, source location and mandatory review |
 | Genetics | 13 | Exact assembly/allele matching, no-calls, filters, indel exclusions, source conflict and review status |
 

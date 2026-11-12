@@ -167,6 +167,36 @@ def test_semicolon_files_with_decimal_commas_parse() -> None:
     assert result.reference_low == pytest.approx(13.5)
 
 
+def test_decimal_commas_that_cannot_be_thousands_parse() -> None:
+    parsed = _parse(
+        "specimen_datetime;loinc;value;unit;reference_low;reference_high;lab\n"
+        "2026-01-02;2276-4;0,125;ng/mL;;;Labor Mitte\n"
+        "2026-01-03;2276-4;12,50;ng/mL;;;Labor Mitte\n"
+        "2026-01-04;2276-4;1234,5;ng/mL;;;Labor Mitte\n"
+        "2026-01-05;2276-4;2.150;ng/mL;;;Labor Mitte\n"
+    )
+    assert [r.numeric_value for r in parsed.results] == pytest.approx([0.125, 12.5, 1234.5, 2.15])
+
+
+@pytest.mark.parametrize("value", ["1,250", "7,500", "250,000", "<1,250", "-1,250", "2,150"])
+def test_a_comma_before_exactly_three_digits_is_never_guessed(value: str) -> None:
+    # 1,250 is 1250 on a US report and 1.25 on a German one. Stored as 1.25 it would
+    # read "below" a 30 to 400 range when the truth is far above it.
+    errors = _errors(
+        "specimen_datetime;loinc;value;unit;reference_low;reference_high;lab\n"
+        f"2026-01-02;2276-4;{value};ng/mL;30;400;Northfield Diagnostics\n"
+    )
+    assert any("value" in error and "thousands separator" in error for error in errors), errors
+
+
+def test_an_ambiguous_reference_limit_is_never_guessed() -> None:
+    errors = _errors(
+        "specimen_datetime;loinc;value;unit;reference_low;reference_high;lab\n"
+        "2026-01-02;777-3;250;10*9/L;150;1,250;Northfield Diagnostics\n"
+    )
+    assert any("reference_high" in error and "1250 or 1.25" in error for error in errors), errors
+
+
 def test_unknown_marker_keeps_its_own_unit_and_name() -> None:
     parsed = _parse(
         "specimen_datetime,loinc,marker_name,value,unit,lab\n"
