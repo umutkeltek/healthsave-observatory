@@ -7986,6 +7986,11 @@ font-size: 17px;
   color: var(--ink);
   background: color-mix(in srgb, var(--warn) 22%, transparent);
 }
+/* Dark muted on --surface-3 reads 3.95:1; the grey chips ("Not yet",
+   "Stopped") sit in an inset well instead, as .badge.waiting does. */
+[data-theme="dark"] .yr-chip:not(.yr-chip-low, .yr-chip-new) {
+  background: var(--raise);
+}
 .yr-section {
   margin-top: var(--s7);
 }
