@@ -4787,6 +4787,11 @@ html,
   background: var(--surface-3);
 }
 
+/* Dark muted on --surface-3 reads 3.9:1; an inset well keeps it above 4.5:1. */
+[data-theme="dark"] .badge.waiting {
+  background: var(--raise);
+}
+
 .metric-rows {
   margin-top: 16px;
 }
