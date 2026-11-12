@@ -31,15 +31,16 @@ export function Sparkline({ values, unit, label }: { values: number[]; unit?: st
     <svg className="spark signal-spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden>
       <rect className="spark-band" x="0" y={bandTop} width={w} height={bandHeight} />
       <path d={d} pathLength={1} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-      <circle
+      {/* A zero-length round-capped stroke stays round in the stretched
+          viewBox; a <circle> was squashed into a wide ellipse. */}
+      <path
         className={`spark-dot ${outOfBand ? "out" : ""}`}
-        cx={w}
-        cy={y(last)}
-        r="3.5"
+        d={`M ${w} ${y(last).toFixed(1)} h 0`}
+        strokeLinecap="round"
         vectorEffect="non-scaling-stroke"
       >
         <title>{`${formatValue(last, unit)} · ${label}`}</title>
-      </circle>
+      </path>
     </svg>
   );
 }

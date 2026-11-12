@@ -3607,11 +3607,12 @@ label.field-label {
    category colour identity */
 
 .spark-dot {
-  fill: var(--signal);
+  stroke: var(--signal);
+  stroke-width: 7px;
 }
 
 .spark-dot.out {
-  fill: var(--anomaly);
+  stroke: var(--anomaly);
 }
 
 /* The hero carries the day's state as a quiet ambient glow, not a banner. */
@@ -5720,7 +5721,7 @@ body {
   border-color: var(--accent-line);
 }
 .metric-chart-well:hover .signal-spark .spark-dot {
-  r: 5;
+  stroke-width: 10px;
 }
 .metric-chart-well:hover .signal-spark path {
   stroke-width: 2.4;
@@ -5733,6 +5734,7 @@ body {
 .signal-spark {
   height: 54px;
   margin-top: 0;
+  overflow: visible; /* the end dot sits on the right edge */
 }
 
 .metric-foot {
