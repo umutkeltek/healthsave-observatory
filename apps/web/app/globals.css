@@ -4417,6 +4417,11 @@ label.field-label {
   font-size: var(--fs-2xs);
   color: var(--faint);
 }
+/* On the dark active row (--hover over the sheet) the grey hint reads 3.8:1;
+   a little ink lifts it to 4.7:1 and keeps it secondary to the row label. */
+[data-theme="dark"] .palette-item.active .palette-hint {
+  color: color-mix(in srgb, var(--faint) 80%, var(--ink));
+}
 .palette-empty {
   margin: 0;
   padding: var(--s5);
