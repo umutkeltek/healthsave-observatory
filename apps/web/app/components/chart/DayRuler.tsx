@@ -6,7 +6,8 @@
 // drag is in progress.
 //
 //   <DayScrub series={...}>        selected day + drag state; marks the scope
-//     ...chart with <ScrubCursor>  stem, dot and glow on the selected day
+//     ...chart with <ScrubCursor>  stem, dot and glow on the selected day, and
+//                                  a layer that drives the handle from the chart
 //     <DayRuler label="..." />     the slider: ticks, handle, lens
 //     <ScrubAnswer />              one answer line, value in ink
 //   </DayScrub>
@@ -26,8 +27,17 @@ import {
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
-import { scrubAnswer, scrubValueText, type ScrubSeries } from "./dayScrub";
+import {
+  nearestDay,
+  scrubAnswer,
+  scrubValueText,
+  startPress,
+  takesHandle,
+  type ScrubPress,
+  type ScrubSeries,
+} from "./dayScrub";
 
 type Scrub = {
   series: ScrubSeries;
@@ -35,6 +45,7 @@ type Scrub = {
   dragging: boolean;
   select: (index: number) => void;
   setDragging: (dragging: boolean) => void;
+  ruler: RefObject<HTMLDivElement | null>;
 };
 
 const ScrubContext = createContext<Scrub | null>(null);
@@ -51,13 +62,14 @@ export function DayScrub({
   const last = series.days.length - 1;
   const [index, setIndex] = useState(series.initial);
   const [dragging, setDragging] = useState(false);
+  const ruler = useRef<HTMLDivElement>(null);
   const select = useCallback(
     (next: number) => setIndex(Math.min(last, Math.max(0, Math.round(next)))),
     [last],
   );
   return (
     <ScrubContext.Provider
-      value={{ series, index: Math.min(index, last), dragging, select, setDragging }}
+      value={{ series, index: Math.min(index, last), dragging, select, setDragging, ruler }}
     >
       <div
         className={className ? `day-scrub ${className}` : "day-scrub"}
@@ -76,71 +88,78 @@ const GROW = 0.45; // ticks near the pointer grow by up to 45%
 
 const frac = (index: number, count: number) => (count > 1 ? index / (count - 1) : 0.5);
 
+// Pointer handling for anything that drives the handle: the ruler, and the
+// chart above it. `xs` are the days' positions as fractions of the element's
+// width. A mouse or pen press takes the handle at once; a finger waits until
+// it has clearly moved sideways (takesHandle), so a vertical swipe still
+// scrolls the page and leaves the selected day alone; a tap selects.
+function useScrubPointer(xs: number[]) {
+  const scrub = useContext(ScrubContext);
+  const press = useRef<ScrubPress | null>(null);
+  const at = (event: PointerEvent<HTMLElement>) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    return nearestDay(xs, box.width > 0 ? (event.clientX - box.left) / box.width : 0);
+  };
+  const end = () => {
+    const was = press.current?.active;
+    press.current = null;
+    if (was) scrub?.setDragging(false);
+  };
+  return {
+    onPointerDown: (event: PointerEvent<HTMLElement>) => {
+      if (!scrub || event.button !== 0) return;
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        // Synthetic or already-released pointers cannot be captured; dragging
+        // still works while the pointer stays over the element.
+      }
+      press.current = startPress(event.pointerType, event.clientX, event.clientY);
+      if (!press.current.active) return;
+      scrub.setDragging(true);
+      scrub.select(at(event));
+    },
+    onPointerMove: (event: PointerEvent<HTMLElement>) => {
+      const held = press.current;
+      if (!scrub || !held) return;
+      if (!held.active) {
+        if (!takesHandle(held, event.clientX, event.clientY)) return;
+        held.active = true;
+        scrub.setDragging(true);
+      }
+      scrub.select(at(event));
+    },
+    onPointerUp: (event: PointerEvent<HTMLElement>) => {
+      if (scrub && press.current && !press.current.active) scrub.select(at(event)); // a tap
+      end();
+    },
+    onPointerCancel: end,
+    onLostPointerCapture: end,
+  };
+}
+
 export function DayRuler({ label }: { label: string }) {
   const scrub = useContext(ScrubContext);
-  const root = useRef<HTMLDivElement>(null);
-  // A mouse or pen press takes the handle at once. A finger waits until it
-  // has clearly moved sideways, so a vertical swipe that starts on the ruler
-  // still scrolls the page and leaves the selected day alone; a tap selects.
-  const press = useRef<{ x: number; y: number; touch: boolean; active: boolean } | null>(null);
+  const count = scrub?.series.days.length ?? 0;
+  const pointer = useScrubPointer(Array.from({ length: count }, (_, i) => frac(i, count)));
   const [width, setWidth] = useState(0);
 
   useEffect(() => {
-    const el = root.current;
+    const el = scrub?.ruler.current;
     if (!el) return;
     const measure = () => setWidth(el.clientWidth);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [scrub?.ruler]);
 
-  if (!scrub || scrub.series.days.length === 0) return null;
-  const { series, index, dragging, select, setDragging } = scrub;
+  if (!scrub || count === 0) return null;
+  const { series, index, dragging, select } = scrub;
   const days = series.days;
-  const count = days.length;
   const day = days[index];
   const big = 7;
 
-  const at = (event: PointerEvent<HTMLDivElement>) => {
-    const box = event.currentTarget.getBoundingClientRect();
-    const f = box.width > 0 ? (event.clientX - box.left) / box.width : 0;
-    return Math.min(1, Math.max(0, f)) * (count - 1);
-  };
-  const end = () => {
-    const was = press.current?.active;
-    press.current = null;
-    if (was) setDragging(false);
-  };
-  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      // Synthetic or already-released pointers cannot be captured; dragging
-      // still works while the pointer stays over the ruler.
-    }
-    const touch = event.pointerType === "touch";
-    press.current = { x: event.clientX, y: event.clientY, touch, active: !touch };
-    if (touch) return;
-    setDragging(true);
-    select(at(event));
-  };
-  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    const held = press.current;
-    if (!held) return;
-    if (!held.active) {
-      const dx = Math.abs(event.clientX - held.x);
-      if (dx < 6 || dx <= Math.abs(event.clientY - held.y)) return;
-      held.active = true;
-      setDragging(true);
-    }
-    select(at(event));
-  };
-  const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
-    if (press.current && !press.current.active) select(at(event)); // a tap
-    end();
-  };
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const step = event.shiftKey ? big : 1;
     const moves: Record<string, number> = {
@@ -194,7 +213,7 @@ export function DayRuler({ label }: { label: string }) {
   return (
     <div className="day-ruler-wrap">
       <div
-        ref={root}
+        ref={scrub.ruler}
         className={dragging ? "day-ruler is-dragging" : "day-ruler"}
         role="slider"
         tabIndex={0}
@@ -205,11 +224,7 @@ export function DayRuler({ label }: { label: string }) {
         aria-valuenow={index}
         aria-valuetext={scrubValueText(day, series.unit)}
         style={{ "--f": frac(index, count) } as CSSProperties}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={end}
-        onLostPointerCapture={end}
+        {...pointer}
         onKeyDown={onKeyDown}
       >
         <div className="day-ruler-ticks" aria-hidden>
@@ -282,12 +297,24 @@ export type ScrubPoint = { x: number; y: number | null };
 
 export function ScrubCursor({ points }: { points: ScrubPoint[] }) {
   const scrub = useContext(ScrubContext);
+  const pointer = useScrubPointer(points.map((point) => point.x / 100));
   if (!scrub || points.length === 0) return null;
   const point = points[Math.min(scrub.index, points.length - 1)];
   const gap = point.y === null;
   const at = { left: `${point.x}%`, top: `${point.y ?? 0}%` };
+  // Pressing the chart works the ruler: on release the slider takes focus, as
+  // a native slider does when its track is clicked, so the arrow keys carry
+  // on from the picked day. Focus moves after the press has settled, so a
+  // mouse user gets no focus ring. A finger gets no focus (no keyboard).
+  const onPointerUp = (event: PointerEvent<HTMLElement>) => {
+    pointer.onPointerUp(event);
+    if (event.button === 0 && event.pointerType !== "touch") {
+      scrub.ruler.current?.focus({ preventScroll: true });
+    }
+  };
   return (
     <div className={gap ? "scrub-cursor is-gap" : "scrub-cursor"} aria-hidden>
+      <div className="scrub-surface" {...pointer} onPointerUp={onPointerUp} />
       {!gap && (
         <span className="scrub-glow">
           <span className="scrub-glow-box">

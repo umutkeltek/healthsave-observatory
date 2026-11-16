@@ -4,8 +4,12 @@ import {
   buildScrubSeries,
   calendarDays,
   compactValue,
+  nearestDay,
   scrubAnswer,
   scrubValueText,
+  startPress,
+  takesHandle,
+  TOUCH_SLOP,
   usualBand,
 } from "./dayScrub";
 
@@ -129,3 +133,52 @@ describe("day ruler series", () => {
     expect(compactValue(53.7, "53.7")).toBe("53.7");
   });
 });
+
+describe("pointer rules shared by the ruler and the chart", () => {
+  const even = (n: number) => Array.from({ length: n }, (_, i) => i / (n - 1));
+
+  test("a press picks the nearest day; past either end takes the end day", () => {
+    const xs = even(30);
+    expect(nearestDay(xs, 0)).toBe(0);
+    expect(nearestDay(xs, 1)).toBe(29);
+    expect(nearestDay(xs, 0.49)).toBe(14);
+    expect(nearestDay(xs, 0.52)).toBe(15);
+    expect(nearestDay(xs, -0.3)).toBe(0);
+    expect(nearestDay(xs, 1.4)).toBe(29);
+    expect(nearestDay(xs, Number.NaN)).toBe(0);
+    expect(nearestDay([], 0.5)).toBe(0);
+  });
+
+  test("the chart and the ruler agree on the day under the same fraction", () => {
+    // The chart passes its own point positions; a 30-day chart lays them out
+    // evenly, exactly as the ruler's ticks.
+    const chart = even(30).map((x) => Number((x * 100).toFixed(4)) / 100);
+    for (const f of [0.03, 0.31, 0.45, 0.77, 0.98]) {
+      expect(nearestDay(chart, f)).toBe(nearestDay(even(30), f));
+    }
+  });
+
+  test("a mouse or pen press takes the handle at once", () => {
+    expect(startPress("mouse", 10, 10).active).toBe(true);
+    expect(startPress("pen", 10, 10).active).toBe(true);
+    expect(takesHandle(startPress("mouse", 10, 10), 10, 200)).toBe(true);
+  });
+
+  test("a finger takes the handle only after a clear sideways move", () => {
+    const press = startPress("touch", 100, 100);
+    expect(press.active).toBe(false);
+    expect(takesHandle(press, 100 + TOUCH_SLOP - 1, 100)).toBe(false); // too small
+    expect(takesHandle(press, 100 + TOUCH_SLOP, 100)).toBe(true);
+    expect(takesHandle(press, 130, 100)).toBe(true);
+    expect(takesHandle(press, 70, 102)).toBe(true); // leftwards too
+  });
+
+  test("a vertical swipe never takes the handle, so the page scrolls", () => {
+    const press = startPress("touch", 100, 100);
+    expect(takesHandle(press, 100, 160)).toBe(false);
+    expect(takesHandle(press, 104, 40)).toBe(false);
+    expect(takesHandle(press, 120, 130)).toBe(false); // more down than across
+    expect(takesHandle(press, 120, 120)).toBe(false); // a diagonal is not sideways
+  });
+});
+

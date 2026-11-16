@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { BaselineRibbon } from "./BaselineRibbon";
+import { DayScrub } from "./chart/DayRuler";
 import { buildScrubSeries } from "./chart/dayScrub";
 
 describe("BaselineRibbon", () => {
@@ -66,5 +67,31 @@ test("per-day ribbon breaks the line at a missing day and never bridges it", () 
   expect(html).not.toContain("ribbon-yaxis");
   // Monday Nov 2 gets a week line.
   expect(html.match(/class="ribbon-week"/g)?.length).toBe(1);
+});
+
+test("inside a day ruler's scope the chart carries the layer that drives the handle", () => {
+  const scrub = buildScrubSeries({
+    dates: ["2026-11-04", "2026-11-05", "2026-11-06"],
+    readings: [
+      { date: "2026-11-04", value: 60 },
+      { date: "2026-11-05", value: 62 },
+      { date: "2026-11-06", value: 58 },
+    ],
+    band: [59, 61],
+    unit: "ms",
+    format: (v) => String(v),
+  });
+  const ruled = renderToStaticMarkup(
+    <DayScrub series={scrub}>
+      <BaselineRibbon values={[]} scrub={scrub} />
+    </DayScrub>,
+  );
+  expect(ruled).toContain('class="scrub-surface"');
+  // The layer is for pointers only; the slider stays the accessible control.
+  expect(ruled).toMatch(/<div class="scrub-cursor" aria-hidden="true"><div class="scrub-surface"/);
+  // Outside a ruler's scope there is nothing to drive.
+  const alone = renderToStaticMarkup(<BaselineRibbon values={[]} scrub={scrub} />);
+  expect(alone).not.toContain("scrub-surface");
+  expect(alone).toContain("ribbon-edge-label is-above");
 });
 

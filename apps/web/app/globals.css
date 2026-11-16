@@ -3656,6 +3656,21 @@ label.field-label {
   inset: 0;
   pointer-events: none;
 }
+/* The chart is part of the ruler: pressing or dragging it picks the nearest
+   day. Vertical swipes still scroll the page on touch. */
+.scrub-surface {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  touch-action: pan-y;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.day-scrub[data-scrubbing] .scrub-surface {
+  cursor: grabbing;
+}
 .scrub-glow {
   position: absolute;
   inset: -64px calc(-1 * var(--scrub-inset, 0px)) 0;

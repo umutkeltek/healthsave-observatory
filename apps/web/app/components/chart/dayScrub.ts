@@ -160,3 +160,35 @@ export function scrubAnswer(
     day.position && usual ? ` · ${day.position} your usual ${usual[0]} to ${usual[1]}` : "";
   return { value, rest: ` on ${day.label}${compared}${day.note ? ` · ${day.note}` : ""}` };
 }
+
+// ── Pointer rules shared by the ruler and the chart above it ──────────────
+
+export type ScrubPress = { x: number; y: number; active: boolean };
+
+// A mouse or pen press takes the handle at once. A finger does not: it may be
+// starting to scroll the page.
+export function startPress(pointerType: string, x: number, y: number): ScrubPress {
+  return { x, y, active: pointerType !== "touch" };
+}
+
+// A finger takes the handle once it has moved clearly sideways: at least
+// TOUCH_SLOP px, and more across than down. A vertical swipe never does, so
+// the page keeps scrolling and the selected day stays put.
+export const TOUCH_SLOP = 6;
+export function takesHandle(press: ScrubPress, x: number, y: number): boolean {
+  if (press.active) return true;
+  const dx = Math.abs(x - press.x);
+  return dx >= TOUCH_SLOP && dx > Math.abs(y - press.y);
+}
+
+// The day nearest a pointer at fraction `f` (0 to 1) across a box whose days
+// sit at the fractions `xs`. A pointer past either end takes the end day.
+export function nearestDay(xs: number[], f: number): number {
+  if (xs.length === 0) return 0;
+  const at = Math.min(1, Math.max(0, Number.isFinite(f) ? f : 0));
+  let best = 0;
+  for (let i = 1; i < xs.length; i++) {
+    if (Math.abs(xs[i] - at) < Math.abs(xs[best] - at)) best = i;
+  }
+  return best;
+}
