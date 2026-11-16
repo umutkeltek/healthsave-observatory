@@ -53,3 +53,46 @@ export function briefLeadSentence(narrative: string | null | undefined): string 
   const sentence = text.match(/^.+?[.!?](?=\s|$)/)?.[0] ?? text.slice(0, 180);
   return sentence.trim();
 }
+
+// A brief broken into what the card shows: the main read, up to two supporting
+// points, and the closing suggestion. Headings the narrator writes on their
+// own line ("Recovery", "Activity:") are never a sentence.
+export type BriefRead = { lead: string | null; takeaways: string[]; suggestion: string | null };
+
+const SUGGESTION =
+  /\b(try|consider|take|taking|aim|start|add|keep|walk|stroll|stretch|bedtime|wind down|could|might|small step|one thing)\b/i;
+
+function stripBriefLabel(text: string): string {
+  return text.replace(/^(Recovery|Summary|Today|This week|Weekly brief):\s*/i, "").trim();
+}
+
+function isSentence(text: string): boolean {
+  return text.split(/\s+/).filter(Boolean).length >= 4;
+}
+
+// "Additionally, try ..." reads oddly once it stands alone on the card.
+function dropConnector(text: string): string {
+  const trimmed = text.replace(/^(additionally|also|finally|lastly|plus|in addition|on top of that),?\s+/i, "");
+  return (trimmed[0]?.toUpperCase() ?? "") + trimmed.slice(1);
+}
+
+export function briefRead(narrative: string): BriefRead {
+  const sentences = briefParagraphs(narrative)
+    .flatMap((paragraph) => stripBriefLabel(paragraph).split(/(?<=[.!?])\s+/))
+    .map((sentence) => sentence.trim())
+    .filter(isSentence);
+  // The narrator is asked to end with one or two small suggestions: take the
+  // trailing sentences that read like one, at most two.
+  const tail: string[] = [];
+  for (let i = sentences.length - 1; i > 0 && tail.length < 2; i--) {
+    if (!SUGGESTION.test(sentences[i])) break;
+    tail.unshift(sentences[i]);
+  }
+  const body = sentences.slice(0, sentences.length - tail.length);
+  return {
+    lead: body[0] ?? null,
+    takeaways: body.slice(1, 3),
+    suggestion: tail.length > 0 ? dropConnector(tail.join(" ")) : null,
+  };
+}
+

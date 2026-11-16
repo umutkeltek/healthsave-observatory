@@ -6679,6 +6679,19 @@ font-size: 14px;
 line-height: 1.48;
 }
 
+/* The brief's closing suggestion: same label grammar as the main read, no card chrome. */
+.brief-suggestion {
+  display: grid;
+  gap: 4px;
+}
+
+.brief-suggestion p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.48;
+}
+
 .brief-dot {
   width: 7px;
   height: 7px;
