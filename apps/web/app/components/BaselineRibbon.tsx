@@ -5,6 +5,7 @@
 // round regardless of width.
 
 import { valueTicks } from "./chart/axis";
+import { placeBandLabels, type BandLabelSpot } from "./chart/bandLabels";
 import type { ScrubSeries } from "./chart/dayScrub";
 import { ScrubCursor } from "./chart/DayRuler";
 import { HoverOverlay } from "./chart/HoverOverlay";
@@ -186,6 +187,28 @@ function DailyRibbon({
   const bandBot = y(lo);
   const mid = y((lo + hi) / 2);
   const pct = (v: number, of: number) => `${((v / of) * 100).toFixed(2)}%`;
+  // Band labels go where the line is not (chart/bandLabels.ts).
+  const px = (v: number) => (v / H) * height;
+  const spots = series.usual
+    ? placeBandLabels({
+        trace: days.map((day, i) => (day.value === null ? null : [x(i) / W, px(y(day.value))] as const)),
+        top: px(bandTop),
+        bottom: px(bandBot),
+        height,
+        high: series.usual[1],
+        low: series.usual[0],
+      })
+    : null;
+  const edgeLabel = (spot: BandLabelSpot | null, edge: number, text: string) =>
+    spot ? (
+      <span
+        className={`ribbon-edge-label is-${spot.side}${spot.at === "right" ? " is-right" : ""}`}
+        style={{ top: pct(edge, H), ...(typeof spot.at === "number" ? { left: `${spot.at * 100}%` } : {}) }}
+        aria-hidden
+      >
+        {text}
+      </span>
+    ) : null;
 
   return (
     <div className="ribbon-wrap ribbon-daily">
@@ -222,14 +245,10 @@ function DailyRibbon({
           <line className="ribbon-median" x1="0" y1={mid} x2={W} y2={mid} vectorEffect="non-scaling-stroke" />
           <path className="ribbon-trace" d={trace} vectorEffect="non-scaling-stroke" />
         </svg>
-        {series.usual && (
+        {series.usual && spots && (
           <>
-            <span className="ribbon-edge-label is-top" style={{ top: pct(bandTop, H) }} aria-hidden>
-              {series.usual[1]}
-            </span>
-            <span className="ribbon-edge-label is-bottom" style={{ top: pct(bandBot, H) }} aria-hidden>
-              {series.usual[0]}
-            </span>
+            {edgeLabel(spots.high, bandTop, series.usual[1])}
+            {edgeLabel(spots.low, bandBot, series.usual[0])}
           </>
         )}
         {lone.map((i) => (

@@ -3728,11 +3728,17 @@ label.field-label {
   paint-order: stroke fill;
   pointer-events: none;
 }
-.ribbon-edge-label.is-top {
+/* Gap, inset and type size are mirrored in chart/bandLabels.ts, which picks
+   a spot the line does not cross. */
+.ribbon-edge-label.is-above {
   transform: translateY(calc(-100% - 5px));
 }
-.ribbon-edge-label.is-bottom {
+.ribbon-edge-label.is-below {
   transform: translateY(5px);
+}
+.ribbon-edge-label.is-right {
+  left: auto;
+  right: 4px;
 }
 .ribbon-lone {
   position: absolute;
