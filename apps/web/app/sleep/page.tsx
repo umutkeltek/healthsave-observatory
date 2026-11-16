@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
 import { BaselineRibbon } from "../components/BaselineRibbon";
+import { DayRuler, DayScrub, ScrubAnswer } from "../components/chart/DayRuler";
+import { buildScrubSeries, calendarDays, usualBand } from "../components/chart/dayScrub";
 import { ConsistencyGauge, Hypnogram, StageBreakdown } from "../components/SleepVisuals";
 import { safeSeriesForRange } from "../lib/load";
 import { seriesCoverage, shortDate } from "../lib/ranges";
@@ -12,6 +14,7 @@ import {
   durationLabel,
   groupSleepNights,
   nightLabel,
+  nightlyDurations,
   sleepDebt,
   sleepTrends,
   type SleepNight,
@@ -103,6 +106,24 @@ export default async function SleepPage() {
   // Duration array for baseline ribbon
   const durationValues = trend.durations;
   const sortedDurations = [...durationValues].sort((a, b) => a - b);
+  // The last 30 nights, one slot per bedtime date, read with the day ruler.
+  // A night is dated by its bedtime, so the newest slot is yesterday unless a
+  // session already began today. The all-time fallback keeps the plain ribbon.
+  const nightly = (() => {
+    if (usingFallback) return null;
+    const yesterday = new Date(now - 86_400_000).toISOString().slice(0, 10);
+    const end = lastNight && lastNight.date > yesterday ? lastNight.date : yesterday;
+    const dates = calendarDays(end, 30);
+    const readings = nightlyDurations(nights).filter((night) => night.date >= dates[0] && night.date <= end);
+    if (readings.length < 2) return null;
+    return buildScrubSeries({
+      dates,
+      readings,
+      band: usualBand(readings.map((night) => night.value)),
+      unit: null,
+      format: durationLabel,
+    });
+  })();
 
   return (
     <div className="sleep-page">
@@ -192,7 +213,24 @@ export default async function SleepPage() {
       </section>
 
       {/* 30-day duration trend */}
-      {durationValues.length >= 3 && (
+      {nightly ? (
+        <section className="lead">
+          <article className="card">
+            <DayScrub series={nightly}>
+              <h2 className="scrub-soft">30-day duration trend</h2>
+              <BaselineRibbon
+                values={[]}
+                scrub={nightly}
+                height={132}
+                ariaLabel="Sleep duration for each of the last 30 nights, with your usual range as a band"
+              />
+              <DayRuler label="Sleep duration, night" />
+              <ScrubAnswer />
+              <p className="scrub-caption scrub-soft">Nights are dated by bedtime, in UTC.</p>
+            </DayScrub>
+          </article>
+        </section>
+      ) : durationValues.length >= 3 && (
         <section className="lead">
           <article className="card">
             <h2>{usingFallback ? "Duration trend · all time" : "30-day duration trend"}</h2>

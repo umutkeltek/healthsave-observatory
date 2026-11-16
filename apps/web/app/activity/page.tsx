@@ -2,10 +2,14 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { BaselineRibbon } from "../components/BaselineRibbon";
+import { DayRuler, DayScrub, ScrubAnswer } from "../components/chart/DayRuler";
+import { buildScrubSeries, calendarDays, usualBand } from "../components/chart/dayScrub";
 import { CountUp } from "../components/CountUp";
 import { CardSkeleton } from "../components/Skeletons";
 import { agoLabel, safeSeries, safeSeriesMany } from "../lib/load";
+import { formatValue } from "../lib/format";
 import { summarizeNumericSeries } from "../lib/series";
+import { dailyReadings, todayReadings, trendWindow } from "../lib/todayPresentation";
 
 export const revalidate = 30;
 export const metadata: Metadata = { title: "Activity · HealthSave Observatory" };
@@ -101,25 +105,35 @@ async function StepsTimeline() {
   // pays once for the overlapping window; no duplicate network cost.
   const series = await safeSeries("activity.steps", "30d");
   if (!series || series.points.length < 3) return null;
-  const values = series.points
-    .filter((p): p is typeof p & { value: number } => p.value !== null)
-    .map((p) => p.value);
-  const hoverLabels = series.points
-    .filter((p) => p.value !== null)
-    .map((p) => new Date(p.t).toLocaleDateString(undefined, { month: "short", day: "numeric" }));
+  // One value per day, chosen the way Today chooses it: the all-source day
+  // total when the server has one, otherwise one stream. Never a blend.
+  const now = new Date().toISOString();
+  const days = trendWindow(dailyReadings(todayReadings(series)), 30, now);
+  if (days.length < 2) return null;
+  const steps = buildScrubSeries({
+    dates: calendarDays(now, 30),
+    readings: days,
+    band: usualBand(days.map((day) => day.value)),
+    unit: "steps",
+    format: (value) => formatValue(value),
+    incompleteLatest: true,
+  });
 
   return (
     <section className="lead">
       <article className="card">
-        <h2>30-day steps</h2>
-        <BaselineRibbon
-          values={values}
-          height={132}
-          axis={["30 days ago", "today"]}
-          hoverLabels={hoverLabels}
-          unit="steps"
-          ariaLabel="Steps over the last 30 days against your personal baseline"
-        />
+        <DayScrub series={steps}>
+          <h2 className="scrub-soft">30-day steps</h2>
+          <BaselineRibbon
+            values={[]}
+            scrub={steps}
+            height={132}
+            ariaLabel="Steps for each of the last 30 days, with your usual range as a band"
+          />
+          <DayRuler label="Steps, day" />
+          <ScrubAnswer />
+          <p className="scrub-caption scrub-soft">Daily totals, dates in UTC.</p>
+        </DayScrub>
       </article>
     </section>
   );
