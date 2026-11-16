@@ -22,9 +22,8 @@ Findings (computed — narrate these claims, do NOT recompute or invent numbers)
 
 Write a 180-300 word narrative. Organize by pillar (Recovery, Sleep,
 Activity, Body), skipping any pillar with no lines above, and lead with
-the measurement that moved most. End with one sentence naming a measurement
-from the lines above that is worth watching next week, with its own number
-from above. Phrase it as an observation, never as advice.
+the measurement that moved most. End with one or two small, practical
+suggestions for the coming week that fit what moved most.
 """
 
 

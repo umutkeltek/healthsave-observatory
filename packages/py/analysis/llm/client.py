@@ -488,7 +488,7 @@ class HealthLLMClient:
         # interpret health or give advice, round long decimals. A reply with
         # nothing left is a failed attempt, so the next candidate is tried and
         # no hollow brief is stored.
-        scrubbed = scrub_narrative(raw)
+        scrubbed = scrub_narrative(raw, allow_doctor="severity alert" in payload)
         if scrubbed.removed:
             log.warning(
                 "narrator: %s broke the narration rules; removed %d sentence(s)",

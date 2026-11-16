@@ -10,8 +10,9 @@ line of defense between the LLM and the user:
     non-critical insight.
   * :func:`inject_disclaimer` - idempotent helper that appends the
     disclaimer only when the LLM has not already produced one.
-  * :func:`scrub_narrative` - removes sentences that interpret health or
-    give advice, and rounds long decimals, before the disclaimer is added.
+  * :func:`scrub_narrative` - removes sentences that diagnose, name a
+    condition, mention medication or set diet targets, and rounds long
+    decimals, before the disclaimer is added.
 """
 
 import re
@@ -31,10 +32,7 @@ CRITICAL_THRESHOLDS: dict[str, float] = {
 
 
 DISCLAIMER_TEXT: str = (
-    "This is not medical advice. HealthSave analyses are informational only "
-    "and cannot diagnose conditions or replace professional evaluation. "
-    "If you are experiencing symptoms or have concerns about a reading, "
-    "please consult a qualified healthcare provider."
+    "General wellness information, not medical advice. If something worries you, talk to a doctor."
 )
 
 
@@ -60,28 +58,32 @@ def inject_disclaimer(text: str) -> str:
     return f"{text}{separator}{DISCLAIMER_TEXT}"
 
 
-# What the narrator must not say, enforced on the reply because a small local
-# model does not always follow the system prompt. Measured on llama3.1:8b
-# before this filter: every brief of ten carried at least one such sentence
-# ("may indicate improved cardiovascular resilience", "consider taking a short
-# walk"). A sentence that matches is removed whole; the rest of the brief stays.
-_INTERPRETATION = re.compile(
-    r"cardiovascular|heart health|overall health|well-?being|fitness|"
-    r"healthier|\bhealthy\b|improv|deteriorat|worsen|"
-    r"\b(positive|negative|encouraging|concerning|worrying|good|bad)\s+"
-    r"(trend|development|sign|change|indicator|news)|"
-    r"\bsign of\b|\bstress|illness|\bsick|disease|infection|inflammat|overtrain|"
-    r"immun|fatigue|underlying|medical condition|diagnos|"
-    r"efficien|resilien|ability to (adapt|recover)",
+# The hard limits, enforced on the reply because a small local model does not
+# always follow the system prompt. Light wellness context and small everyday
+# suggestions are welcome (Umut, 2026-11-16); diagnosis, conditions,
+# medication, diet targets and cure claims are not. A sentence that crosses a
+# line is removed whole; the rest of the brief stays.
+_FORBIDDEN = re.compile(
+    r"diagnos|\bdisease|disorder|syndrome|medical condition|underlying condition|"
+    r"diabet|hypertens|hypotens|arrhythm|fibrillation|\bafib\b|tachycard|bradycard|"
+    r"apnea|apnoea|insomnia|depress|anxiety disorder|infection|\bcovid|\bflu\b|"
+    r"cancer|heart attack|stroke|an(a)?emi|thyroid|"
+    r"medication|medicine|\bdrug|supplement|melatonin|magnesium|vitamin|ibuprofen|"
+    r"aspirin|statin|beta.?blocker|\bdos(e|age)\b|\d\s?(mg|mcg|µg)\b|"
+    r"calorie deficit|cut (your |back on )?calories|\bfasting\b|weight.?loss|"
+    r"lose weight|\bdiet\b|"
+    r"\bcure|\btreat(s|ment|ing)?\b|guarantee|"
+    r"medical advice",
     re.IGNORECASE,
 )
-_ADVICE = re.compile(
-    r"\b(consider|try to|try incorporating|aim (for|to)|you (should|could|may want|might want)|"
-    r"make sure|focus on|set(ting)? a goal|engage in|incorporat|increase your|reduce your|"
-    r"it'?s (essential|important|worth) to|consult|see a doctor|healthcare provider|"
-    r"medical advice|seek)\b",
-    re.IGNORECASE,
-)
+# A doctor is mentioned only for a reading the engine flagged "severity alert";
+# for anything else the one-line note already says it, and a stray "see a
+# doctor" about an ordinary change only worries people.
+_DOCTOR = re.compile(r"\b(doctor|physician|gp\b|healthcare (provider|professional))", re.IGNORECASE)
+# "Significant" reads as a medical or statistical verdict; keep it only next to
+# a p-value.
+_SIGNIFICANT = re.compile(r"\b(significant)(ly)?\b", re.IGNORECASE)
+_HAS_P = re.compile(r"\bp\s*(=|<|-value)", re.IGNORECASE)
 _LONG_DECIMAL = re.compile(r"\d+\.\d{3,}")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 
@@ -99,8 +101,19 @@ def _round_long_decimal(match: re.Match[str]) -> str:
     return f"{value:.3f}" if abs(value) < 1 else f"{value:.1f}"
 
 
-def scrub_narrative(text: str) -> ScrubResult:
-    """Drop every sentence that interprets health or gives advice; round long decimals.
+def _plain_significant(sentence: str) -> str:
+    if _HAS_P.search(sentence):
+        return sentence
+
+    def swap(match: re.Match[str]) -> str:
+        word = "notably" if match.group(2) else "notable"
+        return word.capitalize() if match.group(1)[0].isupper() else word
+
+    return _SIGNIFICANT.sub(swap, sentence)
+
+
+def scrub_narrative(text: str, *, allow_doctor: bool = False) -> ScrubResult:
+    """Drop every sentence that crosses a hard limit; round long decimals.
 
     Runs line by line so headings and list items keep their place. A line whose
     every sentence is removed disappears. A model-written medical disclaimer is
@@ -112,11 +125,11 @@ def scrub_narrative(text: str) -> ScrubResult:
         sentences = _SENTENCE_END.split(line)
         kept = []
         for sentence in sentences:
-            if _INTERPRETATION.search(sentence) or _ADVICE.search(sentence):
+            if _FORBIDDEN.search(sentence) or (not allow_doctor and _DOCTOR.search(sentence)):
                 if sentence.strip():
                     removed.append(sentence.strip())
             else:
-                kept.append(sentence)
+                kept.append(_plain_significant(sentence))
         new_line = " ".join(kept).rstrip()
         if not new_line.strip() and line.strip():
             continue

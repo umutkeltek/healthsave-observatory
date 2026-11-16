@@ -25,9 +25,8 @@ Correlations worth noting:
 Days with data in this period: {days_of_data}.
 
 Write a 120-200 word narrative in the style the system prompt sets. Lead
-with the largest change. End with one sentence naming a measurement from the
-lines above that is worth watching over the next few days, with its own
-number from above. Phrase it as an observation, never as advice.
+with the largest change, with its own number from above. End with one small,
+practical suggestion for today that fits that change.
 """
 
 
