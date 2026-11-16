@@ -1304,11 +1304,10 @@ html {
   }
 }
 
-/* Hero card - raised, with a faint signature glow */
+/* Hero card - raised; solid surface, colour lives in the data. */
 .hero {
   position: relative;
-  background:
-    radial-gradient(130% 150% at 0% 0%, rgba(124, 131, 255, 0.07), transparent 56%), var(--surface);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
@@ -3957,36 +3956,11 @@ label.field-label {
   stroke: var(--anomaly);
 }
 
-/* The hero carries the day's state as a quiet ambient glow, not a banner. */
+/* The hero states the day's recovery in its chip and dial; the card itself
+   carries no state-tinted glow (cards are solid surface). */
 .hero {
   position: relative;
   overflow: hidden;
-}
-
-.hero::before {
-  content: "";
-  position: absolute;
-  inset: -40% -20% auto;
-  height: 130%;
-  pointer-events: none;
-  opacity: 0.5;
-  transition: background var(--dur-3) ease;
-}
-
-.hero-state-prime::before {
-  background: radial-gradient(640px 280px at 18% 0%, var(--accent-weak), transparent 70%);
-}
-
-.hero-state-steady::before {
-  background: radial-gradient(640px 280px at 18% 0%, rgba(124, 131, 255, 0.12), transparent 70%);
-}
-
-.hero-state-caution::before {
-  background: radial-gradient(640px 280px at 18% 0%, rgba(232, 180, 95, 0.12), transparent 70%);
-}
-
-.hero-state-suppressed::before {
-  background: radial-gradient(640px 280px at 18% 0%, rgba(255, 107, 138, 0.11), transparent 70%);
 }
 
 .cat-dot {
@@ -5087,9 +5061,6 @@ html,
 
 .hero {
   min-height: 356px;
-  background:
-    linear-gradient(135deg, rgba(15, 159, 143, 0.11), rgba(66, 119, 232, 0.08) 54%, rgba(255, 255, 255, 0.88)),
-    var(--surface);
   border-color: color-mix(in srgb, var(--accent) 24%, var(--line));
 }
 
@@ -5428,9 +5399,6 @@ body {
 
 .hero {
   padding: 32px;
-  background:
-    linear-gradient(135deg, rgba(0, 122, 255, 0.11), rgba(48, 209, 88, 0.06) 54%, color-mix(in srgb, var(--surface) 92%, transparent)),
-    var(--surface);
 }
 
 .recovery-line {
@@ -5995,9 +5963,7 @@ body {
   flex-direction: column;
   gap: 16px;
   min-height: 224px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, var(--signal) 6%), var(--surface)),
-    var(--surface);
+  background: var(--surface);
 }
 
 .metric-card-empty {
@@ -6084,17 +6050,13 @@ body {
   padding: 10px 10px 8px;
   border: 0.5px solid var(--line-soft);
   border-radius: 14px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--raise) 82%, transparent), transparent),
-    var(--raise);
+  background: var(--raise);
   /* Hover: the well brightens and the trace thickens — a subtle "inspect"
      affordance without a client-side tooltip island. */
   transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
 .metric-chart-well:hover {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent-weak) 45%, var(--raise) 82%, transparent), transparent),
-    var(--surface);
+  background: var(--surface);
   border-color: var(--accent-line);
 }
 .metric-chart-well:hover .signal-spark .spark-dot {
@@ -6464,9 +6426,7 @@ body {
   padding: 18px;
   border: 0.5px solid var(--line);
   border-radius: 16px;
-  background:
-    radial-gradient(520px 180px at 20% 0%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 70%),
-    var(--raise);
+  background: var(--raise);
 }
 
 .lib-chart-head {
@@ -6633,7 +6593,7 @@ body {
   padding: 16px;
   border: 1px solid var(--line-soft);
   border-radius: 16px;
-  background: linear-gradient(145deg, color-mix(in srgb, var(--metric-color) 5%, var(--surface)), var(--surface) 75%);
+  background: var(--surface);
   color: var(--ink);
   text-decoration: none;
   transition: border-color 120ms ease, box-shadow 120ms ease;
@@ -6761,12 +6721,9 @@ body {
   align-content: start;
   gap: 16px;
   box-shadow: none;
-  /* Solid neutral border (was a washy blue-tinted mix) + one whisper of a
-     top-left glow instead of the heavy double gradient DESIGN.md forbids. */
+  /* Solid neutral border and solid surface: colour lives in the data. */
   border-color: var(--line);
-  background:
-    radial-gradient(680px 280px at 0% 0%, var(--accent-weak), transparent 66%),
-    var(--surface);
+  background: var(--surface);
 }
 
 .today-hero-main {
@@ -7248,9 +7205,7 @@ font-size: 17px;
   margin-top: 24px;
   padding: 30px 32px;
   border-color: var(--line);
-  background:
-    radial-gradient(520px 220px at 40% 0%, color-mix(in srgb, var(--sleep-deep) 14%, transparent), transparent 60%),
-    var(--surface);
+  background: var(--surface);
 }
 
 .sleep-hero-main {
