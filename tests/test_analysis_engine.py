@@ -1258,4 +1258,4 @@ async def test_weekly_summary_injects_finding_cards_into_narrator_prompt():
 
     prompt = llm_mock.generate_insight.await_args.args[0]
     # The computed summary card's claim (via _finding_cards_for_brief) is present.
-    assert "ran -6.4% vs your recent baseline" in prompt
+    assert "Resting heart rate ran -6.4% vs your recent baseline" in prompt

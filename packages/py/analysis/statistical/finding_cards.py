@@ -37,6 +37,8 @@ from contracts.findings import (
     WindowRef,
 )
 
+from contracts import ontology
+
 from . import experiment_readiness as readiness
 from .gates import MINIMUM_DATA_REQUIREMENTS
 
@@ -54,6 +56,54 @@ def _short(metric_id: str | None) -> str:
     if not metric_id:
         return "this metric"
     return readiness._short(metric_id)
+
+
+# Short names the anomaly and trend checks still store, mapped to the wire
+# name the ontology knows them by.
+_LEGACY_WIRE = {"hrv": "heart_rate_variability"}
+_BY_WIRE: dict[str, str] = {}
+for _metric in ontology.all_metrics():
+    for _mapping in _metric.source_mappings:
+        _BY_WIRE.setdefault(_mapping.source_metric, _metric.display_name)
+
+
+def _sentence_case(display: str) -> str:
+    """``Heart Rate Variability (SDNN)`` → ``Heart rate variability (SDNN)``.
+
+    Later words are lowered unless they are acronyms or carry digits (SDNN, VO2).
+    """
+    words = display.split(" ")
+    out = [words[0]]
+    for word in words[1:]:
+        core = word.strip("()")
+        keep = any(ch.isdigit() for ch in core) or (len(core) > 1 and core.isupper())
+        out.append(word if keep else word.lower())
+    return " ".join(out)
+
+
+def _name(metric_id: str | None, *, start: bool = False) -> str:
+    """The metric's catalog name for a sentence: ``Resting heart rate`` at the start,
+    ``resting heart rate`` mid-sentence. Falls back to the id's tail."""
+    if not metric_id:
+        return "This metric" if start else "this metric"
+    definition = ontology.get_metric(metric_id)
+    display = (
+        definition.display_name
+        if definition is not None
+        else _BY_WIRE.get(_LEGACY_WIRE.get(metric_id, metric_id))
+    )
+    text = _sentence_case(display) if display else _short(metric_id)
+    if start:
+        return text[:1].upper() + text[1:]
+    first, _, rest = text.partition(" ")
+    if len(first) > 1 and first.isupper():
+        return text
+    return (first[:1].lower() + first[1:]) + (f" {rest}" if rest else "")
+
+
+def _amount(value: float) -> str:
+    """``8357.0`` → ``8,357``; ``73.24`` → ``73.2``."""
+    return f"{value:,.0f}" if abs(value) >= 100 else f"{value:.1f}"
 
 
 def _z_label(z: float) -> str:
@@ -95,7 +145,7 @@ def _anomaly_card(
     baseline_mean = _num(context.get("baseline_mean"))
 
     above_below = "above" if direction == "up" else "below"
-    claim = f"{_short(metric)} was {abs(z):.1f}σ {above_below} your personal baseline"
+    claim = f"{_name(metric, start=True)} was {abs(z):.1f}σ {above_below} your personal baseline"
 
     delta = None
     if value is not None and baseline_mean is not None:
@@ -138,7 +188,7 @@ def _anomaly_card(
         confounders=confounders,
         next_question=NextQuestion(
             prose=(
-                f"Does {_short(metric)} return toward baseline over the next few days, "
+                f"Does {_name(metric)} return toward baseline over the next few days, "
                 "or is this the start of a new regime?"
             )
         ),
@@ -153,7 +203,10 @@ def _trend_card(metric: str | None, sd: dict[str, Any]) -> FindingCard | None:
     period_days = sd.get("period_days")
     p_value = _num(sd.get("p_value"))
 
-    claim = f"{_short(metric)} is trending {direction or 'flat'} over the last {period_days} days"
+    claim = (
+        f"{_name(metric, start=True)} is trending {direction or 'flat'} "
+        f"over the last {period_days} days"
+    )
     req = MINIMUM_DATA_REQUIREMENTS["trend_analysis"]
     return FindingCard(
         claim=claim,
@@ -180,7 +233,7 @@ def _trend_card(metric: str | None, sd: dict[str, Any]) -> FindingCard | None:
         ],
         next_question=NextQuestion(
             prose=(
-                f"Is this {_short(metric)} trend tied to a recent change "
+                f"Is this {_name(metric)} trend tied to a recent change "
                 "worth pinning on your timeline?"
             )
         ),
@@ -198,7 +251,7 @@ def _correlation_card(metric: str | None, sd: dict[str, Any]) -> FindingCard | N
     together = "inversely" if coefficient < 0 else "together"
 
     claim = (
-        f"{_short(metric_a)} and {_short(metric_b)} moved {together} "
+        f"{_name(metric_a, start=True)} and {_name(metric_b)} moved {together} "
         f"(ρ={coefficient:.2f}) over {period_days} days"
     )
 
@@ -297,12 +350,12 @@ def _summary_card(metric: str | None, sd: dict[str, Any]) -> FindingCard | None:
         # The aggregator baseline is (end − 30d → window_start), i.e. 30 − window
         # days long — the exact length isn't derivable from the builder's inputs,
         # so we say "recent baseline" rather than overstate it as "30-day".
-        claim = f"{_short(metric)} ran {delta_pct:+.1f}% vs your recent baseline"
+        claim = f"{_name(metric, start=True)} ran {delta_pct:+.1f}% vs your recent baseline"
         delta = Delta(pct=delta_pct, direction=direction)
         baseline_window = WindowRef(label="recent baseline")
         coverage = Coverage(observation_count=n)
     elif avg is not None:
-        claim = f"{_short(metric)} averaged {avg:.1f} over the period"
+        claim = f"{_name(metric, start=True)} averaged {_amount(avg)} over the period"
         delta = None
         baseline_window = None
         if delta_pct is not None:

@@ -22,7 +22,7 @@ def test_anomaly_card_carries_zscore_without_confusing_severity_with_confidence(
     assert isinstance(card, FindingCard)
     assert card.schema_version == FINDING_CARD_SCHEMA_VERSION
     assert card.metric == "vital.resting_heart_rate"
-    assert "resting heart rate" in card.claim and "above" in card.claim
+    assert card.claim == "Resting heart rate was 3.2σ above your personal baseline"
     assert card.effect_size.kind == "z_score"
     assert card.effect_size.value == 3.2
     assert card.effect_size.label == "large"
@@ -187,3 +187,39 @@ def test_all_card_fields_json_serializable():
     dumped = card.model_dump(mode="json")
     assert dumped["schema_version"] == FINDING_CARD_SCHEMA_VERSION
     assert dumped["next_question"]["experiment_candidate"]["lever"] == "nutrition.caffeine"
+
+
+def test_claims_use_catalog_names_in_sentence_case():
+    trend = build_card(
+        "trend", "hrv", {"slope": 0.32, "direction": "up", "period_days": 30}, "info"
+    )
+    assert trend.claim == "Heart rate variability (SDNN) is trending up over the last 30 days"
+    assert "heart rate variability (SDNN) trend" in trend.next_question.prose
+
+    pair = build_card(
+        "correlation",
+        "activity.steps~activity.active_energy",
+        {
+            "metric_a": "activity.steps",
+            "metric_b": "activity.active_energy",
+            "coefficient": 0.88,
+            "period_days": 90,
+        },
+        "info",
+    )
+    assert pair.claim == "Steps and active energy moved together (ρ=0.88) over 90 days"
+    assert pair.next_question.prose.startswith("Both metrics are behaviors")
+
+
+def test_summary_average_reads_like_a_number_a_person_writes():
+    card = build_card("summary", "activity.steps", {"avg": 8357.0, "count": 1}, "info")
+    assert card.claim == "Steps averaged 8,357 over the period"
+    card = build_card("summary", "body.weight", {"avg": 73.24, "count": 1}, "info")
+    assert card.claim == "Body weight averaged 73.2 over the period"
+
+
+def test_unknown_metric_falls_back_to_its_id():
+    card = build_card(
+        "trend", "custom.my_signal", {"slope": -0.1, "direction": "down", "period_days": 14}, "info"
+    )
+    assert card.claim == "My signal is trending down over the last 14 days"

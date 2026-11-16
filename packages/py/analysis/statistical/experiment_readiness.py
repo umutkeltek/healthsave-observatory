@@ -82,12 +82,12 @@ def classify_candidate(metric_a: str, metric_b: str) -> ReadinessVerdict:
     if a_lever == b_lever:
         if a_lever:
             rationale = (
-                "both metrics are behaviors you control directly — there's no "
+                "Both metrics are behaviors you control directly, so there's no "
                 "independent outcome to measure the change against."
             )
         else:
             rationale = (
-                "both metrics are physiological outcomes — neither is a behavior "
+                "Both metrics are physiological outcomes. Neither is a behavior "
                 "you can set directly to run an experiment."
             )
         return ReadinessVerdict(
@@ -105,8 +105,10 @@ def classify_candidate(metric_a: str, metric_b: str) -> ReadinessVerdict:
         f"Alternate ~{_BLOCK_DAYS} days of higher {_short(lever)} with ~{_BLOCK_DAYS} days at your "
         f"usual level (ABAB, {_BLOCKS} blocks), measuring {_short(outcome)}."
     )
+    lever_name = _short(lever)
     rationale = (
-        f"{_short(lever)} is a behavior you can change — measure its effect on {_short(outcome)}."
+        f"{lever_name[:1].upper()}{lever_name[1:]} is a behavior you can change. "
+        f"Measure its effect on {_short(outcome)}."
     )
     return ReadinessVerdict(
         verdict=TESTABLE,
