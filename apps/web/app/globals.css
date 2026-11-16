@@ -7129,9 +7129,11 @@ font-size: 17px;
   min-width: 0;
 }
 
+/* Five strain cards. 168px lets all five share one row on a laptop-width
+   content column (about 960px) instead of wrapping four plus one. */
 .activity-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
   gap: 12px;
   margin-top: 20px;
 }
@@ -7195,8 +7197,9 @@ font-size: 17px;
 
 .activity-card-foot {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 8px;
+  gap: 2px 8px;
   font-size: 11.5px;
   color: var(--muted);
   padding-top: 4px;
@@ -7262,6 +7265,11 @@ font-size: 17px;
 @media (max-width: 620px) {
   .activity-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Two columns and an odd count: the last card takes the full row, not half of it. */
+  .activity-grid > .activity-card:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
 
   .activity-big {
