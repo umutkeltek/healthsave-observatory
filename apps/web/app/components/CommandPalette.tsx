@@ -3,30 +3,14 @@
 import { useRouter } from "next/navigation";
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 
+import { NAV } from "../lib/nav";
+import { useI18n } from "./I18nProvider";
+
 // ⌘K palette: jump to any page or any of the ~190 catalog signals without
 // hunting the nav or the Library grid. Pure client island - the metric list
 // arrives server-rendered via PaletteHost, queries never leave the page.
 
 export type PaletteMetric = { id: string; name: string; category: string };
-
-const PAGES: { label: string; href: string }[] = [
-  { label: "Today", href: "/" },
-  { label: "Sleep", href: "/sleep" },
-  { label: "Activity", href: "/activity" },
-  { label: "Findings", href: "/findings" },
-  { label: "Data", href: "/data" },
-  { label: "Experiments", href: "/experiments" },
-  { label: "Sources", href: "/sources" },
-  { label: "Explore", href: "/explore" },
-  { label: "Library", href: "/library" },
-  { label: "Compare", href: "/compare" },
-  { label: "Relationships", href: "/relationships" },
-  { label: "Timeline", href: "/timeline" },
-  { label: "Integrations", href: "/integrations" },
-  { label: "Privacy", href: "/privacy" },
-  { label: "Intelligence", href: "/intelligence" },
-  { label: "Settings", href: "/settings" },
-];
 
 type Item = { key: string; label: string; hint: string; href: string };
 
@@ -71,6 +55,7 @@ export function CommandPalette({ catalog }: { catalog?: ReactNode }) {
 function PaletteDialog({ metrics }: { metrics: PaletteMetric[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const { dict } = useI18n();
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
@@ -101,9 +86,10 @@ function PaletteDialog({ metrics }: { metrics: PaletteMetric[] }) {
 
   const items = useMemo<Item[]>(() => {
     const query = q.trim().toLowerCase();
-    const pages: Item[] = PAGES.map((p) => ({
+    // The sidebar's own page list and names, so search finds every page the nav shows.
+    const pages: Item[] = NAV.map((p) => ({
       key: p.href,
-      label: p.label,
+      label: dict.nav[p.labelKey],
       hint: "page",
       href: p.href,
     }));
@@ -122,7 +108,7 @@ function PaletteDialog({ metrics }: { metrics: PaletteMetric[] }) {
     return [...ranked(pages, (i) => i.href), ...ranked(signals, (i) => i.key)]
       .slice(0, MAX_RESULTS)
       .map((x) => x.item);
-  }, [metrics, q]);
+  }, [dict, metrics, q]);
 
   useEffect(() => {
     setActive(0);
