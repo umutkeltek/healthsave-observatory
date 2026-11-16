@@ -54,6 +54,20 @@ export function formatValue(
   return joinUnit(body, unit);
 }
 
+// A p-value as people read it in a paper: three decimals, and "< 0.001" once
+// it rounds to zero. Printing "0" would claim the chance is exactly nothing.
+export function formatPValue(p: number): string {
+  if (!Number.isFinite(p)) return "-";
+  if (p < 0.001) return "< 0.001";
+  return Number(p.toFixed(3)).toString();
+}
+
+// "p = 0.007", or "p < 0.001" when it rounds to zero.
+export function pValueLabel(p: number): string {
+  const text = formatPValue(p);
+  return text.startsWith("<") ? `p ${text}` : `p = ${text}`;
+}
+
 // Axis-tick formatter.
 export function formatTick(value: number): string {
   const a = Math.abs(value);

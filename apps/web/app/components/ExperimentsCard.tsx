@@ -6,6 +6,7 @@ import type {
   ExperimentResult,
 } from "../lib/api";
 import type { ExperimentPrefill } from "../lib/experimentPrefill";
+import { pValueLabel } from "../lib/format";
 import { experimentStatus, pairKey, runningPairKeys } from "../lib/experimentStatus";
 import { ExperimentActions } from "./ExperimentActions";
 import { StartExperimentButton } from "./StartExperimentButton";
@@ -66,7 +67,7 @@ function ResultBlock({ result }: { result: ExperimentResult }) {
       {!insufficient && (
         <div className="exp-stats">
           {result.p_value != null ? (
-            <span>p={num(result.p_value, 3)}</span>
+            <span>{pValueLabel(result.p_value)}</span>
           ) : (
             <span>{inferenceLabel(result.inference)}</span>
           )}

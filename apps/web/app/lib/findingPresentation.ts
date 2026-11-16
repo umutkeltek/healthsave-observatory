@@ -1,4 +1,5 @@
 import type { CardEffectSize, Finding, FindingCard } from "./api";
+import { pValueLabel } from "./format";
 
 export type FindingGroupId = "needs-attention" | "improving" | "watching" | "background";
 
@@ -46,16 +47,28 @@ const GROUPS: Omit<FindingDisplayGroup, "findings">[] = [
 
 const METRIC_TITLES: Record<string, string> = {
   "activity.active_energy": "Active energy",
+  "activity.exercise_minutes": "Exercise minutes",
   "activity.steps": "Steps",
+  "body.weight": "Body weight",
   recovery: "Recovery score",
   "sleep.stage": "Sleep stages",
+  "vital.blood_oxygen": "Blood oxygen",
   "vital.heart_rate": "Heart rate",
   "vital.hrv_sdnn": "Heart rate variability",
   "vital.respiratory_rate": "Respiratory rate",
   "vital.resting_heart_rate": "Resting heart rate",
   "vital.spo2": "Blood oxygen",
   "vital.walking_heart_rate_average": "Walking heart rate",
+  // Short names the trend and anomaly checks still store.
+  heart_rate: "Heart rate",
+  hrv: "Heart rate variability",
+  resting_heart_rate: "Resting heart rate",
+  respiratory_rate: "Respiratory rate",
 };
+
+function metricTitle(id: string): string {
+  return METRIC_TITLES[id] ?? titleFromId(id);
+}
 
 function numberValue(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -65,20 +78,23 @@ function textValue(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+// Sentence case, like the names above: "custom.metric_name" -> "Metric name".
 function titleFromId(id: string): string {
-  const last = id.includes(".") ? (id.split(".").at(-1) ?? id) : id;
-  return last
-    .split("_")
-    .filter(Boolean)
-    .map((part) => (part[0]?.toUpperCase() ?? "") + part.slice(1))
-    .join(" ");
+  const words = (id.includes(".") ? (id.split(".").at(-1) ?? id) : id).split("_").filter(Boolean);
+  const text = words.join(" ");
+  return (text[0]?.toUpperCase() ?? "") + text.slice(1);
 }
 
 export function userFindingTitle(finding: Finding): string {
   if (finding.finding_type === "recovery_score") return "Recovery score";
-  if (finding.metric && METRIC_TITLES[finding.metric]) return METRIC_TITLES[finding.metric];
-  if (finding.metric) return titleFromId(finding.metric);
-  return "Health signal";
+  const metric = finding.metric;
+  if (!metric) return "Health signal";
+  // A relationship is stored as "a~b": name both sides.
+  if (metric.includes("~")) {
+    const [a, b] = metric.split("~");
+    return `${metricTitle(a)} and ${metricTitle(b).toLowerCase()}`;
+  }
+  return metricTitle(metric);
 }
 
 export type RecoveryEvidence = {
@@ -185,12 +201,12 @@ export function findingProofLine(finding: Finding): string {
 
   if (type === "trend") {
     const p = numberValue(data.p_value);
-    return p !== null ? `Statistically meaningful trend, p=${p.toFixed(3)}.` : "Sustained multi-day direction.";
+    return p !== null ? `Statistically meaningful trend, ${pValueLabel(p)}.` : "Sustained multi-day direction.";
   }
 
   if (type === "correlation") {
     const p = numberValue(data.p_value);
-    return p !== null ? `Cross-signal relationship, p=${p.toFixed(3)}.` : "Cross-signal relationship.";
+    return p !== null ? `Cross-signal relationship, ${pValueLabel(p)}.` : "Cross-signal relationship.";
   }
 
   if (type === "recovery_score") return "Derived from the recovery scoring engine.";
@@ -348,7 +364,7 @@ export function findingCardChips(card: FindingCard): CardChip[] {
       chips.push({
         key: "p",
         label: "significance",
-        value: `p = ${fmtNum(card.effect_size.p_value, 3)}`,
+        value: pValueLabel(card.effect_size.p_value),
         tone: "neutral",
       });
     }

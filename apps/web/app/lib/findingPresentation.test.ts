@@ -63,7 +63,13 @@ describe("finding presentation", () => {
   test("turns engine metric ids into readable titles", () => {
     expect(userFindingTitle(finding({ metric: "vital.hrv_sdnn" }))).toBe("Heart rate variability");
     expect(userFindingTitle(finding({ metric: "activity.steps" }))).toBe("Steps");
-    expect(userFindingTitle(finding({ metric: "custom.metric_name" }))).toBe("Metric Name");
+    expect(userFindingTitle(finding({ metric: "custom.metric_name" }))).toBe("Metric name");
+    // Short names the trend and anomaly checks store, and "a~b" relationships.
+    expect(userFindingTitle(finding({ metric: "hrv" }))).toBe("Heart rate variability");
+    expect(userFindingTitle(finding({ metric: "heart_rate" }))).toBe("Heart rate");
+    expect(userFindingTitle(finding({ metric: "activity.steps~activity.active_energy" }))).toBe(
+      "Steps and active energy",
+    );
   });
 
   test("accepts only evidence-qualified recovery findings for the hero", () => {
