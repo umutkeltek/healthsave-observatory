@@ -20,8 +20,6 @@ Correlations observed:
 Findings (computed — narrate these claims, do NOT recompute or invent numbers):
 {findings}
 
-Days with data in this period: {days_of_data}.
-
 Write a 180-300 word narrative. Organize by pillar (Recovery, Sleep,
 Activity, Body), skipping any pillar with no lines above, and lead with
 the measurement that moved most. End with one sentence naming a measurement
