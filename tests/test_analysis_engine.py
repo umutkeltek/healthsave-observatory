@@ -343,8 +343,8 @@ async def test_run_daily_briefing_persists_anomaly_findings_and_includes_them_in
 
     # Anomalies were formatted into the LLM prompt.
     prompt_arg = llm_mock.generate_insight.await_args.args[0]
-    assert "hrv: down deviation" in prompt_arg
-    assert "severity=alert" in prompt_arg
+    assert "Heart rate variability (SDNN): below your usual range" in prompt_arg
+    assert "(severity alert)" in prompt_arg
 
 
 @pytest.mark.asyncio
@@ -382,7 +382,7 @@ async def test_run_daily_briefing_persists_hrv_only_summary_and_reports_data_ava
     assert findings[0]["finding_type"] == "summary"
     assert findings[0]["metric"] == "hrv"
     prompt_arg = llm_mock.generate_insight.await_args.args[0]
-    assert "Data sufficiency: 1/1 days of history." in prompt_arg
+    assert "Days with data in this period: 1." in prompt_arg
 
 
 @pytest.mark.asyncio
@@ -1005,8 +1005,8 @@ async def test_run_daily_briefing_folds_recent_trends_and_correlations_into_prom
     await engine.run_daily_briefing()
 
     prompt = llm_mock.generate_insight.await_args.args[0]
-    assert "heart_rate: down trend" in prompt
-    assert "vital.hrv_sdnn ~ vital.resting_heart_rate" in prompt
+    assert "Heart rate: trending down" in prompt
+    assert "Heart rate variability (SDNN) and resting heart rate: moved" in prompt
 
 
 @pytest.mark.asyncio
@@ -1046,7 +1046,7 @@ async def test_run_weekly_summary_success_writes_run_finding_and_insight():
     assert insight_inserts[0]["findings_used"] == [701]
     # Week-over-baseline delta was folded into the prompt.
     prompt = llm_mock.generate_insight.await_args.args[0]
-    assert "hrv: -7.7% vs 30-day baseline" in prompt
+    assert "Heart rate variability (SDNN): -7.7% vs your recent baseline" in prompt
     updates = session.all_update_statements()
     assert any(
         "status = 'completed'" in sql and params.get("tokens_in") == 60 for sql, params in updates

@@ -34,7 +34,7 @@ from .llm.prompts.weekly_summary import WEEKLY_SUMMARY_PROMPT_TEMPLATE
 from .statistical.aggregator import DataAggregator
 from .statistical.anomaly import AnomalyDetector
 from .statistical.correlations import CorrelationAnalyzer
-from .statistical.finding_cards import build_card
+from .statistical.finding_cards import build_card, metric_name, metric_unit
 from .statistical.recovery import RECOVERY_INPUT_METRICS, recovery_finding_data
 from .statistical.trends import TrendAnalyzer
 from .types import Anomaly, Finding, Insight
@@ -238,7 +238,7 @@ class AnalysisEngine:
                 recent_correlations = await self._fetch_recent_findings(session, "correlation")
 
                 prompt = DAILY_BRIEFING_PROMPT_TEMPLATE.format(
-                    period_summary=json.dumps(summary.metrics, indent=2, default=str),
+                    period_summary=_format_period_summary(summary.metrics),
                     anomalies=_format_anomalies_for_prompt(anomalies),
                     trends=_format_trends_for_prompt(recent_trends),
                     correlations=_format_correlations_for_prompt(recent_correlations),
@@ -368,7 +368,7 @@ class AnalysisEngine:
                 )
 
                 prompt = WEEKLY_SUMMARY_PROMPT_TEMPLATE.format(
-                    period_summary=json.dumps(summary.metrics, indent=2, default=str),
+                    period_summary=_format_period_summary(summary.metrics),
                     week_comparison=_format_week_comparison(summary.metrics),
                     trends=_format_trends_for_prompt(recent_trends),
                     correlations=_format_correlations_for_prompt(recent_correlations),
@@ -783,12 +783,55 @@ class AnalysisEngine:
             return []
 
 
+# The narrator gets plain, rounded lines with the catalog's names. Raw floats
+# ("slope=0.32088987764182425") and JSON dumps were copied into briefs as-is,
+# and a dumped "max" was narrated as if it were the unusual reading.
+def _num_text(value: float) -> str:
+    """``8357.14`` → ``8,357``; ``53.142`` → ``53.1``."""
+    return f"{value:,.0f}" if abs(value) >= 100 else f"{value:.1f}"
+
+
+def _p_text(p: Any) -> str | None:
+    """``0.00707`` → ``p = 0.007``; anything that rounds to zero → ``p < 0.001``."""
+    if not isinstance(p, int | float):
+        return None
+    return "p < 0.001" if p < 0.001 else f"p = {p:.3f}"
+
+
+def _format_period_summary(metrics: dict[str, dict]) -> str:
+    """One line per metric: this period's average, the usual level and the change."""
+    if not metrics:
+        return "no readings in this period"
+    lines = []
+    for metric_id, metric in metrics.items():
+        avg = metric.get("avg")
+        if not isinstance(avg, int | float):
+            continue
+        unit = metric_unit(metric_id)
+        suffix = f" {unit}" if unit else ""
+        count = metric.get("sample_count") or 0
+        line = (
+            f"- {metric_name(metric_id, start=True)}: average {_num_text(avg)}{suffix} "
+            f"from {count} reading{'s' if count != 1 else ''}"
+        )
+        baseline = metric.get("baseline_avg")
+        if isinstance(baseline, int | float):
+            line += f"; your recent usual {_num_text(baseline)}{suffix}"
+        delta = metric.get("delta_pct_vs_baseline")
+        if isinstance(delta, int | float):
+            line += f"; change {delta:+.1f}%"
+        lines.append(line)
+    return "\n".join(lines) if lines else "no readings in this period"
+
+
 def _format_anomalies_for_prompt(anomalies: list[Anomaly]) -> str:
     """Turn an anomaly list into a short bullet block for the LLM prompt."""
     if not anomalies:
         return "no unusual readings vs baseline"
     return "\n".join(
-        f"- {a.metric}: {a.direction} deviation, severity={a.severity}, z={a.magnitude:.2f}"
+        f"- {metric_name(a.metric, start=True)}: "
+        f"{'above' if a.direction == 'up' else 'below'} your usual range, "
+        f"z = {abs(a.magnitude):.1f} (severity {a.severity})"
         for a in anomalies
     )
 
@@ -800,10 +843,18 @@ def _format_trends_for_prompt(trends: list[Any]) -> str:
     lines = []
     for trend in trends:
         data = trend.structured_data
-        lines.append(
-            f"- {trend.metric or data.get('metric')}: {data.get('direction')} trend "
-            f"(slope={data.get('slope')}, p={data.get('p_value')})"
-        )
+        metric = trend.metric or data.get("metric")
+        line = f"- {metric_name(metric, start=True)}: trending {data.get('direction')}"
+        if data.get("period_days"):
+            line += f" over the last {data.get('period_days')} days"
+        details = []
+        slope = data.get("slope")
+        if isinstance(slope, int | float):
+            details.append(f"slope {slope:.2f} per day")
+        p_text = _p_text(data.get("p_value"))
+        if p_text:
+            details.append(p_text)
+        lines.append(line + (f" ({', '.join(details)})" if details else ""))
     return "\n".join(lines)
 
 
@@ -814,11 +865,21 @@ def _format_correlations_for_prompt(correlations: list[Any]) -> str:
     lines = []
     for correlation in correlations:
         data = correlation.structured_data
-        lines.append(
-            f"- {data.get('metric_a')} ~ {data.get('metric_b')}: "
-            f"r={data.get('coefficient')} ({data.get('method')})"
+        coefficient = data.get("coefficient")
+        if not isinstance(coefficient, int | float):
+            continue
+        together = "inversely" if coefficient < 0 else "together"
+        line = (
+            f"- {metric_name(data.get('metric_a'), start=True)} and "
+            f"{metric_name(data.get('metric_b'))}: moved {together}, "
+            f"correlation {coefficient:.2f}"
         )
-    return "\n".join(lines)
+        if data.get("method"):
+            line += f" ({data.get('method')})"
+        if data.get("period_days"):
+            line += f" over {data.get('period_days')} days"
+        lines.append(line)
+    return "\n".join(lines) if lines else "no notable correlations detected"
 
 
 def _finding_cards_for_brief(
@@ -867,7 +928,8 @@ def _format_finding_cards_for_prompt(cards: list[Any]) -> str:
 def _format_week_comparison(metrics: dict[str, dict]) -> str:
     """Per-metric week-over-baseline deltas the aggregator already computed."""
     lines = [
-        f"- {name}: {metric['delta_pct_vs_baseline']:+.1f}% vs 30-day baseline"
+        f"- {metric_name(name, start=True)}: {metric['delta_pct_vs_baseline']:+.1f}% "
+        "vs your recent baseline"
         for name, metric in metrics.items()
         if metric.get("delta_pct_vs_baseline") is not None
     ]

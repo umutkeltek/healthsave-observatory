@@ -101,6 +101,20 @@ def _name(metric_id: str | None, *, start: bool = False) -> str:
     return (first[:1].lower() + first[1:]) + (f" {rest}" if rest else "")
 
 
+def metric_name(metric_id: str | None, *, start: bool = False) -> str:
+    """Public form of :func:`_name`, for the narrator prompt's input lines."""
+    return _name(metric_id, start=start)
+
+
+def metric_unit(metric_id: str | None) -> str | None:
+    """The catalog unit worth printing after a value (``bpm``, ``ms``, ``kg``); none for counts."""
+    if not metric_id:
+        return None
+    definition = ontology.get_metric(metric_id)
+    unit = definition.canonical_unit if definition is not None else None
+    return None if unit in (None, "", "count", "1") else unit
+
+
 def _amount(value: float) -> str:
     """``8357.0`` → ``8,357``; ``73.24`` → ``73.2``."""
     return f"{value:,.0f}" if abs(value) >= 100 else f"{value:.1f}"
@@ -428,4 +442,4 @@ def build_card(
     return builder(metric, sd, severity)
 
 
-__all__ = ["build_card"]
+__all__ = ["build_card", "metric_name", "metric_unit"]

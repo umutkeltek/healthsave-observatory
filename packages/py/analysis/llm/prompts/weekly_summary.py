@@ -20,11 +20,13 @@ Correlations observed:
 Findings (computed — narrate these claims, do NOT recompute or invent numbers):
 {findings}
 
-Data sufficiency: {days_of_data}/{minimum_required} days of history.
+Days with data in this period: {days_of_data}.
 
-Produce a 200-350 word narrative. Organize by pillar (Recovery, Sleep,
-Activity, Body) and emphasize the single dimension that moved most.
-Close with one proposed focus area for the coming week.
+Write a 180-300 word narrative. Organize by pillar (Recovery, Sleep,
+Activity, Body), skipping any pillar with no lines above, and lead with
+the measurement that moved most. End with one sentence naming a measurement
+from the lines above that is worth watching next week, with its own number
+from above. Phrase it as an observation, never as advice.
 """
 
 
