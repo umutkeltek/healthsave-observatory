@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { formatValue } from "../lib/format";
 import {
   readingDate,
@@ -8,6 +9,8 @@ import {
   type TodayTrendOption,
 } from "../lib/todayPresentation";
 import { BaselineRibbon } from "./BaselineRibbon";
+import { DayRuler, DayScrub, ScrubAnswer } from "./chart/DayRuler";
+import { buildScrubSeries, calendarDays, usualBand } from "./chart/dayScrub";
 import { useTodayExploration } from "./TodayExploration";
 
 export function TodayTrend({
@@ -18,18 +21,21 @@ export function TodayTrend({
   now: string;
 }) {
   const exploration = useTodayExploration();
+  const [tableOpen, setTableOpen] = useState(false);
   const range = exploration?.range ?? 30;
   const option =
     options.find((item) => item.id === exploration?.selectedId) ?? options[0];
   if (!option) return null;
   const days = trendWindow(option.days, range, now);
-  const latest = days.at(-1);
   const dailyTotal = option.kind === "daily-total";
   const sleepMinutes = option.id === "sleep.duration" && option.unit === "min";
   const displayValue = (value: number) =>
     sleepMinutes
       ? `${Math.floor(Math.round(value) / 60)}h ${Math.round(value) % 60}m`
       : formatValue(value, option.unit);
+  // The same number without its unit, for the handle and the lens.
+  const bareValue = (value: number) =>
+    sleepMinutes ? displayValue(value) : formatValue(value);
   const description = dailyTotal
     ? "Daily totals"
     : option.kind === "nightly"
@@ -39,137 +45,136 @@ export function TodayTrend({
     option.id === "sleep.duration"
       ? "/sleep"
       : `/library/${encodeURIComponent(option.id)}?range=${range}d`;
+  const series =
+    days.length >= 2
+      ? buildScrubSeries({
+          dates: calendarDays(now, range),
+          readings: days,
+          band: usualBand(days.map((day) => day.value)),
+          unit: sleepMinutes ? "" : option.unit,
+          format: bareValue,
+          incompleteLatest: dailyTotal,
+        })
+      : null;
+  const lastReading = option.latestAt ? readingDate(option.latestAt) : null;
+  const tableId = "today-trend-values";
 
-  return (
-    <article
-      className="card today-trend"
-      id="today-reading-detail"
-      aria-label="Reading explorer"
-      aria-labelledby="today-trend-title"
-      tabIndex={-1}
-      ref={exploration?.registerDetail}
-    >
-      <div className="today-section-heading">
-        <div>
-          <span className="today-eyebrow">Explore a reading</span>
-          <h2 id="today-trend-title">{option.title} over time</h2>
-        </div>
-        <div className="today-range" role="group" aria-label="Chart time range">
-          {([7, 30] as const).map((count) => (
-            <button
-              key={count}
-              type="button"
-              aria-pressed={range === count}
-              onClick={() => exploration?.setRange(count)}
-            >
-              {count} days
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="today-trend-controls">
-        <label className="today-metric-picker">
-          <span>Reading</span>
-          <select
-            value={option.id}
-            onChange={(event) => exploration?.select(event.target.value)}
-          >
-            {options.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Link href={href}>
-          Full history <span aria-hidden>↗</span>
-        </Link>
-      </div>
-      <div
-        className="today-trend-summary"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        <span>
-          {description} · {days.length} of {range} days recorded
-        </span>
-        {latest && (
-          <span>
-            <strong>{displayValue(latest.value)}</strong> on{" "}
-            {readingDate(latest.date)}
-          </span>
-        )}
-      </div>
-      {days.length >= 2 ? (
-        <BaselineRibbon
-          key={`${option.id}-${range}`}
-          values={days.map((day) =>
-            sleepMinutes ? day.value / 60 : day.value,
-          )}
-          timestamps={days.map((day) => day.date)}
-          height={164}
-          unit={sleepMinutes ? "h" : option.unit}
-          axis={[
-            readingDate(days[0].date),
-            readingDate(days[days.length - 1].date),
-          ]}
-          hoverLabels={days.map((day) => readingDate(day.date))}
-          ariaLabel={`${option.title}: ${description.toLowerCase()} over ${range} days`}
-        />
-      ) : (
-        <div className="today-trend-empty">
-          <strong>
-            {days.length === 1
-              ? "One day recorded in this window"
-              : "No readings in this window"}
-          </strong>
-          <p>
-            {range === 7 && option.days.length > days.length
-              ? "Choose 30 days to see earlier readings."
-              : "A trend will appear after at least two recorded days."}
+  const card = (
+    <>
+      <div className="today-trend-field">
+        <header className="today-trend-head scrub-soft">
+          <div className="today-trend-top">
+            <span className="today-eyebrow">Explore a reading</span>
+            <div className="today-range" role="group" aria-label="Chart time range">
+              {([7, 30] as const).map((count) => (
+                <button
+                  key={count}
+                  type="button"
+                  aria-pressed={range === count}
+                  onClick={() => exploration?.setRange(count)}
+                >
+                  {count} days
+                </button>
+              ))}
+            </div>
+          </div>
+          <h2>
+            <label className="today-trend-pick">
+              <span id="today-trend-title">{option.title}</span>
+              <svg viewBox="0 0 12 12" aria-hidden>
+                <path d="M2.5 4.5 6 8l3.5-3.5" />
+              </svg>
+              <select
+                aria-label="Reading"
+                value={option.id}
+                onChange={(event) => exploration?.select(event.target.value)}
+              >
+                {options.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </h2>
+          <p className="today-trend-help" aria-live="polite" aria-atomic="true">
+            {description} · {days.length} of {range} days recorded
           </p>
-          <Link href="/sources">
-            Check your sources <span aria-hidden>→</span>
-          </Link>
-        </div>
-      )}
-      <div className="today-trend-context">
-        <span>{option.source}</span>
-        <span>
-          Dates in UTC
-          {option.latestAt
-            ? ` · Last reading ${readingDate(option.latestAt)}`
-            : ""}
-        </span>
-      </div>
-      <div className="today-trend-note">
-        {days.length >= 2 && (
-          <span>
-            Band: middle 50% of shown days.
-            {dailyTotal
-              ? " Latest day may be incomplete."
-              : " Gaps mean no readings."}
-          </span>
+        </header>
+        {series ? (
+          <div className="today-trend-chart">
+            <BaselineRibbon
+              values={[]}
+              scrub={series}
+              height={150}
+              ariaLabel={`${option.title}: ${description.toLowerCase()} over ${range} days, with your usual range as a band`}
+            />
+          </div>
+        ) : (
+          <div className="today-trend-empty">
+            <strong>
+              {days.length === 1
+                ? "One day recorded in this window"
+                : "No readings in this window"}
+            </strong>
+            <p>
+              {range === 7 && option.days.length > days.length
+                ? "Choose 30 days to see earlier readings."
+                : "A trend will appear after at least two recorded days."}
+              {lastReading ? ` Last reading ${lastReading}.` : ""}
+            </p>
+            <Link href="/sources">
+              Check your sources <span aria-hidden>→</span>
+            </Link>
+          </div>
         )}
-        <Link href="/compare">
-          Compare signals <span aria-hidden>↗</span>
-        </Link>
       </div>
-      {days.length > 0 && (
-        <details
-          className="today-trend-data"
-          key={`${option.id}-${range}-data`}
-        >
-          <summary>View {days.length} daily values</summary>
+      <div className="today-trend-body">
+        {series && (
+          <>
+            <DayRuler label={`${option.title}, day`} />
+            <ScrubAnswer />
+          </>
+        )}
+        <div className="today-trend-meta scrub-soft">
+          <span>{option.source} · dates in UTC</span>
+          <span className="today-trend-links">
+            <Link href={href}>
+              Full history <span aria-hidden>↗</span>
+            </Link>
+            <Link href="/compare">
+              Compare <span aria-hidden>↗</span>
+            </Link>
+            {days.length > 0 && (
+              <button
+                type="button"
+                aria-expanded={tableOpen}
+                aria-controls={tableId}
+                onClick={() => setTableOpen((open) => !open)}
+              >
+                Daily values <span aria-hidden>{tableOpen ? "▴" : "▾"}</span>
+              </button>
+            )}
+          </span>
+        </div>
+        {days.length > 0 && (
           <div
-            className="today-trend-table-wrap"
+            className="today-trend-table-wrap scrub-soft"
+            id={tableId}
+            hidden={!tableOpen}
             tabIndex={0}
             role="region"
             aria-label={`${option.title} daily values`}
           >
             <table>
               <caption>
-                {option.title} · {description.toLowerCase()} · UTC
+                {option.title} · {description.toLowerCase()} · UTC.
+                {series?.usual
+                  ? ` Your usual range, ${series.usual[0]} to ${series.usual[1]}${
+                      series.unit ? ` ${series.unit}` : ""
+                    }, is the middle half of these days.`
+                  : ""}
+                {dailyTotal ? " The latest day may be incomplete." : ""}
               </caption>
               <thead>
                 <tr>
@@ -195,7 +200,25 @@ export function TodayTrend({
               </tbody>
             </table>
           </div>
-        </details>
+        )}
+      </div>
+    </>
+  );
+
+  return (
+    <article
+      className="card today-trend"
+      id="today-reading-detail"
+      aria-labelledby="today-trend-title"
+      tabIndex={-1}
+      ref={exploration?.registerDetail}
+    >
+      {series ? (
+        <DayScrub key={`${option.id}-${range}`} series={series}>
+          {card}
+        </DayScrub>
+      ) : (
+        card
       )}
     </article>
   );
