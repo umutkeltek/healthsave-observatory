@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { briefLeadSentence, briefParagraphs } from "./textPresentation";
+import { BRIEF_NOTE, briefLeadSentence, briefParagraphs } from "./textPresentation";
 
 describe("text presentation", () => {
   test("turns narrator markdown into readable plain paragraphs", () => {
@@ -35,5 +35,14 @@ describe("text presentation", () => {
     expect(briefParagraphs("Recovery was compared with your 30-day baseline.")).toEqual([
       "Recovery was compared with your 30-day baseline.",
     ]);
+  });
+
+  test("the medical note is a caption, not a paragraph of the brief", () => {
+    const short = "Steps fell 9.4%.\n\nGeneral wellness information, not medical advice. If something worries you, talk to a doctor.";
+    const long =
+      "Steps fell 9.4%.\n\nThis is not medical advice. HealthSave analyses are informational only and cannot diagnose conditions.";
+    expect(briefParagraphs(short)).toEqual(["Steps fell 9.4%."]);
+    expect(briefParagraphs(long)).toEqual(["Steps fell 9.4%."]);
+    expect(BRIEF_NOTE.length).toBeLessThan(60);
   });
 });

@@ -4294,6 +4294,14 @@ label.field-label {
   text-decoration: underline;
 }
 
+/* One-line medical note under the brief: present on every brief, quiet in the layout. */
+.brief-disclaimer {
+  justify-self: start;
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+
 /* Experiment proposed from a finding (read-only URL prefill). */
 .exp-prefill {
   margin-bottom: 12px;

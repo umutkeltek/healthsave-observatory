@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
 import type { InsightsLatest, Narrative, NarratorRun, NarrativeHistoryItem } from "../lib/api";
-import { briefParagraphs } from "../lib/textPresentation";
+import { BRIEF_NOTE, briefParagraphs } from "../lib/textPresentation";
 import { RefreshInsightsButton } from "./RefreshInsightsButton";
 
 function formatDate(iso: string | null): string {
@@ -193,6 +193,8 @@ export function WeeklyBriefCard({
           ))}
         </ul>
       )}
+
+      <p className="brief-disclaimer">{BRIEF_NOTE}</p>
 
       {evidenceHref && (
         <a className="brief-evidence-link" href={evidenceHref}>

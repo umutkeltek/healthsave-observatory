@@ -22,12 +22,23 @@ function stripInlineMarkdown(line: string): string {
     .trim();
 }
 
+// The medical note the narrator appends (and the longer one older briefs carry)
+// is shown once, as a small caption under the brief, not as a paragraph of it.
+export const BRIEF_NOTE = "General wellness information, not medical advice.";
+
+function isMedicalNote(paragraph: string): boolean {
+  return /not medical advice/i.test(paragraph);
+}
+
 export function briefParagraphs(narrative: string): string[] {
   return narrative
     .replace(/\r\n/g, "\n")
     .split(/\n{2,}|\n/)
     .map(stripInlineMarkdown)
-    .filter((paragraph) => Boolean(paragraph) && !GENERIC_BRIEF_TITLES.has(paragraph.toLowerCase()));
+    .filter(
+      (paragraph) =>
+        Boolean(paragraph) && !GENERIC_BRIEF_TITLES.has(paragraph.toLowerCase()) && !isMedicalNote(paragraph),
+    );
 }
 
 export function briefLeadSentence(narrative: string | null | undefined): string | null {
