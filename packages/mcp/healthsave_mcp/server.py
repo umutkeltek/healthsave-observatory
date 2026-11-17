@@ -1,4 +1,4 @@
-"""MCP surface: eight read-only tools over the Observatory read API.
+"""MCP surface: nine read-only tools over the Observatory read API.
 
 No ``from __future__ import annotations`` here: FastMCP (1.12) inspects the
 tool parameters' annotations as real objects to build their schemas.
@@ -28,6 +28,8 @@ Use them to answer questions like "how did I sleep this year", "how active was I
 - today_vs_usual: today's readings against the person's own last 28 days.
 - sleep_summary / activity_summary: nights or days over a period, with monthly rows for long
   periods.
+- workouts: one record per workout (start, end, type, duration, energy, distance, heart rate,
+  source) over a period or between two dates.
 - metric_trend: one kind of data (any metric id from the overview) over a period.
 - findings: what the statistical engine found (anomalies, trends, correlations, recovery).
 - lab_results: blood test results against each lab's own reference range.
@@ -122,6 +124,22 @@ def build_server(
     )
     async def activity_summary(period: DayPeriod = "last_30_days") -> dict[str, Any]:
         return await run(tools.activity_summary(client(), period, clock=clock))
+
+    @server.tool(
+        title="Workouts",
+        description="One record per workout: start and end in the person's time zone, activity "
+        "type, duration, active energy, distance, average and highest heart rate, and the "
+        "source that recorded it. Use period, or from_date and to_date (YYYY-MM-DD) for exact "
+        "days. The newest 60 are listed one by one; longer periods add counts per source and "
+        "per month. Workouts from two sources are never merged.",
+        annotations=READ_ONLY,
+    )
+    async def workouts(
+        period: DayPeriod = "last_30_days",
+        from_date: str | None = None,
+        to_date: str | None = None,
+    ) -> dict[str, Any]:
+        return await run(tools.workouts(client(), period, from_date, to_date, clock=clock))
 
     @server.tool(
         title="One metric over time",

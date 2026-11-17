@@ -3,15 +3,16 @@
 Every result carries the window it covers, the units of every number, where
 it came from (``read_from``), and ``limitations``: stable codes with a plain
 sentence, the way the Observatory web words its limits. No tool writes, and
-no tool returns raw readings: only per-day, per-night and per-month summaries,
-findings the statistical engine already computed, and lab results.
+no tool returns raw readings: only per-day, per-night, per-workout and
+per-month summaries, findings the statistical engine already computed, and
+lab results.
 """
 
 from __future__ import annotations
 
 import difflib
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Callable, Sequence
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
@@ -46,6 +47,9 @@ DAY_PERIODS: dict[str, tuple[str, int | None]] = {
 DETAIL_LIMIT = 14
 MONTHLY_AFTER = 45
 DAILY_ROWS_LIMIT = 92
+#: Workouts are listed one by one up to this many (the newest); the rest are
+#: counted per source and per month.
+WORKOUT_LIST_LIMIT = 60
 
 ACTIVITY = (
     # metric id, key, unit shown, divisor from the canonical unit, digits
@@ -710,6 +714,16 @@ async def today_vs_usual(
 # ─── one metric over time ──────────────────────────────────────────────
 
 
+def _other_tool(metric_id: str) -> str:
+    """Where a metric that is not one number per reading can be read instead."""
+
+    if metric_id.startswith("sleep."):
+        return "use sleep_summary for sleep."
+    if metric_id.startswith("workout."):
+        return "use workouts for one record per workout."
+    return "metric_trend reads single-number metrics only."
+
+
 async def metric_trend(
     client: ObservatoryClient,
     metric_id: str,
@@ -732,7 +746,7 @@ async def metric_trend(
         )
     meta = known[metric_id]
     if meta.get("value_type") != "quantity":
-        raise ValueError(f"{metric_id} has no numeric values; use sleep_summary for sleep stages.")
+        raise ValueError(f"{metric_id} has no single numeric value; {_other_tool(metric_id)}")
     basis = await reader.basis()
     body = await reader.get(f"/api/v2/metrics/{metric_id}/series", {"range": range_})
     points = body.get("points") or []
@@ -848,6 +862,120 @@ async def metric_trend(
     else:
         payload["days"] = rows
     return reader.result("metric_trend", **payload)
+
+
+# ─── workouts ──────────────────────────────────────────────────────────
+
+
+def _day_arg(value: str | None, name: str) -> date | None:
+    if value is None or not str(value).strip():
+        return None
+    try:
+        return date.fromisoformat(str(value).strip())
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a date like 2026-11-01; got {value!r}") from exc
+
+
+async def workouts(
+    client: ObservatoryClient,
+    period: str = "last_30_days",
+    from_date: str | None = None,
+    to_date: str | None = None,
+    *,
+    clock: Clock | None = None,
+) -> dict[str, Any]:
+    _, days = _check_period(period, DAY_PERIODS)
+    first, last = _day_arg(from_date, "from_date"), _day_arg(to_date, "to_date")
+    if first is None and last is not None:
+        raise ValueError("to_date needs from_date; give both dates, or use period.")
+    if first is not None and last is not None and last < first:
+        raise ValueError(f"from_date {first} is after to_date {last}.")
+    reader = Reader(client, clock)
+    basis = await reader.basis()
+    today = reader.calendar_today(basis)  # a workout belongs to the day it started
+    if first is not None:
+        start, end = first, last or max(first, today)
+    else:
+        start, end = _window(today, days)
+    window = {
+        "period": period if first is None else "dates",
+        "from": start.isoformat(),
+        "to": end.isoformat(),
+        "time_basis": basis.describe(),
+    }
+    limit = derive.SERVER_POINT_CAP
+    rows = await reader.get(
+        "/api/v2/export",
+        {
+            "metric": "workouts",
+            # The export cuts on UTC dates; a day either side covers local days.
+            "from": (start - timedelta(days=1)).isoformat(),
+            "to": (end + timedelta(days=1)).isoformat(),
+            "limit": limit,
+        },
+    )
+    rows = rows if isinstance(rows, list) else []
+    sessions = derive.workouts(rows)
+    if len(rows) >= limit and sessions:
+        # The export keeps the newest rows; its oldest day may be incomplete.
+        whole = sessions[0].day(basis) + timedelta(days=1)
+        if whole > start:
+            reader.note(
+                "window_cut",
+                f"The Observatory returned its newest {limit:,} workouts, so workouts before "
+                f"{whole.isoformat()} are not in this answer. Ask for a shorter period.",
+            )
+            sessions = [w for w in sessions if w.day(basis) >= whole]
+    found = [w for w in sessions if start <= w.day(basis) <= end]
+    await reader.awaiting_sync(basis, start, today, what="workouts")
+    if not found:
+        reader.note("no_data", f"No workouts recorded between {start} and {end}.")
+        return reader.result("workouts", window=window, count=0, workouts=[])
+
+    per_source: dict[str, list[derive.Workout]] = defaultdict(list)
+    for workout in found:
+        per_source[workout.source].append(workout)
+    payload: dict[str, Any] = {
+        "window": window,
+        "count": len(found),
+        # Per source, never added across sources: two devices can record one session.
+        "sources": [
+            {
+                "source": name,
+                "workouts": len(items),
+                "duration_h": derive.rnd(sum(w.duration_min or 0.0 for w in items) / 60, 1),
+                "active_energy_kcal": derive.rnd(sum(w.active_energy_kcal or 0.0 for w in items), 0)
+                if any(w.active_energy_kcal is not None for w in items)
+                else None,
+                "types": dict(Counter(w.kind for w in items).most_common()),
+            }
+            for name, items in sorted(per_source.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+        ],
+    }
+    twice = sum(1 for w in found if w.overlaps)
+    if twice:
+        reader.note(
+            "overlapping_sources",
+            f"{twice} workouts were recorded by two sources over the same minutes (marked "
+            "same_time_as_another_source). They may be one session seen twice; they are listed "
+            "separately and never merged or added.",
+        )
+    if (end - start).days > MONTHLY_AFTER:
+        months: dict[str, Counter[str]] = defaultdict(Counter)
+        for workout in found:
+            months[workout.day(basis).strftime("%Y-%m")][workout.source] += 1
+        payload["months"] = [
+            {"month": month, "workouts_by_source": dict(sorted(months[month].items()))}
+            for month in sorted(months)
+        ]
+    if len(found) > WORKOUT_LIST_LIMIT:
+        reader.note(
+            "list_cut",
+            f"{len(found)} workouts in this period; the latest {WORKOUT_LIST_LIMIT} are listed "
+            "one by one. Ask for a shorter period, or from_date and to_date, for the rest.",
+        )
+    payload["workouts"] = [w.as_dict(basis) for w in found[-WORKOUT_LIST_LIMIT:]]
+    return reader.result("workouts", **payload)
 
 
 # ─── findings ──────────────────────────────────────────────────────────

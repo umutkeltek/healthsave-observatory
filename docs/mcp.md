@@ -13,6 +13,7 @@ The server is read-only. It talks to your Observatory and nothing else.
 |---|---|
 | "How did I sleep this year?" "Was last night normal for me?" | `sleep_summary` |
 | "How active was I last month?" "What was my best day?" | `activity_summary` |
+| "What workouts did I do yesterday?" "How long was Sunday's hike?" | `workouts` |
 | "How am I today compared with usual?" | `today_vs_usual` |
 | "Show my resting heart rate since spring." | `metric_trend` |
 | "What has changed lately?" | `findings` |
@@ -89,13 +90,15 @@ the primary person, so for a participant's key the tools say `key_scope` instead
 
 ## What it never does
 
-- **It never writes.** All eight tools are marked read-only to the client, the
+- **It never writes.** All nine tools are marked read-only to the client, the
   server sends only `GET` requests, and the key cannot write.
 - **It never hands your AI raw readings.** The MCP server runs on the AI's computer,
   reads from your Observatory (up to 5,000 readings per request, over your own
   network) and turns them into summaries: one value per day or per night, monthly
-  rows for long periods, findings the statistical engine already computed. Lab results
-  are the exception: they are listed one by one, at most 20 per marker. Away from
+  rows for long periods, findings the statistical engine already computed. Two things
+  are listed one by one: lab results (at most 20 per marker) and workouts (the newest
+  60, each as its own summary: times, type, duration, energy, distance, average and
+  highest heart rate, never the heart rate samples inside it). Away from
   home, reach your server over HTTPS or Tailscale ([Remote access](operations/remote-access.md)),
   never plain HTTP across the internet.
 - **It never talks to anyone else.** The server connects to `HEALTHSAVE_URL` only. It
@@ -117,6 +120,13 @@ Sleep: `last_night`, `last_7_nights`, `last_30_nights`, `last_90_nights`,
 `last_30_days`, `last_90_days`, `last_365_days`, `this_year`. Up to 14 nights or days are
 listed one by one; longer periods add one row per month.
 
+`workouts` takes the same day periods, or exact days with `from_date` and `to_date`
+(`2026-11-01`). Each workout is one record: start and end in your time zone, type,
+duration, active energy, distance, average and highest heart rate, and the device that
+recorded it. A number the device did not record is left out, not shown as zero. Elevation
+gain is not stored yet. When a watch and a band both record the same session, both are
+listed and marked; they are never merged or added.
+
 | Limitation code | Meaning |
 |---|---|
 | `window_cut` | The Observatory returns at most 5,000 readings per request and keeps the newest. The answer says from which day it is complete. Ask for a shorter period for full detail. |
@@ -126,6 +136,7 @@ listed one by one; longer periods add one row per month.
 | `awaiting_sync` | The phone last synced before a finished day ended, so that day may be partial until it syncs again. The day's row carries `awaiting_sync` (`yesterday_awaiting_sync` in `today_vs_usual`). Shown only when your phone app reports its syncs to the Observatory. |
 | `one_source_of_several` | No all-source day total, so one device's totals are used and the others left out, never added. |
 | `sources_disagree` | Two sources reported different sleep stages at the same time. |
+| `overlapping_sources` | Two sources recorded a workout over the same minutes. Both are listed and marked `same_time_as_another_source`. |
 | `record_starts_late` | The period starts before your first data. |
 | `no_data`, `no_findings` | Nothing recorded, or no findings computed yet. |
 | `list_cut` | A long list was shortened; the detail says how. |

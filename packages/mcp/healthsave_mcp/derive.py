@@ -3,8 +3,8 @@
 Everything an MCP tool hands to an AI client is computed here, the same way
 the Observatory web computes it: nights from ``sleep.stage`` intervals, one
 value per day for daily totals, and a person's usual range from their own
-history. Raw readings never leave this module; only per-day, per-night and
-per-month summaries do.
+history. Raw readings never leave this module; only per-day, per-night,
+per-workout and per-month summaries do.
 """
 
 from __future__ import annotations
@@ -579,3 +579,114 @@ def truncated(points: Sequence[dict[str, Any]]) -> datetime | None:
         return None
     times = [t for t in (parse_time(p.get("t")) for p in points) if t is not None]
     return min(times) if times else None
+
+
+# ─── workouts ──────────────────────────────────────────────────────────
+
+#: Two sources that recorded this much of the same time may hold one session.
+WORKOUT_OVERLAP = timedelta(minutes=1)
+
+
+@dataclass(slots=True)
+class Workout:
+    """One recorded workout: the session's own summary, never its samples."""
+
+    start: datetime
+    end: datetime | None
+    kind: str
+    source: str
+    duration_min: float | None
+    active_energy_kcal: float | None
+    distance_m: float | None
+    avg_hr: float | None
+    max_hr: float | None
+    #: Another source recorded a workout over the same minutes.
+    overlaps: bool = False
+
+    def day(self, basis: TimeBasis) -> date:
+        """The calendar day the workout started on."""
+
+        return self.start.astimezone(basis.tz).date()
+
+    def as_dict(self, basis: TimeBasis) -> dict[str, Any]:
+        row = {
+            "start": self.start.astimezone(basis.tz).isoformat(timespec="minutes"),
+            "end": self.end.astimezone(basis.tz).isoformat(timespec="minutes")
+            if self.end
+            else None,
+            "type": self.kind,
+            "source": self.source,
+            "duration_min": rnd(self.duration_min, 1),
+            "active_energy_kcal": rnd(self.active_energy_kcal, 0),
+            "distance_km": rnd(self.distance_m / 1000, 2) if self.distance_m is not None else None,
+            "avg_heart_rate_bpm": rnd(self.avg_hr, 0),
+            "max_heart_rate_bpm": rnd(self.max_hr, 0),
+        }
+        out = {key: value for key, value in row.items() if value is not None}
+        if self.overlaps:
+            out["same_time_as_another_source"] = True
+        return out
+
+
+def _label(value: Any) -> str:
+    text = " ".join(str(value).split()) if value is not None else ""
+    return text[:60] or "unknown"
+
+
+def _positive(value: Any) -> float | None:
+    number = _finite(value)
+    return number if number is not None and number > 0 else None
+
+
+def workouts(rows: Iterable[Any]) -> list[Workout]:
+    """Workouts from ``GET /api/v2/export?metric=workouts`` rows, oldest first.
+
+    Each source's workouts stay their own records. When two sources recorded
+    the same minutes both are kept and flagged, never merged or added: they
+    may be one session seen twice, or two different ones.
+    """
+
+    out: list[Workout] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        start = parse_time(row.get("start_time"))
+        if start is None:
+            continue
+        end = parse_time(row.get("end_time"))
+        if end is not None and end <= start:
+            end = None
+        milliseconds = _positive(row.get("duration_ms"))
+        if milliseconds is not None:
+            minutes: float | None = milliseconds / 60_000
+        elif end is not None:
+            minutes = (end - start).total_seconds() / 60
+        else:
+            minutes = None
+        if end is None and minutes is not None:
+            end = start + timedelta(minutes=minutes)
+        out.append(
+            Workout(
+                start=start,
+                end=end,
+                kind=_label(row.get("sport_type")),
+                source=_label(row.get("source_id")),
+                duration_min=minutes,
+                active_energy_kcal=_finite(row.get("calories")),
+                distance_m=_finite(row.get("distance_m")),
+                avg_hr=_positive(row.get("avg_hr")),
+                max_hr=_positive(row.get("max_hr")),
+            )
+        )
+    out.sort(key=lambda w: w.start)
+    running: list[Workout] = []
+    for workout in out:
+        running = [
+            w for w in running if w.end is not None and w.end - workout.start >= WORKOUT_OVERLAP
+        ]
+        for other in running:
+            if other.source != workout.source:
+                other.overlaps = workout.overlaps = True
+        if workout.end is not None:
+            running.append(workout)
+    return out

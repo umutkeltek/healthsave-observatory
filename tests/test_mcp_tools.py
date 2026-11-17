@@ -18,6 +18,7 @@ import pytest
 from healthsave_mcp import tools
 from healthsave_mcp.client import Config, ObservatoryClient
 from server.api.v2_metrics import _point_dicts
+from storage.timescale.export import METRIC_EXPORTS
 from storage.timescale.observations import SeriesPoint
 
 NOW = datetime(2026, 11, 7, 10, 0, tzinfo=UTC)
@@ -153,7 +154,64 @@ CATALOG = [
         "value_type": "category",
         "canonical_unit": None,
     },
+    {
+        "id": "workout.session",
+        "display_name": "Workout Session",
+        "category": "activity",
+        "value_type": "event",
+        "canonical_unit": None,
+    },
 ]
+
+
+def _workout(day: date, hour: int, minutes: int, sport: str, source: str, **fields) -> dict:
+    """One export row, keyed by the columns the server's export sends."""
+
+    start = _at(day, hour)
+    row = {
+        "start_time": start.isoformat(),
+        "end_time": (start + timedelta(minutes=minutes)).isoformat(),
+        "sport_type": sport,
+        "duration_ms": minutes * 60_000,
+        "avg_hr": fields.get("avg_hr"),
+        "max_hr": fields.get("max_hr"),
+        "calories": fields.get("calories"),
+        "distance_m": fields.get("distance_m"),
+        "source_id": source,
+    }
+    assert tuple(row) == METRIC_EXPORTS["workouts"].columns  # the wire shape, not a guess
+    return row
+
+
+def _workout_rows() -> list[dict]:
+    """A watch workout every third day all year; the band joins in November."""
+
+    rows = []
+    for i, day in enumerate(_days()):
+        if _off(day) or i % 3:
+            continue
+        rows.append(
+            _workout(
+                day,
+                7,
+                40,
+                "Running",
+                "Umut\u2019s Apple\xa0Watch",
+                avg_hr=148.4,
+                max_hr=171.0,
+                calories=410.6,
+                distance_m=6234.0,
+            )
+        )
+    rows.append(
+        _workout(date(2026, 11, 5), 18, 62, "Hiking", "WHOOP", avg_hr=121.0, calories=388.0)
+    )
+    # The band saw the watch's run on the 6th too: 07:05-07:35 inside 07:00-07:40.
+    band = _workout(date(2026, 11, 6), 7, 30, "Workout", "WHOOP", avg_hr=150.0, calories=395.0)
+    band["start_time"] = _at(date(2026, 11, 6), 7, 5).isoformat()
+    band["end_time"] = _at(date(2026, 11, 6), 7, 35).isoformat()
+    rows.append(band)
+    return rows
 
 
 FINDINGS = {
@@ -455,6 +513,16 @@ class FakeObservatory:
                     "records_received": 120,
                 },
             )
+        if path == "/api/v2/export" and q.get("metric") == "workouts":
+            # The server's own cut: whole UTC days, newest first, at most ``limit``.
+            first, last = date.fromisoformat(q["from"]), date.fromisoformat(q["to"])
+            rows = [
+                r
+                for r in _workout_rows()
+                if first <= datetime.fromisoformat(r["start_time"]).date() <= last
+            ]
+            rows.sort(key=lambda r: r["start_time"], reverse=True)
+            return httpx.Response(200, json=rows[: int(q["limit"])])
         return httpx.Response(404, json={"detail": "Not Found"})
 
     def client(self) -> ObservatoryClient:
@@ -601,6 +669,111 @@ async def test_metric_trend_refuses_unknown_and_non_numeric_metrics() -> None:
         await tools.metric_trend(FakeObservatory().client(), "vital.hrv", clock=CLOCK)
     with pytest.raises(ValueError, match="sleep_summary"):
         await tools.metric_trend(FakeObservatory().client(), "sleep.stage", clock=CLOCK)
+    # A workout is not a sleep stage: the refusal names the tool that reads it.
+    with pytest.raises(ValueError, match="use workouts for one record per workout") as refusal:
+        await tools.metric_trend(FakeObservatory().client(), "workout.session", clock=CLOCK)
+    assert "sleep" not in str(refusal.value)
+
+
+# ─── workouts ──────────────────────────────────────────────────────────
+
+
+async def test_workouts_are_one_record_each_with_units_time_zone_and_source() -> None:
+    fake = FakeObservatory(settings={"time_zone": "America/New_York", "day_boundary_minutes": 0})
+    result = await tools.workouts(fake.client(), "last_7_days", clock=CLOCK)
+    _assert_summary_only(result, fake)
+    assert result["window"]["time_basis"].startswith("America/New_York")
+    run = next(w for w in result["workouts"] if w["start"].startswith("2026-11-03"))
+    assert run == {
+        # 07:00 UTC is 02:00 in New York (EST since November 1): local time, with its offset.
+        "start": "2026-11-03T02:00-05:00",
+        "end": "2026-11-03T02:40-05:00",
+        "type": "Running",
+        "source": "Umut\u2019s Apple Watch",  # the label, without its no-break space
+        "duration_min": 40.0,
+        "active_energy_kcal": 411,
+        "distance_km": 6.23,
+        "avg_heart_rate_bpm": 148,
+        "max_heart_rate_bpm": 171,
+    }
+    hike = next(w for w in result["workouts"] if w["type"] == "Hiking")
+    assert "distance_km" not in hike and "max_heart_rate_bpm" not in hike  # not recorded, not 0
+    assert [w["start"] for w in result["workouts"]] == sorted(
+        w["start"] for w in result["workouts"]
+    )
+    assert result["count"] == len(result["workouts"])
+    [export] = [r for r in fake.requests if r.url.path == "/api/v2/export"]
+    assert export.url.params["metric"] == "workouts"
+
+
+async def test_workouts_between_two_dates_are_those_days_only() -> None:
+    result = await tools.workouts(
+        FakeObservatory().client(), from_date="2026-11-05", to_date="2026-11-05", clock=CLOCK
+    )
+    assert result["window"] == {
+        "period": "dates",
+        "from": "2026-11-05",
+        "to": "2026-11-05",
+        "time_basis": "UTC, days start 00:00",
+    }
+    assert [(w["type"], w["source"]) for w in result["workouts"]] == [("Hiking", "WHOOP")]
+    assert result["workouts"][0]["start"] == "2026-11-05T18:00+00:00"
+    assert result["workouts"][0]["duration_min"] == 62.0
+
+
+async def test_two_sources_on_one_session_are_both_listed_and_never_added() -> None:
+    result = await tools.workouts(
+        FakeObservatory().client(), from_date="2026-11-06", to_date="2026-11-06", clock=CLOCK
+    )
+    assert result["count"] == 2
+    assert all(w["same_time_as_another_source"] for w in result["workouts"])
+    assert "overlapping_sources" in [lim["code"] for lim in result["limitations"]]
+    # One row per source: nothing here adds the watch's 40 minutes to the band's 30.
+    assert {s["source"]: s["duration_h"] for s in result["sources"]} == {
+        "Umut\u2019s Apple Watch": 0.7,
+        "WHOOP": 0.5,
+    }
+
+
+async def test_a_year_of_workouts_lists_the_latest_and_counts_the_rest_by_month() -> None:
+    fake = FakeObservatory()
+    result = await tools.workouts(fake.client(), "this_year", clock=CLOCK)
+    _assert_summary_only(result, fake)
+    assert result["count"] > tools.WORKOUT_LIST_LIMIT
+    assert len(result["workouts"]) == tools.WORKOUT_LIST_LIMIT
+    assert result["workouts"][-1]["start"].startswith("2026-11-06")
+    assert "list_cut" in [lim["code"] for lim in result["limitations"]]
+    november = next(m for m in result["months"] if m["month"] == "2026-11")
+    assert november["workouts_by_source"]["WHOOP"] == 2
+    watch = next(s for s in result["sources"] if s["source"] != "WHOOP")
+    assert watch["types"] == {"Running": watch["workouts"]}
+
+
+async def test_workouts_refuse_dates_they_cannot_read_and_say_when_there_are_none() -> None:
+    fake = FakeObservatory()
+    with pytest.raises(ValueError, match="from_date must be a date like"):
+        await tools.workouts(fake.client(), from_date="last tuesday", clock=CLOCK)
+    with pytest.raises(ValueError, match="to_date needs from_date"):
+        await tools.workouts(fake.client(), to_date="2026-11-05", clock=CLOCK)
+    with pytest.raises(ValueError, match="is after to_date"):
+        await tools.workouts(
+            fake.client(), from_date="2026-11-05", to_date="2026-11-01", clock=CLOCK
+        )
+    assert fake.requests == []
+    empty = await tools.workouts(
+        fake.client(), from_date="2026-08-04", to_date="2026-08-10", clock=CLOCK
+    )
+    assert empty["count"] == 0 and empty["workouts"] == []
+    assert "no_data" in [lim["code"] for lim in empty["limitations"]]
+
+
+async def test_a_cut_workout_export_is_named_with_its_real_start(monkeypatch) -> None:
+    monkeypatch.setattr(tools.derive, "SERVER_POINT_CAP", 10)
+    result = await tools.workouts(FakeObservatory().client(), "this_year", clock=CLOCK)
+    [cut] = [lim for lim in result["limitations"] if lim["code"] == "window_cut"]
+    kept_from = cut["detail"].split(" before ")[1][:10]
+    assert all(w["start"][:10] >= kept_from for w in result["workouts"])
+    assert result["count"] == len(result["workouts"]) < 10
 
 
 # ─── a day the phone has not synced since ──────────────────────────────
@@ -626,6 +799,12 @@ async def test_a_day_synced_before_it_ended_is_flagged_in_every_daily_answer() -
         FakeObservatory(synced_at=LATE).client(), "activity.steps", "last_7_days", clock=CLOCK
     )
     assert [d["date"] for d in trend["days"] if d.get("awaiting_sync")] == ["2026-11-06"]
+
+    sessions = await tools.workouts(
+        FakeObservatory(synced_at=LATE).client(), "last_7_days", clock=CLOCK
+    )
+    [lim] = [lim for lim in sessions["limitations"] if lim["code"] == "awaiting_sync"]
+    assert "workouts may be partial" in lim["detail"]
 
 
 async def test_a_day_synced_after_it_ended_or_never_synced_by_a_phone_is_not_flagged() -> None:

@@ -38,14 +38,28 @@ Plugins carry their own versions.
   of thirty a minute across all addresses. Left `false`, sign-in keeps one
   shared count of ten a minute, as before; the sign-in page now says how long
   to wait.
+- After `healthsave update`, run `healthsave mcp` again and paste the new setup
+  line into your AI client to get the new `workouts` tool.
 
 ### Added
 
-- MCP: `activity_summary`, `today_vs_usual` and `metric_trend` now say when
-  the phone last synced before a finished day ended (limitation
+- MCP: a ninth read-only tool, `workouts`. One record per workout over a period
+  or between two dates (`from_date`, `to_date`): start and end in your time
+  zone, type, duration, active energy, distance, average and highest heart
+  rate, and the device that recorded it. The newest 60 are listed one by one;
+  longer periods add counts per source and per month. A session that two
+  devices recorded is listed twice and marked, never merged or added. Elevation
+  gain is not stored yet. ([Give your AI a body](docs/mcp.md))
+- MCP: `activity_summary`, `today_vs_usual`, `metric_trend` and `workouts` now
+  say when the phone last synced before a finished day ended (limitation
   `awaiting_sync`, and `awaiting_sync` on that day's row), so a morning read
   no longer passes off a partial yesterday as final. Shown only when the phone
   app reports its syncs to the Observatory.
+
+### Fixed
+
+- MCP: `metric_trend` on `workout.session` no longer answers "use
+  sleep_summary for sleep stages". It names the tool that reads the metric.
 
 ## [1.4.0] - 2026-11-07
 

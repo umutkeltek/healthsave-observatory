@@ -1,6 +1,6 @@
 """MCP read server through the protocol: a real MCP client session, in memory.
 
-What an AI client sees: eight tools, every one marked read-only, typed
+What an AI client sees: nine tools, every one marked read-only, typed
 periods, JSON results, and errors it can explain.
 """
 
@@ -22,6 +22,7 @@ TOOLS = {
     "today_vs_usual",
     "sleep_summary",
     "activity_summary",
+    "workouts",
     "metric_trend",
     "findings",
     "lab_results",
@@ -39,7 +40,7 @@ def _json(result) -> dict:
     return json.loads("".join(getattr(c, "text", "") for c in result.content))
 
 
-async def test_eight_read_only_tools_and_nothing_else() -> None:
+async def test_nine_read_only_tools_and_nothing_else() -> None:
     async with create_connected_server_and_client_session(_server()) as session:
         listed = await session.list_tools()
     assert {tool.name for tool in listed.tools} == TOOLS
@@ -67,6 +68,24 @@ async def test_how_did_i_sleep_this_year_through_the_protocol() -> None:
     body = _json(result)
     assert body["tool"] == "sleep_summary" and body["summary"]["nights"] > 290
     assert body["nights_without_data"]["runs"][0]["from"] == "2026-08-03"
+    assert all(r.method == "GET" for r in fake.requests)
+
+
+async def test_workouts_between_two_dates_through_the_protocol() -> None:
+    fake = FakeObservatory()
+    async with create_connected_server_and_client_session(_server(fake)) as session:
+        listed = await session.list_tools()
+        schema = next(t.inputSchema for t in listed.tools if t.name == "workouts")
+        assert {"period", "from_date", "to_date"} <= set(schema["properties"])
+        result = await session.call_tool(
+            "workouts", {"from_date": "2026-11-05", "to_date": "2026-11-06"}
+        )
+        bad = await session.call_tool("workouts", {"from_date": "yesterday"})
+    assert not result.isError
+    body = _json(result)
+    assert body["tool"] == "workouts" and body["count"] == 3
+    assert {w["type"] for w in body["workouts"]} == {"Hiking", "Running", "Workout"}
+    assert bad.isError and "from_date must be a date like" in bad.content[0].text
     assert all(r.method == "GET" for r in fake.requests)
 
 

@@ -88,20 +88,52 @@ async def _ask(key: str, calls: list[tuple[str, dict]]) -> tuple[list[str], str,
 def synthetic_year():
     """A fresh participant with the synthetic year: (read key, seed summary)."""
 
-    from scripts.seed_synthetic_year import seed
+    from scripts.seed_synthetic_year import post, seed
 
     owner = uuid.uuid4()
     label = f"e2e-mcp-{owner.hex[:8]}"
     ingest = asyncio.run(_mint(label, "ingest", owner))
     read = asyncio.run(_mint(label, "read", owner))
     summary = seed(BASE_URL, ingest)
+    # Two workouts the way the phone sends them, for the workouts tool.
+    post(BASE_URL, ingest, "workouts", _phone_workouts())
     return read, summary
+
+
+def _phone_workouts() -> list[dict]:
+    """Yesterday's run and hike, in the iOS app's batch shape."""
+
+    day = dt.datetime.now(dt.UTC).replace(hour=7, minute=0, second=0, microsecond=0)
+    day -= dt.timedelta(days=1)
+
+    def sample(name: str, start: dt.datetime, minutes: int, **extra) -> dict:
+        return {
+            "name": name,
+            "start": start.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            "end": (start + dt.timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            "duration": minutes * 60,
+            "source": "Apple Watch",
+            **extra,
+        }
+
+    return [
+        sample(
+            "Running",
+            day,
+            45,
+            activeEnergy=410,
+            distance=7200,
+            avgHeartRate=142,
+            maxHeartRate=176,
+        ),
+        sample("Hiking", day + dt.timedelta(hours=9), 62, activeEnergy=388),
+    ]
 
 
 def test_how_did_i_sleep_this_year_through_a_real_mcp_client(synthetic_year) -> None:
     read_key, seeded = synthetic_year
     today = dt.datetime.now(dt.UTC).date()
-    names, instructions, (sleep, year, overview, found) = asyncio.run(
+    names, instructions, (sleep, year, overview, found, sessions) = asyncio.run(
         _ask(
             read_key,
             [
@@ -109,10 +141,11 @@ def test_how_did_i_sleep_this_year_through_a_real_mcp_client(synthetic_year) -> 
                 ("year_in_health", {}),
                 ("observatory_overview", {}),
                 ("findings", {}),
+                ("workouts", {"period": "last_7_days"}),
             ],
         )
     )
-    assert len(names) == 8 and "sleep_summary" in names
+    assert len(names) == 9 and {"sleep_summary", "workouts"} <= set(names)
     assert "read-only" in instructions
 
     # Every seeded night comes back, counted the way the web counts it.
@@ -142,6 +175,17 @@ def test_how_did_i_sleep_this_year_through_a_real_mcp_client(synthetic_year) -> 
             off_from <= g["start"] <= g["end"] <= off_to and g["days"] >= 7 for g in year["gaps"]
         ), year["gaps"]
     assert any(c["device"] == "Oura Ring" for c in year["device_changes"])
+
+    # Phone batch -> workouts table -> export -> one record per workout, with the
+    # participant's own read key (the export is one of the routes it may read).
+    assert sessions["count"] == 2, sessions
+    run, hike = sessions["workouts"]
+    assert (run["type"], run["duration_min"], run["source"]) == ("Running", 45.0, "Apple Watch")
+    assert (run["active_energy_kcal"], run["distance_km"]) == (410, 7.2)
+    assert (run["avg_heart_rate_bpm"], run["max_heart_rate_bpm"]) == (142, 176)
+    assert run["start"].endswith("T07:00+00:00")  # this key reads in UTC
+    assert hike["type"] == "Hiking" and "distance_km" not in hike
+    assert sessions["sources"][0]["types"] == {"Running": 1, "Hiking": 1}
 
     # A participant's read key is told what it cannot read, not given it.
     assert overview["can_read"] == {"readings": True, "findings": False, "lab_results": False}
