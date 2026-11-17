@@ -602,16 +602,25 @@ class Workout:
     max_hr: float | None
     #: Another source recorded a workout over the same minutes.
     overlaps: bool = False
+    #: Minutes east of UTC where the workout was recorded, when the phone sent it.
+    offset_min: int | None = None
+
+    def zone(self, basis: TimeBasis) -> tzinfo:
+        """The workout's own time zone, else the person's setting."""
+
+        if self.offset_min is not None:
+            return timezone(timedelta(minutes=self.offset_min))
+        return basis.tz
 
     def day(self, basis: TimeBasis) -> date:
-        """The calendar day the workout started on."""
+        """The calendar day the workout started on, where it was recorded."""
 
-        return self.start.astimezone(basis.tz).date()
+        return self.start.astimezone(self.zone(basis)).date()
 
     def as_dict(self, basis: TimeBasis) -> dict[str, Any]:
         row = {
-            "start": self.start.astimezone(basis.tz).isoformat(timespec="minutes"),
-            "end": self.end.astimezone(basis.tz).isoformat(timespec="minutes")
+            "start": self.start.astimezone(self.zone(basis)).isoformat(timespec="minutes"),
+            "end": self.end.astimezone(self.zone(basis)).isoformat(timespec="minutes")
             if self.end
             else None,
             "type": self.kind,
@@ -638,12 +647,33 @@ def _positive(value: Any) -> float | None:
     return number if number is not None and number > 0 else None
 
 
-def workouts(rows: Iterable[Any]) -> list[Workout]:
+def workout_offsets(points: Iterable[Any]) -> dict[datetime, int]:
+    """Start time -> the UTC offset the phone recorded that workout at.
+
+    From ``workout.session`` series points, which carry the capture offset the
+    workouts export does not. Only the offset is read from them.
+    """
+
+    out: dict[datetime, int] = {}
+    for point in points:
+        if not isinstance(point, dict):
+            continue
+        t = parse_time(point.get("t"))
+        offset = point.get("tz_offset_minutes")
+        if t is None or isinstance(offset, bool) or not isinstance(offset, int):
+            continue
+        if -16 * 60 <= offset <= 16 * 60:
+            out[t] = offset
+    return out
+
+
+def workouts(rows: Iterable[Any], offsets: dict[datetime, int] | None = None) -> list[Workout]:
     """Workouts from ``GET /api/v2/export?metric=workouts`` rows, oldest first.
 
     Each source's workouts stay their own records. When two sources recorded
     the same minutes both are kept and flagged, never merged or added: they
-    may be one session seen twice, or two different ones.
+    may be one session seen twice, or two different ones. ``offsets`` (see
+    ``workout_offsets``) gives a workout the time zone it was recorded in.
     """
 
     out: list[Workout] = []
@@ -676,6 +706,7 @@ def workouts(rows: Iterable[Any]) -> list[Workout]:
                 distance_m=_finite(row.get("distance_m")),
                 avg_hr=_positive(row.get("avg_hr")),
                 max_hr=_positive(row.get("max_hr")),
+                offset_min=(offsets or {}).get(start),
             )
         )
     out.sort(key=lambda w: w.start)

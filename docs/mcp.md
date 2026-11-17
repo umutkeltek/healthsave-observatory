@@ -121,9 +121,10 @@ Sleep: `last_night`, `last_7_nights`, `last_30_nights`, `last_90_nights`,
 listed one by one; longer periods add one row per month.
 
 `workouts` takes the same day periods, or exact days with `from_date` and `to_date`
-(`2026-11-01`). Each workout is one record: start and end in your time zone, type,
+(`2026-11-01`). Each workout is one record: start and end in the time zone it was
+recorded in (your Observatory's time zone when the phone did not send one), type,
 duration, active energy, distance, average and highest heart rate, and the device that
-recorded it. A number the device did not record is left out, not shown as zero. Elevation
+recorded it. A workout belongs to the day it started on in that time zone. A number the device did not record is left out, not shown as zero. Elevation
 gain is not stored yet. When a watch and a band both record the same session, both are
 listed and marked; they are never merged or added.
 

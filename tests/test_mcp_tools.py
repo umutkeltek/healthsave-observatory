@@ -164,6 +164,9 @@ CATALOG = [
 ]
 
 
+WATCH_NAME = "Umut\u2019s Apple\xa0Watch"  # as HealthKit spells it, no-break space included
+
+
 def _workout(day: date, hour: int, minutes: int, sport: str, source: str, **fields) -> dict:
     """One export row, keyed by the columns the server's export sends."""
 
@@ -196,7 +199,7 @@ def _workout_rows() -> list[dict]:
                 7,
                 40,
                 "Running",
-                "Umut\u2019s Apple\xa0Watch",
+                WATCH_NAME,
                 avg_hr=148.4,
                 max_hr=171.0,
                 calories=410.6,
@@ -211,7 +214,37 @@ def _workout_rows() -> list[dict]:
     band["start_time"] = _at(date(2026, 11, 6), 7, 5).isoformat()
     band["end_time"] = _at(date(2026, 11, 6), 7, 35).isoformat()
     rows.append(band)
+    # 23:30 UTC on October 20 is 00:30 on the 21st where the watch was (UTC+1).
+    late = _workout(date(2026, 10, 20), 23, 30, "Running", WATCH_NAME, calories=300.0)
+    late["start_time"] = _at(date(2026, 10, 20), 23, 30).isoformat()
+    late["end_time"] = _at(date(2026, 10, 21), 0, 0).isoformat()
+    rows.append(late)
     return rows
+
+
+def _workout_sessions() -> list[dict]:
+    """The session series: the watch's workouts with the offset the phone captured.
+
+    The band's workouts came through its own connector and carry no offset.
+    """
+
+    return _point_dicts(
+        [
+            SeriesPoint(
+                t=datetime.fromisoformat(row["start_time"]),
+                interval_end=datetime.fromisoformat(row["end_time"]),
+                value=None,
+                code=None,
+                unit=None,
+                source_id="apple_health",
+                confidence=None,
+                stream_id=WATCH,
+                tz_offset_minutes=60,
+            )
+            for row in _workout_rows()
+            if row["source_id"] == WATCH_NAME
+        ]
+    )
 
 
 FINDINGS = {
@@ -375,6 +408,8 @@ class FakeObservatory:
 
     def _series(self, metric: str, range_: str) -> list[dict]:
         points = SERIES.get(metric, list)()
+        if metric == "workout.session":
+            points = _workout_sessions()
         if metric == "sleep.stage":
             points = sorted(points + self.extra_sleep, key=lambda p: p["t"])
         since = NOW - timedelta(days=RANGE_DAYS.get(range_, 3650))
@@ -685,9 +720,9 @@ async def test_workouts_are_one_record_each_with_units_time_zone_and_source() ->
     assert result["window"]["time_basis"].startswith("America/New_York")
     run = next(w for w in result["workouts"] if w["start"].startswith("2026-11-03"))
     assert run == {
-        # 07:00 UTC is 02:00 in New York (EST since November 1): local time, with its offset.
-        "start": "2026-11-03T02:00-05:00",
-        "end": "2026-11-03T02:40-05:00",
+        # The watch recorded it at UTC+1: shown there, not in the New York setting.
+        "start": "2026-11-03T08:00+01:00",
+        "end": "2026-11-03T08:40+01:00",
         "type": "Running",
         "source": "Umut\u2019s Apple Watch",  # the label, without its no-break space
         "duration_min": 40.0,
@@ -697,13 +732,30 @@ async def test_workouts_are_one_record_each_with_units_time_zone_and_source() ->
         "max_heart_rate_bpm": 171,
     }
     hike = next(w for w in result["workouts"] if w["type"] == "Hiking")
+    # The band sent no offset: 18:00 UTC in the person's own zone (EST since November 1).
+    assert (hike["start"], hike["end"]) == ("2026-11-05T13:00-05:00", "2026-11-05T14:02-05:00")
     assert "distance_km" not in hike and "max_heart_rate_bpm" not in hike  # not recorded, not 0
-    assert [w["start"] for w in result["workouts"]] == sorted(
-        w["start"] for w in result["workouts"]
-    )
+    instants = [datetime.fromisoformat(w["start"]) for w in result["workouts"]]
+    assert instants == sorted(instants)
     assert result["count"] == len(result["workouts"])
     [export] = [r for r in fake.requests if r.url.path == "/api/v2/export"]
     assert export.url.params["metric"] == "workouts"
+
+
+async def test_a_workout_belongs_to_the_day_it_started_where_it_was_recorded() -> None:
+    late = {"from_date": "2026-10-21", "to_date": "2026-10-21"}
+    result = await tools.workouts(FakeObservatory().client(), **late, clock=CLOCK)
+    assert [w["start"] for w in result["workouts"]] == ["2026-10-21T00:30+01:00"]
+    day_before = await tools.workouts(
+        FakeObservatory().client(), from_date="2026-10-20", to_date="2026-10-20", clock=CLOCK
+    )
+    assert day_before["count"] == 0
+    # Without the session series (an older server, a narrower key) the answer still
+    # comes, in the person's own zone: 23:30 UTC stays on the 20th.
+    fake = FakeObservatory(deny=("/api/v2/metrics/workout.session",))
+    plain = await tools.workouts(fake.client(), from_date="2026-10-20", clock=CLOCK)
+    assert plain["workouts"][0]["start"] == "2026-10-20T23:30+00:00"
+    assert "key_scope" not in [lim["code"] for lim in plain["limitations"]]
 
 
 async def test_workouts_between_two_dates_are_those_days_only() -> None:
@@ -715,6 +767,8 @@ async def test_workouts_between_two_dates_are_those_days_only() -> None:
         "from": "2026-11-05",
         "to": "2026-11-05",
         "time_basis": "UTC, days start 00:00",
+        "times": "each workout in the time zone it was recorded in when the phone sent one, "
+        "otherwise UTC",
     }
     assert [(w["type"], w["source"]) for w in result["workouts"]] == [("Hiking", "WHOOP")]
     assert result["workouts"][0]["start"] == "2026-11-05T18:00+00:00"

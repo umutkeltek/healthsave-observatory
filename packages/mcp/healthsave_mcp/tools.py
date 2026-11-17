@@ -892,6 +892,16 @@ def _day_arg(value: str | None, name: str) -> date | None:
         raise ValueError(f"{name} must be a date like 2026-11-01; got {value!r}") from exc
 
 
+def _series_range(start: date, today: date) -> str:
+    """The narrowest series range that reaches back to ``start``."""
+
+    back = (today - start).days + 2
+    for name, reach in (("7d", 7), ("30d", 30), ("90d", 90), ("1y", 365)):
+        if back <= reach:
+            return name
+    return "all"
+
+
 async def workouts(
     client: ObservatoryClient,
     period: str = "last_30_days",
@@ -918,6 +928,8 @@ async def workouts(
         "from": start.isoformat(),
         "to": end.isoformat(),
         "time_basis": basis.describe(),
+        "times": "each workout in the time zone it was recorded in when the phone sent one, "
+        f"otherwise {basis.zone}",
     }
     limit = derive.SERVER_POINT_CAP
     rows = await reader.get(
@@ -931,7 +943,14 @@ async def workouts(
         },
     )
     rows = rows if isinstance(rows, list) else []
-    sessions = derive.workouts(rows)
+    try:  # the export has no time zone; the session series carries each one's offset
+        series = await reader.get(
+            "/api/v2/metrics/workout.session/series", {"range": _series_range(start, today)}
+        )
+    except ObservatoryError:
+        series = {}
+    points = series.get("points") if isinstance(series, dict) else None
+    sessions = derive.workouts(rows, derive.workout_offsets(points or []))
     if len(rows) >= limit and sessions:
         # The export keeps the newest rows; its oldest day may be incomplete.
         whole = sessions[0].day(basis) + timedelta(days=1)

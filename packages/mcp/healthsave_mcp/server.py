@@ -127,11 +127,11 @@ def build_server(
 
     @server.tool(
         title="Workouts",
-        description="One record per workout: start and end in the person's time zone, activity "
-        "type, duration, active energy, distance, average and highest heart rate, and the "
-        "source that recorded it. Use period, or from_date and to_date (YYYY-MM-DD) for exact "
-        "days. The newest 60 are listed one by one; longer periods add counts per source and "
-        "per month. Workouts from two sources are never merged.",
+        description="One record per workout: start and end in the time zone it was recorded "
+        "in, activity type, duration, active energy, distance, average and highest heart rate, "
+        "and the source that recorded it. Use period, or from_date and to_date (YYYY-MM-DD) "
+        "for exact days. The newest 60 are listed one by one; longer periods add counts per "
+        "source and per month. Workouts from two sources are never merged.",
         annotations=READ_ONLY,
     )
     async def workouts(

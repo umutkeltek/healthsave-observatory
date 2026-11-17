@@ -44,9 +44,9 @@ Plugins carry their own versions.
 ### Added
 
 - MCP: a ninth read-only tool, `workouts`. One record per workout over a period
-  or between two dates (`from_date`, `to_date`): start and end in your time
-  zone, type, duration, active energy, distance, average and highest heart
-  rate, and the device that recorded it. The newest 60 are listed one by one;
+  or between two dates (`from_date`, `to_date`): start and end in the time
+  zone it was recorded in, type, duration, active energy, distance, average
+  and highest heart rate, and the device that recorded it. The newest 60 are listed one by one;
   longer periods add counts per source and per month. A session that two
   devices recorded is listed twice and marked, never merged or added. Elevation
   gain is not stored yet. ([Give your AI a body](docs/mcp.md))
