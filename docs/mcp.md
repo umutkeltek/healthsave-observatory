@@ -123,6 +123,7 @@ listed one by one; longer periods add one row per month.
 | `time_basis_utc` | The key cannot read your time zone setting, so days are grouped in UTC. |
 | `key_scope` | This key may not read that part of the record (a participant's key and findings, for example). |
 | `today_in_progress` | Today's totals are still counting and are kept out of the averages. |
+| `awaiting_sync` | The phone last synced before a finished day ended, so that day may be partial until it syncs again. The day's row carries `awaiting_sync` (`yesterday_awaiting_sync` in `today_vs_usual`). Shown only when your phone app reports its syncs to the Observatory. |
 | `one_source_of_several` | No all-source day total, so one device's totals are used and the others left out, never added. |
 | `sources_disagree` | Two sources reported different sleep stages at the same time. |
 | `record_starts_late` | The period starts before your first data. |

@@ -39,6 +39,14 @@ Plugins carry their own versions.
   shared count of ten a minute, as before; the sign-in page now says how long
   to wait.
 
+### Added
+
+- MCP: `activity_summary`, `today_vs_usual` and `metric_trend` now say when
+  the phone last synced before a finished day ended (limitation
+  `awaiting_sync`, and `awaiting_sync` on that day's row), so a morning read
+  no longer passes off a partial yesterday as final. Shown only when the phone
+  app reports its syncs to the Observatory.
+
 ## [1.4.0] - 2026-11-07
 
 Give your AI a body: your own Claude can read your record. `healthsave mcp`

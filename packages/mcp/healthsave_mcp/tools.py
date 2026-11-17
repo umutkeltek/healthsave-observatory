@@ -89,6 +89,8 @@ class Reader:
         self.limitations: list[dict[str, str]] = []
         self._basis: TimeBasis | None = None
         self._labels: dict[str, str] | None = None
+        self._sync_read = False
+        self._last_sync: datetime | None = None
 
     async def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         query = "&".join(f"{k}={v}" for k, v in (params or {}).items() if v is not None)
@@ -130,6 +132,49 @@ class Reader:
                 if isinstance(s, dict)
             }
         return self._labels
+
+    async def last_sync(self) -> datetime | None:
+        """When the phone's latest sync reached the Observatory, if one is on record."""
+
+        if not self._sync_read:
+            self._sync_read = True
+            try:
+                run = await self.get("/api/v2/sync/runs/latest")
+            except ObservatoryError:
+                run = None
+            if isinstance(run, dict):
+                self._last_sync = derive.parse_time(
+                    run.get("completed_at") or run.get("started_at")
+                )
+        return self._last_sync
+
+    async def awaiting_sync(
+        self, basis: TimeBasis, start: date, today: date, *, what: str, boundary: bool = False
+    ) -> date | None:
+        """The finished day the phone last synced in, when the window holds it.
+
+        A day is final only once the phone syncs after it ends. Until then that
+        day may be partial and later days hold nothing from the phone. Without
+        a sync on record (an Android phone, a wearable connector) nothing is
+        claimed either way.
+        """
+
+        synced = await self.last_sync()
+        if synced is None:
+            return None
+        day = (
+            derive.analytical_day(synced, basis) if boundary else synced.astimezone(basis.tz).date()
+        )
+        if not start <= day < today:
+            return None
+        stamp = synced.astimezone(basis.tz).strftime("%Y-%m-%d %H:%M")
+        self.note(
+            "awaiting_sync",
+            f"The phone last synced at {stamp} ({basis.zone}), before {day.isoformat()} ended. "
+            f"That day's {what} may be partial, and later days hold nothing from the phone, "
+            "until it syncs again.",
+        )
+        return day
 
     def today(self, basis: TimeBasis) -> date:
         """The person's analytical day (for readings: day starts at the boundary)."""
@@ -462,6 +507,7 @@ async def activity_summary(
         )
 
     listed = [d for d in derive.date_range(start, end) if any(d in v for v in per_metric.values())]
+    late = await reader.awaiting_sync(basis, start, today, what="totals")
     payload: dict[str, Any] = {"window": window, "totals": totals, "units": units}
     if (end - start).days > MONTHLY_AFTER:
         months: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
@@ -490,6 +536,7 @@ async def activity_summary(
                 for key, values in per_metric.items()
                 if d in values
             },
+            **({"awaiting_sync": True} if d == late else {}),
         }
         for d in listed[-DETAIL_LIMIT:]
     ]
@@ -576,6 +623,7 @@ async def today_vs_usual(
 
     totals = []
     cal = reader.calendar_today(basis)  # totals and nights are calendar days
+    late = await reader.awaiting_sync(basis, cal - timedelta(days=1), cal, what="totals")
     for metric_id, _key, unit, divisor, digits in ACTIVITY[:3]:
         daily = derive.daily_totals(by_id.get(metric_id) or [], basis)
         values = {d: v / divisor for d, v in daily.values.items()}
@@ -595,6 +643,9 @@ async def today_vs_usual(
                 if cal - timedelta(days=1) in values
                 else None,
                 "usual_full_day": derive.usual_range(before, digits),
+                **(
+                    {"yesterday_awaiting_sync": True} if late is not None and late in values else {}
+                ),
             }
         )
     if totals:
@@ -752,6 +803,13 @@ async def metric_trend(
             unit=unit,
             window=window,
         )
+    late = await reader.awaiting_sync(
+        basis, start, today, what="total" if is_total else "readings", boundary=not is_total
+    )
+    if late is not None:
+        for row in rows:
+            if row["date"] == late.isoformat():
+                row["awaiting_sync"] = True
     payload: dict[str, Any] = {
         "metric": metric_id,
         "name": meta.get("display_name"),

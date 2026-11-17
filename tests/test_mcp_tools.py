@@ -154,6 +154,8 @@ CATALOG = [
         "canonical_unit": None,
     },
 ]
+
+
 FINDINGS = {
     "findings": [
         {
@@ -304,11 +306,13 @@ class FakeObservatory:
         cap: int | None = None,
         settings: dict | None = None,
         extra_sleep: list[dict] | None = None,
+        synced_at: str | None = "2026-11-07T06:05:00Z",
     ) -> None:
         self.deny = deny
         self.cap = cap
         self.settings = settings or SETTINGS
         self.extra_sleep = extra_sleep or []
+        self.synced_at = synced_at
         self.requests: list[httpx.Request] = []
 
     def _series(self, metric: str, range_: str) -> list[dict]:
@@ -441,10 +445,12 @@ class FakeObservatory:
                 },
             )
         if path == "/api/v2/sync/runs/latest":
+            if self.synced_at is None:  # no phone sync on record
+                return httpx.Response(404, json={"detail": "no sync runs"})
             return httpx.Response(
                 200,
                 json={
-                    "completed_at": "2026-11-07T06:05:00Z",
+                    "completed_at": self.synced_at,
                     "status": "ok",
                     "records_received": 120,
                 },
@@ -595,6 +601,47 @@ async def test_metric_trend_refuses_unknown_and_non_numeric_metrics() -> None:
         await tools.metric_trend(FakeObservatory().client(), "vital.hrv", clock=CLOCK)
     with pytest.raises(ValueError, match="sleep_summary"):
         await tools.metric_trend(FakeObservatory().client(), "sleep.stage", clock=CLOCK)
+
+
+# ─── a day the phone has not synced since ──────────────────────────────
+
+LATE = "2026-11-06T21:00:00Z"  # the phone's last sync: 9 pm yesterday
+
+
+async def test_a_day_synced_before_it_ended_is_flagged_in_every_daily_answer() -> None:
+    activity = await tools.activity_summary(
+        FakeObservatory(synced_at=LATE).client(), "last_7_days", clock=CLOCK
+    )
+    [lim] = [lim for lim in activity["limitations"] if lim["code"] == "awaiting_sync"]
+    assert "2026-11-06 21:00 (UTC)" in lim["detail"] and "before 2026-11-06 ended" in lim["detail"]
+    flagged = [d["date"] for d in activity["days"] if d.get("awaiting_sync")]
+    assert flagged == ["2026-11-06"]
+
+    today = await tools.today_vs_usual(FakeObservatory(synced_at=LATE).client(), clock=CLOCK)
+    steps = next(t for t in today["totals"] if t["metric"] == "activity.steps")
+    assert steps["yesterday"] is not None and steps["yesterday_awaiting_sync"] is True
+    assert "awaiting_sync" in [lim["code"] for lim in today["limitations"]]
+
+    trend = await tools.metric_trend(
+        FakeObservatory(synced_at=LATE).client(), "activity.steps", "last_7_days", clock=CLOCK
+    )
+    assert [d["date"] for d in trend["days"] if d.get("awaiting_sync")] == ["2026-11-06"]
+
+
+async def test_a_day_synced_after_it_ended_or_never_synced_by_a_phone_is_not_flagged() -> None:
+    # Synced this morning: yesterday is final. Today is "in progress", not "awaiting".
+    # No sync on record (Android, a wearable connector): nothing is claimed either way.
+    for fake in (
+        FakeObservatory(),
+        FakeObservatory(synced_at=None),
+        FakeObservatory(deny=("/api/v2/sync",)),
+        FakeObservatory(synced_at="2026-10-01T09:00:00Z"),  # long ago: outside the window
+    ):
+        activity = await tools.activity_summary(fake.client(), "last_7_days", clock=CLOCK)
+        assert "awaiting_sync" not in [lim["code"] for lim in activity["limitations"]]
+        assert not any("awaiting_sync" in d for d in activity["days"])
+        today = await tools.today_vs_usual(fake.client(), clock=CLOCK)
+        assert not any("yesterday_awaiting_sync" in t for t in today["totals"])
 
 
 # ─── findings, labs, year, overview ────────────────────────────────────
