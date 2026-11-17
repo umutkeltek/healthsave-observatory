@@ -175,7 +175,7 @@ class Reader:
         self.note(
             "awaiting_sync",
             f"The phone last synced at {stamp} ({basis.zone}), before {day.isoformat()} ended. "
-            f"That day's {what} may be partial, and later days hold nothing from the phone, "
+            f"{what}, and later days hold nothing from the phone, "
             "until it syncs again.",
         )
         return day
@@ -370,6 +370,13 @@ async def sleep_summary(
         "night_of": "the evening a night began (a night that started after midnight counts "
         "for the evening before)",
     }
+    late = await reader.awaiting_sync(
+        basis,
+        start,
+        today,
+        what="The night that began that evening may be missing or partial",
+        boundary=True,
+    )
     if not nights:
         reader.note("no_data", f"No night with at least an hour asleep between {start} and {end}.")
         return reader.result("sleep_summary", window=window, summary={"nights": 0})
@@ -413,7 +420,10 @@ async def sleep_summary(
             )
     if len(nights) > MONTHLY_AFTER:
         payload["months"] = derive.sleep_months(nights, basis)
-    payload["nights"] = [n.as_dict(basis) for n in nights[-DETAIL_LIMIT:]]
+    payload["nights"] = [
+        {**n.as_dict(basis), **({"awaiting_sync": True} if n.night_of == late else {})}
+        for n in nights[-DETAIL_LIMIT:]
+    ]
     if len(nights) > DETAIL_LIMIT:
         payload["nights_listed"] = f"the last {DETAIL_LIMIT} of {len(nights)}"
     if any(n.stage_min.get("conflict") for n in nights):
@@ -511,7 +521,7 @@ async def activity_summary(
         )
 
     listed = [d for d in derive.date_range(start, end) if any(d in v for v in per_metric.values())]
-    late = await reader.awaiting_sync(basis, start, today, what="totals")
+    late = await reader.awaiting_sync(basis, start, today, what="That day's totals may be partial")
     payload: dict[str, Any] = {"window": window, "totals": totals, "units": units}
     if (end - start).days > MONTHLY_AFTER:
         months: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
@@ -627,7 +637,9 @@ async def today_vs_usual(
 
     totals = []
     cal = reader.calendar_today(basis)  # totals and nights are calendar days
-    late = await reader.awaiting_sync(basis, cal - timedelta(days=1), cal, what="totals")
+    late = await reader.awaiting_sync(
+        basis, cal - timedelta(days=1), cal, what="That day's totals may be partial"
+    )
     for metric_id, _key, unit, divisor, digits in ACTIVITY[:3]:
         daily = derive.daily_totals(by_id.get(metric_id) or [], basis)
         values = {d: v / divisor for d, v in daily.values.items()}
@@ -818,7 +830,11 @@ async def metric_trend(
             window=window,
         )
     late = await reader.awaiting_sync(
-        basis, start, today, what="total" if is_total else "readings", boundary=not is_total
+        basis,
+        start,
+        today,
+        what=f"That day's {'total' if is_total else 'readings'} may be partial",
+        boundary=not is_total,
     )
     if late is not None:
         for row in rows:
@@ -927,7 +943,7 @@ async def workouts(
             )
             sessions = [w for w in sessions if w.day(basis) >= whole]
     found = [w for w in sessions if start <= w.day(basis) <= end]
-    await reader.awaiting_sync(basis, start, today, what="workouts")
+    await reader.awaiting_sync(basis, start, today, what="That day's workouts may be partial")
     if not found:
         reader.note("no_data", f"No workouts recorded between {start} and {end}.")
         return reader.result("workouts", window=window, count=0, workouts=[])

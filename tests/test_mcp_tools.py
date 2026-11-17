@@ -804,7 +804,14 @@ async def test_a_day_synced_before_it_ended_is_flagged_in_every_daily_answer() -
         FakeObservatory(synced_at=LATE).client(), "last_7_days", clock=CLOCK
     )
     [lim] = [lim for lim in sessions["limitations"] if lim["code"] == "awaiting_sync"]
-    assert "workouts may be partial" in lim["detail"]
+    assert "That day's workouts may be partial" in lim["detail"]
+
+    sleep = await tools.sleep_summary(
+        FakeObservatory(synced_at=LATE).client(), "last_7_nights", clock=CLOCK
+    )
+    [lim] = [lim for lim in sleep["limitations"] if lim["code"] == "awaiting_sync"]
+    assert "The night that began that evening may be missing or partial" in lim["detail"]
+    assert [n["night_of"] for n in sleep["nights"] if n.get("awaiting_sync")] == ["2026-11-06"]
 
 
 async def test_a_day_synced_after_it_ended_or_never_synced_by_a_phone_is_not_flagged() -> None:
@@ -821,6 +828,9 @@ async def test_a_day_synced_after_it_ended_or_never_synced_by_a_phone_is_not_fla
         assert not any("awaiting_sync" in d for d in activity["days"])
         today = await tools.today_vs_usual(fake.client(), clock=CLOCK)
         assert not any("yesterday_awaiting_sync" in t for t in today["totals"])
+        sleep = await tools.sleep_summary(fake.client(), "last_7_nights", clock=CLOCK)
+        assert "awaiting_sync" not in [lim["code"] for lim in sleep["limitations"]]
+        assert not any("awaiting_sync" in n for n in sleep["nights"])
 
 
 # ─── findings, labs, year, overview ────────────────────────────────────

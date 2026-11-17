@@ -50,11 +50,12 @@ Plugins carry their own versions.
   longer periods add counts per source and per month. A session that two
   devices recorded is listed twice and marked, never merged or added. Elevation
   gain is not stored yet. ([Give your AI a body](docs/mcp.md))
-- MCP: `activity_summary`, `today_vs_usual`, `metric_trend` and `workouts` now
-  say when the phone last synced before a finished day ended (limitation
-  `awaiting_sync`, and `awaiting_sync` on that day's row), so a morning read
-  no longer passes off a partial yesterday as final. Shown only when the phone
-  app reports its syncs to the Observatory.
+- MCP: `sleep_summary`, `activity_summary`, `today_vs_usual`, `metric_trend`
+  and `workouts` now say when the phone last synced before a finished day ended
+  (limitation `awaiting_sync`, and `awaiting_sync` on that day's row or night),
+  so a morning read no longer passes off a partial yesterday, or a night that
+  has not arrived yet, as final. Shown only when the phone app reports its
+  syncs to the Observatory.
 
 ### Fixed
 
