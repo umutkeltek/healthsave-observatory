@@ -1141,6 +1141,21 @@ async def _ingest_daily_quantity(
     return result.with_counts(rejected=rejected_count, deduped_in_batch=dedup_count)
 
 
+def _workout_elevation_gain_m(sample: dict) -> float | None:
+    """A workout's total elevation gain in metres, or None.
+
+    ``elevationGain`` rides on a workouts sample only when the device recorded
+    one (iPhone app 1.9.4 and later). A value that is not a finite number
+    >= 0 is dropped and the workout is kept, as a bad ``distance`` is: one
+    unusable field never fails the batch.
+    """
+    raw = first_present(sample, "elevation_gain_m", "elevationGain")
+    if isinstance(raw, bool):
+        return None
+    value = to_float(raw)
+    return value if value is not None and value >= 0 else None
+
+
 async def _ingest_workouts(
     session: AsyncSession,
     device_id: int,
@@ -1175,6 +1190,7 @@ async def _ingest_workouts(
                 "max_hr": to_float(first_present(s, "max_hr", "maxHeartRate")),
                 "calories": to_float(first_present(s, "calories", "activeEnergy")),
                 "distance_m": to_float(first_present(s, "distance_m", "distance")),
+                "elevation_gain_m": _workout_elevation_gain_m(s),
                 "source_id": _sample_source(s),
                 "owner_id": str(owner_id),
             }
@@ -1199,6 +1215,7 @@ async def _ingest_workouts(
                 "max_hr",
                 "calories",
                 "distance_m",
+                "elevation_gain_m",
                 "source_id",
                 "owner_id",
             ],
@@ -1212,6 +1229,7 @@ async def _ingest_workouts(
                 "max_hr",
                 "calories",
                 "distance_m",
+                "elevation_gain_m",
                 "source_id",
                 "owner_id",
             ],
@@ -1225,6 +1243,10 @@ async def _ingest_workouts(
                 "max_hr = EXCLUDED.max_hr, "
                 "calories = EXCLUDED.calories, "
                 "distance_m = EXCLUDED.distance_m, "
+                # Older apps and other sources send no elevation gain; a
+                # re-sent workout without one keeps the value already stored.
+                "elevation_gain_m = COALESCE(EXCLUDED.elevation_gain_m, "
+                "workouts.elevation_gain_m), "
                 "source_id = COALESCE(EXCLUDED.source_id, workouts.source_id)"
             ),
         )
