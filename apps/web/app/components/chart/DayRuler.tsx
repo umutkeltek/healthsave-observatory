@@ -21,6 +21,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -280,15 +281,32 @@ export function DayRuler({ label }: { label: string }) {
   );
 }
 
+// Every day's answer also sits, unseen, in the same grid cell as the one shown,
+// so the line keeps the height of its longest answer. A gap day reads shorter
+// and a note longer; moving the ruler never moves what is under the line.
 export function ScrubAnswer({ className }: { className?: string }) {
   const scrub = useContext(ScrubContext);
+  const series = scrub?.series;
+  const sizes = useMemo(
+    () => (series ? series.days.map((day) => scrubAnswer(day, series)) : []),
+    [series],
+  );
   if (!scrub || scrub.series.days.length === 0) return null;
   const answer = scrubAnswer(scrub.series.days[scrub.index], scrub.series);
+  const name = className ? `scrub-answer ${className}` : "scrub-answer";
   return (
-    <p className={className ? `scrub-answer ${className}` : "scrub-answer"}>
-      <b>{answer.value}</b>
-      {answer.rest}
-    </p>
+    <div className="scrub-answer-slot">
+      <p className={name}>
+        <b>{answer.value}</b>
+        {answer.rest}
+      </p>
+      {sizes.map((size, i) => (
+        <p key={i} className={`${name} scrub-answer-size`} aria-hidden>
+          <b>{size.value}</b>
+          {size.rest}
+        </p>
+      ))}
+    </div>
   );
 }
 

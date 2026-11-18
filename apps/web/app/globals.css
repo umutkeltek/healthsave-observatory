@@ -3634,6 +3634,17 @@ label.field-label {
   color: var(--ink);
   font-weight: 600;
 }
+/* The shown answer and, unseen, every other day's answer share one cell, so
+   the line is as tall as its longest answer and nothing below it moves. */
+.scrub-answer-slot {
+  display: grid;
+}
+.scrub-answer-slot > .scrub-answer {
+  grid-area: 1 / 1;
+}
+.scrub-answer-size {
+  visibility: hidden;
+}
 .scrub-caption {
   margin: 6px 0 0;
   text-align: center;

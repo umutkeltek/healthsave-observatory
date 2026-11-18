@@ -78,6 +78,20 @@ describe("Today exploration", () => {
     expect(ticks.match(/is-dot/g)?.length).toBe(28);
   });
 
+  test("the answer line keeps the height of its longest answer, so nothing below moves", () => {
+    const html = renderToStaticMarkup(
+      <TodayTrend options={[option]} now="2026-10-16T23:00:00Z" />,
+    );
+    const slot = html.split('<div class="scrub-answer-slot">')[1].split("</div>")[0];
+    // The shown answer comes first; every day of the window sits behind it, unseen.
+    expect(slot.startsWith('<p class="scrub-answer"><b>23 steps</b>')).toBe(true);
+    const sizes = slot.match(/<p class="scrub-answer scrub-answer-size" aria-hidden="true">/g);
+    expect(sizes?.length).toBe(30);
+    // The short gap-day answer and the long noted one both size the line.
+    expect(slot).toContain("<b>No reading</b> on Thu, Sep 17. The gap stays a gap.");
+    expect(slot).toContain("<b>23 steps</b> on Fri, Oct 16 · latest day, may be incomplete");
+  });
+
   test("stale data does not create a current trend and offers a source check", () => {
     const html = renderToStaticMarkup(
       <TodayTrend options={[option]} now="2026-12-01T00:00:00Z" />,
