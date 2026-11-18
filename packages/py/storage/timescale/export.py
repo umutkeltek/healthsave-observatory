@@ -5,7 +5,8 @@ metrics maps each public metric name to a real datahub table + a fixed column
 list, so the route never lets a caller name a table/column. Every query is
 owner-scoped to the single-user sentinel and parameterized; date filters and the
 row cap are bound params. Mirrors the legacy healthtrack export service but maps
-to datahub's actual schema (e.g. workouts has no altitude_gain_m here).
+to datahub's actual schema (workouts carry ``elevation_gain_m``, not the
+legacy ``altitude_gain_m``).
 """
 
 from __future__ import annotations
@@ -127,6 +128,7 @@ METRIC_EXPORTS: dict[str, MetricExportSpec] = {
             "max_hr",
             "calories",
             "distance_m",
+            "elevation_gain_m",
             "source_id",
         ),
         "Workouts",

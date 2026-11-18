@@ -180,6 +180,7 @@ def _workout(day: date, hour: int, minutes: int, sport: str, source: str, **fiel
         "max_hr": fields.get("max_hr"),
         "calories": fields.get("calories"),
         "distance_m": fields.get("distance_m"),
+        "elevation_gain_m": fields.get("elevation_gain_m"),
         "source_id": source,
     }
     assert tuple(row) == METRIC_EXPORTS["workouts"].columns  # the wire shape, not a guess
