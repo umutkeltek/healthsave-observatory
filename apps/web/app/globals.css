@@ -3741,8 +3741,10 @@ label.field-label {
   stroke-width: 1;
   stroke-dasharray: 1 5;
 }
+/* Above the selected day's stem: the halo masks the stem where it passes. */
 .ribbon-edge-label {
   position: absolute;
+  z-index: 1;
   left: 4px;
   color: var(--muted);
   font-family: var(--mono);
