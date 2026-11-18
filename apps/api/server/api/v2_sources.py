@@ -211,7 +211,9 @@ async def whoop_webhook(request: Request, session: Any = Depends(get_session)) -
 async def _apply_whoop_event(raw_body: bytes, session: Any) -> dict[str, Any]:
     try:
         event = json.loads(raw_body)
-    except json.JSONDecodeError as e:
+    except ValueError as e:
+        # Malformed JSON, not UTF-8, or an integer past Python's int-string
+        # limit (a plain ValueError): never parses, so a 400, not a 500.
         raise HTTPException(status_code=400, detail="whoop webhook body must be JSON") from e
     if not isinstance(event, dict):
         raise HTTPException(status_code=400, detail="whoop webhook body must be a JSON object")

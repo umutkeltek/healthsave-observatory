@@ -68,7 +68,6 @@ the iOS client change ships in Slice 3).
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
@@ -532,7 +531,11 @@ async def v2_apple_batch(
     raw_payload: dict[str, Any]
     try:
         raw_payload = await request.json()
-    except json.JSONDecodeError as exc:
+    except ValueError as exc:
+        # Malformed JSON, a body that is not UTF-8, or an integer longer than
+        # Python's int-string limit (4,300 digits; json raises a plain
+        # ValueError for it): the body can never parse, so it gets the same
+        # terminal 400 as v1, never a 500 the app would retry forever.
         raise HTTPException(status_code=400, detail="invalid JSON body") from exc
 
     payload_hash = await _trusted_payload_hash(request)
