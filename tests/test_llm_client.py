@@ -116,6 +116,27 @@ async def test_reasoning_model_falls_back_to_reasoning_content(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["content", "reasoning_content"])
+async def test_a_doubled_negative_never_reaches_the_brief(monkeypatch, field):
+    """The guard runs on every reply, including the reasoning-content fallback."""
+    reply = "<think>Use the change line.</think>Resting heart rate was down -4.8% this week."
+    response = (
+        _fake_response(reply) if field == "content" else _fake_response("", reasoning_content=reply)
+    )
+    acompletion = AsyncMock(return_value=response)
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(LLMConfig(provider="ollama", model="qwen3:6b"))
+    result = await client.generate_insight("p", insight_type="weekly_summary")
+
+    assert result.narrative == llm_client.inject_disclaimer(
+        "Resting heart rate was down 4.8% this week."
+    )
+    assert acompletion.await_count == 1
+    assert (result.tokens_in, result.tokens_out) == (42, 77)
+
+
+@pytest.mark.asyncio
 async def test_inline_think_block_is_stripped_from_content(monkeypatch):
     content = "<think>I should mention the baseline. Frame neutrally.</think>\n\nSleep was steady."
     acompletion = AsyncMock(return_value=_fake_response(content))

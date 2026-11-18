@@ -11,8 +11,9 @@ line of defense between the LLM and the user:
   * :func:`inject_disclaimer` - idempotent helper that appends the
     disclaimer only when the LLM has not already produced one.
   * :func:`scrub_narrative` - removes sentences that diagnose, name a
-    condition, mention medication or set diet targets, and rounds long
-    decimals, before the disclaimer is added.
+    condition, mention medication or set diet targets, rounds long
+    decimals, and drops the minus sign a fall word already says
+    (:func:`drop_doubled_minus`), before the disclaimer is added.
 """
 
 import re
@@ -87,6 +88,69 @@ _HAS_P = re.compile(r"\bp\s*(=|<|-value)", re.IGNORECASE)
 _LONG_DECIMAL = re.compile(r"\d+\.\d{3,}")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 
+# The prompt gives each change signed ("change -4.8%"), and a small model copies
+# the sign after a word that already says "fell": "down -4.8%", "decreased by
+# -1.7%", "a -4.8% drop". Only that sign is dropped; the number, unit, spacing
+# and any bold markers stay. Left verbatim, on purpose:
+#   - a signed percent with no fall word ("change -4.8%", "Steps: -4.8%");
+#   - a parenthesised figure ("fell (-4.8%)"), which reads as the raw stat;
+#   - a word that contradicts the sign ("rose -4.8%", "decreased by +2%"):
+#     dropping the sign would flip the computed direction, so the contradiction
+#     stays visible instead of becoming a confident wrong claim;
+#   - ranges and bounds ("by -1.7% to -0.5%", "-1.7%–-0.5%", "-1.7% or more"),
+#     where the sign belongs to an endpoint;
+#   - anything not a percent ("fell -0.3 °C", "the correlation was -0.3").
+_H = r"[^\S\r\n]"  # horizontal whitespace: never joins two lines
+# Character-class body: hyphen-minus (escaped, so "[+" + this "]" is no range),
+# minus sign, and an en dash written as a minus.
+_MINUS = r"\-\u2212\u2013"
+_EM = r"(?:\*{1,2}|_{1,2})?"  # markdown bold/italic around the figure
+_PCT = rf"(?:\d+(?:\.\d+)?|\.\d+)(?:{_H}?%|{_H}+per{_H}?cent\b|{_H}+percentage{_H}+points?\b)"
+_FALL_VERB = (
+    r"down|fell|fallen|falls|dropped|drops|decreased|decreases|declined|declines|"
+    r"dipped|dips|slipped|slips|sank|sunk|shrank|shrunk|reduced|lowered"
+)
+_FALL_NOUN = r"drop|decrease|decline|fall|dip|reduction"
+_FALL_AFTER = r"drop|decrease|decline|fall|dip|reduction|lower|less|below|down"
+# The figure is the first end of a range or a bound: leave it alone.
+_RANGE_OR_BOUND = (
+    rf"{_EM}\s*(?:or\b|(?:to|through|and)\s*[+{_MINUS}]?{_PCT}"
+    rf"|[{_MINUS}\u2014]\s*[+{_MINUS}]?\.?\d)"
+)
+_FALL_THEN_MINUS = re.compile(
+    rf"(?P<lead>\b(?:(?:{_FALL_VERB}){_H}+(?:by{_H}+)?|(?:{_FALL_NOUN}){_H}+(?:of|by){_H}+"
+    rf"|lower{_H}+by{_H}+){_EM})[{_MINUS}]{_H}?(?P<figure>{_PCT})(?!{_RANGE_OR_BOUND})",
+    re.IGNORECASE,
+)
+_MINUS_THEN_FALL = re.compile(
+    rf"(?<![\w.%+{_MINUS}])[{_MINUS}](?P<figure>{_PCT}{_EM}{_H}+(?:{_FALL_AFTER})\b)",
+    re.IGNORECASE,
+)
+# "between -2% and -4.8% lower": the figure closes a range.
+_RANGE_BEFORE = re.compile(rf"(?:\b(?:to|through|and|or)|[{_MINUS}\u2014]){_H}*{_EM}$", re.I)
+
+
+def _unsign_after_fall_word(match: re.Match[str]) -> str:
+    return match.group("lead") + match.group("figure")
+
+
+def _unsign_before_fall_word(match: re.Match[str]) -> str:
+    if _RANGE_BEFORE.search(match.string, 0, match.start()):
+        return match.group(0)
+    return match.group("figure")
+
+
+def drop_doubled_minus(text: str) -> str:
+    """Drop the minus from a percent that a fall word already makes negative.
+
+    ``"down -4.8%"`` becomes ``"down 4.8%"``, ``"decreased by -1.7%"`` becomes
+    ``"decreased by 1.7%"`` and ``"a -4.8% drop"`` becomes ``"a 4.8% drop"``.
+    Wording only: no number changes, and text without that doubled negative
+    comes back unchanged. Idempotent.
+    """
+    text = _FALL_THEN_MINUS.sub(_unsign_after_fall_word, text)
+    return _MINUS_THEN_FALL.sub(_unsign_before_fall_word, text)
+
 
 @dataclass(frozen=True)
 class ScrubResult:
@@ -117,7 +181,8 @@ def scrub_narrative(text: str, *, allow_doctor: bool = False) -> ScrubResult:
 
     Runs line by line so headings and list items keep their place. A line whose
     every sentence is removed disappears. A model-written medical disclaimer is
-    removed too: :func:`inject_disclaimer` then appends the reviewed one.
+    removed too: :func:`inject_disclaimer` then appends the reviewed one. A
+    doubled negative ("down -4.8%") loses its minus (:func:`drop_doubled_minus`).
     """
     removed: list[str] = []
     kept_lines: list[str] = []
@@ -136,6 +201,7 @@ def scrub_narrative(text: str, *, allow_doctor: bool = False) -> ScrubResult:
         kept_lines.append(new_line)
     cleaned = re.sub(r"\n{3,}", "\n\n", "\n".join(kept_lines)).strip()
     cleaned = _LONG_DECIMAL.sub(_round_long_decimal, cleaned)
+    cleaned = drop_doubled_minus(cleaned)
     return ScrubResult(text=cleaned, removed=removed)
 
 
