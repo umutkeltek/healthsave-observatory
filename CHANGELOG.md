@@ -11,8 +11,10 @@ Plugins carry their own versions.
 
 ### Upgrade
 
-- Migrations 030 to 034 are additive and run on boot (the `migrate` service,
-  before `api` and `worker` start).
+- Migrations 030 to 037 are additive and run on boot (the `migrate` service,
+  before `api` and `worker` start). 037 adds one empty column,
+  `workouts.elevation_gain_m`; no rows change. Nothing to change in `.env`
+  for it.
 - **Run the migrations before starting the new image.** The worker's source
   polls and the connector authorize scripts (`scripts/whoop_authorize.py`
   and the others) read and write the column migration 033 adds; against a
@@ -48,8 +50,18 @@ Plugins carry their own versions.
   zone it was recorded in, type, duration, active energy, distance, average
   and highest heart rate, and the device that recorded it. The newest 60 are listed one by one;
   longer periods add counts per source and per month. A session that two
-  devices recorded is listed twice and marked, never merged or added. Elevation
-  gain is not stored yet. ([Give your AI a body](docs/mcp.md))
+  devices recorded is listed twice and marked, never merged or added.
+  ([Give your AI a body](docs/mcp.md))
+- Workouts now keep their elevation gain: the total ascent in metres, when the
+  watch recorded one. iPhone app 1.9.4 and later sends it; the Whoop connector
+  fills it from Whoop's altitude gain. It shows in the workouts export
+  (`elevation_gain_m`, JSON and CSV), the Grafana workout log, and each record
+  of the MCP `workouts` tool. Workouts saved before this release read empty
+  until the phone sends them again (in the iPhone app, Backfill Past Data); a
+  re-send without the value, from an older app or another source, never
+  clears one already saved. An older iPhone app keeps working unchanged, and
+  a 1.4.0 server accepts the new app's workouts and ignores the value.
+  Android does not send it yet.
 - MCP: `sleep_summary`, `activity_summary`, `today_vs_usual`, `metric_trend`
   and `workouts` now say when the phone last synced before a finished day ended
   (limitation `awaiting_sync`, and `awaiting_sync` on that day's row or night),
