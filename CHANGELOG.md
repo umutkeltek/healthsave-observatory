@@ -9,7 +9,42 @@ Plugins carry their own versions.
 
 ## [Unreleased]
 
-## [1.5.0] - 2026-11-18
+## [1.5.1] - 2026-11-18
+
+Three fixes: the Whoop webhook refuses old and repeated deliveries, briefs stop
+saying "down -4.8%", and one kind of broken upload no longer jams a metric.
+
+### Upgrade
+
+```bash
+healthsave update --to v1.5.1
+```
+
+- No migration and no `.env` change.
+
+### Fixed
+
+- **Whoop webhook: old or repeated deliveries.** With `WHOOP_CLIENT_SECRET`
+  set, a Whoop push is accepted only when its signed time is within 5 minutes
+  of your server's clock, and the same delivery sent twice in that time is
+  applied once (the repeat is answered 200 with `"duplicate": 1`). Before, a
+  captured signed delivery could be sent again at any later time. If your
+  server's clock is more than 5 minutes off, pushes are refused with 401; the
+  30-minute Whoop poll still brings the data in. Without `WHOOP_CLIENT_SECRET`
+  nothing changes.
+- **Briefs no longer say "down -4.8%".** The daily and weekly brief could put a
+  minus sign after a word that already says the number fell ("down -4.8%",
+  "decreased by -1.7%"). That minus is now removed from the written brief; no
+  number changes. A sign that is the number itself ("change -4.8%", ranges,
+  temperatures) stays as written. Briefs already stored keep their wording.
+- **One broken upload no longer jams its metric.** An upload holding a number
+  more than 4,300 digits long, or a body that is not UTF-8, was answered with a
+  server error (500), which the iPhone and Android apps retry forever, so that
+  one batch held up its metric. It is now answered 400 `invalid JSON body`, the
+  answer any malformed upload already gets and the apps treat as final. The
+  Whoop webhook had the same gap and is fixed too. Real uploads never contain
+  such a number, and every other answer is unchanged, so the apps need no
+  update.
 
 Workouts keep their elevation gain, from the iPhone app through to the export,
 Grafana and your AI. Blood test reports (CSV or PDF) and raw DNA files can be
