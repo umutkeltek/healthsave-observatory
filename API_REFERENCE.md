@@ -554,7 +554,7 @@ Other typed shapes: `AnomaliesListResponse {count, anomalies[{id,metric,severity
 ## 6. Webhooks
 
 ### `POST /api/v2/sources/whoop/webhook` · caller: Whoop
-Inbound Whoop events. Verifies `base64(HMAC-SHA256(secret, ts + raw_body))` against `X-WHOOP-Signature` (constant-time). Unset secret → warn + allow (unconfigured no-op).
+Inbound Whoop events. Verifies `base64(HMAC-SHA256(secret, ts + raw_body))` against `X-WHOOP-Signature` (constant-time). `X-WHOOP-Signature-Timestamp` (milliseconds since the epoch) must be within 5 minutes of the server clock either way, else `401`. The same signed delivery sent again inside that window answers `200` with `result.duplicate: 1` and is not applied twice. Unset secret → warn + allow (unconfigured no-op).
 
 ---
 
