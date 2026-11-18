@@ -218,6 +218,9 @@ def test_normalize_workouts_matches_ios_emitted_shape():
     # 1500 kJ -> 358.51 kcal (rounded to 2 dp)
     assert sample["activeEnergy"] == 358.51
     assert sample["distance"] == 6500.0
+    # The workout carries its ascent under the phone apps' wire key, so it
+    # lands in workouts.elevation_gain_m beside distance.
+    assert sample["elevationGain"] == 123.4
     assert sample["source"] == SOURCE_TAG
     assert out["workout_altitude_gain_m"][0]["qty"] == 123.4
     assert out["workout_zone_1_minutes"][0]["qty"] == 10.0

@@ -346,6 +346,9 @@ def normalize_workouts(items: list[dict[str, Any]]) -> dict[str, list[dict[str, 
         if (dist := score.get("distance_meter")) is not None:
             sample["distance"] = float(dist)
         if (altitude := score.get("altitude_gain_meter")) is not None:
+            # On the workout itself too (workouts.elevation_gain_m), under the
+            # wire key the phone apps send.
+            sample["elevationGain"] = float(altitude)
             out["workout_altitude_gain_m"].append(
                 {"date": start, "qty": float(altitude), "source": SOURCE_TAG}
             )
