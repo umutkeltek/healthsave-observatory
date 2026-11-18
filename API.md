@@ -194,9 +194,11 @@ not persisted by this small-footprint server.
 from the workout's own elevation-ascended metadata). It is sent only when the
 device recorded one, a recorded flat workout as `0`, and it lands in
 `workouts.elevation_gain_m` (1.5.0+). A workout re-sent without it keeps the
-value already stored. A value that is not a finite number >= 0 is dropped and
-the rest of the workout is stored, the same as a bad `distance`. Servers before
-1.5.0 accept the key and ignore it.
+value already stored. A value that is not a finite number >= 0 (negative, NaN
+or infinite, `true` or `false`, or a string that does not parse as a number) is
+dropped: the workout is stored without it, and a value already stored for that
+workout is kept. A number sent as a string, such as `"84.5"`, is read as that
+number. Servers before 1.5.0 accept the key and ignore it.
 
 ### Full HealthKit Metric Catalog
 
