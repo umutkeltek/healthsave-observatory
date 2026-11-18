@@ -123,11 +123,28 @@ def _phone_workouts() -> list[dict]:
             45,
             activeEnergy=410,
             distance=7200,
+            elevationGain=86.5,  # iPhone app 1.9.4+; an older server ignores it
             avgHeartRate=142,
             maxHeartRate=176,
         ),
         sample("Hiking", day + dt.timedelta(hours=9), 62, activeEnergy=388),
     ]
+
+
+def _export_has_elevation(read_key: str) -> bool:
+    """Whether this server's workouts export carries the elevation_gain_m column."""
+
+    import httpx
+
+    day = dt.datetime.now(dt.UTC).date()
+    rows = httpx.get(
+        f"{BASE_URL}/api/v2/export",
+        params={"metric": "workouts", "from": (day - dt.timedelta(days=3)).isoformat()},
+        headers={"X-API-Key": read_key},
+        timeout=30,
+    ).json()
+    assert rows, "the seeded workouts are missing from the export"
+    return "elevation_gain_m" in rows[0]
 
 
 def test_how_did_i_sleep_this_year_through_a_real_mcp_client(synthetic_year) -> None:
@@ -185,6 +202,12 @@ def test_how_did_i_sleep_this_year_through_a_real_mcp_client(synthetic_year) -> 
     assert (run["avg_heart_rate_bpm"], run["max_heart_rate_bpm"]) == (142, 176)
     assert run["start"].endswith("T07:00+00:00")  # this key reads in UTC
     assert hike["type"] == "Hiking" and "distance_km" not in hike
+    # Elevation gain: from a server that stores it (1.5.0+), on the run that
+    # recorded one; a 1.4.0 server has no such column and the tool leaves it out.
+    if _export_has_elevation(read_key):
+        assert run["elevation_gain_m"] == 86 and "elevation_gain_m" not in hike
+    else:
+        assert "elevation_gain_m" not in run and "elevation_gain_m" not in hike
     assert sessions["sources"][0]["types"] == {"Running": 1, "Hiking": 1}
 
     # A participant's read key is told what it cannot read, not given it.
