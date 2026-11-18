@@ -133,7 +133,8 @@ CREATE TABLE workouts (
     calories        FLOAT,
     distance_m      FLOAT,
     source_id       TEXT,
-    owner_id        UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001'
+    owner_id        UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    elevation_gain_m FLOAT
 );
 CREATE UNIQUE INDEX uq_workouts_device_start
     ON workouts (device_id, start_time, owner_id);
