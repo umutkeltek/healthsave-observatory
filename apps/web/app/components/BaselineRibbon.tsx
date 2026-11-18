@@ -5,6 +5,9 @@
 // round regardless of width.
 
 import { valueTicks } from "./chart/axis";
+import { placeBandLabels, type BandLabelSpot } from "./chart/bandLabels";
+import type { ScrubSeries } from "./chart/dayScrub";
+import { ScrubCursor } from "./chart/DayRuler";
 import { HoverOverlay } from "./chart/HoverOverlay";
 import { quantile, robustDomain } from "./chart/scale";
 import { formatTick } from "../lib/format";
@@ -20,6 +23,11 @@ type Props = {
   timestamps?: string[]; // Real-time x positions aligned with values.
   unit?: string | null; // printed after the value in the tooltip
   ariaLabel?: string; // SVG accessible name; override so repeated figures aren't identical to AT
+  // One slot per calendar day, read with the day ruler (DayRuler.tsx) instead
+  // of the hover tooltip. Days without a reading are gaps in the line. Replaces
+  // `values`, `band`, `timestamps` and the left value gutter: the usual range is
+  // labelled on the band itself.
+  scrub?: ScrubSeries;
 };
 
 export function BaselineRibbon({
@@ -33,7 +41,9 @@ export function BaselineRibbon({
   timestamps,
   unit,
   ariaLabel = "Recent trace against your personal baseline range",
+  scrub,
 }: Props) {
+  if (scrub) return <DailyRibbon series={scrub} height={height} ariaLabel={ariaLabel} />;
   if (values.length < 2) return null;
 
   const sorted = [...values].sort((a, b) => a - b);
@@ -127,6 +137,135 @@ export function BaselineRibbon({
           <span>{axis[1]}</span>
         </div>
       )}
+    </div>
+  );
+}
+
+// The per-day variant. x is the day's slot in the calendar window, so the
+// line and the ruler's ticks share one scale; a missing day breaks the line
+// and is never bridged.
+function DailyRibbon({
+  series,
+  height,
+  ariaLabel,
+}: {
+  series: ScrubSeries;
+  height: number;
+  ariaLabel: string;
+}) {
+  const days = series.days;
+  const finite = days.flatMap((day) => (day.value === null ? [] : [day.value]));
+  if (finite.length === 0) return null;
+  const sorted = [...finite].sort((a, b) => a - b);
+  const [lo, hi] = series.band ?? [quantile(sorted, 0.25), quantile(sorted, 0.75)];
+  const [min, max] = robustDomain(finite, lo, hi);
+  const span = max - min || 1;
+
+  const W = 1000;
+  const H = 100;
+  // Room under the trace for the selected day's stem to reach the ruler.
+  const padTop = 12;
+  const padBottom = 24;
+  const n = days.length;
+  const x = (i: number) => (n > 1 ? (i / (n - 1)) * W : W / 2);
+  const clampV = (v: number) => (v < min ? min : v > max ? max : v);
+  const y = (v: number) => padTop + (H - padTop - padBottom) * (1 - (clampV(v) - min) / span);
+
+  const trace = days
+    .map((day, i) =>
+      day.value === null
+        ? ""
+        : `${i === 0 || days[i - 1].value === null ? "M" : "L"} ${x(i).toFixed(1)} ${y(day.value).toFixed(1)}`,
+    )
+    .filter(Boolean)
+    .join(" ");
+  // A reading with a gap on both sides has no segment to draw; mark it.
+  const lone = days.flatMap((day, i) =>
+    day.value !== null && days[i - 1]?.value == null && days[i + 1]?.value == null ? [i] : [],
+  );
+  const bandTop = y(hi);
+  const bandBot = y(lo);
+  const mid = y((lo + hi) / 2);
+  const pct = (v: number, of: number) => `${((v / of) * 100).toFixed(2)}%`;
+  // Band labels go where the line is not (chart/bandLabels.ts).
+  const px = (v: number) => (v / H) * height;
+  const spots = series.usual
+    ? placeBandLabels({
+        trace: days.map((day, i) => (day.value === null ? null : [x(i) / W, px(y(day.value))] as const)),
+        top: px(bandTop),
+        bottom: px(bandBot),
+        height,
+        high: series.usual[1],
+        low: series.usual[0],
+      })
+    : null;
+  const edgeLabel = (spot: BandLabelSpot | null, edge: number, text: string) =>
+    spot ? (
+      <span
+        className={`ribbon-edge-label is-${spot.side}${spot.at === "right" ? " is-right" : ""}`}
+        style={{ top: pct(edge, H), ...(typeof spot.at === "number" ? { left: `${spot.at * 100}%` } : {}) }}
+        aria-hidden
+      >
+        {text}
+      </span>
+    ) : null;
+
+  return (
+    <div className="ribbon-wrap ribbon-daily">
+      <div className="ribbon-plot" style={{ height }}>
+        <svg
+          className="ribbon"
+          viewBox={`0 0 ${W} ${H}`}
+          preserveAspectRatio="none"
+          role="img"
+          aria-label={ariaLabel}
+        >
+          {days.map((day, i) =>
+            day.weekStart ? (
+              <line
+                key={day.date}
+                className="ribbon-week"
+                x1={x(i)}
+                x2={x(i)}
+                y1={0}
+                y2={H}
+                vectorEffect="non-scaling-stroke"
+              />
+            ) : null,
+          )}
+          <rect
+            className="ribbon-band"
+            x="0"
+            y={bandTop}
+            width={W}
+            height={Math.max(2, bandBot - bandTop)}
+          />
+          <line className="ribbon-band-edge" x1="0" y1={bandTop} x2={W} y2={bandTop} vectorEffect="non-scaling-stroke" />
+          <line className="ribbon-band-edge" x1="0" y1={bandBot} x2={W} y2={bandBot} vectorEffect="non-scaling-stroke" />
+          <line className="ribbon-median" x1="0" y1={mid} x2={W} y2={mid} vectorEffect="non-scaling-stroke" />
+          <path className="ribbon-trace" d={trace} vectorEffect="non-scaling-stroke" />
+        </svg>
+        {series.usual && spots && (
+          <>
+            {edgeLabel(spots.high, bandTop, series.usual[1])}
+            {edgeLabel(spots.low, bandBot, series.usual[0])}
+          </>
+        )}
+        {lone.map((i) => (
+          <span
+            key={days[i].date}
+            className="ribbon-lone"
+            style={{ left: pct(x(i), W), top: pct(y(days[i].value as number), H) }}
+            aria-hidden
+          />
+        ))}
+        <ScrubCursor
+          points={days.map((day, i) => ({
+            x: (x(i) / W) * 100,
+            y: day.value === null ? null : (y(day.value) / H) * 100,
+          }))}
+        />
+      </div>
     </div>
   );
 }

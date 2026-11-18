@@ -135,6 +135,30 @@ Sidebar rules:
 - Segmented controls: 28-32px high, `6-8px` radius.
 - Cards should communicate real hierarchy; do not wrap every section in same-weight cards.
 - Calculations and raw proof should default collapsed.
+- Cards are solid surface: `var(--surface)`, the hairline, and the card shadow. No tint
+  washes, glows, or gradients inside a card background; colour lives in the data
+  (traces, bands, bars, chips).
+
+### Day ruler
+
+The one way to read a per-day chart a day at a time (`components/chart/DayRuler.tsx`).
+A slider under the chart with one tick per day: taller on Mondays, a dot for a day
+with no reading. The dark handle carries the day's short value; held, it opens into a
+lens with the exact value and unit. Pressing or dragging the chart drives the same
+handle. One answer line sits under it with only the value in ink; while a day is held,
+anything marked `.scrub-soft` blurs back.
+
+- Build the data with `buildScrubSeries` (one slot per calendar day; a missing day is a
+  gap, never filled or averaged) and pass it to `BaselineRibbon`'s `scrub` prop. Chart
+  math stays in the server-rendered ribbon; the ruler is the client piece.
+- Use it where a card shows one value per day and a person reads single days: Today's
+  "Explore a reading", Sleep's 30-day duration, Activity's 30-day steps.
+- Do not use it as decoration, or where a series is not one value per day: the Library
+  metric detail (raw readings over any range), the recovery hero's HRV line (a glance,
+  not a reading), Explore saved panels (several small charts per card), and finding
+  cards (evidence windows in a list).
+- Lens tokens: `--lens` is the open handle's surface and `--lens-shadow` its lift. They
+  belong to the lens only.
 
 ## Motion
 
