@@ -604,6 +604,9 @@ class Workout:
     overlaps: bool = False
     #: Minutes east of UTC where the workout was recorded, when the phone sent it.
     offset_min: int | None = None
+    #: Total ascent in metres. Only from a server that stores it (1.5.0+) and only
+    #: when the device recorded one; an older server's export has no such column.
+    elevation_gain_m: float | None = None
 
     def zone(self, basis: TimeBasis) -> tzinfo:
         """The workout's own time zone, else the person's setting."""
@@ -628,6 +631,7 @@ class Workout:
             "duration_min": rnd(self.duration_min, 1),
             "active_energy_kcal": rnd(self.active_energy_kcal, 0),
             "distance_km": rnd(self.distance_m / 1000, 2) if self.distance_m is not None else None,
+            "elevation_gain_m": rnd(self.elevation_gain_m, 0),
             "avg_heart_rate_bpm": rnd(self.avg_hr, 0),
             "max_heart_rate_bpm": rnd(self.max_hr, 0),
         }
@@ -645,6 +649,11 @@ def _label(value: Any) -> str:
 def _positive(value: Any) -> float | None:
     number = _finite(value)
     return number if number is not None and number > 0 else None
+
+
+def _non_negative(value: Any) -> float | None:
+    number = _finite(value)
+    return number if number is not None and number >= 0 else None
 
 
 def workout_offsets(points: Iterable[Any]) -> dict[datetime, int]:
@@ -707,6 +716,7 @@ def workouts(rows: Iterable[Any], offsets: dict[datetime, int] | None = None) ->
                 avg_hr=_positive(row.get("avg_hr")),
                 max_hr=_positive(row.get("max_hr")),
                 offset_min=(offsets or {}).get(start),
+                elevation_gain_m=_non_negative(row.get("elevation_gain_m")),
             )
         )
     out.sort(key=lambda w: w.start)

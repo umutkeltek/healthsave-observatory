@@ -276,6 +276,25 @@ def test_days_without_the_all_source_total_are_counted_not_mixed_in() -> None:
     assert bare not in daily.values
 
 
+def test_workout_elevation_gain_shows_a_recorded_zero_and_leaves_out_bad_values() -> None:
+    """A flat walk the device recorded reads 0; absent or unusable reads nothing."""
+
+    def row(**extra) -> dict:
+        return {
+            "start_time": "2026-11-05T07:00:00+00:00",
+            "end_time": "2026-11-05T07:30:00+00:00",
+            "sport_type": "Walking",
+            "duration_ms": 1_800_000,
+            "source_id": "WHOOP",
+            **extra,
+        }
+
+    values = [0.0, 83.6, -3.0, "12", True, float("nan"), None]
+    rows = [row(elevation_gain_m=v) for v in values] + [row()]  # last: a 1.4.0 server's row
+    shown = [w.as_dict(derive.UTC_BASIS).get("elevation_gain_m") for w in derive.workouts(rows)]
+    assert shown == [0, 84, None, None, None, None, None, None]
+
+
 def test_the_package_runs_on_python_310() -> None:
     # The server runs on the AI client's computer (requires-python >= 3.10);
     # datetime.UTC only exists from 3.11.

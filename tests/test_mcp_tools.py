@@ -205,6 +205,7 @@ def _workout_rows() -> list[dict]:
                 max_hr=171.0,
                 calories=410.6,
                 distance_m=6234.0,
+                elevation_gain_m=83.6,
             )
         )
     rows.append(
@@ -399,12 +400,15 @@ class FakeObservatory:
         settings: dict | None = None,
         extra_sleep: list[dict] | None = None,
         synced_at: str | None = "2026-11-07T06:05:00Z",
+        export_without: tuple[str, ...] = (),
     ) -> None:
         self.deny = deny
         self.cap = cap
         self.settings = settings or SETTINGS
         self.extra_sleep = extra_sleep or []
         self.synced_at = synced_at
+        #: Export columns this server does not have (1.4.0 has no elevation_gain_m).
+        self.export_without = export_without
         self.requests: list[httpx.Request] = []
 
     def _series(self, metric: str, range_: str) -> list[dict]:
@@ -558,6 +562,7 @@ class FakeObservatory:
                 if first <= datetime.fromisoformat(r["start_time"]).date() <= last
             ]
             rows.sort(key=lambda r: r["start_time"], reverse=True)
+            rows = [{k: v for k, v in r.items() if k not in self.export_without} for r in rows]
             return httpx.Response(200, json=rows[: int(q["limit"])])
         return httpx.Response(404, json={"detail": "Not Found"})
 
@@ -729,18 +734,39 @@ async def test_workouts_are_one_record_each_with_units_time_zone_and_source() ->
         "duration_min": 40.0,
         "active_energy_kcal": 411,
         "distance_km": 6.23,
+        "elevation_gain_m": 84,
         "avg_heart_rate_bpm": 148,
         "max_heart_rate_bpm": 171,
     }
     hike = next(w for w in result["workouts"] if w["type"] == "Hiking")
     # The band sent no offset: 18:00 UTC in the person's own zone (EST since November 1).
     assert (hike["start"], hike["end"]) == ("2026-11-05T13:00-05:00", "2026-11-05T14:02-05:00")
-    assert "distance_km" not in hike and "max_heart_rate_bpm" not in hike  # not recorded, not 0
+    # Not recorded, not 0.
+    assert not {"distance_km", "max_heart_rate_bpm", "elevation_gain_m"} & set(hike)
     instants = [datetime.fromisoformat(w["start"]) for w in result["workouts"]]
     assert instants == sorted(instants)
     assert result["count"] == len(result["workouts"])
     [export] = [r for r in fake.requests if r.url.path == "/api/v2/export"]
     assert export.url.params["metric"] == "workouts"
+
+
+async def test_workouts_from_a_1_4_0_server_answer_as_before_without_elevation() -> None:
+    """A 1.4.0 Observatory's export has no elevation_gain_m column at all."""
+
+    new = await tools.workouts(FakeObservatory().client(), "last_30_days", clock=CLOCK)
+    fake = FakeObservatory(export_without=("elevation_gain_m",))
+    old = await tools.workouts(fake.client(), "last_30_days", clock=CLOCK)
+
+    _assert_summary_only(old, fake)
+    assert any("elevation_gain_m" in w for w in new["workouts"])
+    assert not any("elevation_gain_m" in w for w in old["workouts"])
+    # Everything else is the same answer, record for record.
+    assert old["workouts"] == [
+        {k: v for k, v in w.items() if k != "elevation_gain_m"} for w in new["workouts"]
+    ]
+    assert {k: v for k, v in old.items() if k != "workouts"} == {
+        k: v for k, v in new.items() if k != "workouts"
+    }
 
 
 async def test_a_workout_belongs_to_the_day_it_started_where_it_was_recorded() -> None:

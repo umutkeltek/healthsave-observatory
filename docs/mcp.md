@@ -97,8 +97,8 @@ the primary person, so for a participant's key the tools say `key_scope` instead
   network) and turns them into summaries: one value per day or per night, monthly
   rows for long periods, findings the statistical engine already computed. Two things
   are listed one by one: lab results (at most 20 per marker) and workouts (the newest
-  60, each as its own summary: times, type, duration, energy, distance, average and
-  highest heart rate, never the heart rate samples inside it). Away from
+  60, each as its own summary: times, type, duration, energy, distance, elevation gain,
+  average and highest heart rate, never the heart rate samples inside it). Away from
   home, reach your server over HTTPS or Tailscale ([Remote access](operations/remote-access.md)),
   never plain HTTP across the internet.
 - **It never talks to anyone else.** The server connects to `HEALTHSAVE_URL` only. It
@@ -123,10 +123,14 @@ listed one by one; longer periods add one row per month.
 `workouts` takes the same day periods, or exact days with `from_date` and `to_date`
 (`2026-11-01`). Each workout is one record: start and end in the time zone it was
 recorded in (your Observatory's time zone when the phone did not send one), type,
-duration, active energy, distance, average and highest heart rate, and the device that
-recorded it. A workout belongs to the day it started on in that time zone. A number the device did not record is left out, not shown as zero. Elevation
-gain is not stored yet. When a watch and a band both record the same session, both are
-listed and marked; they are never merged or added.
+duration, active energy, distance, elevation gain (`elevation_gain_m`, total ascent in
+metres), average and highest heart rate, and the device that recorded it. A workout
+belongs to the day it started on in that time zone. A number the device did not record is
+left out, not shown as zero. Elevation gain needs Observatory 1.5.0 or later and arrives
+from iPhone app 1.9.4 and later, and from Whoop; older workouts gain it when the phone
+sends them again, and an older Observatory simply leaves it out. When a watch and a band
+both record the same session, both are listed and marked; they are never merged or
+added.
 
 | Limitation code | Meaning |
 |---|---|
