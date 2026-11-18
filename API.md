@@ -168,6 +168,7 @@ Workout samples can include these fields:
   "source": "Apple Watch",
   "activeEnergy": 420,
   "distance": 6500,
+  "elevationGain": 84.5,
   "avgHeartRate": 145,
   "maxHeartRate": 178,
   "heartRateData": [
@@ -188,6 +189,14 @@ Workout samples can include these fields:
 The reference server stores the workout summary fields in `workouts`.
 `heartRateData` and `route` are accepted as part of the client payload but are
 not persisted by this small-footprint server.
+
+`elevationGain` is the workout's total ascent in metres (HealthSave iOS 1.9.4+,
+from the workout's own elevation-ascended metadata). It is sent only when the
+device recorded one, a recorded flat workout as `0`, and it lands in
+`workouts.elevation_gain_m` (1.5.0+). A workout re-sent without it keeps the
+value already stored. A value that is not a finite number >= 0 is dropped and
+the rest of the workout is stored, the same as a bad `distance`. Servers before
+1.5.0 accept the key and ignore it.
 
 ### Full HealthKit Metric Catalog
 
@@ -1083,7 +1092,8 @@ mirror; enforced by `tests/contract/test_ios_v2_headers_in_sync.py`).
 Workouts are `HKSample`s too, so they carry `uuid`, `startDate`, `endDate`
 and `tzOffsetMinutes` like every anchored family, plus the v1 keys
 (`name`, `start`, `end`, `duration`, `activeEnergy`, `distance`,
-`avgHeartRate`, `maxHeartRate`, `source`) unchanged.
+`avgHeartRate`, `maxHeartRate`, `source`) unchanged, and `elevationGain` when
+the workout recorded one (iOS 1.9.4+; see Workout Payload Details).
 
 ### iOS route selection
 
