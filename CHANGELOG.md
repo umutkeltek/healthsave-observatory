@@ -9,18 +9,36 @@ Plugins carry their own versions.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-18
+
+Workouts keep their elevation gain, from the iPhone app through to the export,
+Grafana and your AI. Blood test reports (CSV or PDF) and raw DNA files can be
+read on your own server. Per-day charts read one day at a time. And a long list
+of fixes for what the server, the connectors and the web app did when something
+failed halfway.
+
 ### Upgrade
 
-- Migrations 030 to 037 are additive and run on boot (the `migrate` service,
-  before `api` and `worker` start). 037 adds one empty column,
-  `workouts.elevation_gain_m`; no rows change. Nothing to change in `.env`
-  for it.
+```bash
+healthsave update --to v1.5.0
+```
+
+- Eight migrations, 030 to 037, run on boot (the `migrate` service, before
+  `api` and `worker` start). All are additive: new tables for connector poll
+  cursors, lab documents and genetic reports, new columns, one index, and one
+  more allowed audit event type. No existing row changes. 037 adds
+  `workouts.elevation_gain_m`, empty until a phone or connector fills it.
+  Nothing to change in `.env` for them.
 - **Run the migrations before starting the new image.** The worker's source
   polls and the connector authorize scripts (`scripts/whoop_authorize.py`
   and the others) read and write the column migration 033 adds; against a
-  database without it every source poll fails and authorizing fails. `docker compose up` and
-  `healthsave update` already run `migrate` first; only a hand-run container
-  started without it is affected.
+  database without it every source poll fails and authorizing fails. `docker
+  compose up` and `healthsave update` already run `migrate` first; only a
+  hand-run container started without it is affected.
+- The migration runner now records a checksum for each applied file; its
+  first run records them for the files your database already ran. If a file
+  changes after it ran, `migrate` logs an ERROR naming it on every run. It
+  still exits 0, so the stack starts.
 - `HDH_KEYRING` now reaches the `api` and `worker` containers. The code read
   it before, but `docker-compose.yml` never passed it through, so a value in
   `.env` had no effect. Once it does, a non-empty ring decides which key seals
@@ -40,18 +58,25 @@ Plugins carry their own versions.
   of thirty a minute across all addresses. Left `false`, sign-in keeps one
   shared count of ten a minute, as before; the sign-in page now says how long
   to wait.
+- A new Docker volume, `genetics_reference`, holds the public ClinVar
+  reference if you install one (see Genetics below). `docker compose up`
+  creates it. Allow about 3 GB of free disk for each genome build you install.
+- The API image now includes Poppler and Tesseract, so blood test PDFs,
+  scanned ones too, are read on your server; the image is larger. Running the
+  API from source, put `pdfinfo`, `pdftotext`, `pdftoppm` and `tesseract` on
+  its PATH.
+- If you run your own copy of `deploy/reverse-proxy/nginx.conf`, replace it
+  with the new one. It sends the web app's own upload and export paths
+  (`/api/genetics`, `/api/lab-imports`, `/api/export`, `/api/changes`) to the
+  web app, which checks the sign-in; allows 50 MB genotype uploads and 5 MB
+  lab uploads; and streams them instead of writing them to temporary files.
+  Any other proxy in front needs to allow 50 MB request bodies and 120 seconds
+  for a genotype upload.
 - After `healthsave update`, run `healthsave mcp` again and paste the new setup
   line into your AI client to get the new `workouts` tool.
 
 ### Added
 
-- MCP: a ninth read-only tool, `workouts`. One record per workout over a period
-  or between two dates (`from_date`, `to_date`): start and end in the time
-  zone it was recorded in, type, duration, active energy, distance, average
-  and highest heart rate, and the device that recorded it. The newest 60 are listed one by one;
-  longer periods add counts per source and per month. A session that two
-  devices recorded is listed twice and marked, never merged or added.
-  ([Give your AI a body](docs/mcp.md))
 - Workouts now keep their elevation gain: the total ascent in metres, when the
   watch recorded one. iPhone app 1.9.4 and later sends it; the Whoop connector
   fills it from Whoop's altitude gain. It shows in the workouts export
@@ -59,20 +84,209 @@ Plugins carry their own versions.
   of the MCP `workouts` tool. Workouts saved before this release read empty
   until the phone sends them again (in the iPhone app, Backfill Past Data); a
   re-send without the value, from an older app or another source, never
-  clears one already saved. An older iPhone app keeps working unchanged, and
-  a 1.4.0 server accepts the new app's workouts and ignores the value.
-  Android does not send it yet.
+  clears one already saved. Android does not send it yet.
+- MCP: a ninth read-only tool, `workouts`. One record per workout over a period
+  or between two dates (`from_date`, `to_date`): start and end in the time
+  zone it was recorded in, type, duration, active energy, distance, elevation
+  gain, average and highest heart rate, and the device that recorded it. The
+  newest 60 are listed one by one; longer periods add counts per source and
+  per month. A session that two devices recorded is listed twice and marked,
+  never merged or added. ([Give your AI a body](docs/mcp.md))
 - MCP: `sleep_summary`, `activity_summary`, `today_vs_usual`, `metric_trend`
   and `workouts` now say when the phone last synced before a finished day ended
   (limitation `awaiting_sync`, and `awaiting_sync` on that day's row or night),
   so a morning read no longer passes off a partial yesterday, or a night that
   has not arrived yet, as final. Shown only when the phone app reports its
   syncs to the Observatory.
+- Blood test reports in the browser. **Labs → Import a lab report** takes a
+  CSV, a text PDF or a scanned PDF (up to 5 MB and 12 pages). Text extraction and
+  OCR run on your server. You check each row against the original, pick the
+  test, correct values, units or ranges, and confirm it; nothing enters Labs
+  before that. A saved import keeps the original file and a report: each
+  result against the range your lab printed, and the change from your previous
+  result for the same test at the same lab. Deleting an import removes the
+  original and its report together, and, if you choose, the results it wrote.
+  ([Blood test results](docs/capture/labs-csv.md))
+- Genetics (**Explore → Genetics**). Match a 23andMe- or Ancestry-style raw
+  data file, or a single-sample VCF, against public ClinVar annotations on your
+  own server. First install the ClinVar reference for GRCh37 or GRCh38 from
+  that page. A report lists each match with ClinVar's classification and review
+  status, says what was left out and why, and links to the public ClinVar
+  record. It is evidence with its sources, not a diagnosis or a risk score. The
+  original file is kept only if you choose to; reports stay until you delete
+  them. Admin only, and only for the primary person.
+  ([Private genetic evidence](docs/capture/genetic-evidence.md))
+- Web: a day ruler under per-day charts. The Today reading card and the Sleep
+  and Activity 30-day trends read one day at a time: press or drag on the
+  chart, or use the arrow keys on the ruler, and one line gives that day's
+  value against your usual range. A missing day stays a gap. A vertical swipe
+  over a chart still scrolls the page.
+- Briefs may now add short general wellness context and one small everyday
+  suggestion, shown under "Try this", with a one-line note that this is not
+  medical advice. They still never diagnose, name a condition, mention
+  medication or a dose, or set diet or weight targets; a sentence that does is
+  removed before you see it.
+- API: `/api/v2/lab-imports` and `/api/v2/genetics` routes behind the two
+  features above ([API reference](API_REFERENCE.md)).
+
+### Changed
+
+- Sleep's 30-day trend shows one value per night. When a date has two sleep
+  sessions it shows the longest and says so, never an average. Activity's
+  steps take one value per day (the all-source day total, otherwise one
+  stream), as Today does, instead of plotting every source's points as one
+  line.
+- Cards drop their tinted backgrounds; colour is kept for the data.
+- Briefs describe what was measured, in rounded numbers and plain metric names.
+  Before, a local model often turned them into health claims, repeated example
+  numbers from its own instructions as if they were data, or printed raw
+  decimals. The weekly brief no longer says "1 day of data" for a full week.
+- Finding titles use the catalog's metric names in sentence case ("Heart rate
+  variability (SDNN) trending up", "Steps averaged 8,357"), and p-values read
+  the way people write them ("p < 0.001").
+- Finding cards no longer turn a p-value or a severity into a confidence level
+  (`confidence` is now empty). They say instead that p-values are exploratory:
+  repeated tests are not corrected for, and medical significance is not
+  assessed.
 
 ### Fixed
 
+- Phone sync:
+  - A batch whose attempt failed can be sent again; the failed attempt no
+    longer ties its idempotency key to that body.
+  - Sync coverage counts only processed batches as delivered, and readiness
+    says "failed" when every batch received failed.
+  - A stored batch's receipt names its sync run in the same transaction.
+  - On the v2 batch route, a sample deleted in the same batch that added it is
+    never copied into the v1 tables, and the v1 copy takes its device from the
+    samples actually copied.
+  - A revised sleep night replaces the earlier one instead of failing; a sample
+    sent again after it was deleted counts again; a re-sent copy of a fused
+    workout keeps its fusion.
+- Connectors (Whoop, Amazfit, Polar, Google):
+  - After a dead token, a vendor outage or a stopped worker, the next poll
+    reaches back to the last successful one (up to 30 days) instead of leaving
+    a permanent gap. A range the vendor refuses is given up after 3 polls, one
+    it keeps timing out on after 12, while recent data keeps arriving. A vendor
+    outage uses up neither count, authorizing a token resets both, and a gap
+    that was given up on is recorded and listed with the sync anomalies.
+  - A poll skipped for want of a token is recorded as skipped, not as a
+    success, and does not move the cursor.
+  - Token refreshes: one at a time per token, committed on their own, keeping
+    the account details stored when you authorized. A refused access token
+    that looks valid is refreshed once, and a vendor request that fails for a
+    moment is retried before the poll fails.
+  - Whoop webhook: a workout deleted in Whoop is removed here too (before, the
+    deletion failed and the workout stayed), and a failure that repeats is
+    never answered with a 500.
+  - The worker closes pipeline runs that were left marked as running.
+- Workouts recorded by two devices: a rejected pair is decided once instead of
+  on every poll, a device link that stops qualifying undoes the fusion it
+  made, and deleting a fused workout makes the other copy count again.
+- AI settings and privacy:
+  - Cloud consent is withdrawn when the mode or the cloud destination changes,
+    or prompt redaction is turned off. A fallback to the `.env` narrator never
+    carries a cloud opt-in.
+  - A changed endpoint or key clears the old connection test result; two saves
+    of the fallback chain take turns; granting or withdrawing consent counts as
+    a settings change.
+  - A brief written by a fallback narrator no longer fails after the narrator
+    answered: migration 030 allows the audit entry that records the switch.
+- Analysis, agents, experiments and moments:
+  - One analysis run of each type at a time, across processes; a triggered run
+    waits for the one in progress instead of being skipped; a run that hits a
+    database error is recorded as failed.
+  - The anomaly watcher works through a backlog oldest first and sees findings
+    committed late; a proposal the store rejects is dropped instead of being
+    retried forever.
+  - Experiments: an invalid design is refused before it is stored; only a
+    collecting experiment can be abandoned; an analysis run cannot complete an
+    abandoned one.
+  - A moment that ends before it starts, or whose time cannot be held in UTC,
+    is refused with a 422, not a 500.
+- Labs: a number such as "1,250", which reads as 1250 on a US report and 1.25
+  on a German one, is refused with a message naming both readings instead of
+  being read as 1.25. A value or range that overflows after unit conversion,
+  or a date out of range, is a row error instead of a failure.
+- `GET /api/apple/status` and coverage: one metric whose query fails no longer
+  makes every metric after it read zero, and after a statement timeout the
+  remaining metrics are skipped at once instead of each waiting out the
+  timeout. The response shape is unchanged.
+- The export returns only active rows from the tables that keep superseded
+  ones.
+- A raw replay refuses when the rows could belong to another person, and the
+  check works on a database without the `api_keys` table.
+- Home Assistant: entities under a legacy topic prefix turn unavailable when
+  the MQTT bridge stops, and a source that ages out turns unavailable, instead
+  of freezing on the last value.
 - MCP: `metric_trend` on `workout.session` no longer answers "use
   sleep_summary for sleep stages". It names the tool that reads the metric.
+- Web app:
+  - A read that fails says the server did not answer; it never shows demo
+    data. An expired session reads as signed out; a failed privacy read shows
+    "unknown", never "stays local" or "off"; a metric the server does not know
+    reads as not found; empty, unreachable and withheld for this person read
+    differently; Library detail never labels all-time data as the requested
+    range.
+  - The read cache no longer serves stale data as current. A write clears the
+    reads it changes, new data on the server expires them, and the cache is
+    bounded.
+  - Which person a page is about is decided in one place, and the export
+    follows the same decision.
+  - Sign-in: with `WEB_TRUST_PROXY`, wrong passwords from one address no
+    longer lock the owner out; a blocked sign-in shows a readable page, not raw
+    JSON; Sign in is disabled while it is sending.
+  - Today and Explore: a pin or saved view that does not fit is no longer
+    dropped without a word; the customizer is a real modal that keeps focus
+    and locks while saving; an emptied view cannot be saved to Today, and a
+    saved view with no panels can still be removed.
+  - The brief card shows the current brief and says what a refresh did; the
+    Intelligence form sends only the fields the selected mode shows; an
+    integration that stopped syncing no longer reads "connected"; a completed
+    experiment no longer blocks testing the same pair again.
+  - Language and theme: error messages and status pills follow the interface
+    language, a language picked in one tab reaches the others, and the
+    last-resort error page follows the saved theme. The search box finds every
+    page the sidebar shows.
+  - Phones and tablets, 320 px and up: touch targets at least 44 px, form
+    fields that do not zoom, a sidebar that scrolls, a phone drawer that does
+    not scroll the page behind it, charts that answer a tap or a finger drag
+    while a vertical swipe still scrolls, and tables, chips and labels that fit
+    instead of overflowing.
+  - Dark mode: native controls render dark, text on dark cards reaches 4.5:1
+    contrast, chips, sparklines and legends stay visible, and printed reports
+    use the light palette.
+
+### Compatibility
+
+- No change to the routes the iPhone app depends on (`POST /api/apple/batch`,
+  `GET /api/apple/status`, `GET /api/health`), to any other v1 route, or to
+  `/api/insights/*`. Everything new is under `/api/v2/`.
+- Older iPhone and Android apps work with 1.5.0 unchanged. iPhone app 1.9.4
+  works with a 1.4.0 server: its workouts are accepted there and the elevation
+  gain is ignored.
+- The 1.5.0 AI connector works with a 1.4.0 server (the `workouts` tool then
+  leaves elevation gain out), and a 1.4.0 connector keeps working with 1.5.0,
+  without the `workouts` tool.
+- The workouts CSV export has a new column, `elevation_gain_m`, right after
+  `distance_m`, so `source_id` moves one column to the right. A script that
+  reads columns by their header name is unaffected; one that reads them by
+  position must be updated. The JSON export gains the same key.
+
+### Privacy
+
+- Lab reports and genotype files are read on your server. No cloud AI, OCR
+  service or other outside service receives them.
+- Installing the ClinVar reference is the one new outbound connection: it
+  downloads a fixed public file from NCBI (`ftp.ncbi.nlm.nih.gov`) over HTTPS,
+  only after you confirm it on the Genetics page, and sends no personal data.
+  Updates are never automatic. Opening a ClinVar link in a report is an
+  ordinary link to NCBI's site.
+- Only the admin key reaches DNA records and lab documents. Read keys,
+  including the one your AI client uses, and ingest keys cannot.
+- Originals and reports are stored in PostgreSQL with the rest of your record
+  and are in your backups. Genetics adds no encryption beyond your database's
+  own.
 
 ## [1.4.0] - 2026-11-07
 
