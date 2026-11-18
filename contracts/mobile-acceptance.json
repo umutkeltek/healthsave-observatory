@@ -219,6 +219,15 @@
         "visual"
       ]
     },
+    "workout_elevation_gain": {
+      "expected": "Each workout the device recorded an ascent for sends it as elevationGain in metres beside distance, a recorded 0 as 0, nothing when none was recorded; the file export lists it beside distance.",
+      "ios_source": "Sources/HealthSync/Sync/WorkoutWire.swift",
+      "required_evidence": [
+        "behavior",
+        "visual",
+        "device"
+      ]
+    },
     "journey.onboarding": {
       "expected": "Same welcome, permission, first-export and post-value purchase/restore journey.",
       "ios_source": "Sources/HealthSync/OnboardingView.swift",
