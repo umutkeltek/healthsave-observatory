@@ -9,6 +9,37 @@ Plugins carry their own versions.
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-11-21
+
+Settings now has a Backups card that shows the two backup commands, and the
+docs say plainly what the optional Observatory Care licence is.
+
+### Upgrade
+
+```bash
+healthsave update --to v1.5.2
+```
+
+- No migration and no `.env` change.
+
+### Added
+
+- **Backups card in Settings.** It names `healthsave backup` and
+  `healthsave restore FILE`, which are free, and adds one line with a link to
+  Observatory Care. The card loads nothing from outside your server. The link
+  opens only when you click it, and it sends no referrer, so your server's
+  address is not passed on.
+
+### Docs
+
+- The README, the deployment guide, the backup guide and the Care page now say
+  what Observatory Care costs ($99 a year or $9 a month) and what it adds:
+  encrypted, scheduled, off-site backups to storage you choose, restore drills,
+  and update rollback. The free backup and restore come first and are
+  unchanged. The links to the pricing page carry a `utm_source` tag, so the
+  website can count which page a visit came from. Observatory itself still has
+  no analytics.
+
 ## [1.5.1] - 2026-11-18
 
 Three fixes: the Whoop webhook refuses old and repeated deliveries, briefs stop
