@@ -22,6 +22,8 @@ When a licence ends, Care commands keep working for 14 more days, then stop. You
 
 ## Activate a licence
 
+Care costs $99 a year or $9 a month, billed by Paddle. Buy it on the [pricing page](https://healthsave.app/pricing/?utm_source=observatory_care_doc#care).
+
 After a purchase you get a 24-character licence code. On the machine that runs Observatory:
 
 ```bash

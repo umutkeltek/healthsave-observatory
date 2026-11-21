@@ -27,7 +27,7 @@ You can also back up the TimescaleDB Docker volume (`db_data`) directly. It hold
 - If you run on a VM or NAS, point the volume at a disk that's already in your backup rotation (a ZFS dataset you snapshot, a backed-up directory, etc.).
 - For a logical backup, `pg_dump` against the database also works and is portable across TimescaleDB versions.
 
-[Observatory Care](observatory-care.md) adds encrypted backups, off-site copies through rclone, scheduled backups, and restore drills that prove a backup restores. Restoring an encrypted backup never needs a licence.
+If you would rather have backups done for you, [Observatory Care](https://healthsave.app/pricing/?utm_source=observatory_backup#care) ($99 a year or $9 a month) adds encrypted backups with a passphrase that stays in your `.env`, off-site copies through rclone to storage you choose, scheduled backups, and restore drills that prove a backup restores. The backups go only to that storage, never to HealthSave. Restoring an encrypted backup never needs a licence, and if you stop paying, everything on this page above keeps working. [What Care adds](observatory-care.md).
 
 ## Updating existing installs
 

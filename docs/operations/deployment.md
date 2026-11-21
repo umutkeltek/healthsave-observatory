@@ -115,6 +115,20 @@ Docker-capable LXC can work, but Docker-in-LXC often needs privileged container 
 
 TimescaleDB is the stateful piece. Put Docker volumes on reliable storage and follow [Backups & migrations](backup-and-migrations.md).
 
+### Backups
+
+Backups are free and take one command each:
+
+```bash
+healthsave backup                     # one file: database, .env and config.yaml
+healthsave backup --out /mnt/nas/hs   # or straight into a folder you already back up
+healthsave restore FILE               # takes a safety backup of the current database first
+```
+
+The file is not encrypted and holds health data and the secrets in `.env`, so encrypt it before it leaves the machine, for example with `gpg -c FILE`. `healthsave update` takes a backup before it changes anything. Details: [Backups & migrations](backup-and-migrations.md).
+
+If you would rather have this done for you, [Observatory Care](https://healthsave.app/pricing/?utm_source=observatory_deploy#care) ($99 a year or $9 a month) encrypts each backup with a passphrase that stays in your `.env`, copies it on a schedule to storage you choose through rclone, test-restores a backup into a throwaway database to prove it opens, and rolls back an update in one command. The backups go only to that storage, never to HealthSave. If you stop paying, Care commands stop 14 days after the licence ends; the server, plain backups and restoring your encrypted backups keep working. [What Care adds](observatory-care.md).
+
 ## Connect iOS App
 
 Open HealthSave on iPhone, then Settings -> Server Sync. Use the LAN URL printed by `healthsave doctor`, for example:

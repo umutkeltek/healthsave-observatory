@@ -57,6 +57,12 @@
   </tr>
 </table>
 
+## Free, with one optional paid plan
+
+Everything in this repository is free to run, including backup, restore and updates, and nothing free will move behind a licence.
+
+If you want your backups looked after, **Observatory Care** costs $99 a year or $9 a month. It adds encrypted backups on a schedule, copied to storage you choose (a NAS, S3 or Backblaze B2, through rclone), restore drills that prove a backup opens, and a one-command rollback after an update. The backups never reach HealthSave, and the licence is checked on your own server, offline. [See Care](https://healthsave.app/pricing/?utm_source=observatory_readme#care) · [What it adds](docs/operations/observatory-care.md)
+
 ## Quick start
 
 You need [Docker Compose v2](https://docs.docker.com/compose/install/) on macOS, Linux, or Windows through WSL2.
