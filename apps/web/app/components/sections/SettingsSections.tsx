@@ -180,6 +180,34 @@ export async function WebSignInSection() {
   );
 }
 
+// The tag tells the pricing page's own logs which place a visit came from.
+// Nothing here loads from or reports to that site; the link only opens on a click,
+// and rel="noreferrer" keeps this server's address out of the request.
+export const CARE_URL = "https://healthsave.app/pricing/?utm_source=observatory_app#care";
+
+// Backups are run on the server, so this card only says how: the free commands
+// first, then one quiet line on the optional Care licence.
+export function BackupsSection() {
+  return (
+    <section className="lead">
+      <div className="card">
+        <h2>Backups</h2>
+        <p>
+          On the server, <code>healthsave backup</code> writes one file with the database, <code>.env</code> and{" "}
+          <code>config.yaml</code>. <code>healthsave restore FILE</code> brings it back. Both are free.
+        </p>
+        <p className="meta" style={{ marginTop: 10 }}>
+          Want them looked after? Observatory Care ($99 a year) adds encrypted backups on a schedule, copied to
+          storage you choose, and restore drills.{" "}
+          <a href={CARE_URL} target="_blank" rel="noreferrer">
+            About Care ↗
+          </a>
+        </p>
+      </div>
+    </section>
+  );
+}
+
 export async function SystemSection() {
   const meta = await safeMeta();
   return (
