@@ -131,13 +131,13 @@ If you would rather have this done for you, [Observatory Care](https://healthsav
 
 ## Connect iOS App
 
-Open HealthSave on iPhone, then Settings -> Server Sync. Use the LAN URL printed by `healthsave doctor`, for example:
+Run `healthsave pair` and scan its QR code with the iPhone Camera: HealthSave opens Server Sync with the address and key filled in (works without Pro). Or, with HealthSave Pro, open Settings -> Server Sync and use the LAN URL printed by `healthsave doctor`, for example:
 
 ```text
 http://<server-lan-ip>:8000
 ```
 
-Do not use `localhost` from the phone. Set the API key if you configured one, then tap **Sync New Data**.
+Do not use `localhost` from the phone. Set the API key if you configured one, then tap **Sync Latest Changes**. Automatic sync needs Pro; see [Connect HealthSave](../connect-healthsave.md#free-and-pro).
 
 ## See Also
 

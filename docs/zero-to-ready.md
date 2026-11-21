@@ -95,11 +95,17 @@ Do not use `localhost` from the phone.
 
 ## 5. Connect HealthSave iOS
 
+The quickest way: scan the QR code that `healthsave pair` prints with the iPhone Camera. HealthSave opens Server Sync with the URL and key filled in; tap **Sync Latest Changes**, or **Backfill Past Data** for your whole history. This works without Pro.
+
+To type it in instead (needs HealthSave Pro):
+
 1. Open HealthSave on iPhone.
 2. Go to Settings -> Server Sync.
 3. Set Server URL to the LAN URL printed by `healthsave pair`.
 4. Set the API key that `healthsave pair` prints (setup generates one).
-5. Tap **Sync New Data**.
+5. Tap **Sync Latest Changes**.
+
+Automatic sync needs Pro. See [Connect HealthSave](connect-healthsave.md#free-and-pro).
 
 The iOS app sends Apple Health data through the frozen v1 ingest contract. The backend normalizes readings into the canonical record used by web, Grafana, findings, integrations, and exports.
 
