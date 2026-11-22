@@ -8,7 +8,10 @@ Each function takes the raw record list returned by the matching
 Routing into Timescale tables — relies on the existing
 ``server.ingestion.mappers.DEDICATED_TABLES`` registry:
 
-  * ``heart_rate_variability`` -> ``hrv`` table
+  * ``heart_rate_variability_rmssd`` -> ``quantity_samples``
+    (Whoop recovery HRV is RMSSD. The wire name ``heart_rate_variability``
+    is SDNN and the ``hrv`` table stores it with ``algorithm=sdnn``, so
+    this sample must not use that name.)
   * ``blood_oxygen`` -> ``blood_oxygen`` table
   * ``body_temperature`` -> ``body_temperature`` table
   * ``heart_rate`` -> ``heart_rate`` table
@@ -177,7 +180,7 @@ def normalize_recovery(items: list[dict[str, Any]]) -> dict[str, list[dict[str, 
     RHR, recovery score, calibrating flag).
     """
     out: dict[str, list[dict[str, Any]]] = {
-        "heart_rate_variability": [],
+        "heart_rate_variability_rmssd": [],
         "blood_oxygen": [],
         "body_temperature": [],
         "resting_heart_rate": [],
@@ -193,7 +196,7 @@ def normalize_recovery(items: list[dict[str, Any]]) -> dict[str, list[dict[str, 
             continue
 
         if (hrv := score.get("hrv_rmssd_milli")) is not None:
-            out["heart_rate_variability"].append(
+            out["heart_rate_variability_rmssd"].append(
                 {"date": ts, "qty": float(hrv), "source": SOURCE_TAG}
             )
         if (spo2 := score.get("spo2_percentage")) is not None:

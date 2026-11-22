@@ -333,7 +333,8 @@ async def test_ingest_happy_path_with_fresh_token():
     assert {c.device_id for c in storage.ingest_calls} == {1}
     # The recorded metrics include the ones normalize_* emits.
     written_metrics = {c.metric for c in storage.ingest_calls}
-    assert "heart_rate_variability" in written_metrics
+    assert "heart_rate_variability_rmssd" in written_metrics
+    assert "heart_rate_variability" not in written_metrics
     assert "blood_oxygen" in written_metrics
     assert "workouts" in written_metrics
     assert "strain" in written_metrics

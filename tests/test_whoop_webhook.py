@@ -205,7 +205,8 @@ async def test_handle_webhook_recovery_event_fetches_and_ingests():
     assert result["accepted"] > 0
     assert any(f"{PATH_RECOVERY}/rec-1" in call["url"] for call in http.get_calls)
     written_metrics = {call.metric for call in storage.ingest_calls}
-    assert "heart_rate_variability" in written_metrics
+    assert "heart_rate_variability_rmssd" in written_metrics
+    assert "heart_rate_variability" not in written_metrics
     assert "blood_oxygen" in written_metrics
 
 
