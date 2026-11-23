@@ -110,7 +110,7 @@ export function MetricCard({
               </>
             )}
           </div>
-          <span className="metric-state">{groups.length} sources · kept apart</span>
+          <span className="metric-state">{groups.length} sources</span>
         </div>
         {groups.map((group, index) => {
           const groupValues = group.points.map((p) => p.value);

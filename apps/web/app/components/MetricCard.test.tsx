@@ -88,7 +88,7 @@ describe("MetricCard with two devices", () => {
     const html = renderToStaticMarkup(
       <MetricCard series={twoDevices()} fallbackTitle="" sourceLabels={{ watch: "Apple Watch", "whoop-stream": "Whoop" }} />,
     );
-    expect(html).toContain("2 sources · kept apart");
+    expect(html).toContain(">2 sources<");
     expect(html).toContain("Apple Watch mean");
     expect(html).toContain("Whoop mean");
     expect(html).toContain("61"); // Apple Watch mean
