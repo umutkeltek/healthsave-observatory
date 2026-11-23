@@ -196,6 +196,8 @@ async def test_handle_webhook_recovery_event_fetches_and_ingests():
             "event": {"type": "recovery.updated", "id": "rec-1"},
             "storage": storage,
             "session": object(),
+            "stream_registry": _StreamRegistry(),
+            "canonical_repository": _InsertRepo(),
             "http_client": http,
             "token_store": token_store,
             "oauth_config": _oauth_config(),
@@ -221,6 +223,7 @@ async def test_handle_webhook_sleep_event_fetches_and_ingests():
             "event": {"type": "sleep.updated", "id": "slp-1"},
             "storage": storage,
             "session": object(),
+            "stream_registry": _StreamRegistry(),
             "http_client": http,
             "token_store": token_store,
             "oauth_config": _oauth_config(),
@@ -245,6 +248,7 @@ async def test_handle_webhook_workout_event_fetches_and_ingests():
             "event": {"type": "workout.updated", "id": "wk-1"},
             "storage": storage,
             "session": object(),
+            "stream_registry": _StreamRegistry(),
             "http_client": http,
             "token_store": token_store,
             "oauth_config": _oauth_config(),
@@ -268,6 +272,7 @@ async def test_handle_webhook_unknown_event_type_is_noop():
             "event": {"type": "user.something", "id": "x"},
             "storage": storage,
             "session": object(),
+            "stream_registry": _StreamRegistry(),
             "http_client": http,
             "token_store": token_store,
             "oauth_config": _oauth_config(),
@@ -291,6 +296,7 @@ async def test_handle_webhook_missing_type_or_id_raises_value_error():
                 "event": {},
                 "storage": storage,
                 "session": object(),
+                "stream_registry": _StreamRegistry(),
                 "http_client": http,
                 "token_store": token_store,
                 "oauth_config": _oauth_config(),
@@ -324,6 +330,8 @@ async def test_handle_webhook_refreshes_expired_token_then_ingests():
             "event": {"type": "recovery.updated", "id": "rec-1"},
             "storage": storage,
             "session": session,
+            "stream_registry": _StreamRegistry(),
+            "canonical_repository": _InsertRepo(),
             "http_client": http,
             "token_store": token_store,
             "oauth_config": _oauth_config(),
@@ -350,6 +358,8 @@ async def test_handle_webhook_with_no_stored_token_is_noop():
             "event": {"type": "recovery.updated", "id": "rec-1"},
             "storage": storage,
             "session": object(),
+            "stream_registry": _StreamRegistry(),
+            "canonical_repository": _InsertRepo(),
             "http_client": http,
             "token_store": token_store,
             "oauth_config": _oauth_config(),
@@ -393,6 +403,7 @@ async def test_a_deleted_workout_is_superseded_without_fetching_it():
             "event": {"type": "workout.deleted", "id": "wk-9"},
             "storage": _RecordingStorage(),
             "session": object(),
+            "stream_registry": _StreamRegistry(),
             "http_client": http,
             "token_store": _TokenStore(initial_token=_fresh_token()),
             "canonical_repository": canonical,
@@ -424,6 +435,7 @@ async def test_a_deleted_sleep_or_recovery_is_acknowledged_without_fetching(even
             "event": {"type": event_type, "id": "res-9"},
             "storage": _RecordingStorage(),
             "session": object(),
+            "stream_registry": _StreamRegistry(),
             "http_client": http,
             "token_store": _TokenStore(initial_token=_fresh_token()),
             "canonical_repository": canonical,
@@ -445,6 +457,7 @@ async def test_an_updated_resource_that_is_gone_is_acknowledged_not_failed():
             "event": {"type": "sleep.updated", "id": "slp-9"},
             "storage": storage,
             "session": object(),
+            "stream_registry": _StreamRegistry(),
             "http_client": http,
             "token_store": _TokenStore(initial_token=_fresh_token()),
         }
@@ -558,6 +571,7 @@ async def test_a_webhook_fetch_refused_with_401_refreshes_once_and_ingests():
             "event": {"type": "workout.updated", "id": "wk-1"},
             "storage": _RecordingStorage(),
             "session": _Session(),
+            "stream_registry": _StreamRegistry(),
             "http_client": http,
             "token_store": token_store,
             "oauth_config": _oauth_config(),
@@ -566,3 +580,46 @@ async def test_a_webhook_fetch_refused_with_401_refreshes_once_and_ingests():
 
     assert result["accepted"] > 0
     assert [kind for _, kind in token_store.put_calls] == ["refreshed"]
+
+
+class _StreamRegistry:
+    """Records the Whoop stream registration instead of writing it."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    async def record_origins(self, session, **kwargs):
+        self.calls.append(kwargs)
+        return 1
+
+
+class _InsertRepo:
+    def __init__(self) -> None:
+        self.inserted: list[Any] = []
+
+    async def insert_many(self, session, observations):
+        self.inserted.extend(observations)
+        return len(observations)
+
+
+@pytest.mark.asyncio
+async def test_a_recovery_webhook_writes_rmssd_rhr_and_spo2_as_whoops_own_readings():
+    repo = _InsertRepo()
+    registry = _StreamRegistry()
+    http = _HttpClient(get_responses={PATH_RECOVERY: _Response(200, _RECOVERY_RECORD)})
+    await _plugin().handle_webhook(
+        {
+            "event": {"type": "recovery.updated", "id": "rec-1"},
+            "storage": _RecordingStorage(),
+            "session": object(),
+            "stream_registry": registry,
+            "canonical_repository": repo,
+            "http_client": http,
+            "token_store": _TokenStore(initial_token=_fresh_token()),
+            "oauth_config": _oauth_config(),
+        }
+    )
+    metrics = sorted(o.metric_id for o in repo.inserted)
+    assert "vital.hrv_rmssd" in metrics and "vital.hrv_sdnn" not in metrics
+    assert set(metrics) <= {"vital.hrv_rmssd", "vital.resting_heart_rate", "vital.blood_oxygen"}
+    assert len(registry.calls) == 1

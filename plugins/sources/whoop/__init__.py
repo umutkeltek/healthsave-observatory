@@ -182,6 +182,7 @@ class WhoopSource(Source):
             fetch_workouts,
         )
         from .normalize import (
+            canonical_recovery_observations,
             canonical_session_observations,
             normalize_body_measurement,
             normalize_cycles,
@@ -285,7 +286,12 @@ class WhoopSource(Source):
             owner_id=owner_id,
             provider_subject_id=provider_subject_id,
         )
+        # Recovery HRV (RMSSD), resting heart rate and blood oxygen: each its
+        # own canonical metric on the Whoop stream, never merged with another
+        # device's reading of the same metric.
+        canonical_observations += canonical_recovery_observations(recovery_items, owner_id=owner_id)
         if canonical_observations:
+            await _record_whoop_stream(payload, session, owner_id)
             accepted += await canonical_repository.insert_many(session, canonical_observations)
 
         log.info(
@@ -318,6 +324,7 @@ class WhoopSource(Source):
         )
         from .normalize import (
             NORMALIZER_ID,
+            canonical_recovery_observations,
             normalize_recovery,
             normalize_sleep,
             normalize_workouts,
@@ -443,6 +450,18 @@ class WhoopSource(Source):
                 accepted += await storage.ingest_metric(
                     session, device_id, metric, samples, owner_id
                 )
+        if normalizer is normalize_recovery:
+            recovery_observations = canonical_recovery_observations([data], owner_id=owner_id)
+            if recovery_observations:
+                from storage.timescale.observations import (
+                    default_repository as default_canonical_repo,
+                )
+
+                canonical_repository = payload.get("canonical_repository") or (
+                    default_canonical_repo
+                )
+                await _record_whoop_stream(payload, session, owner_id)
+                accepted += await canonical_repository.insert_many(session, recovery_observations)
 
         log.info(
             "whoop webhook complete owner=%s accepted=%d event_type=%s resource_id=%s",
@@ -455,6 +474,21 @@ class WhoopSource(Source):
 
     async def shutdown(self) -> None:
         log.info("whoop plugin shutdown")
+
+
+async def _record_whoop_stream(payload: dict[str, Any], session: Any, owner_id: Any) -> None:
+    """Register the Whoop source and stream, so pages and the AI connector name
+    its readings "Whoop" instead of an id. Idempotent upsert."""
+
+    stream_registry = payload.get("stream_registry")
+    if stream_registry is None:
+        from storage.timescale import registry as stream_registry  # type: ignore[no-redef]
+
+    from .normalize import ORIGIN_PROVIDER, SOURCE_TAG
+
+    await stream_registry.record_origins(
+        session, owner_id=owner_id, plugin_id=ORIGIN_PROVIDER, origins=[SOURCE_TAG]
+    )
 
 
 __all__ = [

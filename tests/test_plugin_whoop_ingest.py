@@ -308,6 +308,7 @@ async def test_ingest_happy_path_with_fresh_token():
             "token_store": token_store,
             "oauth_config": _oauth_config(),
             "canonical_repository": _CanonicalRepo(),
+            "stream_registry": _StreamRegistry(),
         }
     )
 
@@ -360,15 +361,22 @@ async def test_ingest_writes_canonical_workout_session_for_fusion():
             "token_store": token_store,
             "oauth_config": _oauth_config(),
             "canonical_repository": canonical_repo,
+            "stream_registry": _StreamRegistry(),
         }
     )
 
     legacy_accepted = sum(len(call.samples) for call in storage.ingest_calls)
-    assert result == {"accepted": legacy_accepted + 1, "rejected": 0}
+    # One workout session plus the recovery's three readings.
+    assert result == {"accepted": legacy_accepted + 4, "rejected": 0}
     assert len(canonical_repo.insert_calls) == 1
     inserted_session, observations = canonical_repo.insert_calls[0]
     assert inserted_session is session
-    assert len(observations) == 1
+    assert [o.metric_id for o in observations] == [
+        "workout.session",
+        "vital.hrv_rmssd",
+        "vital.resting_heart_rate",
+        "vital.blood_oxygen",
+    ]
 
     obs = observations[0]
     expected_source_id = identity.source_uuid(DEFAULT_OWNER_ID, "whoop-healthsave")
@@ -429,6 +437,7 @@ async def test_ingest_refreshes_expired_token_and_audits_refreshed_event():
             "token_store": token_store,
             "oauth_config": _oauth_config(),
             "canonical_repository": _CanonicalRepo(),
+            "stream_registry": _StreamRegistry(),
         }
     )
 
@@ -603,6 +612,7 @@ async def test_a_refused_token_that_looks_valid_is_refreshed_once_and_the_poll_s
             "token_store": token_store,
             "oauth_config": _oauth_config(),
             "canonical_repository": _CanonicalRepo(),
+            "stream_registry": _StreamRegistry(),
         }
     )
 
@@ -630,6 +640,7 @@ async def test_a_token_refused_again_after_its_refresh_fails_the_poll_without_lo
                 "token_store": token_store,
                 "oauth_config": _oauth_config(),
                 "canonical_repository": _CanonicalRepo(),
+                "stream_registry": _StreamRegistry(),
             }
         )
     assert len(http.post_calls) == 1, "one refresh, not a loop"
@@ -655,6 +666,64 @@ async def test_a_refused_token_with_no_refresh_token_fails_as_before():
                 "token_store": _TokenStore(initial_token=token),
                 "oauth_config": _oauth_config(),
                 "canonical_repository": _CanonicalRepo(),
+                "stream_registry": _StreamRegistry(),
             }
         )
     assert http.post_calls == []
+
+
+class _StreamRegistry:
+    """Records the Whoop stream registration instead of writing it."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    async def record_origins(self, session, **kwargs):
+        self.calls.append(kwargs)
+        return 1
+
+
+class _InsertRepo:
+    def __init__(self) -> None:
+        self.inserted: list[Any] = []
+
+    async def insert_many(self, session, observations):
+        self.inserted.extend(observations)
+        return len(observations)
+
+
+@pytest.mark.asyncio
+async def test_recovery_readings_reach_the_canonical_store_on_the_whoop_stream():
+    """HRV goes to RMSSD (never SDNN); RHR and SpO2 are Whoop's own rows."""
+
+    canonical_repo = _CanonicalRepo()
+    registry = _StreamRegistry()
+    plugin = WhoopSource(load_manifest(PLUGIN_DIR / "plugin.yaml"))
+    await plugin.ingest(
+        {
+            "storage": _RecordingStorage(),
+            "session": object(),
+            "http_client": _HttpClient(get_responses=_default_get_responses()),
+            "token_store": _TokenStore(initial_token=_fresh_token()),
+            "oauth_config": _oauth_config(),
+            "canonical_repository": canonical_repo,
+            "stream_registry": registry,
+        }
+    )
+    _, observations = canonical_repo.insert_calls[0]
+    recovery = [o for o in observations if o.metric_id != "workout.session"]
+    whoop_stream = identity.stream_id(DEFAULT_OWNER_ID, "whoop-healthsave", "whoop")
+    assert {o.metric_id for o in recovery} == {
+        "vital.hrv_rmssd",
+        "vital.resting_heart_rate",
+        "vital.blood_oxygen",
+    }
+    assert "vital.hrv_sdnn" not in {o.metric_id for o in observations}
+    assert {o.stream_id for o in recovery} == {whoop_stream}
+    assert {o.source_id for o in recovery} == {
+        identity.source_uuid(DEFAULT_OWNER_ID, "whoop-healthsave")
+    }
+    assert {o.value.unit for o in recovery} == {"ms", "bpm", "%"}
+    assert registry.calls == [
+        {"owner_id": DEFAULT_OWNER_ID, "plugin_id": "whoop-healthsave", "origins": ["Whoop"]}
+    ]
