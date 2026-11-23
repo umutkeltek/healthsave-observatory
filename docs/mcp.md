@@ -38,7 +38,7 @@ with this server's address and that key filled in. Paste the line on the compute
 where your AI runs. For Claude Code it looks like this:
 
 ```bash
-claude mcp add healthsave -e HEALTHSAVE_URL=http://192.168.1.20:8000 -e HEALTHSAVE_API_KEY=<your read key> -- uvx --from "git+https://github.com/umutkeltek/healthsave-observatory@v1.5.2#subdirectory=packages/mcp" healthsave-mcp
+claude mcp add healthsave -e HEALTHSAVE_URL=http://192.168.1.20:8000 -e HEALTHSAVE_API_KEY=<your read key> -- uvx --from "git+https://github.com/umutkeltek/healthsave-observatory@v1.5.3#subdirectory=packages/mcp" healthsave-mcp
 ```
 
 Then ask Claude about your sleep. `claude mcp list` shows `healthsave` as connected.

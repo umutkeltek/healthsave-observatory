@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "healthsave-mcp"
 # Same version as the Observatory release it ships in
 # (tests/contract/test_release_version_coherence.py).
-version = "1.5.2"
+version = "1.5.3"
 description = "Read-only MCP server: your own AI client reads your HealthSave Observatory."
 requires-python = ">=3.10"
 license = { text = "Elastic-2.0" }

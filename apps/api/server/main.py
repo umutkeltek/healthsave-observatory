@@ -175,7 +175,7 @@ async def lifespan(a: FastAPI):
         await engine.dispose()
 
 
-app = FastAPI(title="HealthSave Observatory", version="1.5.2", lifespan=lifespan)
+app = FastAPI(title="HealthSave Observatory", version="1.5.3", lifespan=lifespan)
 
 
 @app.exception_handler(json.JSONDecodeError)
