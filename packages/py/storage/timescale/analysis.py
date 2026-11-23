@@ -696,6 +696,31 @@ async def summarize_metric_window(
               AND numeric_value IS NOT NULL
               AND status = 'active'
               AND aggregation_scope = :aggregation_scope
+              AND (
+                   :aggregation_scope = 'owner_all_source_day_total'
+                   OR stream_id IS NOT DISTINCT FROM (
+                       -- One device per metric: never average two sources (an
+                       -- Apple Watch and a Whoop) into one number. The stream
+                       -- with the most readings in the last 60 days, then the
+                       -- most recent; fixed per run, so a window and its
+                       -- baseline always read the same device.
+                       SELECT pick.stream_id
+                         FROM canonical_observations AS pick
+                        WHERE pick.owner_id = :owner_id
+                          AND pick.workspace_id = :workspace_id
+                          AND pick.metric_id = :metric_id
+                          AND pick.numeric_value IS NOT NULL
+                          AND pick.status = 'active'
+                          AND pick.aggregation_scope = :aggregation_scope
+                        GROUP BY pick.stream_id
+                        ORDER BY count(*) FILTER (
+                                     WHERE pick.interval_start >= now() - interval '60 days'
+                                 ) DESC,
+                                 max(pick.interval_start) DESC,
+                                 pick.stream_id
+                        LIMIT 1
+                   )
+              )
             """
         ),
         {
@@ -757,6 +782,31 @@ async def fetch_metric_daily_series(
               AND numeric_value IS NOT NULL
               AND status = 'active'
               AND aggregation_scope = :aggregation_scope
+              AND (
+                   :aggregation_scope = 'owner_all_source_day_total'
+                   OR stream_id IS NOT DISTINCT FROM (
+                       -- One device per metric: never average two sources (an
+                       -- Apple Watch and a Whoop) into one number. The stream
+                       -- with the most readings in the last 60 days, then the
+                       -- most recent; fixed per run, so a window and its
+                       -- baseline always read the same device.
+                       SELECT pick.stream_id
+                         FROM canonical_observations AS pick
+                        WHERE pick.owner_id = :owner_id
+                          AND pick.workspace_id = :workspace_id
+                          AND pick.metric_id = :metric_id
+                          AND pick.numeric_value IS NOT NULL
+                          AND pick.status = 'active'
+                          AND pick.aggregation_scope = :aggregation_scope
+                        GROUP BY pick.stream_id
+                        ORDER BY count(*) FILTER (
+                                     WHERE pick.interval_start >= now() - interval '60 days'
+                                 ) DESC,
+                                 max(pick.interval_start) DESC,
+                                 pick.stream_id
+                        LIMIT 1
+                   )
+              )
             GROUP BY day
             ORDER BY day ASC
             """
