@@ -293,6 +293,49 @@ async def rows_tagged_with_run(session: AsyncSession, *, run_id: UUID) -> dict[s
     return {str(metric): int(n) for metric, n in rows}
 
 
+async def fetch_whoop_legacy_recovery_rows(
+    session: AsyncSession,
+    *,
+    device_type: str = "Whoop",
+    source_tag: str = "Whoop",
+) -> list[tuple[UUID, str, Any, float]]:
+    """Whoop recovery readings the per-metric tables hold, oldest first.
+
+    Returns ``(owner_id, kind, time, value)`` with ``kind`` one of ``hrv_rmssd``,
+    ``resting_heart_rate``, ``blood_oxygen``. Only rows the Whoop connector
+    wrote: device ``Whoop`` AND source ``Whoop``, so an Apple Watch or iPhone
+    row (even one HealthKit got from the Whoop app) is never read. Whoop HRV
+    sits in ``hrv`` (versions up to 1.5.2 stored it there, mislabelled SDNN)
+    or in ``quantity_samples`` (1.5.3); both are RMSSD.
+    """
+
+    sql = text(
+        """
+        WITH whoop AS (SELECT id FROM devices WHERE device_type = :device_type)
+        SELECT owner_id, 'hrv_rmssd' AS kind, time, value_ms AS value
+          FROM hrv
+         WHERE device_id IN (SELECT id FROM whoop) AND source_id = :source_tag
+        UNION ALL
+        SELECT owner_id,
+               CASE metric_name WHEN 'heart_rate_variability_rmssd' THEN 'hrv_rmssd'
+                                ELSE 'resting_heart_rate' END,
+               time, value
+          FROM quantity_samples
+         WHERE device_id IN (SELECT id FROM whoop) AND source_id = :source_tag
+           AND metric_name IN ('heart_rate_variability_rmssd', 'resting_heart_rate')
+        UNION ALL
+        SELECT owner_id, 'blood_oxygen', time, spo2_pct
+          FROM blood_oxygen
+         WHERE device_id IN (SELECT id FROM whoop) AND source_id = :source_tag
+         ORDER BY time, kind
+        """
+    )
+    rows = await session.execute(sql, {"device_type": device_type, "source_tag": source_tag})
+    return [
+        (UUID(str(row.owner_id)), str(row.kind), row.time, float(row.value)) for row in rows.all()
+    ]
+
+
 # Module-level defaults — production wiring (``server.main``) constructs
 # its own instances; these are the fallback for unit tests that hit
 # routes without a full FastAPI lifespan.
