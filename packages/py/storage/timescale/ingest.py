@@ -152,6 +152,147 @@ async def ingest_owner_ids(session: AsyncSession) -> set[UUID]:
     return {UUID(str(row[0])) for row in rows.all()}
 
 
+async def fetch_raw_metric_payloads(
+    session: AsyncSession,
+    *,
+    wire_metric: str,
+    after_id: int = 0,
+    limit: int = 500,
+) -> list[tuple[int, dict, UUID | None]]:
+    """Stored raw batches of ONE wire metric, oldest first, with their owner.
+
+    Returns ``(raw_ingestion_log.id, raw_payload, owner_id)``. The raw log has
+    no owner column; the owner is the one the batch's sync receipt recorded
+    (``healthsave_sync_receipts.raw_log_id``), or ``None`` when no receipt
+    names one. The metric back-fill (``replay.orchestrator``) uses it so a
+    participant's batch is never written into the primary person's history.
+    """
+
+    sql = text(
+        """
+        SELECT raw.id,
+               raw.raw_payload,
+               (SELECT r.owner_id
+                  FROM healthsave_sync_receipts AS r
+                 WHERE r.raw_log_id = raw.id
+                   AND r.owner_id IS NOT NULL
+                 ORDER BY r.id
+                 LIMIT 1) AS owner_id
+          FROM raw_ingestion_log AS raw
+         WHERE raw.id > :after_id
+           AND raw.source_type = 'healthsave'
+           AND raw.raw_payload->>'metric' = :wire_metric
+         ORDER BY raw.id ASC
+         LIMIT :limit
+        """
+    )
+    rows = (
+        (
+            await session.execute(
+                sql, {"after_id": after_id, "wire_metric": wire_metric, "limit": limit}
+            )
+        )
+        .mappings()
+        .all()
+    )
+    out: list[tuple[int, dict, UUID | None]] = []
+    for row in rows:
+        payload = row["raw_payload"]
+        if isinstance(payload, str):  # JSONB usually decodes to dict; be defensive
+            payload = json.loads(payload)
+        owner = row["owner_id"]
+        out.append((row["id"], payload, UUID(str(owner)) if owner is not None else None))
+    return out
+
+
+async def supersede_metric_records(
+    session: AsyncSession,
+    *,
+    owner_id: UUID,
+    metric_id: str,
+    uuids: list[str],
+) -> int:
+    """Mark ONE canonical metric's active rows superseded for these sample UUIDs.
+
+    The back-fill's deletion replay: scoped to ``metric_id`` so it can never
+    touch another metric's rows (RMSSD's back-fill never touches SDNN).
+    Idempotent; returns rows changed.
+    """
+
+    if not uuids:
+        return 0
+    result = await session.execute(
+        text(
+            """
+            UPDATE canonical_observations
+               SET status = 'superseded'
+             WHERE owner_id = :owner_id
+               AND metric_id = :metric_id
+               AND status = 'active'
+               AND source_record_uid = ANY(:uuids)
+            """
+        ),
+        {"owner_id": str(owner_id), "metric_id": metric_id, "uuids": list(uuids)},
+    )
+    return result.rowcount or 0
+
+
+async def metric_row_counts(
+    session: AsyncSession,
+    *,
+    canonical_metric: str,
+    wire_metric: str | None = None,
+) -> dict[str, int]:
+    """Row counts for one metric: raw projection rows and canonical rows by status."""
+
+    raw = 0
+    if wire_metric is not None:
+        raw = (
+            await session.execute(
+                text("SELECT count(*) FROM quantity_samples WHERE metric_name = :wire"),
+                {"wire": wire_metric},
+            )
+        ).scalar_one()
+    by_status = (
+        await session.execute(
+            text(
+                """
+                SELECT status, count(*) AS n
+                  FROM canonical_observations
+                 WHERE metric_id = :metric
+                 GROUP BY status
+                """
+            ),
+            {"metric": canonical_metric},
+        )
+    ).all()
+    counts = {str(status): int(n) for status, n in by_status}
+    return {
+        "raw_rows": int(raw),
+        "active": counts.get("active", 0),
+        "other_status": sum(n for status, n in counts.items() if status != "active"),
+    }
+
+
+async def rows_tagged_with_run(session: AsyncSession, *, run_id: UUID) -> dict[str, int]:
+    """Canonical rows a replay run wrote, per metric (its ``normalization_run_id``)."""
+
+    rows = (
+        await session.execute(
+            text(
+                """
+                SELECT metric_id, count(*) AS n
+                  FROM canonical_observations
+                 WHERE normalization_run_id = :run_id
+                 GROUP BY metric_id
+                """
+            ),
+            {"run_id": str(run_id)},
+        )
+    ).all()
+    return {str(metric): int(n) for metric, n in rows}
+
+
 # Module-level defaults — production wiring (``server.main``) constructs
 # its own instances; these are the fallback for unit tests that hit
 # routes without a full FastAPI lifespan.

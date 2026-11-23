@@ -109,3 +109,131 @@ async def replay_apple_raw_payloads(
         observations_rejected=rejected,
         observations_submitted=submitted,
     )
+
+
+class _MetricSuperseder(Protocol):
+    """Deletion replay scoped to one canonical metric (idempotent)."""
+
+    async def __call__(
+        self, session: Any, *, owner_id: UUID, metric_id: str, uuids: list[str]
+    ) -> int: ...
+
+
+@dataclass(frozen=True)
+class MetricBackfillReport:
+    """One page of a one-metric back-fill: what was read, written and skipped."""
+
+    run_id: str
+    metric_id: str
+    payloads_scanned: int
+    payloads_skipped_unknown_owner: int
+    observations_produced: int
+    observations_rejected: int
+    observations_submitted: int
+    deletions_applied: int
+    last_raw_id: int
+
+
+def _batch_for_normalizer(payload: dict) -> dict:
+    """The ``{metric, samples}`` the live dual-write hands the normalizer.
+
+    The v2 route validates each sample and passes ``model_dump(exclude_none=True)``;
+    stored raw JSON may carry explicit nulls, so they are dropped the same way.
+    """
+
+    samples = payload.get("samples") or []
+    if payload.get("schema_version") == 2:
+        samples = [
+            {k: v for k, v in sample.items() if v is not None}
+            for sample in samples
+            if isinstance(sample, dict)
+        ]
+    return {"metric": payload.get("metric"), "samples": samples}
+
+
+def _deletion_uuids(payload: dict) -> list[str]:
+    return [
+        str(item["uuid"])
+        for item in payload.get("deletions") or []
+        if isinstance(item, dict) and item.get("uuid")
+    ]
+
+
+async def backfill_metric_from_raw(
+    session: Any,
+    *,
+    raw_reader: Callable[..., Awaitable[list[tuple[int, dict, UUID | None]]]],
+    repo: _CanonicalWriter,
+    superseder: _MetricSuperseder,
+    run_id: UUID,
+    source_id: UUID,
+    metric_id: str,
+    fallback_owner_id: UUID | None,
+    source_plugin_id: str = "apple_health",
+    workspace_id: UUID = DEFAULT_WORKSPACE_ID,
+    after_id: int = 0,
+    limit: int = 500,
+) -> MetricBackfillReport:
+    """Turn one metric's stored raw batches into canonical observations.
+
+    For a metric the server stored raw but never mapped (RMSSD before
+    ``vital.hrv_rmssd``). Additive and safe to run twice:
+
+    * only observations of ``metric_id`` are written, through the same
+      idempotent ``ON CONFLICT DO NOTHING`` insert the live dual-write uses,
+      so a row already present (or already superseded) is never rewritten;
+    * each batch's own deletions are replayed in stored order, scoped to
+      ``metric_id``, so a sample HealthKit deleted later stays deleted and no
+      other metric's row (SDNN) is ever touched;
+    * the owner is the one the batch's sync receipt recorded; without one the
+      batch goes to ``fallback_owner_id`` (a single-person Observatory) or is
+      skipped and counted when that is ``None``.
+    """
+
+    raws = await raw_reader(session, after_id=after_id, limit=limit)
+    produced = rejected = submitted = deleted = skipped = 0
+    last_raw_id = after_id
+    for raw_id, payload, receipt_owner in raws:
+        last_raw_id = raw_id
+        owner_id = receipt_owner or fallback_owner_id
+        if owner_id is None:
+            skipped += 1
+            continue
+        provenance = Provenance(
+            source_plugin_id=source_plugin_id,
+            sdk_version="replay",
+            captured_at=datetime.now(UTC),
+            raw_payload_ref=str(raw_id),
+        )
+        result = normalize_apple_batch(
+            _batch_for_normalizer(payload),
+            source_id=source_id,
+            provenance=provenance,
+            owner_id=owner_id,
+            workspace_id=workspace_id,
+        )
+        keep = [
+            obs.model_copy(update={"normalization_run_id": run_id})
+            for obs in result.observations
+            if obs.metric_id == metric_id
+        ]
+        produced += len(keep)
+        rejected += result.rejected
+        if keep:
+            submitted += await repo.insert_many(session, keep)
+        uuids = _deletion_uuids(payload)
+        if uuids:
+            deleted += await superseder(
+                session, owner_id=owner_id, metric_id=metric_id, uuids=uuids
+            )
+    return MetricBackfillReport(
+        run_id=str(run_id),
+        metric_id=metric_id,
+        payloads_scanned=len(raws),
+        payloads_skipped_unknown_owner=skipped,
+        observations_produced=produced,
+        observations_rejected=rejected,
+        observations_submitted=submitted,
+        deletions_applied=deleted,
+        last_raw_id=last_raw_id,
+    )
