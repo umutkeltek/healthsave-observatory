@@ -9,6 +9,30 @@ Plugins carry their own versions.
 
 ## [Unreleased]
 
+### Upgrade
+
+- If you connected Whoop, run the Whoop back-fill once after the update
+  (dry run first). It turns the Whoop recovery readings your server already
+  stored into shown readings; it only adds, never touches Apple Watch or
+  SDNN readings, and a second run adds nothing:
+
+  ```bash
+  docker compose exec api python -m scripts.backfill_whoop_recovery --dry-run
+  docker compose exec api python -m scripts.backfill_whoop_recovery
+  ```
+
+### Fixed
+
+- **Whoop recovery readings show.** Whoop's HRV (as RMSSD, never SDNN),
+  resting heart rate and blood oxygen now reach the pages, the metric list
+  and the AI connector, each named "Whoop".
+- **Two devices are never averaged.** When an Apple Watch and a Whoop both
+  report a reading, the Data page shows each device with its own value and
+  line, Today names the device it shows and gives the other's reading beside
+  it, and the AI connector lists both. The weekly brief, the recovery score
+  and the correlations read one device per metric instead of averaging all
+  of them.
+
 ## [1.5.3] - 2026-11-25
 
 The second heart rate variability measure, RMSSD, now shows. HealthSave for
