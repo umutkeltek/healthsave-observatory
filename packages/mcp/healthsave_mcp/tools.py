@@ -645,6 +645,36 @@ async def today_vs_usual(
         others = [labels.get(s, "another source") for s in per_stream if s != stream]
         if others:
             entry["other_sources_not_mixed_in"] = others
+            # Each other device's own latest reading against its own 28 days,
+            # side by side: never pooled with the main one (an Apple Watch and
+            # a Whoop both reporting resting heart rate are two readings).
+            own: list[dict[str, Any]] = []
+            for other in per_stream:
+                if other == stream:
+                    continue
+                o_values = per_stream[other].values
+                o_day = max(o_values)
+                if o_day < today - timedelta(days=2):
+                    continue
+                o_history = [
+                    o_values[d] for d in o_values if o_day - timedelta(days=28) <= d < o_day
+                ]
+                o_band = derive.usual_range(o_history, digits)
+                o_value = derive.rnd(o_values[o_day], digits)
+                own.append(
+                    {
+                        "source": labels.get(other, "another source"),
+                        "day": o_day.isoformat(),
+                        "value": o_value,
+                        "unit": unit,
+                        "usual": o_band,
+                        "place": derive.place(o_value, o_band)
+                        if o_band and o_band["days"] >= 7
+                        else None,
+                    }
+                )
+            if own:
+                entry["other_source_readings"] = own
         readings.append(entry)
 
     totals = []

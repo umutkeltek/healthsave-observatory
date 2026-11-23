@@ -100,7 +100,8 @@ def build_server(
         description="Today's readings (resting heart rate, HRV as SDNN and, when recorded, "
         "RMSSD as a separate value, respiratory rate, blood oxygen, "
         "wrist temperature, weight), today's activity so far and last night's sleep, each "
-        "against the same source's previous 28 days. Includes the engine's recovery score when "
+        "against the same source's previous 28 days; when two devices report one reading, each "
+        "device's value is listed apart, never averaged. Includes the engine's recovery score when "
         "the key may read findings.",
         annotations=READ_ONLY,
     )

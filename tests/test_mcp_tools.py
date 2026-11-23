@@ -678,6 +678,11 @@ async def test_today_compares_each_reading_with_the_same_sources_usual() -> None
     assert rhr["source"] == "Apple Watch"
     assert rhr["other_sources_not_mixed_in"] == ["Oura Ring"]
     assert 56 <= rhr["usual"]["median"] <= 57  # the watch's own range, not pooled with the ring
+    ring = rhr["other_source_readings"]
+    assert [r["source"] for r in ring] == ["Oura Ring"]
+    # The ring's own value and range: ~53 against the watch's ~56, never one mean.
+    assert 53 <= ring[0]["value"] <= 54 and 53 <= ring[0]["usual"]["median"] <= 54
+    assert ring[0]["unit"] == "bpm"
     assert result["last_night"]["night_of"] == "2026-11-06"
     assert result["recovery"]["score"] == 71
     steps = next(t for t in result["totals"] if t["metric"] == "activity.steps")
