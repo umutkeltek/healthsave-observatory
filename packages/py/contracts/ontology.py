@@ -283,6 +283,20 @@ _QUANTITY: list[MetricDefinition] = [
         hi=500,
         kind="summary",
     ),
+    # RMSSD is a different HRV definition from SDNN: its own metric, never mapped
+    # onto vital.hrv_sdnn and never averaged with it. iOS 27+ (HealthKit
+    # heartRateVariabilityRMSSD) and Android Health Connect send it as
+    # heart_rate_variability_rmssd; Whoop recovery HRV is RMSSD too.
+    _q(
+        "vital.hrv_rmssd",
+        "heart_rate_variability_rmssd",
+        "Heart Rate Variability (RMSSD)",
+        "vital",
+        "ms",
+        lo=0,
+        hi=500,
+        kind="summary",
+    ),
     _q(
         "vital.heart_rate_recovery",
         "heart_rate_recovery",

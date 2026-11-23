@@ -10,6 +10,7 @@ add it here AND to the registry — this test fails until both are done.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from contracts.ontology import REGISTRY, all_metrics, export_registry
 
@@ -21,6 +22,7 @@ INGESTED_WIRE_NAMES: frozenset[str] = frozenset(
         "resting_heart_rate",
         "walking_heart_rate_average",
         "heart_rate_variability",
+        "heart_rate_variability_rmssd",
         "heart_rate_recovery",
         "atrial_fibrillation_burden",
         "vo2_max",
@@ -186,3 +188,29 @@ def test_each_ingested_wire_name_maps_to_exactly_one_metric() -> None:
 
 def test_full_registry_is_json_serializable() -> None:
     json.dumps(export_registry())
+
+
+_IOS_UNIT_CATALOG = (
+    Path(__file__).parent / "fixtures" / "apple_healthsave_v2" / "v2-ios-quantity-units.json"
+)
+
+
+def test_every_metric_in_the_ios_unit_catalog_has_a_canonical_mapping() -> None:
+    """The iOS quantity unit catalog (a byte mirror of what the app sends) is the
+    second, machine-made list of wire names. A name in it with no registry entry is
+    stored in quantity_samples but never as a canonical observation, so the
+    Observatory read surfaces (web, /api/v2/metrics, MCP) never show it. That is how
+    heart_rate_variability_rmssd went missing (2026-11-23)."""
+    sent = set(json.loads(_IOS_UNIT_CATALOG.read_text())["units"])
+    unmapped = sent - _mapped_wire_names()
+    assert not unmapped, f"iOS sends metrics with no canonical mapping: {sorted(unmapped)}"
+
+
+def test_rmssd_and_sdnn_are_separate_metrics() -> None:
+    """RMSSD is never mapped onto, or merged with, SDNN (CLAUDE.md health semantics)."""
+    owners: dict[str, set[str]] = {}
+    for metric in all_metrics():
+        for mapping in metric.source_mappings:
+            owners.setdefault(mapping.source_metric, set()).add(metric.id)
+    assert owners["heart_rate_variability"] == {"vital.hrv_sdnn"}
+    assert owners["heart_rate_variability_rmssd"] == {"vital.hrv_rmssd"}
