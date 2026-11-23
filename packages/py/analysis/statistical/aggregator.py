@@ -25,6 +25,8 @@ _DEFAULT_SUMMARY_METRICS: tuple[str, ...] = (
     "vital.heart_rate",
     "vital.resting_heart_rate",
     "vital.hrv_sdnn",
+    # RMSSD is its own HRV measure: summarized on its own, never with SDNN.
+    "vital.hrv_rmssd",
     "vital.respiratory_rate",
     "vital.blood_oxygen",
     "vital.walking_heart_rate_average",
