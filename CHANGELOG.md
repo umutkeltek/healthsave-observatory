@@ -9,6 +9,67 @@ Plugins carry their own versions.
 
 ## [Unreleased]
 
+## [1.5.3] - 2026-11-25
+
+The second heart rate variability measure, RMSSD, now shows. HealthSave for
+iPhone 1.9.8 on iOS 27 and the Android app send it; until now the server stored
+it but no page, list or AI connector showed it.
+
+### Upgrade
+
+```bash
+healthsave update --to v1.5.3
+```
+
+- No migration and no `.env` change.
+- **Run the back-fill once** after the update, from your Observatory folder.
+  It turns the RMSSD readings your server already stored into shown readings.
+  First the dry run, which writes nothing and prints how many readings it
+  would add; then the real run:
+
+  ```bash
+  docker compose exec api python -m scripts.backfill_metric --metric heart_rate_variability_rmssd --dry-run
+  docker compose exec api python -m scripts.backfill_metric --metric heart_rate_variability_rmssd
+  ```
+
+  It only adds RMSSD readings, never changes or removes anything, and never
+  touches your SDNN readings. A reading HealthKit later deleted stays deleted.
+  Running it again adds nothing. If you never sent RMSSD it reports 0.
+
+### Fixed
+
+- **RMSSD is its own metric.** `heart_rate_variability_rmssd` now becomes
+  `vital.hrv_rmssd` ("Heart Rate Variability (RMSSD)", ms), next to and apart
+  from `vital.hrv_sdnn`. Before, each such batch logged
+  `v2 dual-write divergence ... canonical_accepted=0`.
+- **Whoop recovery HRV is recorded as RMSSD**, the measure Whoop reports, no
+  longer under the SDNN name. Readings stored by older versions stay where
+  they are.
+
+### Added
+
+- **RMSSD on the web.** Today and Data show an "HRV · RMSSD" card right after
+  SDNN, only when RMSSD has readings, with one line on how to read it: "A
+  second way to measure HRV. Compare it only with its own past readings." The
+  two are never merged, averaged or drawn on one line. The Library page has
+  its own notes.
+- **RMSSD in the AI connector.** `today_vs_usual` lists it as a separate,
+  labelled reading against its own usual range; `metric_trend` reads
+  `vital.hrv_rmssd`. Both HRV measures carry a `how_to_read` line.
+- **RMSSD in the weekly brief's summary**, on its own baseline.
+- `scripts/backfill_metric.py`: the one-metric back-fill above.
+
+### Known gap
+
+- Whoop's recovery readings (HRV, resting heart rate, blood oxygen) are still
+  stored only in the older per-metric tables, so the pages above do not show
+  them yet. Unchanged from earlier versions.
+
+### Docs
+
+- The capture docs say which sending needs HealthSave Pro (the QR pairing
+  screen sends by hand without it) and name the app's real buttons.
+
 ## [1.5.2] - 2026-11-21
 
 Settings now has a Backups card that shows the two backup commands, and the
