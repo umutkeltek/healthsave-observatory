@@ -107,7 +107,7 @@ export const GRID_METRICS: { id: string; title: string }[] = [
   { id: "vital.heart_rate", title: "Heart Rate" },
   { id: "vital.resting_heart_rate", title: "Resting Heart Rate" },
   { id: "vital.walking_heart_rate_average", title: "Walking Heart Rate" },
-  { id: "vital.hrv_sdnn", title: "Heart Rate Variability" },
+  { id: "vital.hrv_sdnn", title: "Heart Rate Variability (SDNN)" },
   { id: "vital.respiratory_rate", title: "Respiratory Rate" },
   { id: "mobility.walking_speed", title: "Walking Speed" },
   { id: "mobility.walking_step_length", title: "Step Length" },

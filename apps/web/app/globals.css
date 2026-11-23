@@ -6650,6 +6650,7 @@ body {
 .today-total-bars span:last-child { background: var(--metric-color); }
 .today-metric-chart .spark-band { fill: color-mix(in srgb, var(--metric-color) 7%, transparent); }
 .today-metric-empty { display: block; font-size: 12px; color: var(--muted); line-height: 1.4; }
+.today-metric-note { display: block; font-size: 11px; color: var(--muted); line-height: 1.35; }
 .today-metric-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 8px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .today-more-signals { font-size: 13px; color: var(--muted); }
 .today-more-signals summary { padding: 10px 0; cursor: pointer; }

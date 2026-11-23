@@ -7,6 +7,7 @@ import {
   trendWindow,
 } from "../lib/todayPresentation";
 import { hasOwnerDailyTotalSemantics } from "../lib/series";
+import { metricOneLiner } from "../lib/metricNotes";
 import { TodayReadingTile, TodayTileAffordance } from "./TodayExploration";
 import { Sparkline } from "./MetricCard";
 
@@ -51,12 +52,15 @@ export function TodayMetricCard({
       : "vital";
 
   const className = `today-metric today-metric-${tone}`;
+  // RMSSD sits beside SDNN; one line keeps the reader from comparing the two.
+  const note = metricOneLiner(id);
   const contents = (
     <>
       <div className="today-metric-heading">
         <h2>{title}</h2>
         <TodayTileAffordance />
       </div>
+      {note && <span className="today-metric-note">{note}</span>}
       <div className="today-metric-reading">
         <strong>{value}</strong>
         {latest && <span>{displayUnit}</span>}

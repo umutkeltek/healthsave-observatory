@@ -12,6 +12,7 @@ describe("positiveIsGoodFor", () => {
 
   test("returns true for higher-is-better signals", () => {
     expect(positiveIsGoodFor("vital.hrv_sdnn")).toBe(true);
+    expect(positiveIsGoodFor("vital.hrv_rmssd")).toBe(true);
     expect(positiveIsGoodFor("vital.blood_oxygen")).toBe(true);
     expect(positiveIsGoodFor("activity.steps")).toBe(true);
     expect(positiveIsGoodFor("mobility.walking_speed")).toBe(true);

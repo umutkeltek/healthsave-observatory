@@ -8,10 +8,27 @@ export const DEFAULT_TODAY_METRICS = [
   { id: "sleep.duration", title: "Sleep" },
   { id: "vital.resting_heart_rate", title: "Resting heart rate" },
   { id: "vital.hrv_sdnn", title: "HRV · SDNN" },
+  { id: "vital.hrv_rmssd", title: "HRV · RMSSD" },
   { id: "vital.respiratory_rate", title: "Respiratory rate" },
   { id: "activity.steps", title: "Steps" },
   { id: "activity.active_energy", title: "Active energy" },
 ];
+
+// Default readings shown only when they hold data. Most records carry SDNN
+// alone; an RMSSD card would then only say "no readings". When RMSSD does
+// stream (iPhone on iOS 27, Android, Whoop) it gets its own card beside SDNN.
+export const OPTIONAL_TODAY_METRICS: ReadonlySet<string> = new Set(["vital.hrv_rmssd"]);
+
+export function presentTodayDefs<T extends { id: string }>(
+  defs: T[],
+  pinned: boolean,
+  series: ReadonlyMap<string, MetricSeries | null>,
+): T[] {
+  if (pinned) return defs;
+  return defs.filter(
+    (def) => !OPTIONAL_TODAY_METRICS.has(def.id) || todayReadings(series.get(def.id) ?? null).length > 0,
+  );
+}
 
 export type RecoveryRecency = "current" | "older" | "unknown";
 export function recoveryRecency(

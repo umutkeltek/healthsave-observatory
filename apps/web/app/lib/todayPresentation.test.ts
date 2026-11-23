@@ -10,7 +10,10 @@ import {
   sleepDurationFromStages,
   todayFindings,
   todayReadings,
+  DEFAULT_TODAY_METRICS,
+  presentTodayDefs,
 } from "./todayPresentation";
+import { METRIC_NOTES, metricOneLiner } from "./metricNotes";
 
 function point(
   value: number,
@@ -220,4 +223,50 @@ test("Today findings show the latest check per metric and kind, with attention f
   expect(selected.map((f) => f.id)).not.toContain(1);
   expect(selected.map((f) => f.id)).not.toContain(2);
   expect(selected).toHaveLength(3);
+});
+
+describe("RMSSD beside SDNN on Today", () => {
+  const hrvSeries = (id: string, values: number[]): MetricSeries => ({
+    metric: { id, display_name: id, category: "vital", value_type: "quantity", canonical_unit: "ms" },
+    range: "30d",
+    start: "2026-11-01T00:00:00Z",
+    end: "2026-11-24T00:00:00Z",
+    points: values.map((v, i) => point(v, `2026-11-2${i}T07:00:00Z`)),
+  });
+
+  test("SDNN and RMSSD are two separate default cards, RMSSD right after SDNN", () => {
+    const ids = DEFAULT_TODAY_METRICS.map((m) => m.id);
+    expect(ids.indexOf("vital.hrv_rmssd")).toBe(ids.indexOf("vital.hrv_sdnn") + 1);
+    const titles = Object.fromEntries(DEFAULT_TODAY_METRICS.map((m) => [m.id, m.title]));
+    expect(titles["vital.hrv_sdnn"]).toBe("HRV · SDNN");
+    expect(titles["vital.hrv_rmssd"]).toBe("HRV · RMSSD");
+  });
+
+  test("the RMSSD card shows only when RMSSD has readings", () => {
+    const sdnnOnly = new Map([["vital.hrv_sdnn", hrvSeries("vital.hrv_sdnn", [48, 52])]]);
+    expect(presentTodayDefs(DEFAULT_TODAY_METRICS, false, sdnnOnly).map((m) => m.id)).not.toContain(
+      "vital.hrv_rmssd",
+    );
+    const both = new Map([
+      ["vital.hrv_sdnn", hrvSeries("vital.hrv_sdnn", [48, 52])],
+      ["vital.hrv_rmssd", hrvSeries("vital.hrv_rmssd", [61, 66])],
+    ]);
+    const shown = presentTodayDefs(DEFAULT_TODAY_METRICS, false, both).map((m) => m.id);
+    expect(shown).toContain("vital.hrv_sdnn");
+    expect(shown).toContain("vital.hrv_rmssd");
+    expect(shown).toHaveLength(DEFAULT_TODAY_METRICS.length);
+  });
+
+  test("a pinned list is never trimmed", () => {
+    const pinned = [{ id: "vital.hrv_rmssd", title: "HRV (RMSSD)" }];
+    expect(presentTodayDefs(pinned, true, new Map())).toEqual(pinned);
+  });
+
+  test("RMSSD carries the iPhone app's one line; SDNN carries none", () => {
+    expect(metricOneLiner("vital.hrv_rmssd")).toBe(
+      "A second way to measure HRV. Compare it only with its own past readings.",
+    );
+    expect(metricOneLiner("vital.hrv_sdnn")).toBeNull();
+    expect(METRIC_NOTES["vital.hrv_rmssd"]?.[0]).toBe(metricOneLiner("vital.hrv_rmssd"));
+  });
 });

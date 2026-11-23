@@ -27,7 +27,7 @@ import { friendlyName } from "../../lib/provenance";
 import { hasOwnerDailyTotalSemantics } from "../../lib/series";
 import { TodayFindings } from "../TodayFindings";
 import { TodayMetricCard } from "../TodayMetricCard";
-import { DEFAULT_TODAY_METRICS, recoveryRecency, findingEvidenceHref, dailyReadings, sleepDurationFromStages, todayReadings, type TodayTrendOption } from "../../lib/todayPresentation";
+import { DEFAULT_TODAY_METRICS, presentTodayDefs, recoveryRecency, findingEvidenceHref, dailyReadings, sleepDurationFromStages, todayReadings, type TodayTrendOption } from "../../lib/todayPresentation";
 import { ExperimentsCard } from "../ExperimentsCard";
 import { FocusGoalPicker } from "../FocusGoalPicker";
 import { GoalRibbon } from "../GoalRibbon";
@@ -337,7 +337,7 @@ const todaySeries30d = cache(async () => {
     const sleep = sleepDurationFromStages(stages);
     if (sleep) displayMap.set("sleep.duration", sleep);
   }
-  return { defs, pinned, displayMap };
+  return { defs: presentTodayDefs(defs, pinned, displayMap), pinned, displayMap };
 });
 
 async function trendOptions(): Promise<TodayTrendOption[]> {
@@ -434,6 +434,9 @@ export async function SignalsSection() {
       ...defs.filter((d) => !goalSet.has(d.id)),
     ];
   }
+  // Pinned lists fold after six; the default list is short and shows whole
+  // (six cards, seven when RMSSD streams beside SDNN).
+  const shown = pinned ? 6 : defs.length;
   return (
     <section
       className="today-signals"
@@ -446,7 +449,7 @@ export async function SignalsSection() {
         </Link>
       </div>
       <div className="today-signal-grid">
-        {defs.slice(0, 6).map((metric) => (
+        {defs.slice(0, shown).map((metric) => (
           <TodayMetricCard
             key={metric.id}
             id={metric.id}
@@ -455,11 +458,11 @@ export async function SignalsSection() {
           />
         ))}
       </div>
-      {defs.length > 6 && (
+      {defs.length > shown && (
         <details className="today-more-signals">
-          <summary>{defs.length - 6} more pinned readings</summary>
+          <summary>{defs.length - shown} more pinned readings</summary>
           <div className="today-signal-grid">
-            {defs.slice(6).map((metric) => (
+            {defs.slice(shown).map((metric) => (
               <TodayMetricCard
                 key={metric.id}
                 id={metric.id}

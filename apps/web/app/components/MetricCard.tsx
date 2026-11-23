@@ -1,6 +1,7 @@
 import type { MetricSeries } from "../lib/api";
 import { positiveIsGoodFor } from "../lib/direction";
 import { formatValue } from "../lib/format";
+import { metricOneLiner } from "../lib/metricNotes";
 import { rangeLabel } from "../lib/ranges";
 import { quantile } from "./chart/scale";
 import { CountUp } from "./CountUp";
@@ -94,6 +95,7 @@ export function MetricCard({
   // in resting HR should not read as positive. When the metric's direction is
   // unknown we stay neutral instead of guessing.
   const direction = positiveIsGoodFor(series.metric.id);
+  const note = metricOneLiner(series.metric.id);
   const tone = direction === null ? "" : direction === (delta >= 0) ? "good" : "bad";
 
   return (
@@ -102,6 +104,12 @@ export function MetricCard({
         <div>
           <h2>{series.metric.display_name}</h2>
           <span className="metric-kind">{rangeLabel(series.range)} window</span>
+          {note && (
+            <>
+              <br />
+              <span className="metric-kind">{note}</span>
+            </>
+          )}
         </div>
         <span className={`metric-state${tone ? ` ${tone}` : ""}`}>{deltaLabel}</span>
       </div>

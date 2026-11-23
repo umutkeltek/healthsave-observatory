@@ -28,6 +28,7 @@ const LOWER_IS_BETTER = new Set([
 
 const HIGHER_IS_BETTER = new Set([
   "vital.hrv_sdnn",
+  "vital.hrv_rmssd",
   "vital.blood_oxygen",
   "activity.steps",
   "activity.exercise_minutes",

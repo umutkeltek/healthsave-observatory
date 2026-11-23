@@ -119,6 +119,8 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
 
   // Resolve the visible metric set from the active filters, bounded to guard N+1.
   let visible: MetricSummary[];
+  // Default-grid metrics that only earn a card when they hold readings.
+  const optional = new Set<string>();
   if (all.length === 0) {
     visible = fallback;
   } else if (metricSel) {
@@ -129,16 +131,30 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
     const byId = new Map(all.map((m) => [m.id, m]));
     const defaults = GRID_METRICS.map((g) => byId.get(g.id)).filter((m): m is MetricSummary => Boolean(m));
     visible = (defaults.length ? defaults : all).slice(0, DEFAULT_CAP);
+    // RMSSD is its own HRV measure: when it streams it gets its own card
+    // right after SDNN, never merged into it (healthOpinion.ts).
+    const rmssd = byId.get("vital.hrv_rmssd");
+    const sdnnAt = visible.findIndex((m) => m.id === "vital.hrv_sdnn");
+    if (rmssd && sdnnAt >= 0) {
+      visible.splice(sdnnAt + 1, 0, rmssd);
+      optional.add(rmssd.id);
+    }
   }
   const isDefault = !metricSel && !categorySel;
   // A metric id in the URL that resolves to nothing (backend reachable) is an
   // invalid selection — show an honest empty state, not "0 metrics" + demo.
   const unknownMetric = Boolean(metricSel) && all.length > 0 && visible.length === 0;
 
-  const [reads, sleep] = await Promise.all([
+  const [allReads, sleep] = await Promise.all([
     Promise.all(visible.map((m) => safeSeriesRead(m.id, range))),
     isDefault ? safeSeries("sleep.stage", range) : Promise.resolve(null),
   ]);
+  const shown = visible.map((m, i) => {
+    const read = allReads[i];
+    return !optional.has(m.id) || (read.kind === "series" && read.series.points.length > 0);
+  });
+  visible = visible.filter((_, i) => shown[i]);
+  const reads = allReads.filter((_, i) => shown[i]);
 
   // Source + device facets from the actually-fetched points.
   const seriesList = reads.map((read) => (read.kind === "series" ? read.series : null));

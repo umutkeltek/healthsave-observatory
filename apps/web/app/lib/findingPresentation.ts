@@ -54,14 +54,15 @@ const METRIC_TITLES: Record<string, string> = {
   "sleep.stage": "Sleep stages",
   "vital.blood_oxygen": "Blood oxygen",
   "vital.heart_rate": "Heart rate",
-  "vital.hrv_sdnn": "Heart rate variability",
+  "vital.hrv_sdnn": "Heart rate variability (SDNN)",
+  "vital.hrv_rmssd": "Heart rate variability (RMSSD)",
   "vital.respiratory_rate": "Respiratory rate",
   "vital.resting_heart_rate": "Resting heart rate",
   "vital.spo2": "Blood oxygen",
   "vital.walking_heart_rate_average": "Walking heart rate",
   // Short names the trend and anomaly checks still store.
   heart_rate: "Heart rate",
-  hrv: "Heart rate variability",
+  hrv: "Heart rate variability (SDNN)",
   resting_heart_rate: "Resting heart rate",
   respiratory_rate: "Respiratory rate",
 };
