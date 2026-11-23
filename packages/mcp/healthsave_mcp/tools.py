@@ -61,11 +61,21 @@ ACTIVITY = (
 TODAY_READINGS = (
     ("vital.resting_heart_rate", "Resting heart rate", "bpm", 0),
     ("vital.hrv_sdnn", "Heart rate variability (SDNN)", "ms", 0),
+    ("vital.hrv_rmssd", "Heart rate variability (RMSSD)", "ms", 0),
     ("vital.respiratory_rate", "Respiratory rate", "breaths/min", 1),
     ("vital.blood_oxygen", "Blood oxygen", "%", 1),
     ("body.wrist_temperature", "Wrist temperature", "degC", 2),
     ("body.weight", "Body weight", "kg", 1),
 )
+#: One plain line for metrics a reader would mix up. SDNN and RMSSD are two
+#: different HRV measures: each is its own value, never averaged or compared
+#: with the other (the same words the iPhone app and the web use).
+HOW_TO_READ = {
+    "vital.hrv_sdnn": "SDNN, the HRV measure Apple Watch has always recorded. "
+    "Compare it only with its own past readings, never with RMSSD.",
+    "vital.hrv_rmssd": "A second way to measure HRV. Compare it only with its own past readings.",
+}
+
 LOINC = re.compile(r"^\d{1,7}-\d$")
 UNIT_LABELS = {"count/min": "bpm", "count": "count"}
 
@@ -628,6 +638,8 @@ async def today_vs_usual(
             "usual": band,
             "place": derive.place(value, band) if band and band["days"] >= 7 else None,
         }
+        if metric_id in HOW_TO_READ:
+            entry["how_to_read"] = HOW_TO_READ[metric_id]
         if band is None or band["days"] < 7:
             entry["usual_note"] = "fewer than 7 earlier days from this source; no usual range yet"
         others = [labels.get(s, "another source") for s in per_stream if s != stream]
@@ -828,6 +840,7 @@ async def metric_trend(
             name=meta.get("display_name"),
             unit=unit,
             window=window,
+            **({"how_to_read": HOW_TO_READ[metric_id]} if metric_id in HOW_TO_READ else {}),
         )
     late = await reader.awaiting_sync(
         basis,
@@ -845,6 +858,7 @@ async def metric_trend(
         "name": meta.get("display_name"),
         "unit": unit,
         "window": window,
+        **({"how_to_read": HOW_TO_READ[metric_id]} if metric_id in HOW_TO_READ else {}),
         "per_day": how,
         "source": source,
         "days_with_data": len(values),

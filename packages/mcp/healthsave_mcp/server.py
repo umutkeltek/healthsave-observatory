@@ -97,7 +97,8 @@ def build_server(
 
     @server.tool(
         title="Today against your usual",
-        description="Today's readings (resting heart rate, HRV, respiratory rate, blood oxygen, "
+        description="Today's readings (resting heart rate, HRV as SDNN and, when recorded, "
+        "RMSSD as a separate value, respiratory rate, blood oxygen, "
         "wrist temperature, weight), today's activity so far and last night's sleep, each "
         "against the same source's previous 28 days. Includes the engine's recovery score when "
         "the key may read findings.",
@@ -146,7 +147,8 @@ def build_server(
         title="One metric over time",
         description="One kind of data over a period, one value per day (or per month for long "
         "periods), from one source; other sources are named, never mixed in. metric_id is a "
-        "canonical id such as vital.resting_heart_rate, vital.hrv_sdnn, body.weight or "
+        "canonical id such as vital.resting_heart_rate, vital.hrv_sdnn, vital.hrv_rmssd "
+        "(a second HRV measure, never mixed with SDNN), body.weight or "
         "activity.steps (observatory_overview lists what this record holds).",
         annotations=READ_ONLY,
     )

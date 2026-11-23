@@ -112,6 +112,9 @@ def _daily(metric: str) -> list[dict]:
                 out.append(_sp(_at(day, 6, 30), 53 + rng.random(), unit="count/min", stream=RING))
         elif metric == "vital.hrv_sdnn" and not partial:
             out.append(_sp(_at(day, 5), 50 + rng.random() * 4, unit="ms", stream=WATCH))
+        elif metric == "vital.hrv_rmssd" and not partial:
+            # The same watch, the other HRV measure: a different scale on purpose.
+            out.append(_sp(_at(day, 5, 1), 70 + rng.random() * 4, unit="ms", stream=WATCH))
     if metric == "vital.resting_heart_rate":
         out.append(_sp(_at(NOW.date(), 6), 63, unit="count/min", stream=WATCH))  # above usual
     return _point_dicts(out)
@@ -123,6 +126,7 @@ SERIES = {
     "activity.active_energy": lambda: _daily("activity.active_energy"),
     "vital.resting_heart_rate": lambda: _daily("vital.resting_heart_rate"),
     "vital.hrv_sdnn": lambda: _daily("vital.hrv_sdnn"),
+    "vital.hrv_rmssd": lambda: _daily("vital.hrv_rmssd"),
 }
 RANGE_DAYS = {"24h": 1, "7d": 7, "30d": 30, "90d": 90, "1y": 365}
 CATALOG = [
@@ -136,6 +140,13 @@ CATALOG = [
     {
         "id": "vital.hrv_sdnn",
         "display_name": "Heart Rate Variability (SDNN)",
+        "category": "vital",
+        "value_type": "quantity",
+        "canonical_unit": "ms",
+    },
+    {
+        "id": "vital.hrv_rmssd",
+        "display_name": "Heart Rate Variability (RMSSD)",
         "category": "vital",
         "value_type": "quantity",
         "canonical_unit": "ms",
@@ -671,6 +682,38 @@ async def test_today_compares_each_reading_with_the_same_sources_usual() -> None
     assert result["recovery"]["score"] == 71
     steps = next(t for t in result["totals"] if t["metric"] == "activity.steps")
     assert steps["today_so_far"] == 3100 and steps["yesterday"] is not None
+
+
+async def test_today_gives_rmssd_as_its_own_labelled_reading_beside_sdnn() -> None:
+    result = await tools.today_vs_usual(FakeObservatory().client(), clock=CLOCK)
+    sdnn = next(r for r in result["readings"] if r["metric"] == "vital.hrv_sdnn")
+    rmssd = next(r for r in result["readings"] if r["metric"] == "vital.hrv_rmssd")
+    assert sdnn["name"] == "Heart rate variability (SDNN)" and sdnn["unit"] == "ms"
+    assert rmssd["name"] == "Heart rate variability (RMSSD)" and rmssd["unit"] == "ms"
+    assert rmssd["how_to_read"] == (
+        "A second way to measure HRV. Compare it only with its own past readings."
+    )
+    assert "never with RMSSD" in sdnn["how_to_read"]
+    # Each against its own history: never pooled, never averaged.
+    assert 50 <= sdnn["usual"]["median"] <= 54 and 50 <= sdnn["value"] <= 54
+    assert 70 <= rmssd["usual"]["median"] <= 74 and 70 <= rmssd["value"] <= 74
+
+
+async def test_today_without_rmssd_lists_no_empty_rmssd_reading(monkeypatch) -> None:
+    monkeypatch.delitem(SERIES, "vital.hrv_rmssd")
+    result = await tools.today_vs_usual(FakeObservatory().client(), clock=CLOCK)
+    metrics = [r["metric"] for r in result["readings"]]
+    assert "vital.hrv_sdnn" in metrics and "vital.hrv_rmssd" not in metrics
+
+
+async def test_metric_trend_reads_rmssd_on_its_own_scale_and_says_so() -> None:
+    result = await tools.metric_trend(
+        FakeObservatory().client(), "vital.hrv_rmssd", "last_30_days", clock=CLOCK
+    )
+    assert result["metric"] == "vital.hrv_rmssd"
+    assert result["name"] == "Heart Rate Variability (RMSSD)" and result["unit"] == "ms"
+    assert result["how_to_read"].startswith("A second way to measure HRV.")
+    assert all(70 <= day["median"] <= 74 for day in result["days"])
 
 
 async def test_today_without_findings_access_says_so_and_still_answers() -> None:
