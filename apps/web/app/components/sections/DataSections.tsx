@@ -166,6 +166,12 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
     .map((id) => ({ id, label: sourceLabels[id] ?? id }))
     .sort((a, b) => a.label.localeCompare(b.label));
   const streamLabels = new Map((streams ?? []).map((s) => [s.id, s.device_label ?? s.source_plugin_id]));
+  // Device names for a card that shows two sources apart: the stream's own
+  // label ("Apple Watch", "Whoop"), falling back to the source name.
+  const deviceLabels: Record<string, string> = {
+    ...sourceLabels,
+    ...Object.fromEntries((streams ?? []).map((s) => [s.id, s.device_label ?? friendlyName(s.source_plugin_id)])),
+  };
   const deviceIds = [...new Set(allPoints.map((p) => p.stream_id).filter((s): s is string => Boolean(s)))];
   const devices = deviceIds
     .map((id) => ({ id, label: streamLabels.get(id) ?? id }))
@@ -259,6 +265,7 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
             series={series}
             fallbackTitle={metric.display_name}
             missing={notFound.has(metric.id)}
+            sourceLabels={deviceLabels}
           />
         ))}
         {isDefault && <SleepCard series={sleep} />}

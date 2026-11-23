@@ -422,10 +422,14 @@ export async function TodayStorySection() {
 
 export async function SignalsSection() {
   if (!(await hasAnyData())) return null;
-  const [{ defs: baseDefs, pinned, displayMap }, goal] = await Promise.all([
+  const [{ defs: baseDefs, pinned, displayMap }, goal, streams] = await Promise.all([
     todaySeries30d(),
     getFocusGoal(),
+    safeStreams(),
   ]);
+  const sourceLabels: Record<string, string> = Object.fromEntries(
+    (streams ?? []).map((s) => [s.id, s.device_label ?? friendlyName(s.source_plugin_id)]),
+  );
   let defs = baseDefs;
   if (goal) {
     const goalSet = new Set(goal.metricIds);
@@ -455,6 +459,7 @@ export async function SignalsSection() {
             id={metric.id}
             title={metric.title}
             series={displayMap.get(metric.id) ?? null}
+            sourceLabels={sourceLabels}
           />
         ))}
       </div>
@@ -468,6 +473,7 @@ export async function SignalsSection() {
                 id={metric.id}
                 title={metric.title}
                 series={displayMap.get(metric.id) ?? null}
+                sourceLabels={sourceLabels}
               />
             ))}
           </div>

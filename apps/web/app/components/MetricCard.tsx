@@ -3,6 +3,7 @@ import { positiveIsGoodFor } from "../lib/direction";
 import { formatValue } from "../lib/format";
 import { metricOneLiner } from "../lib/metricNotes";
 import { rangeLabel } from "../lib/ranges";
+import { hasOwnerDailyTotalSemantics, sourceGroupLabel, splitBySource } from "../lib/series";
 import { quantile } from "./chart/scale";
 import { CountUp } from "./CountUp";
 
@@ -50,11 +51,14 @@ export function MetricCard({
   series,
   fallbackTitle,
   missing = false,
+  sourceLabels = {},
 }: {
   series: MetricSeries | null;
   fallbackTitle: string;
   // The backend answered that it does not know this metric (404).
   missing?: boolean;
+  // Device name per stream id (or source id), for a metric two devices report.
+  sourceLabels?: Record<string, string>;
 }) {
   // No series means the read failed (an answered empty range is a series with
   // no points, handled below) - not "no readings yet".
@@ -83,6 +87,58 @@ export function MetricCard({
           <span className="metric-state">waiting</span>
         </div>
         <p className="empty">No numeric readings in this range.</p>
+      </article>
+    );
+  }
+
+  // Two devices reporting one metric are two readings: one block each, with
+  // its own value, mean and line. Never one averaged series (healthOpinion.ts).
+  const groups = hasOwnerDailyTotalSemantics(series.points) ? [] : splitBySource(series.points);
+  if (groups.length > 1) {
+    const unit = series.metric.canonical_unit ?? undefined;
+    const note = metricOneLiner(series.metric.id);
+    return (
+      <article className="card metric-card">
+        <div className="metric-card-head">
+          <div>
+            <h2>{series.metric.display_name}</h2>
+            <span className="metric-kind">{rangeLabel(series.range)} window</span>
+            {note && (
+              <>
+                <br />
+                <span className="metric-kind">{note}</span>
+              </>
+            )}
+          </div>
+          <span className="metric-state">{groups.length} sources · kept apart</span>
+        </div>
+        {groups.map((group, index) => {
+          const groupValues = group.points.map((p) => p.value);
+          const mean = groupValues.reduce((a, b) => a + b, 0) / groupValues.length;
+          const label = sourceGroupLabel(group, sourceLabels, index);
+          return (
+            <div key={group.key} aria-label={`${label}: ${formatValue(group.latest.value)} ${unit ?? ""}`}>
+              <span className="metric-kind">{label}</span>
+              <div className="metric-value-row">
+                <div className="big">
+                  <CountUp value={Math.round(group.latest.value)} />
+                  {unit && <span className="unit">{unit}</span>}
+                </div>
+                <div className="metric-mean">
+                  <span>{label} mean</span>
+                  <strong>{formatValue(mean)}</strong>
+                </div>
+              </div>
+              <div className="metric-chart-well">
+                <Sparkline values={groupValues} unit={unit} label={`${label}: latest of ${groupValues.length} readings`} />
+              </div>
+            </div>
+          );
+        })}
+        <div className="metric-foot">
+          <span>Each device against its own readings, never averaged</span>
+          <span>last {rangeLabel(series.range)}</span>
+        </div>
       </article>
     );
   }

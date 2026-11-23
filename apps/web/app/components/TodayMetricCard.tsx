@@ -6,7 +6,7 @@ import {
   todayReadings,
   trendWindow,
 } from "../lib/todayPresentation";
-import { hasOwnerDailyTotalSemantics } from "../lib/series";
+import { hasOwnerDailyTotalSemantics, sourceGroupLabel, splitBySource } from "../lib/series";
 import { metricOneLiner } from "../lib/metricNotes";
 import { TodayReadingTile, TodayTileAffordance } from "./TodayExploration";
 import { Sparkline } from "./MetricCard";
@@ -15,10 +15,13 @@ export function TodayMetricCard({
   series,
   id,
   title,
+  sourceLabels = {},
 }: {
   series: MetricSeries | null;
   id: string;
   title: string;
+  // Device name per stream id (or source id).
+  sourceLabels?: Record<string, string>;
 }) {
   const readings = todayReadings(series);
   const latest = readings.at(-1);
@@ -54,6 +57,20 @@ export function TodayMetricCard({
   const className = `today-metric today-metric-${tone}`;
   // RMSSD sits beside SDNN; one line keeps the reader from comparing the two.
   const note = metricOneLiner(id);
+  // The card shows one device. When another device reports the same metric
+  // (an Apple Watch and a Whoop), name the one shown and give the other's
+  // latest reading on its own line: two readings, never averaged.
+  const groups = series && !isDailyTotal ? splitBySource(series.points) : [];
+  const shownIndex = latest
+    ? groups.findIndex((g) => g.sourceId === latest.source_id && g.streamId === (latest.stream_id ?? null))
+    : -1;
+  const shownLabel = groups.length > 1 && shownIndex >= 0 ? sourceGroupLabel(groups[shownIndex], sourceLabels, shownIndex) : null;
+  const others = groups.length > 1
+    ? groups
+        .map((group, index) => ({ group, index }))
+        .filter(({ index }) => index !== shownIndex)
+        .map(({ group, index }) => `${sourceGroupLabel(group, sourceLabels, index)} ${formatValue(group.latest.value)} ${displayUnit ?? ""}`.trim())
+    : [];
   const contents = (
     <>
       <div className="today-metric-heading">
@@ -61,6 +78,9 @@ export function TodayMetricCard({
         <TodayTileAffordance />
       </div>
       {note && <span className="today-metric-note">{note}</span>}
+      {others.length > 0 && (
+        <span className="today-metric-note">Also {others.join(", ")} · kept apart, not averaged</span>
+      )}
       <div className="today-metric-reading">
         <strong>{value}</strong>
         {latest && <span>{displayUnit}</span>}
@@ -96,7 +116,9 @@ export function TodayMetricCard({
             <span>
               {isDailyTotal
                 ? `Daily total · ${readingDate(latest.t)}`
-                : "Latest reading"}
+                : shownLabel
+                  ? `Latest · ${shownLabel}`
+                  : "Latest reading"}
             </span>
             <time dateTime={latest.t}>{formatAgo(latest.t)}</time>
           </>
