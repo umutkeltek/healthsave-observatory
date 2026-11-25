@@ -570,7 +570,7 @@
     "to": "now"
   },
   "timepicker": {},
-  "timezone": "",
+  "timezone": "utc",
   "title": "Apple Health (HealthSave Observatory)",
   "uid": null,
   "version": 1,

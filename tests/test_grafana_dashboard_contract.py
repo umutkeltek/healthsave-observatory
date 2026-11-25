@@ -250,6 +250,7 @@ def test_public_dashboard_selects_its_postgresql_datasource_at_import():
 
 def test_public_dashboard_queries_follow_the_selected_time_range():
     dashboard = json.loads(PUBLIC_OVERVIEW.read_text())
+    assert dashboard["timezone"] == "utc"
     for panel in dashboard["panels"]:
         for target in panel["targets"]:
             sql = target["rawSql"]
