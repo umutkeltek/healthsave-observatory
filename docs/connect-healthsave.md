@@ -6,11 +6,11 @@ HealthSave expects a **base server URL** and appends API paths itself.
 
 ## Pair The App
 
-With the QR code (works without Pro):
+With the QR code (sending the last 7 days works without Pro):
 
 1. On the server, run `healthsave pair`. It prints the server URL, the API key and a QR code.
 2. Scan the QR code with the iPhone Camera. HealthSave opens **Server Sync** with the URL and key filled in.
-3. Tap **Sync Latest Changes**, or **Backfill Past Data** to send your whole history.
+3. Tap **Sync Latest Changes** to send the last 7 days. To send your whole history, tap **Backfill Past Data** (needs Pro).
 
 By typing it in (needs Pro):
 
@@ -27,12 +27,15 @@ Observatory is free. In the HealthSave app, HealthSave Pro is a one-time purchas
 
 | In the app | Without Pro | With Pro |
 |---|---|---|
-| Send data by hand (**Sync Latest Changes**, **Backfill Past Data**) | Yes, on the Server Sync screen that opens after you scan the pairing QR code. To send again later, scan the code again | Yes, any time |
+| Send the last 7 days by hand (**Sync Latest Changes**) | Yes, on the Server Sync screen that opens after you scan the pairing QR code. To send again later, scan the code again | Yes, any time |
+| Send your whole history (**Backfill Past Data**) | No. The button shows the Pro offer | Yes, any time |
 | Open **Settings -> Server Sync** | Shows the Pro offer | Yes |
 | Automatic sync: in the background, and each time you open the app | No | Yes. iOS decides when background work runs, so it can be hours late |
 | Sync alerts when sending stops | No | Yes |
 | Home Assistant sensors from the app | No | Yes |
 | What is sent | Your Data Scope choice, same as Pro | Your Data Scope choice |
+
+Installed HealthSave before version 1.9.8? Sending by hand works as it did for you: the screen the QR code opens also sends your whole history without Pro.
 
 ## Building Another Client?
 

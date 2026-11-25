@@ -74,10 +74,10 @@ npx healthsave
 Pick **Basic setup**. It creates the passwords and an API key, then starts the default services. After that:
 
 1. Run `healthsave pair`. It prints your server's address, the API key and a QR code.
-2. Scan the QR code with the iPhone Camera. HealthSave opens Server Sync with the address and key filled in. Tap **Sync Latest Changes**, or **Backfill Past Data** for your whole history.
+2. Scan the QR code with the iPhone Camera. HealthSave opens Server Sync with the address and key filled in. Tap **Sync Latest Changes** to send the last 7 days, or **Backfill Past Data** for your whole history (needs Pro).
 3. On the server, open **http://localhost:4173**. `healthsave pair` also shows the dashboard password.
 
-Observatory is free. Sending by hand is free too: the Server Sync screen that opens after you scan the QR code works without Pro. Automatic sync (in the background and each time you open the app) needs HealthSave Pro, a one-time purchase in the iPhone app; with Pro you can also open Server Sync from Settings at any time. Without Pro, scan the code again to send more. [What is free and what needs Pro](docs/connect-healthsave.md#free-and-pro). Other ways to install are under [Setup](#setup).
+Observatory is free. Sending the last 7 days by hand is free too: the Server Sync screen that opens after you scan the QR code sends them without Pro. Your whole history (**Backfill Past Data**) and automatic sync (in the background and each time you open the app) need HealthSave Pro, a one-time purchase in the iPhone app; with Pro you can also open Server Sync from Settings at any time. Without Pro, scan the code again to send more. [What is free and what needs Pro](docs/connect-healthsave.md#free-and-pro). Other ways to install are under [Setup](#setup).
 
 ## A look around
 
@@ -295,7 +295,7 @@ Optional layers stay off until you turn them on: local AI (`healthsave up --ai`)
 
 `healthsave pair` shows the server address, the API key, a QR code (when `qrencode` is installed) and the dashboard password.
 
-- **With the QR code:** scan it with the iPhone Camera. HealthSave opens Server Sync with everything filled in. This works without Pro.
+- **With the QR code:** scan it with the iPhone Camera. HealthSave opens Server Sync with everything filled in. Without Pro it sends the last 7 days; your whole history needs Pro.
 - **By typing it in (needs Pro):** in HealthSave, open **Settings → Server Sync**, enter the address and the API key, then tap **Sync Latest Changes**.
 
 Use the server's network address, for example `http://192.168.1.20:8000`. Do not use `localhost` on the phone: there it means the phone itself. The app posts to `POST /api/apple/batch`; give it the base address only. Full guide: [Connect HealthSave](docs/connect-healthsave.md).

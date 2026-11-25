@@ -95,7 +95,7 @@ Do not use `localhost` from the phone.
 
 ## 5. Connect HealthSave iOS
 
-The quickest way: scan the QR code that `healthsave pair` prints with the iPhone Camera. HealthSave opens Server Sync with the URL and key filled in; tap **Sync Latest Changes**, or **Backfill Past Data** for your whole history. This works without Pro.
+The quickest way: scan the QR code that `healthsave pair` prints with the iPhone Camera. HealthSave opens Server Sync with the URL and key filled in; tap **Sync Latest Changes** to send the last 7 days (no Pro needed), or **Backfill Past Data** for your whole history (needs Pro).
 
 To type it in instead (needs HealthSave Pro):
 

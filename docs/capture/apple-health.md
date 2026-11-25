@@ -56,7 +56,7 @@ collapsed single value.
 
 The quickest way: run `healthsave pair` on the server and scan its QR code with
 the iPhone Camera. HealthSave opens **Server Sync** with the address and key
-filled in; this works without Pro. To type it in instead (needs HealthSave Pro):
+filled in; without Pro it sends the last 7 days, and your whole history needs Pro. To type it in instead (needs HealthSave Pro):
 
 1. Open HealthSave → **Settings → Server Sync**.
 2. Set **Server URL** to `http://your-server-ip:8000` (the app appends the API paths).
