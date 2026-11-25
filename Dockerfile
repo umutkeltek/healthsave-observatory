@@ -35,6 +35,7 @@ COPY scripts/ ./scripts/
 
 # The MCP read server (healthsave mcp): its own venv, so its dependencies never
 # move the server's pinned ones. Clients run /opt/healthsave-mcp/bin/healthsave-mcp.
+LABEL io.modelcontextprotocol.server.name="app.healthsave/observatory"
 COPY packages/mcp/ /tmp/healthsave-mcp/
 # Dependencies come from a hash-locked file (build tooling included), then the
 # package itself without resolving anything new.
