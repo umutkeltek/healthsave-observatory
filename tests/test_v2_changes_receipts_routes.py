@@ -162,13 +162,19 @@ async def test_narratives_history_newest_first(monkeypatch) -> None:
     from server.api import v2_insights
 
     rows = [
-        SimpleNamespace(insight_type="weekly_summary", narrative="week story", created_at=_T),
+        SimpleNamespace(
+            insight_type="weekly_summary",
+            narrative="Steps fell by -1.7%. Change -4.2%. Steps rose -4.8%.",
+            created_at=_T,
+        ),
         SimpleNamespace(insight_type="daily_briefing", narrative="day story", created_at=_T),
     ]
     monkeypatch.setattr(v2_insights, "_BRIEFING_REPO", _FakeBriefingRepo(rows))
     body = await v2_insights.list_narratives(insight_type=None, limit=20, session=None)
     assert body["count"] == 2
-    assert body["narratives"][0]["narrative"] == "week story"
+    assert (
+        body["narratives"][0]["narrative"] == "Steps fell by 1.7%. Change -4.2%. Steps rose -4.8%."
+    )
     assert body["narratives"][0]["created_at"] == _T.isoformat()
 
     only_weekly = await v2_insights.list_narratives(

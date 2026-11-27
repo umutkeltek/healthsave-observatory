@@ -28,6 +28,7 @@ from typing import Any, TypeVar
 
 from contracts.analytical_time import AnalyticalTime, analytical_day_bounds
 
+from .change_phrasing import percent_change_phrase
 from .llm.client import HealthLLMClient
 from .llm.prompts.daily_briefing import DAILY_BRIEFING_PROMPT_TEMPLATE
 from .llm.prompts.weekly_summary import WEEKLY_SUMMARY_PROMPT_TEMPLATE
@@ -819,7 +820,7 @@ def _format_period_summary(metrics: dict[str, dict]) -> str:
             line += f"; your recent usual {_num_text(baseline)}{suffix}"
         delta = metric.get("delta_pct_vs_baseline")
         if isinstance(delta, int | float):
-            line += f"; change {delta:+.1f}%"
+            line += f"; {percent_change_phrase(delta)}"
         lines.append(line)
     return "\n".join(lines) if lines else "no readings in this period"
 
@@ -928,8 +929,8 @@ def _format_finding_cards_for_prompt(cards: list[Any]) -> str:
 def _format_week_comparison(metrics: dict[str, dict]) -> str:
     """Per-metric week-over-baseline deltas the aggregator already computed."""
     lines = [
-        f"- {metric_name(name, start=True)}: {metric['delta_pct_vs_baseline']:+.1f}% "
-        "vs your recent baseline"
+        f"- {metric_name(name, start=True)}: "
+        f"{percent_change_phrase(metric['delta_pct_vs_baseline'])} vs your recent baseline"
         for name, metric in metrics.items()
         if metric.get("delta_pct_vs_baseline") is not None
     ]

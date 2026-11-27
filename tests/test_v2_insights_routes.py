@@ -127,7 +127,7 @@ async def test_latest_narratives_shapes_daily_and_weekly():
     rows = [
         _Row(
             insight_type="daily_briefing",
-            narrative="Resting HR steady; HRV up 8%.",
+            narrative="Resting HR steady; HRV fell by -8%.",
             created_at=datetime(2026, 5, 1, 7, 0, tzinfo=UTC),
         ),
         _Row(
@@ -140,7 +140,7 @@ async def test_latest_narratives_shapes_daily_and_weekly():
 
     result = await latest_narratives(session=session)
 
-    assert result["daily_briefing"]["narrative"] == "Resting HR steady; HRV up 8%."
+    assert result["daily_briefing"]["narrative"] == "Resting HR steady; HRV fell by 8%."
     assert result["daily_briefing"]["created_at"] == "2026-05-01T07:00:00+00:00"
     assert result["weekly_summary"]["insight_type"] == "weekly_summary"
 

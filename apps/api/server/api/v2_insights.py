@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
+from analysis.llm.safety import drop_doubled_minus
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,7 +40,7 @@ def _narrative(row) -> dict | None:
         return None
     return {
         "insight_type": row.insight_type,
-        "narrative": row.narrative,
+        "narrative": drop_doubled_minus(row.narrative),
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
 
@@ -136,14 +137,7 @@ async def list_narratives(
     if insight_type is not None and insight_type not in _NARRATIVE_TYPES:
         raise HTTPException(status_code=422, detail=f"unknown narrative type: {insight_type}")
     rows = await _BRIEFING_REPO.list_narratives(session, insight_type=insight_type, limit=limit)
-    narratives = [
-        {
-            "insight_type": row.insight_type,
-            "narrative": row.narrative,
-            "created_at": row.created_at.isoformat() if row.created_at else None,
-        }
-        for row in rows
-    ]
+    narratives = [_narrative(row) for row in rows]
     return {"narratives": narratives, "count": len(narratives)}
 
 

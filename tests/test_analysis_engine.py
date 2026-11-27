@@ -1046,7 +1046,8 @@ async def test_run_weekly_summary_success_writes_run_finding_and_insight():
     assert insight_inserts[0]["findings_used"] == [701]
     # Week-over-baseline delta was folded into the prompt.
     prompt = llm_mock.generate_insight.await_args.args[0]
-    assert "Heart rate variability (SDNN): -7.7% vs your recent baseline" in prompt
+    assert "Heart rate variability (SDNN): decreased by 7.7% vs your recent baseline" in prompt
+    assert "-7.7%" not in prompt
     updates = session.all_update_statements()
     assert any(
         "status = 'completed'" in sql and params.get("tokens_in") == 60 for sql, params in updates
@@ -1220,7 +1221,7 @@ async def test_build_summary_card_reads_real_aggregator_output_keys():
     assert card.delta is not None
     assert card.delta.pct == pytest.approx(-10.0)  # (54 − 60) / 60 × 100
     assert card.coverage.observation_count == 20  # sample_count key honored
-    assert "ran" in card.claim
+    assert "decreased by 10.0%" in card.claim
 
 
 @pytest.mark.asyncio
@@ -1258,4 +1259,4 @@ async def test_weekly_summary_injects_finding_cards_into_narrator_prompt():
 
     prompt = llm_mock.generate_insight.await_args.args[0]
     # The computed summary card's claim (via _finding_cards_for_brief) is present.
-    assert "Resting heart rate ran -6.4% vs your recent baseline" in prompt
+    assert "Resting heart rate decreased by 6.4% vs your recent baseline" in prompt

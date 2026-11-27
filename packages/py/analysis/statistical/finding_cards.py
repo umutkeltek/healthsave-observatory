@@ -39,6 +39,7 @@ from contracts.findings import (
 
 from contracts import ontology
 
+from ..change_phrasing import percent_change_phrase
 from . import experiment_readiness as readiness
 from .gates import MINIMUM_DATA_REQUIREMENTS
 
@@ -364,7 +365,8 @@ def _summary_card(metric: str | None, sd: dict[str, Any]) -> FindingCard | None:
         # The aggregator baseline is (end − 30d → window_start), i.e. 30 − window
         # days long — the exact length isn't derivable from the builder's inputs,
         # so we say "recent baseline" rather than overstate it as "30-day".
-        claim = f"{_name(metric, start=True)} ran {delta_pct:+.1f}% vs your recent baseline"
+        phrase = percent_change_phrase(delta_pct)
+        claim = f"{_name(metric, start=True)} {phrase} vs your recent baseline"
         delta = Delta(pct=delta_pct, direction=direction)
         baseline_window = WindowRef(label="recent baseline")
         coverage = Coverage(observation_count=n)
