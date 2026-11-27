@@ -89,24 +89,6 @@ async def test_generate_insight_calls_ollama_with_prefixed_model(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_generate_insight_strips_double_negative_percent(monkeypatch):
-    """A small local model copying '-1.7%' onto 'decreased' is corrected."""
-    content = "HRV decreased by -1.7% this week. Steps increased by +4.2%. Weight changed by -0.4%."
-    acompletion = AsyncMock(return_value=_fake_response(content))
-    _install_fake_litellm(monkeypatch, acompletion)
-
-    client = llm_client.HealthLLMClient(LLMConfig(provider="ollama", model="qwen2.5:3b"))
-    result = await client.generate_insight("p", insight_type="weekly_summary")
-
-    assert "decreased by 1.7%" in result.narrative
-    assert "increased by 4.2%" in result.narrative
-    assert "changed by -0.4%" in result.narrative
-    assert "decreased by -" not in result.narrative
-    assert "increased by +" not in result.narrative
-    assert "not medical advice" in result.narrative.lower()
-
-
-@pytest.mark.asyncio
 async def test_generate_insight_preserves_existing_disclaimer(monkeypatch):
     content = "Your heart rate looks fine.\n\nThis is not medical advice. Please consult a doctor."
     acompletion = AsyncMock(return_value=_fake_response(content))
@@ -131,6 +113,27 @@ async def test_reasoning_model_falls_back_to_reasoning_content(monkeypatch):
 
     assert "HRV is trending above baseline" in result.narrative
     assert "not medical advice" in result.narrative.lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["content", "reasoning_content"])
+async def test_a_doubled_negative_never_reaches_the_brief(monkeypatch, field):
+    """The guard runs on every reply, including the reasoning-content fallback."""
+    reply = "<think>Use the change line.</think>Resting heart rate was down -4.8% this week."
+    response = (
+        _fake_response(reply) if field == "content" else _fake_response("", reasoning_content=reply)
+    )
+    acompletion = AsyncMock(return_value=response)
+    _install_fake_litellm(monkeypatch, acompletion)
+
+    client = llm_client.HealthLLMClient(LLMConfig(provider="ollama", model="qwen3:6b"))
+    result = await client.generate_insight("p", insight_type="weekly_summary")
+
+    assert result.narrative == llm_client.inject_disclaimer(
+        "Resting heart rate was down 4.8% this week."
+    )
+    assert acompletion.await_count == 1
+    assert (result.tokens_in, result.tokens_out) == (42, 77)
 
 
 @pytest.mark.asyncio

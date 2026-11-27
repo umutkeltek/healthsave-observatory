@@ -135,7 +135,7 @@ async def test_amazfit_ingest_no_op_when_token_store_returns_none():
             "token_store": _NoopTokenStore(),
         }
     )
-    assert result == {"accepted": 0, "rejected": 0}
+    assert result == {"accepted": 0, "rejected": 0, "skipped_no_token": 1}
 
 
 def test_region_base_urls_target_current_zepp_host():

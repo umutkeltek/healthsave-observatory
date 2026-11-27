@@ -22,9 +22,10 @@ Keyring source (first that is set wins):
     label with no ``:`` or ``,`` (e.g. ``v1``, ``2026q2``).
   * ``HDH_TOKEN_ENC_KEY`` — the legacy single key, adopted as a one-entry
     ring with version id ``"v0"``. This means a deploy that only set the
-    legacy key keeps working with zero config, and a credential sealed
-    today still opens after the operator later introduces ``HDH_KEYRING``
-    with ``v0`` kept as a trailing (decrypt-only) entry.
+    legacy key keeps working with zero config. When ``HDH_KEYRING`` is set,
+    the legacy key (if set and not already listed) is appended as a
+    trailing, decrypt-only entry, so a credential sealed before the ring
+    existed still opens without the operator listing it by hand.
 
 The version id is stored alongside the ciphertext (``llm_credentials.
 key_version``) purely for audit + rotation detection — unsealing does not
@@ -137,12 +138,40 @@ def _parse_keyring_env(raw: str) -> list[tuple[str, str]]:
     return entries
 
 
+def _with_legacy_fallback(
+    entries: list[tuple[str, str]], legacy: str | None
+) -> list[tuple[str, str]]:
+    """Append the legacy key as a trailing, decrypt-only entry when the ring lacks it.
+
+    A credential saved while only ``HDH_TOKEN_ENC_KEY`` was set is sealed with
+    that key. If the operator later sets ``HDH_KEYRING`` and does not list it,
+    every saved provider key would stop opening and have to be typed in again.
+    The legacy key is already in this process (it protects ``oauth_tokens``),
+    so keeping it as a decrypt-only fallback widens nothing. The head is
+    unchanged: new seals always use the ring's first key. A legacy value that
+    is not a valid Fernet key is skipped, never allowed to break a good ring
+    (the OAuth path reports it on its own).
+    """
+    if not legacy or any(key == legacy for _, key in entries):
+        return entries
+    try:
+        Fernet(legacy.encode())
+    except Exception:  # noqa: BLE001 - a broken legacy key is just not added
+        return entries
+    taken = {version for version, _ in entries}
+    version = LEGACY_KEY_VERSION
+    while version in taken:
+        version = f"{version}-legacy"
+    return [*entries, (version, legacy)]
+
+
 @lru_cache(maxsize=1)
 def _keyring_from_env() -> Keyring:
     """The process keyring, derived from env (cached; tests clear via ``cache_clear``)."""
     raw = os.environ.get(KEYRING_ENV)
     if raw:
-        return _build_keyring(_parse_keyring_env(raw))
+        entries = _parse_keyring_env(raw)
+        return _build_keyring(_with_legacy_fallback(entries, os.environ.get(ENV_KEY)))
     legacy = os.environ.get(ENV_KEY)
     if legacy:
         return _build_keyring([(LEGACY_KEY_VERSION, legacy)])

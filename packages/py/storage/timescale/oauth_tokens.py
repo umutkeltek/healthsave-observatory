@@ -64,6 +64,9 @@ async def put_token(
 ) -> None:
     """Upsert the token row, encrypt secrets, append an audit event.
 
+    A ``refreshed`` token merges its metadata over the stored metadata; an
+    ``authorized`` (or ``revoked``) one replaces it.
+
     ``event_kind`` MUST be one of ``authorized`` / ``refreshed`` /
     ``revoked``; ``refresh_failed`` is recorded via
     :func:`record_refresh_failure` because it has an error message.
@@ -85,7 +88,13 @@ async def put_token(
                   refresh_token_enc = EXCLUDED.refresh_token_enc,
                   expires_at        = EXCLUDED.expires_at,
                   scopes            = EXCLUDED.scopes,
-                  metadata          = EXCLUDED.metadata,
+                  -- A refresh response carries no account details (Whoop
+                  -- sends token_type, Google nothing), so it keeps what
+                  -- authorizing stored (a subject id, a region) and only
+                  -- adds or updates its own keys.
+                  metadata          = CASE WHEN :merge_metadata
+                                           THEN oauth_tokens.metadata || EXCLUDED.metadata
+                                           ELSE EXCLUDED.metadata END,
                   updated_at        = NOW()
             """
         ),
@@ -97,9 +106,27 @@ async def put_token(
             "expires_at": token.expires_at,
             "scopes": list(token.scopes),
             "metadata": json.dumps(token.metadata),
+            "merge_metadata": event_kind == "refreshed",
         },
     )
     await _record_event(session, token.owner_id, token.provider, event_kind)
+    if event_kind == "authorized":
+        # A newly authorized token gives a widened backfill window its attempts
+        # back (the worker keys source_poll_cursors by this provider id). A
+        # routine refresh does not: Whoop refreshes hourly, which would keep a
+        # window the vendor rejects from ever being given up.
+        await session.execute(
+            text(
+                """
+                UPDATE source_poll_cursors
+                   SET backfill_failures = 0, backfill_outage_failures = 0,
+                       updated_at = NOW()
+                 WHERE owner_id = :owner_id AND provider = :provider
+                   AND (backfill_failures <> 0 OR backfill_outage_failures <> 0)
+                """
+            ),
+            {"owner_id": str(token.owner_id), "provider": token.provider},
+        )
 
 
 async def revoke_token(
@@ -158,3 +185,30 @@ async def _record_event(
             "event_kind": event_kind,
         },
     )
+
+
+async def lock_token(
+    session: AsyncSession,
+    *,
+    provider: str,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+) -> OAuthToken | None:
+    """Row-lock ``(owner_id, provider)`` until the transaction ends, then read it.
+
+    A refresher calls this before spending the refresh token. A concurrent
+    refresher (the worker poll and the Whoop webhook can race) waits here, and
+    once the first commits, the fresh read returns the token it stored, so the
+    rotated refresh token is never spent twice. The caller's commit or
+    rollback releases the lock.
+    """
+    await session.execute(
+        text(
+            """
+            SELECT 1 FROM oauth_tokens
+             WHERE owner_id = :owner_id AND provider = :provider
+               FOR UPDATE
+            """
+        ),
+        {"owner_id": str(owner_id), "provider": provider},
+    )
+    return await get_token(session, provider=provider, owner_id=owner_id)

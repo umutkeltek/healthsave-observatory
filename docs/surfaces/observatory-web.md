@@ -25,10 +25,16 @@ baseline, and where did it come from?
   default-deny egress, raw rows staying on host, and cloud narration only by
   consent.
 
-Pages today: Today, Findings, Data, Sources, Library, Integrations, Privacy,
-Intelligence, Settings, Compare, Relationships, Experiments, and Demo. Empty,
-no-data, and backend-unreachable states are handled so a fresh install degrades
-gracefully instead of erroring.
+Pages today, in the sidebar's three groups:
+
+- **Essentials:** Today, Sleep, Activity, Labs, Findings, Data, Sources, Privacy.
+- **Analyze:** Explore, Genetics, Library, Compare, Relationships, Experiments,
+  Timeline, Year in Health.
+- **Manage:** Integrations, Intelligence, Settings.
+
+A Demo page shows a seeded Today before any data has synced. Empty, no-data, and
+backend-unreachable states are handled so a fresh install degrades gracefully
+instead of erroring. Every page works at phone width and in light and dark.
 
 Everything is driven by the v2 read API, including `/api/v2/metrics` and
 `/api/v2/metrics/{id}/series`, the same contract the local LLM narrator

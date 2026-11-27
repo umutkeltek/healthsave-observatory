@@ -7,9 +7,8 @@ import { ComparisonCard, type Side } from "../ComparisonCard";
 import { MultiSeriesChart, type ChartSeries } from "../MultiSeriesChart";
 import { type Delta, groupBySource, groupByStream, periodSplit } from "../../lib/analytics";
 import type { MetricSeries, SeriesPoint, StreamView } from "../../lib/api";
-import { DEMO_COMPARE_SERIES } from "../../lib/demoSeries";
 import { comparability } from "../../lib/healthOpinion";
-import { safeMetrics, safeSeries, safeStreams } from "../../lib/load";
+import { safeMetrics, safeSeriesRead, safeStreams } from "../../lib/load";
 import { rangeLabel } from "../../lib/ranges";
 
 export const COMPARE_RANGES = ["7d", "30d", "90d", "1y", "all"];
@@ -53,14 +52,41 @@ export async function CompareSection({
 }) {
   const [metrics, streams] = await Promise.all([safeMetrics(), safeStreams()]);
   const all = metrics ?? [];
-  const metricId = metricSel || all[0]?.id || DEMO_COMPARE_SERIES.metric.id;
+  const metricId = metricSel || all[0]?.id || null;
   const streamLabels = new Map<string, string>(
     (streams ?? []).map((s: StreamView) => [s.id, s.device_label ?? s.source_plugin_id]),
   );
 
-  const live = await safeSeries(metricId, range);
-  const isDemo = live === null;
-  const series: MetricSeries = live ?? DEMO_COMPARE_SERIES;
+  const read = metricId ? await safeSeriesRead(metricId, range) : null;
+  if (read === null || read.kind !== "series" || metricId === null) {
+    // Nothing to compare: the catalog or the series read failed, or there are no
+    // signals yet. Say which - an illustrative comparison never stands in for
+    // the person's own data outside /demo.
+    const notFound = read?.kind === "not-found";
+    const unreachable = !notFound && (metricId !== null || metrics === null);
+    return (
+      <>
+        <CompareControls
+          metrics={all.map((m) => ({ id: m.id, display_name: m.display_name, category: m.category }))}
+          ranges={COMPARE_RANGES}
+          selected={{ metric: metricSel, mode, range }}
+        />
+        <section className="lead">
+          <article className="card">
+            <p className="empty">
+              {notFound
+                ? `No signal called “${metricId}” on this Observatory. Pick one from the list above.`
+                : unreachable
+                  ? "The Observatory API did not answer, so this comparison cannot be shown right now."
+                  : "No signals yet. Sync data from HealthSave, then compare."}
+            </p>
+          </article>
+        </section>
+        <footer className="foot">compare · nothing left this host</footer>
+      </>
+    );
+  }
+  const series: MetricSeries = read.series;
   const unit = series.metric.canonical_unit ?? "";
 
   let chart: ChartSeries[] = [];
@@ -145,13 +171,13 @@ export async function CompareSection({
 
   return (
     <>
-      <CompareControls metrics={controlMetrics} ranges={COMPARE_RANGES} />
+      <CompareControls metrics={controlMetrics} ranges={COMPARE_RANGES} selected={{ metric: metricSel, mode, range }} />
 
       <section className="lead">
         <article className="card">
           <div className="card-title">
             {series.metric.display_name}
-            {isDemo ? " · demo" : ` · ${rangeLabel(range)}`}
+            {` · ${rangeLabel(range)}`}
           </div>
           <MultiSeriesChart series={chart} unit={unit || null} dateDomain={dateDomain} />
         </article>
@@ -185,9 +211,7 @@ export async function CompareSection({
       )}
 
       <footer className="foot">
-        {isDemo
-          ? "demo data · illustrative comparison · nothing left this host"
-          : `${series.metric.id} · ${rangeLabel(range)} · nothing left this host`}
+        {`${series.metric.id} · ${rangeLabel(range)} · nothing left this host`}
       </footer>
     </>
   );

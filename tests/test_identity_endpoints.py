@@ -50,10 +50,15 @@ class _LinkRepo:
     def __init__(self) -> None:
         self.calls: list[tuple[object, dict]] = []
         self.find_calls: list[tuple[object, dict]] = []
+        self.revoke_calls: list[tuple[object, dict]] = []
         self.reconcile_calls: list[tuple[object, dict]] = []
 
     async def upsert_device_identity_link(self, session, **kwargs):
         self.calls.append((session, kwargs))
+
+    async def revoke_unqualified_assignments(self, session, **kwargs):
+        self.revoke_calls.append((session, kwargs))
+        return 0
 
     async def find_session_candidate_pairs(self, session, **kwargs):
         self.find_calls.append((session, kwargs))
@@ -68,6 +73,7 @@ class _Pair:
     def __init__(self, *, provider_subject_id: str) -> None:
         self.provider_subject_id = provider_subject_id
         self.direct = object()
+        self.revisions = ("", "")
         self.relayed = object()
         self.device_link = object()
 

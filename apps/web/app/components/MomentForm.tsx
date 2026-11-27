@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import type { CreateMomentPayload } from "../lib/api";
 import { createMomentAction } from "../lib/actions";
+import { runAction } from "../lib/session";
 
 const KINDS: { key: string; label: string }[] = [
   { key: "illness", label: "Illness" },
@@ -26,13 +27,45 @@ function kindLabel(kind: string): string {
   return KINDS.find((k) => k.key === kind)?.label ?? kind;
 }
 
+// The outcome of the last submit. Its kind - not its wording - decides how it
+// renders, so a backend detail or the signed-out message is never styled as a
+// success.
+export type MomentStatus = { kind: "saved" } | { kind: "error"; message: string };
+
+export function MomentStatusLine({ status }: { status: MomentStatus | null }) {
+  if (!status) return null;
+  return status.kind === "saved" ? (
+    <span className="meta" role="status">
+      Moment added.
+    </span>
+  ) : (
+    <span className="exp-error" role="status">
+      {status.message}
+    </span>
+  );
+}
+
 export function MomentForm() {
   const [kind, setKind] = useState("custom");
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [grade, setGrade] = useState("");
   const [pending, startTransition] = useTransition();
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, setStatus] = useState<MomentStatus | null>(null);
+  const kindRef = useRef<HTMLSelectElement>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const gradeRef = useRef<HTMLSelectElement>(null);
+  const noteRef = useRef<HTMLInputElement>(null);
+
+  // On a slow connection the form is on screen well before its script runs.
+  // Whatever was typed or picked in that window survives hydration in the DOM
+  // but not in state, so the next render would wipe it. Adopt it once mounted.
+  useEffect(() => {
+    if (kindRef.current) setKind(kindRef.current.value);
+    if (titleRef.current) setTitle(titleRef.current.value);
+    if (gradeRef.current) setGrade(gradeRef.current.value);
+    if (noteRef.current) setNote(noteRef.current.value);
+  }, []);
 
   return (
     <article className="card">
@@ -40,7 +73,7 @@ export function MomentForm() {
       <div className="field-grid">
         <label className="field-label">
           Kind
-          <select className="field-input" value={kind} onChange={(event) => setKind(event.target.value)}>
+          <select ref={kindRef} className="field-input" value={kind} onChange={(event) => setKind(event.target.value)}>
             {KINDS.map((k) => (
               <option value={k.key} key={k.key}>{k.label}</option>
             ))}
@@ -49,6 +82,7 @@ export function MomentForm() {
         <label className="field-label">
           Title
           <input
+            ref={titleRef}
             className="field-input"
             type="text"
             placeholder={`E.g. "Late flight home" for ${kindLabel(kind)}`}
@@ -58,7 +92,7 @@ export function MomentForm() {
         </label>
         <label className="field-label">
           Severity (optional)
-          <select className="field-input" value={grade} onChange={(event) => setGrade(event.target.value)}>
+          <select ref={gradeRef} className="field-input" value={grade} onChange={(event) => setGrade(event.target.value)}>
             <option value="">—</option>
             {GRADES.map((g) => (
               <option value={g} key={g}>{g}</option>
@@ -69,6 +103,7 @@ export function MomentForm() {
       <label className="field-label" style={{ marginTop: 12 }}>
         Note (optional)
         <input
+          ref={noteRef}
           className="field-input"
           type="text"
           placeholder="Any detail that helps explain the timing..."
@@ -90,25 +125,22 @@ export function MomentForm() {
               };
               if (grade) payload.grade = grade;
               if (note.trim()) payload.note = note.trim();
-              const result = await createMomentAction(payload);
+              // A dropped connection comes back as { ok: false } (runAction).
+              const result = await runAction(() => createMomentAction(payload));
               if (result.ok) {
                 setTitle("");
                 setNote("");
                 setGrade("");
-                setStatus("Moment added.");
+                setStatus({ kind: "saved" });
               } else {
-                setStatus(result.error ?? "Could not add this moment.");
+                setStatus({ kind: "error", message: result.error ?? "Could not add this moment." });
               }
             })
           }
         >
           {pending ? "Adding…" : "Add moment"}
         </button>
-        {status && (
-          <span className={status.includes("Could not") ? "exp-error" : "meta"} role="status">
-            {status}
-          </span>
-        )}
+        <MomentStatusLine status={status} />
       </div>
     </article>
   );

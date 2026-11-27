@@ -40,6 +40,18 @@ log = logging.getLogger("healthsave.api.swr")
 DEFAULT_TTL_SECONDS = float(os.environ.get("V2_READ_CACHE_TTL_SECONDS", "60"))
 
 
+def owner_cache_key(key: str, owner_id: object) -> str:
+    """Per-owner variant of a cache key (participant keys, migration 029).
+
+    The default owner keeps the bare key, so existing keys and the ingest
+    drops that target them are unchanged.
+    """
+
+    from contracts._base import DEFAULT_OWNER_ID
+
+    return key if owner_id == DEFAULT_OWNER_ID else f"{key}:{owner_id}"
+
+
 @dataclass
 class _Entry:
     value: Any
@@ -56,6 +68,13 @@ class SwrCache:
         # weak ref to a scheduled task, so without this a refresh can be
         # garbage-collected mid-flight (a well-known asyncio.create_task trap).
         self._background_tasks: set[asyncio.Task[None]] = set()
+        # Bumped by drop()/clear(). A fetch that began before an invalidation
+        # read the pre-write state, so its result must not be cached as fresh.
+        self._generations: dict[str, int] = {}
+        self._epoch = 0
+
+    def _generation(self, key: str) -> tuple[int, int]:
+        return (self._epoch, self._generations.get(key, 0))
 
     async def get(
         self,
@@ -82,16 +101,24 @@ class SwrCache:
             # await the fetcher on this path.
             return entry.value
 
+        generation = self._generation(key)
         value = await fetcher()
-        self._entries[key] = _Entry(value=value, fetched_at=time.monotonic())
+        if self._generation(key) == generation:
+            self._entries[key] = _Entry(value=value, fetched_at=time.monotonic())
         return value
 
     def _spawn_refresh(self, key: str, fetcher: Callable[[], Awaitable[Any]]) -> None:
-        task = asyncio.create_task(self._refresh(key, fetcher))
+        # Capture the generation now, before the task (and its read) can start.
+        task = asyncio.create_task(self._refresh(key, fetcher, self._generation(key)))
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
 
-    async def _refresh(self, key: str, fetcher: Callable[[], Awaitable[Any]]) -> None:
+    async def _refresh(
+        self,
+        key: str,
+        fetcher: Callable[[], Awaitable[Any]],
+        generation: tuple[int, int],
+    ) -> None:
         try:
             value = await fetcher()
         except Exception:
@@ -102,11 +129,14 @@ class SwrCache:
                 # the aggregate cached here is still the last-known-good one.
                 stale.refreshing = False
             return
+        if self._generation(key) != generation:
+            return  # invalidated while fetching: the next read re-aggregates
         self._entries[key] = _Entry(value=value, fetched_at=time.monotonic())
 
     def clear(self) -> None:
         """Drop every entry (tests; or after writes that must be visible now)."""
         self._entries.clear()
+        self._epoch += 1
 
     def drop(self, key: str) -> None:
         """Drop one key after an upstream write so the next read re-aggregates.
@@ -116,6 +146,7 @@ class SwrCache:
         stay warm, so the cost of the cold rescan stays bounded.
         """
         self._entries.pop(key, None)
+        self._generations[key] = self._generations.get(key, 0) + 1
 
 
 # The shared instance for the v2 read surfaces. Keys in use:

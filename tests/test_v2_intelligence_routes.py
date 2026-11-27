@@ -29,6 +29,7 @@ from storage.timescale.intelligence import (  # noqa: E402
     Connection,
     CredentialRef,
     FallbackRoute,
+    SavedKeyUnreadable,
     Settings,
 )
 
@@ -180,6 +181,7 @@ class _FakeRepo:
         consent_text_hash=None,
         consented_by=None,
         actor=None,
+        reason=None,
     ):
         assert self.settings is not None
         self.settings = dataclasses.replace(
@@ -189,6 +191,7 @@ class _FakeRepo:
             consent_text_hash=consent_text_hash if granted else None,
             consented_at=NOW if granted else None,
             consented_by=consented_by if granted else None,
+            revision=self.settings.revision + 1,  # consent is a settings change
         )
         self.audit.append("consent_granted" if granted else "consent_revoked")
 
@@ -352,6 +355,110 @@ async def test_put_then_consent_grants_then_revokes(repo):
     assert revoked["consent"]["granted"] is False
 
 
+async def _put(repo, mode, provider, *, api_key=None, base_url=None, fallback=None):
+    return await mod.put_intelligence(
+        request=_request(),
+        body=mod.ApplyIntelligenceRequest(
+            mode=mode,
+            primary=mod.PrimaryInput(
+                provider=provider, model="m", api_key=api_key, base_url=base_url
+            ),
+            fallback=fallback,
+        ),
+        session=_FakeSession(),
+    )
+
+
+async def _grant():
+    view = await mod.post_consent(
+        body=mod.ConsentRequest(granted=True, consent_version="2026-06"), session=_FakeSession()
+    )
+    assert view["allow_cloud_egress"] is True
+    return view
+
+
+async def test_consent_to_one_provider_does_not_carry_over_to_another(repo):
+    """Consent to A, switch to local, then to cloud with B: B must not get data."""
+    await _put(repo, "cloud", "deepseek", api_key="k")
+    await _grant()
+
+    await _put(repo, "local", "ollama", base_url="http://ollama:11434")
+    view = await _put(repo, "cloud", "openrouter", api_key="or")
+
+    assert view["allow_cloud_egress"] is False
+    assert view["consent"]["granted"] is False
+    assert "consent_revoked" in repo.audit
+
+
+async def test_a_mode_change_revokes_consent_until_it_is_granted_again(repo):
+    await _put(repo, "cloud", "deepseek", api_key="k")
+    await _grant()
+
+    await _put(repo, "local", "deepseek")
+    view = await _put(repo, "cloud", "deepseek")
+    assert view["allow_cloud_egress"] is False
+
+    await _grant()
+
+
+async def test_a_new_cloud_fallback_revokes_consent(repo):
+    await _put(repo, "cloud", "deepseek", api_key="k")
+    await _grant()
+
+    view = await _put(
+        repo,
+        "cloud",
+        "deepseek",
+        fallback=[mod.ConnectionInput(provider="openrouter", model="o", api_key="or")],
+    )
+    assert view["allow_cloud_egress"] is False
+
+
+async def test_resaving_the_same_destinations_keeps_consent(repo):
+    """Same mode and cloud destinations: a model change or key rotation keeps it."""
+    await _put(repo, "cloud", "deepseek", api_key="k")
+    await _grant()
+
+    view = await _put(repo, "cloud", "deepseek", api_key="k2")
+    assert view["allow_cloud_egress"] is True
+    assert view["consent"]["granted"] is True
+    assert "consent_revoked" not in repo.audit
+
+
+async def _set_redaction(redact: bool):
+    return await mod.put_intelligence(
+        request=_request(),
+        body=mod.ApplyIntelligenceRequest(
+            mode="cloud",
+            primary=mod.PrimaryInput(provider="deepseek", model="m"),
+            redact_cloud_prompts=redact,
+        ),
+        session=_FakeSession(),
+    )
+
+
+async def test_turning_redaction_off_revokes_consent(repo):
+    """Unredacted prompts carry more than what was consented to: ask again."""
+    await _put(repo, "cloud", "deepseek", api_key="k")
+    assert repo.settings.redact_cloud_prompts is True
+    await _grant()
+
+    view = await _set_redaction(False)
+
+    assert view["allow_cloud_egress"] is False
+    assert view["consent"]["granted"] is False
+
+
+async def test_turning_redaction_on_keeps_consent(repo):
+    await _put(repo, "cloud", "deepseek", api_key="k")
+    await _set_redaction(False)
+    await _grant()
+
+    view = await _set_redaction(True)
+
+    assert view["allow_cloud_egress"] is True
+
+
 # ── test-connection (SSRF-guarded) ──────────────────────────────────────
 
 
@@ -421,6 +528,40 @@ async def test_test_connection_stored_records_result(repo, monkeypatch):
     )
     assert out["ok"] is True
     assert repo.connections[0].last_test_status == "ok"
+    assert "provider_healthcheck" in repo.audit
+
+
+async def test_test_connection_says_plainly_when_the_saved_key_cannot_be_opened(repo, monkeypatch):
+    # The saved key exists but this server's keys cannot open it. The test
+    # must answer in the result the page already shows, not a server error,
+    # and must not call the provider without a key.
+    await mod.put_intelligence(
+        request=_request(),
+        body=mod.ApplyIntelligenceRequest(
+            mode="cloud", primary=mod.PrimaryInput(provider="deepseek", model="m", api_key="k")
+        ),
+        session=_FakeSession(),
+    )
+    conn_id = repo.connections[0].id
+
+    async def _cannot_open(session, *, connection_id, owner_id=OWNER):
+        raise SavedKeyUnreadable("no ring key matches")
+
+    def _no_provider_call(config):
+        raise AssertionError("the provider must not be called without the key")
+
+    monkeypatch.setattr(repo, "get_connection_secret", _cannot_open)
+    monkeypatch.setattr(mod, "_make_client", _no_provider_call)
+    out = await mod.test_connection(
+        request=_request(),
+        body=mod.TestConnectionRequest(connection_id=conn_id),
+        session=_FakeSession(),
+    )
+    assert out["ok"] is False
+    assert out["error"] == mod.SAVED_KEY_UNREADABLE_MESSAGE
+    assert "enter" in out["error"].lower() and "key" in out["error"].lower()
+    assert out["destination"] == "cloud"
+    assert repo.connections[0].last_test_status == "failed"
     assert "provider_healthcheck" in repo.audit
 
 

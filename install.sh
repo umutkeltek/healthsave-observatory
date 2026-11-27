@@ -4,7 +4,9 @@ set -eu
 REPO_URL="${HEALTHSAVE_OBSERVATORY_REPO:-https://github.com/umutkeltek/healthsave-observatory.git}"
 RELEASES_API="${HEALTHSAVE_OBSERVATORY_RELEASES_API:-https://api.github.com/repos/umutkeltek/healthsave-observatory/releases/latest}"
 # Self-hosters install releases, never main (RELEASING.md). "latest" = the newest
-# vX.Y.Z tag; set HEALTHSAVE_OBSERVATORY_REF to a tag, branch or commit to override.
+# published release: GitHub's "latest release", which exists only once the release
+# workflow has published that tag's images, else the newest vX.Y.Z tag in the
+# clone. Set HEALTHSAVE_OBSERVATORY_REF to a tag, branch or commit to override.
 REF="${HEALTHSAVE_OBSERVATORY_REF:-latest}"
 TARGET_DIR="${HEALTHSAVE_OBSERVATORY_HOME:-${HOME:-$(pwd)}/healthsave-observatory}"
 
@@ -62,7 +64,19 @@ latest_tag_in_checkout() {
 }
 
 latest_tag_from_api() {
-  curl -fsSL "$RELEASES_API" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
+  have curl || return 0
+  curl -fsSL --max-time 10 "$RELEASES_API" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
+}
+
+# The published release if this clone has its tag, else the clone's newest tag.
+latest_release_tag() {
+  published="$(latest_tag_from_api)"
+  if printf '%s\n' "$published" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+    && git -C "$1" rev-parse --verify --quiet "refs/tags/$published" >/dev/null; then
+    printf '%s\n' "$published"
+    return 0
+  fi
+  latest_tag_in_checkout "$1"
 }
 
 is_checkout() {
@@ -85,7 +99,7 @@ ensure_checkout() {
     git clone "$REPO_URL" "$TARGET_DIR"
     ref="$REF"
     if [ "$ref" = "latest" ]; then
-      ref="$(latest_tag_in_checkout "$TARGET_DIR")"
+      ref="$(latest_release_tag "$TARGET_DIR")"
       if [ -z "$ref" ]; then
         rm -rf "$TARGET_DIR"
         fail "$REPO_URL has no vX.Y.Z release tag. Set HEALTHSAVE_OBSERVATORY_REF to choose a branch or commit."

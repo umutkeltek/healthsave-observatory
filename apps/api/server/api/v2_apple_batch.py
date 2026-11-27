@@ -57,6 +57,8 @@ Pipeline (matches v1 ingest.py::apple_batch for compatibility):
     matches.
   7. ``plugin.ingest(...)`` with the canonical observations (projection
     layer keeps the v1 dedicated tables fresh from canonical writes).
+    Samples deleted in their own batch are left out: they never reach the
+    v1 tables, so they cannot displace the row already in their slot.
   8. Receipt completion + ``RAW_LOG_ORPHANED`` error boundary.
   9. Return v1-equivalent delivery receipt.
 
@@ -66,7 +68,6 @@ the iOS client change ships in Slice 3).
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
@@ -93,7 +94,7 @@ from storage.timescale.measurements import (
 # real header set and is the gate for it (audit 2026-09-05).
 from storage.timescale.sync_receipts import complete_receipt_idempotency
 
-from ..ingestion.owner import OWNER_HEADER, resolve_owner_id
+from ..ingestion.owner import OWNER_HEADER, participant_owner_id, resolve_owner_id
 from .deps import get_session, verify_api_key
 from .ingest import (
     INGEST_BATCHES,
@@ -118,7 +119,7 @@ from .ingest import (
     _trusted_payload_hash,
     _write_canonical_observations,
 )
-from .swr import v2_read_cache
+from .swr import owner_cache_key, v2_read_cache
 
 _log = logging.getLogger("healthsave.api.v2_apple_batch")
 
@@ -530,7 +531,11 @@ async def v2_apple_batch(
     raw_payload: dict[str, Any]
     try:
         raw_payload = await request.json()
-    except json.JSONDecodeError as exc:
+    except ValueError as exc:
+        # Malformed JSON, a body that is not UTF-8, or an integer longer than
+        # Python's int-string limit (4,300 digits; json raises a plain
+        # ValueError for it): the body can never parse, so it gets the same
+        # terminal 400 as v1, never a 500 the app would retry forever.
         raise HTTPException(status_code=400, detail="invalid JSON body") from exc
 
     payload_hash = await _trusted_payload_hash(request)
@@ -559,7 +564,9 @@ async def v2_apple_batch(
         )
 
     try:
-        owner_id = resolve_owner_id(request.headers.get(OWNER_HEADER))
+        owner_id = participant_owner_id(request) or resolve_owner_id(
+            request.headers.get(OWNER_HEADER)
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"invalid {OWNER_HEADER}: {exc}") from exc
 
@@ -628,6 +635,7 @@ async def v2_apple_batch(
                 db_session,
                 owner_id=owner_id,
                 idempotency_key=idempotency_key,
+                sync_run_id=sync_run_id,
                 payload_hash=payload_hash,
                 status="empty",
                 response_payload=response,
@@ -707,21 +715,53 @@ async def v2_apple_batch(
         # v1 projection layer keeps the legacy metric tables fresh from the
         # canonical writes. The plugin payload carries the v2 normalizer's
         # canonical observations for any downstream consumer that wants them.
-        plugin = _resolve_apple_health_plugin(request)
-        result = await plugin.ingest(
-            {
-                "storage": storage,
-                "session": db_session,
-                "device_id": first_device_id,
-                "first_device_name": first_device_name,
-                "projection": projection,
-                "metric": metric,
-                "samples": samples,
-                "canonical_observations": canonical_result.observations,
-                "owner_id": owner_id,
-                "wire_schema_version": 2,
-            }
-        )
+        # A sample deleted in this same batch is not projected into the v1
+        # tables. Projecting it would retire the active row already in its
+        # (time, device) slot as revised, and the deletion would then retire
+        # the sample too, leaving v1 empty where canonical keeps that row.
+        deleted_here = {uuid.lower() for uuid in deletion_uuids}
+        projected_samples = [
+            sample
+            for sample in samples
+            if str(sample.get("uuid") or "").lower() not in deleted_here
+        ]
+        projected_observations = [
+            observation
+            for observation in canonical_result.observations
+            if str(observation.source_record_uid or "").lower() not in deleted_here
+        ]
+        # The projection device comes from what is projected: when every
+        # sample of the batch's first device was deleted here, that device's
+        # id must not carry another device's samples into the v1 tables.
+        projected_groups = __import__(
+            "server.ingestion.parsers",
+            fromlist=["group_samples_by_device"],
+        ).group_samples_by_device(projected_samples)
+        if projected_groups:
+            projection_device_name = projected_groups[0][0]
+            projection_device_id = (
+                first_device_id
+                if projection_device_name == first_device_name
+                else await storage.get_or_create_device(db_session, projection_device_name)
+            )
+            plugin = _resolve_apple_health_plugin(request)
+            result = await plugin.ingest(
+                {
+                    "storage": storage,
+                    "session": db_session,
+                    "device_id": projection_device_id,
+                    "first_device_name": projection_device_name,
+                    "projection": projection,
+                    "metric": metric,
+                    "samples": projected_samples,
+                    "canonical_observations": projected_observations,
+                    "owner_id": owner_id,
+                    "wire_schema_version": 2,
+                }
+            )
+        else:
+            result = {"accepted": 0, "rejected": 0}  # every sample was deleted here
+
         count = int(result["accepted"])
         records_inserted_new = _optional_int(result.get("inserted_new"))
         records_deduped_existing = _optional_int(result.get("deduped_existing"))
@@ -755,6 +795,7 @@ async def v2_apple_batch(
                 db_session,
                 owner_id=owner_id,
                 idempotency_key=idempotency_key,
+                sync_run_id=sync_run_id,
                 payload_hash=payload_hash,
                 status="processed",
                 response_payload=response,
@@ -772,7 +813,7 @@ async def v2_apple_batch(
             await audit.mark_processed(db_session, raw_log_id)
         await db_session.commit()
         for key in ("canonical_coverage", "canonical_sources"):
-            v2_read_cache.drop(key)
+            v2_read_cache.drop(owner_cache_key(key, owner_id))
     except Exception as exc:
         try:
             RAW_LOG_ORPHANED.labels(metric=metric).inc()
@@ -856,7 +897,8 @@ async def v2_apple_batch(
     )
 
     canonical_accepted = int(getattr(canonical_result, "accepted", 0) or 0)
-    if (canonical_accepted > 0) != (count > 0):
+    # Samples deleted in their own batch are written to canonical only.
+    if projected_samples and (canonical_accepted > 0) != (count > 0):
         _log.warning(
             "v2 dual-write divergence for %s: canonical_accepted=%d projection_accepted=%d",
             metric,

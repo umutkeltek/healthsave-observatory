@@ -287,7 +287,8 @@ async def test_fetch_raises_when_token_metadata_missing_user_id():
 
 @pytest.mark.asyncio
 async def test_fetch_non_200_raises_amazfit_fetch_error():
-    http = _RecordingHttpClient([_FakeResponse(500, payload={}, text="boom")])
+    # A 500 is retried (plugin_sdk.http); the error surfaces once every try failed.
+    http = _RecordingHttpClient([_FakeResponse(500, payload={}, text="boom")] * 3)
     with pytest.raises(AmazfitFetchError) as exc:
         await fetch_user_info(http, token=_token())
     assert "500" in str(exc.value)

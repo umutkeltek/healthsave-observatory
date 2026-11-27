@@ -5,6 +5,9 @@ ENV PIP_ROOT_USER_ACTION=ignore \
 
 WORKDIR /app
 RUN adduser --disabled-password --gecos "" appuser
+RUN mkdir -p /app/genetics && chown appuser:appuser /app/genetics
+RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils tesseract-ocr \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -14,6 +17,7 @@ COPY apps/worker/worker/ ./worker/
 COPY apps/agents/agents/ ./agents/
 COPY packages/py/analysis/ ./analysis/
 COPY packages/py/auth/ ./auth/
+COPY packages/py/licensing/ ./licensing/
 COPY packages/py/compat_v1/ ./compat_v1/
 COPY packages/py/contracts/ ./contracts/
 COPY contracts/parity.json ./contracts/parity.json
@@ -28,6 +32,19 @@ COPY packages/py/observability/ ./observability/
 COPY plugins/ ./plugins/
 COPY db/migrations/ ./db/migrations/
 COPY scripts/ ./scripts/
+
+# The MCP read server (healthsave mcp): its own venv, so its dependencies never
+# move the server's pinned ones. Clients run /opt/healthsave-mcp/bin/healthsave-mcp.
+LABEL io.modelcontextprotocol.server.name="app.healthsave/observatory"
+COPY packages/mcp/ /tmp/healthsave-mcp/
+# Dependencies come from a hash-locked file (build tooling included), then the
+# package itself without resolving anything new.
+RUN python -m venv /opt/healthsave-mcp \
+    && /opt/healthsave-mcp/bin/pip install --no-cache-dir --require-hashes \
+        -r /tmp/healthsave-mcp/requirements.lock \
+    && /opt/healthsave-mcp/bin/pip install --no-cache-dir --no-deps --no-build-isolation \
+        /tmp/healthsave-mcp \
+    && rm -rf /tmp/healthsave-mcp
 
 USER appuser
 EXPOSE 8000

@@ -6,6 +6,7 @@ import {
   deriveNight,
   durationLabel,
   groupSleepNights,
+  nightlyDurations,
   sleepDebt,
   sleepTrends,
   type SleepNight,
@@ -492,3 +493,19 @@ describe("durationLabel", () => {
     expect(durationLabel(479.6)).toBe("8h 0m");
   });
 });
+
+describe("nightlyDurations", () => {
+  it("keeps one night per bedtime date and names a second session, never averaging", () => {
+    expect(
+      nightlyDurations([
+        { date: "2026-11-05", durationMin: 420 },
+        { date: "2026-11-04", durationMin: 400 },
+        { date: "2026-11-05", durationMin: 35 },
+      ]),
+    ).toEqual([
+      { date: "2026-11-04", value: 400 },
+      { date: "2026-11-05", value: 420, note: "longest of 2 sleep sessions" },
+    ]);
+  });
+});
+

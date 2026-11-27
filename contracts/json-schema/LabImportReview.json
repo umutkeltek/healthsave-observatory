@@ -1,0 +1,108 @@
+{
+  "$defs": {
+    "LabReviewRow": {
+      "additionalProperties": false,
+      "properties": {
+        "confirmed": {
+          "default": false,
+          "title": "Confirmed",
+          "type": "boolean"
+        },
+        "lab": {
+          "default": "",
+          "maxLength": 160,
+          "title": "Lab",
+          "type": "string"
+        },
+        "loinc": {
+          "default": "",
+          "maxLength": 20,
+          "title": "Loinc",
+          "type": "string"
+        },
+        "marker_name": {
+          "default": "",
+          "maxLength": 160,
+          "title": "Marker Name",
+          "type": "string"
+        },
+        "panel": {
+          "default": "",
+          "maxLength": 160,
+          "title": "Panel",
+          "type": "string"
+        },
+        "reference_high": {
+          "default": "",
+          "maxLength": 80,
+          "title": "Reference High",
+          "type": "string"
+        },
+        "reference_low": {
+          "default": "",
+          "maxLength": 80,
+          "title": "Reference Low",
+          "type": "string"
+        },
+        "row_id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Row Id",
+          "type": "string"
+        },
+        "specimen_datetime": {
+          "default": "",
+          "maxLength": 80,
+          "title": "Specimen Datetime",
+          "type": "string"
+        },
+        "unit": {
+          "default": "",
+          "maxLength": 80,
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "default": "",
+          "maxLength": 80,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "row_id"
+      ],
+      "title": "LabReviewRow",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "owner_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "rows": {
+      "items": {
+        "$ref": "#/$defs/LabReviewRow"
+      },
+      "maxItems": 250,
+      "minItems": 1,
+      "title": "Rows",
+      "type": "array"
+    },
+    "workspace_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "rows"
+  ],
+  "title": "LabImportReview",
+  "type": "object"
+}

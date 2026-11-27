@@ -1,0 +1,579 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_HEALTHSAVE",
+      "label": "HealthSave Observatory database",
+      "description": "Choose the PostgreSQL datasource connected to your Observatory TimescaleDB database.",
+      "type": "datasource",
+      "pluginId": "grafana-postgresql-datasource",
+      "pluginName": "PostgreSQL"
+    }
+  ],
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "10.4.2"
+    },
+    {
+      "type": "datasource",
+      "id": "grafana-postgresql-datasource",
+      "name": "PostgreSQL",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "barchart",
+      "name": "Bar chart",
+      "version": ""
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [
+    {
+      "type": "link",
+      "title": "HealthSave Observatory",
+      "url": "https://healthsave.app/observatory/",
+      "targetBlank": true
+    },
+    {
+      "type": "link",
+      "title": "GitHub repository",
+      "url": "https://github.com/umutkeltek/healthsave-observatory",
+      "targetBlank": true
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_HEALTHSAVE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "bpm"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(time, $__interval), COALESCE(NULLIF(source_id, ''), 'Device ' || device_id, 'Unknown source') AS metric, avg(bpm) AS value\nFROM heart_rate\nWHERE $__timeFilter(time)\n  AND owner_id = '00000000-0000-0000-0000-000000000001'\nGROUP BY 1, 2\nORDER BY 1, 2",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_HEALTHSAVE}"
+          }
+        }
+      ],
+      "title": "Heart Rate",
+      "type": "timeseries",
+      "description": "Average heart rate in each interval, grouped by source."
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_HEALTHSAVE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(time, $__interval), COALESCE(NULLIF(source_id, ''), 'Device ' || device_id, 'Unknown source') AS metric, avg(value_ms) AS value\nFROM hrv\nWHERE $__timeFilter(time)\n  AND owner_id = '00000000-0000-0000-0000-000000000001'\n  AND algorithm = 'sdnn'\nGROUP BY 1, 2\nORDER BY 1, 2",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_HEALTHSAVE}"
+          }
+        }
+      ],
+      "title": "Heart Rate Variability (SDNN)",
+      "type": "timeseries",
+      "description": "Average Apple Health HRV (SDNN) in each interval, grouped by source."
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_HEALTHSAVE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(time, $__interval), COALESCE(NULLIF(source_id, ''), 'Device ' || device_id, 'Unknown source') AS metric, avg(spo2_pct) AS value\nFROM blood_oxygen\nWHERE $__timeFilter(time)\n  AND owner_id = '00000000-0000-0000-0000-000000000001'\nGROUP BY 1, 2\nORDER BY 1, 2",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_HEALTHSAVE}"
+          }
+        }
+      ],
+      "title": "Blood Oxygen",
+      "type": "timeseries",
+      "description": "Average blood oxygen saturation in each interval, grouped by source."
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_HEALTHSAVE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "custom": {
+            "lineWidth": 1
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "displayMode": "hidden",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date::timestamp AT TIME ZONE 'UTC' AS time, max(steps) AS steps\nFROM daily_activity\nWHERE date BETWEEN ($__timeFrom()::timestamptz AT TIME ZONE 'UTC')::date\n  AND ($__timeTo()::timestamptz AT TIME ZONE 'UTC')::date\n  AND owner_id = '00000000-0000-0000-0000-000000000001'\n  AND steps IS NOT NULL\nGROUP BY date\nORDER BY 1",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_HEALTHSAVE}"
+          }
+        }
+      ],
+      "title": "Daily Steps",
+      "type": "barchart",
+      "description": "Highest reported step total for each day. Totals from different sources are never added."
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_HEALTHSAVE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 1
+          },
+          "unit": "h"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "displayMode": "hidden",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH daily_source AS (\n  SELECT date_trunc('day', start_time, 'UTC') AS time,\n    COALESCE(NULLIF(source_id, ''), 'Device ' || device_id, 'Unknown source') AS source, sum(total_duration_ms) / 3600000.0 AS hours\n  FROM sleep_sessions\n  WHERE $__timeFilter(start_time)\n    AND owner_id = '00000000-0000-0000-0000-000000000001'\n    AND total_duration_ms IS NOT NULL\n  GROUP BY 1, 2\n), ranked AS (\n  SELECT time, hours, row_number() OVER (\n    PARTITION BY time ORDER BY CASE WHEN hours BETWEEN 0 AND 16 THEN 0 ELSE 1 END, hours DESC\n  ) AS rn\n  FROM daily_source\n)\nSELECT time, round(LEAST(hours, 16)::numeric, 2) AS sleep_hours\nFROM ranked WHERE rn = 1 ORDER BY time",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_HEALTHSAVE}"
+          }
+        }
+      ],
+      "title": "Sleep Duration",
+      "type": "barchart",
+      "description": "Daily sleep duration from one source per day, grouped by the UTC start date."
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_HEALTHSAVE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "unit": "bpm"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 24
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time, bpm AS value\nFROM heart_rate\nWHERE $__timeFilter(time)\n  AND owner_id = '00000000-0000-0000-0000-000000000001'\nORDER BY time DESC, device_id\nLIMIT 1",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_HEALTHSAVE}"
+          }
+        }
+      ],
+      "title": "Latest Heart Rate",
+      "type": "stat",
+      "description": "Most recent heart rate reading in the selected range."
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_HEALTHSAVE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 24
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time, value_ms AS value\nFROM hrv\nWHERE $__timeFilter(time)\n  AND owner_id = '00000000-0000-0000-0000-000000000001'\n  AND algorithm = 'sdnn'\nORDER BY time DESC, device_id\nLIMIT 1",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_HEALTHSAVE}"
+          }
+        }
+      ],
+      "title": "Latest HRV (SDNN)",
+      "type": "stat",
+      "description": "Most recent Apple Health HRV reading (SDNN) in the selected range."
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_HEALTHSAVE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 24
+      },
+      "id": 8,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date::timestamp AT TIME ZONE 'UTC' AS time, max(steps) AS value\nFROM daily_activity\nWHERE date BETWEEN ($__timeFrom()::timestamptz AT TIME ZONE 'UTC')::date\n  AND ($__timeTo()::timestamptz AT TIME ZONE 'UTC')::date\n  AND owner_id = '00000000-0000-0000-0000-000000000001'\n  AND steps IS NOT NULL\nGROUP BY date\nORDER BY date DESC\nLIMIT 1",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_HEALTHSAVE}"
+          }
+        }
+      ],
+      "title": "Latest Daily Steps",
+      "type": "stat",
+      "description": "Highest reported total on the latest day with steps in the selected range."
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_HEALTHSAVE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 24
+      },
+      "id": 9,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT (\n  (SELECT count(*) FROM heart_rate WHERE $__timeFilter(time) AND owner_id = '00000000-0000-0000-0000-000000000001')\n  + (SELECT count(*) FROM hrv WHERE $__timeFilter(time) AND owner_id = '00000000-0000-0000-0000-000000000001')\n  + (SELECT count(*) FROM blood_oxygen WHERE $__timeFilter(time) AND owner_id = '00000000-0000-0000-0000-000000000001')\n  + (SELECT count(*) FROM daily_activity WHERE date BETWEEN ($__timeFrom()::timestamptz AT TIME ZONE 'UTC')::date\n  AND ($__timeTo()::timestamptz AT TIME ZONE 'UTC')::date AND owner_id = '00000000-0000-0000-0000-000000000001')\n  + (SELECT count(*) FROM sleep_sessions WHERE $__timeFilter(start_time) AND owner_id = '00000000-0000-0000-0000-000000000001')\n  + (SELECT count(*) FROM workouts WHERE $__timeFilter(start_time) AND owner_id = '00000000-0000-0000-0000-000000000001')\n  + (SELECT count(*) FROM quantity_samples WHERE $__timeFilter(time) AND owner_id = '00000000-0000-0000-0000-000000000001')\n) AS value",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_HEALTHSAVE}"
+          }
+        }
+      ],
+      "title": "Records Ingested",
+      "type": "stat",
+      "description": "Counts stored heart rate, HRV, blood oxygen, daily activity, sleep, workout, and other quantity records in the selected range, including overlapping sources."
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "apple-health",
+    "healthsave",
+    "timescaledb"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Apple Health (HealthSave Observatory)",
+  "uid": null,
+  "version": 1,
+  "weekStart": "",
+  "description": "Chart Apple Health data synced by the HealthSave iPhone app to your self-hosted HealthSave Observatory. Requires a PostgreSQL datasource connected to the Observatory's TimescaleDB database and data synced for the primary person. https://healthsave.app/observatory/ | https://github.com/umutkeltek/healthsave-observatory"
+}

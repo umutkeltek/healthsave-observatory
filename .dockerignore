@@ -9,3 +9,4 @@ tests/__pycache__
 node_modules
 apps/web/.next
 *.tsbuildinfo
+packages/mcp/build

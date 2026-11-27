@@ -1,6 +1,6 @@
 # v2 read API (evolving)
 
-The `/api/v2/` plane is **your private read API** — the agent-consumable JSON surface your own scripts, notebooks, and dashboards query locally, without handing your data to a third-party API vendor. It is what the Observatory web app reads today, and it is the contract the planned `healthsave` CLI and local MCP server will speak so your own AI agents can query your body data.
+The `/api/v2/` plane is **your private read API** — the agent-consumable JSON surface your own scripts, notebooks, and dashboards query locally, without handing your data to a third-party API vendor. It is what the Observatory web app reads today, and it is the contract the local MCP server speaks so your own AI client can query your body data ([Give your AI a body](../mcp.md)).
 
 > **Status: evolving — not frozen.** Unlike the [v1 ingest contract](v1-apple-contract.md), the v2 read plane is under active development; request and response shapes may change between releases. Treat it as pre-stable and pin to a backend version when scripting against it.
 
@@ -11,6 +11,20 @@ This page is the orientation map. For payload-level request/response examples on
 Most v2 endpoints are **keyed** — send the `X-API-Key` header when `API_KEY` is set (see [API overview](index.md#authentication)). A few are **open** because they expose no health data: `/api/v2/meta`, `/api/v2/setup/diagnostics`, and `/api/v2/metrics` (the static catalog). The Whoop webhook authenticates by HMAC signature instead.
 
 Check `GET /api/v2/meta` first — it reports the running backend's version axes (`api_contract`, `ontology`, `normalizer`, `fusion_policy`) so a client can detect contract drift before relying on a shape.
+
+## People (participant keys)
+
+An Observatory can hold several people: the primary person plus one owner per participant key
+(`healthsave participants add`, see [Participants](../operations/participants.md)).
+
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `GET /api/v2/owners` | admin key | The default owner first (`label: null`), then each participant: `label`, `active`, live `scopes`, `last_ingest_at` |
+
+The series, export, identity (`/sources`, `/devices`, `/streams`, `/streams/{stream_id}`) and
+`/readiness` reads take an optional `owner=<uuid>`. The admin key may name any owner and defaults to the
+default owner; a participant `read` key may name only its own (`403` otherwise); a malformed value is
+`422`. Every other route answers for the primary person and is admin-only (`403` for participant keys).
 
 ## Metrics and time series
 
@@ -47,6 +61,31 @@ Findings are computed by a deterministic statistical engine; the local LLM only 
 | `GET /api/v2/receipts` | key | Intelligence audit trail + ingest freshness (chain-of-custody proof) |
 
 A *stream* is the join of "this device, via this integration" — the same band over HealthKit versus a direct poll is two streams. Stream UUIDs are stable, so Home Assistant and other consumers can key entities on them without fragmenting when you add devices.
+
+## Labs
+
+Blood test results imported with `healthsave labs import` (see
+[Blood test results (CSV)](../capture/labs-csv.md)). Every result keeps the
+reference range its lab printed and the lab stream it came from; results from
+different labs are never averaged.
+
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `GET /api/v2/labs` | key | Every marker (LOINC) with its results, plus the labs that sent them |
+| `GET /api/v2/labs/{loinc}` | key | One marker's results, oldest first (`422` malformed LOINC, `404` none) |
+
+## Year in Health
+
+One calendar year of the record, read as coverage, for one person (`?owner=`).
+Days follow the analytical-time setting (time zone and day start). Every day
+without data is in a gap run; headline numbers are per source and never
+averaged across sources. The web dashboard draws it at `/year/<year>`, with a
+share card at `/year/<year>/card` that carries no personal numbers unless the
+person adds them. Field detail: [API_REFERENCE.md](../../API_REFERENCE.md).
+
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `GET /api/v2/year/{year}` | key | Months, sources per month, device changes, every gap per kind of data, per-source headline numbers, limitation codes (`422` for a year that has not started) |
 
 ## Experiments and agents
 
@@ -94,6 +133,12 @@ This makes the trust boundary inspectable. By default `raw_observations_leave_ho
 |---|---|---|
 | `POST /api/v2/sources/whoop/webhook` | HMAC | Whoop push webhook; authenticity via `X-WHOOP-Signature` (not `X-API-Key`) |
 
-## Planned: CLI and MCP
+## MCP server
 
-A `healthsave` CLI and a local MCP server are on the roadmap. Both will sit on top of this same v2 read API, with scoped read tokens, so your own agents can query your body data through the contract documented here rather than against the database directly. Until they ship, scripts call these endpoints over HTTP with the `X-API-Key` header. See [`API_REFERENCE.md`](../../API_REFERENCE.md) for payloads.
+`healthsave mcp` connects your own AI client (Claude Code, Claude Desktop, any MCP
+client) to this API through a read-only MCP server that sits on top of these
+endpoints. It sends only `GET` requests, returns per-day, per-night and per-month
+summaries rather than raw rows, and talks to the configured server only. Its key is a
+read key minted for the primary person (`healthsave mcp key`): it reads the
+owner-scoped routes plus findings, lab results and the time setting, and every
+route that writes answers it `403`. See [Give your AI a body](../mcp.md).

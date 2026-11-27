@@ -191,6 +191,37 @@
         "title": "ApplyIntelligenceRequest",
         "type": "object"
       },
+      "Confounder": {
+        "additionalProperties": false,
+        "description": "A competing explanation the engine already accounts for or flags.\n\nMirrors the context-suppression rules in the detectors (workout-window HR\nspikes, post-workout HRV drops, the sleep window) so a card can say *why* a\nreading might not mean what it looks like.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "metric": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric"
+          }
+        },
+        "required": [
+          "kind",
+          "description"
+        ],
+        "title": "Confounder",
+        "type": "object"
+      },
       "ConnectionInput": {
         "additionalProperties": false,
         "properties": {
@@ -286,6 +317,69 @@
           "granted"
         ],
         "title": "ConsentRequest",
+        "type": "object"
+      },
+      "Coverage": {
+        "additionalProperties": false,
+        "description": "Data sufficiency behind the finding \u2014 the ``gates.py`` verdict, surfaced.\n\nA finding is only emitted once its producer's sufficiency gate passed, so\n``is_sufficient`` is typically ``True``; ``note`` records the threshold that\nwas cleared (e.g. \"\u226514 observations over \u22657 days\"). ``days_until_sufficient``\nis only meaningful on the not-yet-analyzable path a future producer might\nsurface.",
+        "properties": {
+          "days_until_sufficient": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Until Sufficient"
+          },
+          "days_with_data": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days With Data"
+          },
+          "is_sufficient": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Sufficient"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "observation_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observation Count"
+          }
+        },
+        "title": "Coverage",
         "type": "object"
       },
       "CreateExperimentRequest": {
@@ -538,6 +632,63 @@
         "title": "DecideResponse",
         "type": "object"
       },
+      "Delta": {
+        "additionalProperties": false,
+        "description": "The change: current vs baseline.",
+        "properties": {
+          "absolute": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Absolute"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "enum": [
+                  "up",
+                  "down",
+                  "flat"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "title": "Delta",
+        "type": "object"
+      },
       "DeviceIdentityLinkCreate": {
         "properties": {
           "confidence": {
@@ -686,6 +837,133 @@
         "title": "DevicesResponse",
         "type": "object"
       },
+      "EffectSize": {
+        "additionalProperties": false,
+        "description": "How big the effect is, method-tagged so the UI can label it honestly.\n\n``kind`` names the statistic (``z_score`` / ``spearman_rho`` /\n``slope_per_day`` / ``cohens_d`` \u2026) so a reader never confuses a correlation\ncoefficient with a standardized mean difference. ``p_value`` rides alongside\nthe magnitude (significance \u2260 size) rather than being a separate top-level\ncard field.",
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "p_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Value"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "title": "EffectSize",
+        "type": "object"
+      },
+      "ExperimentCandidateRef": {
+        "additionalProperties": false,
+        "description": "Machine hook linking ``next_question`` to the experiments surface.\n\nDeliberately speaks the ``/api/v2/experiments/candidates`` vocabulary\n(metric pair + lever/outcome/verdict/protocol from the readiness classifier)\n\u2014 the candidate shape the experiment engine already ranks, so nothing new is\ninvented here. The ``POST /api/v2/experiments`` create body renames the pair\nto ``lever_metric_id`` / ``outcome_metric_id``: the values are identical, only\nthe field names differ, so the client maps ``lever`` \u2192 ``lever_metric_id`` and\n``outcome`` \u2192 ``outcome_metric_id`` when promoting a candidate.",
+        "properties": {
+          "lever": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lever"
+          },
+          "metric_a": {
+            "title": "Metric A",
+            "type": "string"
+          },
+          "metric_b": {
+            "title": "Metric B",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "required_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Days"
+          },
+          "suggested_protocol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Protocol"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          }
+        },
+        "required": [
+          "metric_a",
+          "metric_b"
+        ],
+        "title": "ExperimentCandidateRef",
+        "type": "object"
+      },
       "ExperimentListResponse": {
         "additionalProperties": false,
         "properties": {
@@ -802,6 +1080,139 @@
         "title": "ExperimentView",
         "type": "object"
       },
+      "FindingCard": {
+        "additionalProperties": false,
+        "description": "The versioned content model for one evidence-linked finding.\n\n``claim`` / ``metric`` / ``schema_version`` are required; everything else is\noptional so legacy or thin findings are represented without fabrication.",
+        "properties": {
+          "baseline_window": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WindowRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "claim": {
+            "title": "Claim",
+            "type": "string"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "confounders": {
+            "items": {
+              "$ref": "#/components/schemas/Confounder"
+            },
+            "title": "Confounders",
+            "type": "array"
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Coverage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_window": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WindowRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Delta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effect_size": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EffectSize"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finding_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finding Type"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Limitations",
+            "type": "array"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "next_question": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NextQuestion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schema_version": {
+            "default": 1,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceRef"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "claim",
+          "metric"
+        ],
+        "title": "FindingCard",
+        "type": "object"
+      },
       "FindingResponse": {
         "properties": {
           "created_at": {
@@ -875,6 +1286,693 @@
         "title": "FindingResponse",
         "type": "object"
       },
+      "GeneticAnnotation": {
+        "additionalProperties": false,
+        "properties": {
+          "alternate": {
+            "title": "Alternate",
+            "type": "string"
+          },
+          "alternate_copies": {
+            "title": "Alternate Copies",
+            "type": "integer"
+          },
+          "call_quality": {
+            "title": "Call Quality",
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "pathogenic",
+              "benign",
+              "uncertain",
+              "conflicting",
+              "other"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "chromosome": {
+            "title": "Chromosome",
+            "type": "string"
+          },
+          "conditions": {
+            "title": "Conditions",
+            "type": "string"
+          },
+          "conflicting": {
+            "title": "Conflicting",
+            "type": "boolean"
+          },
+          "depth": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depth"
+          },
+          "details_truncated": {
+            "title": "Details Truncated",
+            "type": "boolean"
+          },
+          "gene": {
+            "title": "Gene",
+            "type": "string"
+          },
+          "genotype": {
+            "title": "Genotype",
+            "type": "string"
+          },
+          "genotype_quality": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Genotype Quality"
+          },
+          "hgvs": {
+            "title": "Hgvs",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "review_stars": {
+            "maximum": 4.0,
+            "minimum": 0.0,
+            "title": "Review Stars",
+            "type": "integer"
+          },
+          "source_classification": {
+            "title": "Source Classification",
+            "type": "string"
+          },
+          "source_review_status": {
+            "title": "Source Review Status",
+            "type": "string"
+          },
+          "source_url": {
+            "title": "Source Url",
+            "type": "string"
+          },
+          "variation_id": {
+            "title": "Variation Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "chromosome",
+          "position",
+          "genotype",
+          "reference",
+          "alternate",
+          "alternate_copies",
+          "variation_id",
+          "gene",
+          "conditions",
+          "source_classification",
+          "source_review_status",
+          "review_stars",
+          "conflicting",
+          "category",
+          "call_quality",
+          "depth",
+          "genotype_quality",
+          "hgvs",
+          "source_url",
+          "details_truncated"
+        ],
+        "title": "GeneticAnnotation",
+        "type": "object"
+      },
+      "GeneticDeletion": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmation": {
+            "format": "uuid",
+            "title": "Confirmation",
+            "type": "string"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirmation"
+        ],
+        "title": "GeneticDeletion",
+        "type": "object"
+      },
+      "GeneticDeletionReceipt": {
+        "additionalProperties": false,
+        "properties": {
+          "deleted_reports": {
+            "title": "Deleted Reports",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "deleted_reports"
+        ],
+        "title": "GeneticDeletionReceipt",
+        "type": "object"
+      },
+      "GeneticDocument": {
+        "additionalProperties": false,
+        "properties": {
+          "assembly": {
+            "enum": [
+              "GRCh37",
+              "GRCh38"
+            ],
+            "title": "Assembly",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "original_retained": {
+            "title": "Original Retained",
+            "type": "boolean"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "file_name",
+          "sha256",
+          "assembly",
+          "created_at",
+          "original_retained"
+        ],
+        "title": "GeneticDocument",
+        "type": "object"
+      },
+      "GeneticDocumentDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/GeneticDocument"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "report": {
+            "$ref": "#/components/schemas/GeneticReport"
+          },
+          "reports": {
+            "items": {
+              "$ref": "#/components/schemas/GeneticReportVersion"
+            },
+            "title": "Reports",
+            "type": "array"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document",
+          "report",
+          "reports"
+        ],
+        "title": "GeneticDocumentDetail",
+        "type": "object"
+      },
+      "GeneticIndex": {
+        "additionalProperties": false,
+        "properties": {
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/GeneticDocument"
+            },
+            "title": "Documents",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "documents"
+        ],
+        "title": "GeneticIndex",
+        "type": "object"
+      },
+      "GeneticReanalysis": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "title": "GeneticReanalysis",
+        "type": "object"
+      },
+      "GeneticReference": {
+        "additionalProperties": false,
+        "properties": {
+          "assembly": {
+            "enum": [
+              "GRCh37",
+              "GRCh38"
+            ],
+            "title": "Assembly",
+            "type": "string"
+          },
+          "excluded_reference_records": {
+            "title": "Excluded Reference Records",
+            "type": "integer"
+          },
+          "index_version": {
+            "title": "Index Version",
+            "type": "string"
+          },
+          "installed_at": {
+            "format": "date-time",
+            "title": "Installed At",
+            "type": "string"
+          },
+          "record_count": {
+            "title": "Record Count",
+            "type": "integer"
+          },
+          "release_date": {
+            "title": "Release Date",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "source_url": {
+            "title": "Source Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assembly",
+          "release_date",
+          "sha256",
+          "source_url",
+          "installed_at",
+          "record_count",
+          "excluded_reference_records",
+          "index_version"
+        ],
+        "title": "GeneticReference",
+        "type": "object"
+      },
+      "GeneticReferenceJob": {
+        "additionalProperties": false,
+        "properties": {
+          "assembly": {
+            "anyOf": [
+              {
+                "enum": [
+                  "GRCh37",
+                  "GRCh38"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assembly"
+          },
+          "bytes_downloaded": {
+            "default": 0,
+            "title": "Bytes Downloaded",
+            "type": "integer"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "records_indexed": {
+            "default": 0,
+            "title": "Records Indexed",
+            "type": "integer"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "enum": [
+              "idle",
+              "downloading",
+              "indexing",
+              "complete",
+              "failed",
+              "interrupted"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "title": "GeneticReferenceJob",
+        "type": "object"
+      },
+      "GeneticReferenceStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/GeneticReferenceJob"
+          },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/GeneticReference"
+            },
+            "title": "References",
+            "type": "array"
+          }
+        },
+        "required": [
+          "references",
+          "job"
+        ],
+        "title": "GeneticReferenceStatus",
+        "type": "object"
+      },
+      "GeneticReferenceUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "assembly": {
+            "enum": [
+              "GRCh37",
+              "GRCh38"
+            ],
+            "title": "Assembly",
+            "type": "string"
+          },
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assembly"
+        ],
+        "title": "GeneticReferenceUpdate",
+        "type": "object"
+      },
+      "GeneticReport": {
+        "additionalProperties": false,
+        "properties": {
+          "annotations": {
+            "items": {
+              "$ref": "#/components/schemas/GeneticAnnotation"
+            },
+            "title": "Annotations",
+            "type": "array"
+          },
+          "assembly": {
+            "enum": [
+              "GRCh37",
+              "GRCh38"
+            ],
+            "title": "Assembly",
+            "type": "string"
+          },
+          "assembly_in_file": {
+            "title": "Assembly In File",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "document_id": {
+            "format": "uuid",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "engine_version": {
+            "title": "Engine Version",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "input_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Input Counts",
+            "type": "object"
+          },
+          "input_format": {
+            "title": "Input Format",
+            "type": "string"
+          },
+          "input_sha256": {
+            "title": "Input Sha256",
+            "type": "string"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Limitations",
+            "type": "array"
+          },
+          "matched_annotations": {
+            "title": "Matched Annotations",
+            "type": "integer"
+          },
+          "matched_loci": {
+            "title": "Matched Loci",
+            "type": "integer"
+          },
+          "omitted_annotations": {
+            "title": "Omitted Annotations",
+            "type": "integer"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "reference": {
+            "$ref": "#/components/schemas/GeneticReference"
+          },
+          "reference_mismatch_loci": {
+            "title": "Reference Mismatch Loci",
+            "type": "integer"
+          },
+          "unmatched_loci": {
+            "title": "Unmatched Loci",
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "document_id",
+          "created_at",
+          "engine_version",
+          "file_name",
+          "input_sha256",
+          "input_format",
+          "assembly",
+          "assembly_in_file",
+          "input_counts",
+          "reference",
+          "annotations",
+          "matched_loci",
+          "matched_annotations",
+          "unmatched_loci",
+          "reference_mismatch_loci",
+          "omitted_annotations",
+          "warnings",
+          "limitations"
+        ],
+        "title": "GeneticReport",
+        "type": "object"
+      },
+      "GeneticReportVersion": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "engine_version": {
+            "title": "Engine Version",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "reference_release": {
+            "title": "Reference Release",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "reference_release",
+          "engine_version"
+        ],
+        "title": "GeneticReportVersion",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -919,6 +2017,1508 @@
           }
         },
         "title": "InsightsLatestResponse",
+        "type": "object"
+      },
+      "LabAssessmentView": {
+        "additionalProperties": false,
+        "properties": {
+          "change": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change"
+          },
+          "change_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Pct"
+          },
+          "change_withheld": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Withheld"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "latest_band": {
+            "title": "Latest Band",
+            "type": "string"
+          },
+          "outside_streak": {
+            "title": "Outside Streak",
+            "type": "integer"
+          },
+          "previous_from_other_lab": {
+            "title": "Previous From Other Lab",
+            "type": "boolean"
+          },
+          "previous_specimen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Specimen At"
+          },
+          "prior_count": {
+            "title": "Prior Count",
+            "type": "integer"
+          },
+          "prior_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior Max"
+          },
+          "prior_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior Min"
+          },
+          "versus_history": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versus History"
+          }
+        },
+        "required": [
+          "latest_band",
+          "previous_specimen_at",
+          "previous_from_other_lab",
+          "change",
+          "change_pct",
+          "direction",
+          "change_withheld",
+          "prior_count",
+          "prior_min",
+          "prior_max",
+          "versus_history",
+          "outside_streak"
+        ],
+        "title": "LabAssessmentView",
+        "type": "object"
+      },
+      "LabCrossMatchView": {
+        "additionalProperties": false,
+        "properties": {
+          "card": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FindingCard"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "related_label": {
+            "title": "Related Label",
+            "type": "string"
+          },
+          "related_metric_id": {
+            "title": "Related Metric Id",
+            "type": "string"
+          },
+          "related_unit": {
+            "title": "Related Unit",
+            "type": "string"
+          },
+          "stream_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stream Id"
+          },
+          "stream_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stream Label"
+          }
+        },
+        "required": [
+          "related_metric_id",
+          "related_label",
+          "related_unit",
+          "stream_id",
+          "stream_label",
+          "card",
+          "reason"
+        ],
+        "title": "LabCrossMatchView",
+        "type": "object"
+      },
+      "LabDocumentPage": {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "enum": [
+              "text",
+              "ocr",
+              "csv"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "page",
+          "text",
+          "method"
+        ],
+        "title": "LabDocumentPage",
+        "type": "object"
+      },
+      "LabEvidenceSource": {
+        "additionalProperties": false,
+        "properties": {
+          "accessed_on": {
+            "title": "Accessed On",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "url",
+          "accessed_on",
+          "scope"
+        ],
+        "title": "LabEvidenceSource",
+        "type": "object"
+      },
+      "LabGapView": {
+        "additionalProperties": false,
+        "properties": {
+          "bands_disagree": {
+            "title": "Bands Disagree",
+            "type": "boolean"
+          },
+          "days_apart": {
+            "title": "Days Apart",
+            "type": "number"
+          },
+          "difference": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difference"
+          },
+          "difference_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difference Pct"
+          },
+          "earlier_band": {
+            "title": "Earlier Band",
+            "type": "string"
+          },
+          "earlier_id": {
+            "format": "uuid",
+            "title": "Earlier Id",
+            "type": "string"
+          },
+          "earlier_lab": {
+            "title": "Earlier Lab",
+            "type": "string"
+          },
+          "earlier_specimen_at": {
+            "format": "date-time",
+            "title": "Earlier Specimen At",
+            "type": "string"
+          },
+          "earlier_value": {
+            "title": "Earlier Value",
+            "type": "number"
+          },
+          "later_band": {
+            "title": "Later Band",
+            "type": "string"
+          },
+          "later_id": {
+            "format": "uuid",
+            "title": "Later Id",
+            "type": "string"
+          },
+          "later_lab": {
+            "title": "Later Lab",
+            "type": "string"
+          },
+          "later_specimen_at": {
+            "format": "date-time",
+            "title": "Later Specimen At",
+            "type": "string"
+          },
+          "later_value": {
+            "title": "Later Value",
+            "type": "number"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "earlier_id",
+          "later_id",
+          "earlier_lab",
+          "later_lab",
+          "earlier_specimen_at",
+          "later_specimen_at",
+          "earlier_value",
+          "later_value",
+          "unit",
+          "days_apart",
+          "difference",
+          "difference_pct",
+          "earlier_band",
+          "later_band",
+          "bands_disagree"
+        ],
+        "title": "LabGapView",
+        "type": "object"
+      },
+      "LabImportCatalog": {
+        "additionalProperties": false,
+        "properties": {
+          "markers": {
+            "items": {
+              "$ref": "#/components/schemas/LabImportMarker"
+            },
+            "title": "Markers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "markers"
+        ],
+        "title": "LabImportCatalog",
+        "type": "object"
+      },
+      "LabImportDeletion": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmation": {
+            "format": "uuid",
+            "title": "Confirmation",
+            "type": "string"
+          },
+          "delete_results": {
+            "default": false,
+            "title": "Delete Results",
+            "type": "boolean"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirmation"
+        ],
+        "title": "LabImportDeletion",
+        "type": "object"
+      },
+      "LabImportDeletionPreview": {
+        "additionalProperties": false,
+        "properties": {
+          "explanation": {
+            "default": "Deletes this original and saved report. Optionally deletes results last written by this import; later corrections and other reports are preserved. Copies in your downloads or backups are separate.",
+            "title": "Explanation",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "linked_result_count": {
+            "title": "Linked Result Count",
+            "type": "integer"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "file_name",
+          "linked_result_count"
+        ],
+        "title": "LabImportDeletionPreview",
+        "type": "object"
+      },
+      "LabImportDeletionReceipt": {
+        "additionalProperties": false,
+        "properties": {
+          "deleted_results": {
+            "title": "Deleted Results",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "deleted_results"
+        ],
+        "title": "LabImportDeletionReceipt",
+        "type": "object"
+      },
+      "LabImportDraft": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "pages": {
+            "items": {
+              "$ref": "#/components/schemas/LabDocumentPage"
+            },
+            "title": "Pages",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/LabReviewRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "committed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "file_name",
+          "sha256",
+          "created_at",
+          "status",
+          "pages",
+          "rows",
+          "warnings"
+        ],
+        "title": "LabImportDraft",
+        "type": "object"
+      },
+      "LabImportIndex": {
+        "additionalProperties": false,
+        "properties": {
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/LabImportIndexItem"
+            },
+            "title": "Documents",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "documents"
+        ],
+        "title": "LabImportIndex",
+        "type": "object"
+      },
+      "LabImportIndexItem": {
+        "additionalProperties": false,
+        "properties": {
+          "committed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Committed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "file_name",
+          "sha256",
+          "created_at",
+          "committed_at"
+        ],
+        "title": "LabImportIndexItem",
+        "type": "object"
+      },
+      "LabImportMarker": {
+        "additionalProperties": false,
+        "properties": {
+          "loinc": {
+            "title": "Loinc",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loinc",
+          "name",
+          "unit"
+        ],
+        "title": "LabImportMarker",
+        "type": "object"
+      },
+      "LabImportReceipt": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "inserted": {
+            "title": "Inserted",
+            "type": "integer"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "report_url": {
+            "title": "Report Url",
+            "type": "string"
+          },
+          "result_count": {
+            "title": "Result Count",
+            "type": "integer"
+          },
+          "unchanged": {
+            "title": "Unchanged",
+            "type": "integer"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "inserted",
+          "updated",
+          "unchanged",
+          "result_count",
+          "report_url"
+        ],
+        "title": "LabImportReceipt",
+        "type": "object"
+      },
+      "LabImportReport": {
+        "additionalProperties": false,
+        "properties": {
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "imported_at": {
+            "format": "date-time",
+            "title": "Imported At",
+            "type": "string"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Limitations",
+            "type": "array"
+          },
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "report_version": {
+            "title": "Report Version",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/LabReportResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "review_status": {
+            "title": "Review Status",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/LabEvidenceSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "file_name",
+          "sha256",
+          "imported_at",
+          "report_version",
+          "review_status",
+          "limitations",
+          "results",
+          "sources"
+        ],
+        "title": "LabImportReport",
+        "type": "object"
+      },
+      "LabImportReview": {
+        "additionalProperties": false,
+        "properties": {
+          "owner_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/LabReviewRow"
+            },
+            "maxItems": 250,
+            "minItems": 1,
+            "title": "Rows",
+            "type": "array"
+          },
+          "workspace_id": {
+            "default": "00000000-0000-0000-0000-000000000001",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rows"
+        ],
+        "title": "LabImportReview",
+        "type": "object"
+      },
+      "LabMarkerDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "assessment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LabAssessmentView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cross_match": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LabCrossMatchView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "display_unit": {
+            "title": "Display Unit",
+            "type": "string"
+          },
+          "first_specimen_at": {
+            "format": "date-time",
+            "title": "First Specimen At",
+            "type": "string"
+          },
+          "gap_count": {
+            "title": "Gap Count",
+            "type": "integer"
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/LabGapView"
+            },
+            "title": "Gaps",
+            "type": "array"
+          },
+          "lab_count": {
+            "title": "Lab Count",
+            "type": "integer"
+          },
+          "last_specimen_at": {
+            "format": "date-time",
+            "title": "Last Specimen At",
+            "type": "string"
+          },
+          "loinc": {
+            "title": "Loinc",
+            "type": "string"
+          },
+          "metric_id": {
+            "title": "Metric Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "related_metric_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Metric Id"
+          },
+          "result_count": {
+            "title": "Result Count",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/LabResultView"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loinc",
+          "metric_id",
+          "name",
+          "unit",
+          "display_unit",
+          "result_count",
+          "lab_count",
+          "first_specimen_at",
+          "last_specimen_at",
+          "results",
+          "assessment",
+          "gap_count",
+          "related_metric_id",
+          "gaps",
+          "cross_match"
+        ],
+        "title": "LabMarkerDetail",
+        "type": "object"
+      },
+      "LabMarkerView": {
+        "additionalProperties": false,
+        "properties": {
+          "assessment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LabAssessmentView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "display_unit": {
+            "title": "Display Unit",
+            "type": "string"
+          },
+          "first_specimen_at": {
+            "format": "date-time",
+            "title": "First Specimen At",
+            "type": "string"
+          },
+          "gap_count": {
+            "title": "Gap Count",
+            "type": "integer"
+          },
+          "lab_count": {
+            "title": "Lab Count",
+            "type": "integer"
+          },
+          "last_specimen_at": {
+            "format": "date-time",
+            "title": "Last Specimen At",
+            "type": "string"
+          },
+          "loinc": {
+            "title": "Loinc",
+            "type": "string"
+          },
+          "metric_id": {
+            "title": "Metric Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "related_metric_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Metric Id"
+          },
+          "result_count": {
+            "title": "Result Count",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/LabResultView"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loinc",
+          "metric_id",
+          "name",
+          "unit",
+          "display_unit",
+          "result_count",
+          "lab_count",
+          "first_specimen_at",
+          "last_specimen_at",
+          "results",
+          "assessment",
+          "gap_count",
+          "related_metric_id"
+        ],
+        "title": "LabMarkerView",
+        "type": "object"
+      },
+      "LabReportComparison": {
+        "additionalProperties": false,
+        "properties": {
+          "absolute_change": {
+            "title": "Absolute Change",
+            "type": "number"
+          },
+          "method": {
+            "default": "Most recent earlier result from the same lab, test and normalized unit.",
+            "title": "Method",
+            "type": "string"
+          },
+          "percent_change": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Percent Change"
+          },
+          "previous_specimen_at": {
+            "format": "date-time",
+            "title": "Previous Specimen At",
+            "type": "string"
+          },
+          "previous_value": {
+            "title": "Previous Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "previous_specimen_at",
+          "previous_value",
+          "absolute_change",
+          "percent_change"
+        ],
+        "title": "LabReportComparison",
+        "type": "object"
+      },
+      "LabReportResult": {
+        "additionalProperties": false,
+        "properties": {
+          "comparator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparator"
+          },
+          "comparison": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LabReportComparison"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lab": {
+            "title": "Lab",
+            "type": "string"
+          },
+          "loinc": {
+            "title": "Loinc",
+            "type": "string"
+          },
+          "marker": {
+            "title": "Marker",
+            "type": "string"
+          },
+          "measurement_quality": {
+            "title": "Measurement Quality",
+            "type": "string"
+          },
+          "medical_evidence": {
+            "title": "Medical Evidence",
+            "type": "string"
+          },
+          "observation": {
+            "title": "Observation",
+            "type": "string"
+          },
+          "personal_pattern": {
+            "title": "Personal Pattern",
+            "type": "string"
+          },
+          "quality_flags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Quality Flags",
+            "type": "array"
+          },
+          "reference_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference High"
+          },
+          "reference_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Low"
+          },
+          "source_excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Excerpt"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          },
+          "source_page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Page"
+          },
+          "specimen_at": {
+            "format": "date-time",
+            "title": "Specimen At",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "marker",
+          "loinc",
+          "specimen_at",
+          "lab",
+          "value",
+          "comparator",
+          "unit",
+          "reference_low",
+          "reference_high",
+          "observation",
+          "measurement_quality",
+          "personal_pattern",
+          "medical_evidence",
+          "source_page",
+          "source_excerpt",
+          "quality_flags",
+          "source_ids"
+        ],
+        "title": "LabReportResult",
+        "type": "object"
+      },
+      "LabResultView": {
+        "additionalProperties": false,
+        "properties": {
+          "band": {
+            "title": "Band",
+            "type": "string"
+          },
+          "band_fraction": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Band Fraction"
+          },
+          "comparator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparator"
+          },
+          "date_only": {
+            "title": "Date Only",
+            "type": "boolean"
+          },
+          "display_unit": {
+            "title": "Display Unit",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lab": {
+            "title": "Lab",
+            "type": "string"
+          },
+          "panel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Panel"
+          },
+          "quality_flags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Quality Flags",
+            "type": "array"
+          },
+          "reference_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference High"
+          },
+          "reference_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Low"
+          },
+          "source_plugin_id": {
+            "title": "Source Plugin Id",
+            "type": "string"
+          },
+          "specimen_at": {
+            "format": "date-time",
+            "title": "Specimen At",
+            "type": "string"
+          },
+          "stream_id": {
+            "format": "uuid",
+            "title": "Stream Id",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "specimen_at",
+          "date_only",
+          "value",
+          "comparator",
+          "unit",
+          "display_unit",
+          "reference_low",
+          "reference_high",
+          "lab",
+          "stream_id",
+          "source_plugin_id",
+          "panel",
+          "quality_flags",
+          "band",
+          "band_fraction"
+        ],
+        "title": "LabResultView",
+        "type": "object"
+      },
+      "LabReviewRow": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "lab": {
+            "default": "",
+            "maxLength": 160,
+            "title": "Lab",
+            "type": "string"
+          },
+          "loinc": {
+            "default": "",
+            "maxLength": 20,
+            "title": "Loinc",
+            "type": "string"
+          },
+          "marker_name": {
+            "default": "",
+            "maxLength": 160,
+            "title": "Marker Name",
+            "type": "string"
+          },
+          "panel": {
+            "default": "",
+            "maxLength": 160,
+            "title": "Panel",
+            "type": "string"
+          },
+          "reference_high": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Reference High",
+            "type": "string"
+          },
+          "reference_low": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Reference Low",
+            "type": "string"
+          },
+          "row_id": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Row Id",
+            "type": "string"
+          },
+          "specimen_datetime": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Specimen Datetime",
+            "type": "string"
+          },
+          "unit": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "row_id"
+        ],
+        "title": "LabReviewRow",
+        "type": "object"
+      },
+      "LabSourceView": {
+        "additionalProperties": false,
+        "properties": {
+          "first_specimen_at": {
+            "format": "date-time",
+            "title": "First Specimen At",
+            "type": "string"
+          },
+          "lab": {
+            "title": "Lab",
+            "type": "string"
+          },
+          "last_specimen_at": {
+            "format": "date-time",
+            "title": "Last Specimen At",
+            "type": "string"
+          },
+          "result_count": {
+            "title": "Result Count",
+            "type": "integer"
+          },
+          "source_plugin_id": {
+            "title": "Source Plugin Id",
+            "type": "string"
+          },
+          "stream_id": {
+            "format": "uuid",
+            "title": "Stream Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stream_id",
+          "lab",
+          "source_plugin_id",
+          "result_count",
+          "first_specimen_at",
+          "last_specimen_at"
+        ],
+        "title": "LabSourceView",
+        "type": "object"
+      },
+      "LabsOverview": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "labs": {
+            "items": {
+              "$ref": "#/components/schemas/LabSourceView"
+            },
+            "title": "Labs",
+            "type": "array"
+          },
+          "markers": {
+            "items": {
+              "$ref": "#/components/schemas/LabMarkerView"
+            },
+            "title": "Markers",
+            "type": "array"
+          },
+          "result_count": {
+            "title": "Result Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "markers",
+          "labs",
+          "count",
+          "result_count"
+        ],
+        "title": "LabsOverview",
         "type": "object"
       },
       "MomentListResponse": {
@@ -1034,6 +3634,121 @@
           "updated_at"
         ],
         "title": "MomentView",
+        "type": "object"
+      },
+      "NextQuestion": {
+        "additionalProperties": false,
+        "description": "The flywheel field: prose + an optional promotable experiment candidate.",
+        "properties": {
+          "experiment_candidate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExperimentCandidateRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prose": {
+            "title": "Prose",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prose"
+        ],
+        "title": "NextQuestion",
+        "type": "object"
+      },
+      "OwnerView": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "last_ingest_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Ingest At"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "is_default",
+          "active",
+          "scopes",
+          "created_at",
+          "last_ingest_at"
+        ],
+        "title": "OwnerView",
+        "type": "object"
+      },
+      "OwnersResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "owners": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerView"
+            },
+            "title": "Owners",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "owners"
+        ],
+        "title": "OwnersResponse",
         "type": "object"
       },
       "PhaseView": {
@@ -1575,6 +4290,36 @@
           "rejected"
         ],
         "title": "SessionFusionReconciliationResponse",
+        "type": "object"
+      },
+      "SourceRef": {
+        "additionalProperties": false,
+        "description": "Where the underlying data came from (provenance, at card granularity).",
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "source_plugin_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Plugin Id"
+          }
+        },
+        "title": "SourceRef",
         "type": "object"
       },
       "SourceView": {
@@ -2289,12 +5034,801 @@
         },
         "title": "WeeklySummaryResponse",
         "type": "object"
+      },
+      "WindowRef": {
+        "additionalProperties": false,
+        "description": "A time window a finding is measured over (current or baseline).",
+        "properties": {
+          "end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          }
+        },
+        "title": "WindowRef",
+        "type": "object"
+      },
+      "YearDeviceChangeView": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "first_seen",
+              "last_seen"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "stream_id": {
+            "format": "uuid",
+            "title": "Stream Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "kind",
+          "stream_id",
+          "label"
+        ],
+        "title": "YearDeviceChangeView",
+        "type": "object"
+      },
+      "YearFamilyView": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "enum": [
+              "ok",
+              "low",
+              "none",
+              "future"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "days_with_data": {
+            "title": "Days With Data",
+            "type": "integer"
+          },
+          "days_without_data": {
+            "title": "Days Without Data",
+            "type": "integer"
+          },
+          "first_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Day"
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/YearGapView"
+            },
+            "title": "Gaps",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "last_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Day"
+          },
+          "longest_inside_gap": {
+            "title": "Longest Inside Gap",
+            "type": "integer"
+          },
+          "mask": {
+            "title": "Mask",
+            "type": "string"
+          },
+          "metric_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Metric Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "metric_ids",
+          "days_with_data",
+          "days_without_data",
+          "first_day",
+          "last_day",
+          "mask",
+          "gaps",
+          "longest_inside_gap",
+          "confidence"
+        ],
+        "title": "YearFamilyView",
+        "type": "object"
+      },
+      "YearGapView": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "before_first",
+              "inside",
+              "after_last",
+              "no_data"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "days",
+          "kind"
+        ],
+        "title": "YearGapView",
+        "type": "object"
+      },
+      "YearHeadlineView": {
+        "additionalProperties": false,
+        "properties": {
+          "basis": {
+            "title": "Basis",
+            "type": "string"
+          },
+          "confidence": {
+            "enum": [
+              "ok",
+              "low",
+              "none",
+              "future"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days"
+          },
+          "high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "High"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low"
+          },
+          "of_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Of Days"
+          },
+          "source_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Label"
+          },
+          "stream_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stream Id"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "value",
+          "unit",
+          "stream_id",
+          "source_label",
+          "low",
+          "high",
+          "days",
+          "of_days",
+          "basis",
+          "confidence"
+        ],
+        "title": "YearHeadlineView",
+        "type": "object"
+      },
+      "YearInHealth": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "enum": [
+              "ok",
+              "low",
+              "none",
+              "future"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "day_boundary": {
+            "title": "Day Boundary",
+            "type": "string"
+          },
+          "day_family_counts": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Day Family Counts",
+            "type": "array"
+          },
+          "days_in_window": {
+            "title": "Days In Window",
+            "type": "integer"
+          },
+          "days_with_data": {
+            "title": "Days With Data",
+            "type": "integer"
+          },
+          "device_changes": {
+            "items": {
+              "$ref": "#/components/schemas/YearDeviceChangeView"
+            },
+            "title": "Device Changes",
+            "type": "array"
+          },
+          "families": {
+            "items": {
+              "$ref": "#/components/schemas/YearFamilyView"
+            },
+            "title": "Families",
+            "type": "array"
+          },
+          "first_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Day"
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/YearGapView"
+            },
+            "title": "Gaps",
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "headlines": {
+            "items": {
+              "$ref": "#/components/schemas/YearHeadlineView"
+            },
+            "title": "Headlines",
+            "type": "array"
+          },
+          "last_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Day"
+          },
+          "limitations": {
+            "items": {
+              "$ref": "#/components/schemas/YearLimitationView"
+            },
+            "title": "Limitations",
+            "type": "array"
+          },
+          "longest_inside_gap": {
+            "title": "Longest Inside Gap",
+            "type": "integer"
+          },
+          "mask": {
+            "title": "Mask",
+            "type": "string"
+          },
+          "months": {
+            "items": {
+              "$ref": "#/components/schemas/YearMonthView"
+            },
+            "title": "Months",
+            "type": "array"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/YearSourceView"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "time_zone": {
+            "title": "Time Zone",
+            "type": "string"
+          },
+          "window_end": {
+            "format": "date",
+            "title": "Window End",
+            "type": "string"
+          },
+          "window_start": {
+            "format": "date",
+            "title": "Window Start",
+            "type": "string"
+          },
+          "withheld": {
+            "items": {
+              "$ref": "#/components/schemas/YearWithheldView"
+            },
+            "title": "Withheld",
+            "type": "array"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year",
+          "owner_id",
+          "time_zone",
+          "day_boundary",
+          "generated_at",
+          "window_start",
+          "window_end",
+          "days_in_window",
+          "days_with_data",
+          "first_day",
+          "last_day",
+          "day_family_counts",
+          "mask",
+          "gaps",
+          "longest_inside_gap",
+          "months",
+          "families",
+          "sources",
+          "device_changes",
+          "headlines",
+          "withheld",
+          "limitations",
+          "confidence"
+        ],
+        "title": "YearInHealth",
+        "type": "object"
+      },
+      "YearLimitationView": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day"
+          }
+        },
+        "required": [
+          "code",
+          "day",
+          "count"
+        ],
+        "title": "YearLimitationView",
+        "type": "object"
+      },
+      "YearMonthView": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "enum": [
+              "ok",
+              "low",
+              "none",
+              "future"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage"
+          },
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "days_with_data": {
+            "title": "Days With Data",
+            "type": "integer"
+          },
+          "families": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Families",
+            "type": "array"
+          },
+          "first_seen_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "First Seen Ids",
+            "type": "array"
+          },
+          "last_seen_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Last Seen Ids",
+            "type": "array"
+          },
+          "month": {
+            "title": "Month",
+            "type": "integer"
+          },
+          "source_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "month",
+          "days",
+          "days_with_data",
+          "coverage",
+          "families",
+          "source_ids",
+          "first_seen_ids",
+          "last_seen_ids",
+          "confidence"
+        ],
+        "title": "YearMonthView",
+        "type": "object"
+      },
+      "YearSourceView": {
+        "additionalProperties": false,
+        "properties": {
+          "days_with_data": {
+            "title": "Days With Data",
+            "type": "integer"
+          },
+          "families": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Families",
+            "type": "array"
+          },
+          "first_day": {
+            "format": "date",
+            "title": "First Day",
+            "type": "string"
+          },
+          "first_seen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Seen At"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "last_day": {
+            "format": "date",
+            "title": "Last Day",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          },
+          "months": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Months",
+            "type": "array"
+          },
+          "new_this_year": {
+            "title": "New This Year",
+            "type": "boolean"
+          },
+          "source_plugin_id": {
+            "title": "Source Plugin Id",
+            "type": "string"
+          },
+          "stopped_this_year": {
+            "title": "Stopped This Year",
+            "type": "boolean"
+          },
+          "stream_id": {
+            "format": "uuid",
+            "title": "Stream Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stream_id",
+          "label",
+          "source_plugin_id",
+          "first_day",
+          "last_day",
+          "days_with_data",
+          "months",
+          "families",
+          "first_seen_at",
+          "last_seen_at",
+          "new_this_year",
+          "stopped_this_year"
+        ],
+        "title": "YearSourceView",
+        "type": "object"
+      },
+      "YearWithheldView": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "source_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Label"
+          },
+          "stream_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stream Id"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "stream_id",
+          "source_label",
+          "days",
+          "reason"
+        ],
+        "title": "YearWithheldView",
+        "type": "object"
       }
     }
   },
   "info": {
     "title": "HealthSave Observatory",
-    "version": "1.1.0"
+    "version": "1.5.3"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -3169,6 +6703,25 @@
             }
           },
           {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
+            }
+          },
+          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -3595,6 +7148,25 @@
             }
           },
           {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
+            }
+          },
+          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -3633,6 +7205,25 @@
         "operationId": "list_export_metrics_api_v2_export_metrics_get",
         "parameters": [
           {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
+            }
+          },
+          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -3670,6 +7261,522 @@
           }
         },
         "summary": "List Export Metrics"
+      }
+    },
+    "/api/v2/genetics": {
+      "get": {
+        "operationId": "index_api_v2_genetics_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneticIndex"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Index"
+      },
+      "post": {
+        "operationId": "upload_api_v2_genetics_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneticDocumentDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload"
+      }
+    },
+    "/api/v2/genetics/reference": {
+      "get": {
+        "operationId": "reference_status_api_v2_genetics_reference_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneticReferenceStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reference Status"
+      },
+      "post": {
+        "operationId": "update_reference_api_v2_genetics_reference_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeneticReferenceUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneticReferenceStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Reference"
+      }
+    },
+    "/api/v2/genetics/{document_id}": {
+      "delete": {
+        "operationId": "delete_document_api_v2_genetics__document_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeneticDeletion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneticDeletionReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Document"
+      },
+      "get": {
+        "operationId": "detail_api_v2_genetics__document_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneticDocumentDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Detail"
+      }
+    },
+    "/api/v2/genetics/{document_id}/original": {
+      "delete": {
+        "operationId": "discard_original_api_v2_genetics__document_id__original_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeneticDeletion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneticDocument"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Discard Original"
+      },
+      "get": {
+        "operationId": "original_api_v2_genetics__document_id__original_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Original"
+      }
+    },
+    "/api/v2/genetics/{document_id}/reanalyze": {
+      "post": {
+        "operationId": "reanalyze_api_v2_genetics__document_id__reanalyze_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeneticReanalysis"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneticReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reanalyze"
+      }
+    },
+    "/api/v2/genetics/{document_id}/reports/{report_id}": {
+      "get": {
+        "operationId": "report_version_api_v2_genetics__document_id__reports__report_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Report Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneticReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Report Version"
       }
     },
     "/api/v2/insights/correlations": {
@@ -4227,6 +8334,547 @@
         "summary": "Test Connection"
       }
     },
+    "/api/v2/lab-imports": {
+      "get": {
+        "operationId": "index_api_v2_lab_imports_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabImportIndex"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Index"
+      },
+      "post": {
+        "operationId": "upload_api_v2_lab_imports_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabImportDraft"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload"
+      }
+    },
+    "/api/v2/lab-imports/catalog": {
+      "get": {
+        "operationId": "catalog_api_v2_lab_imports_catalog_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabImportCatalog"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Catalog"
+      }
+    },
+    "/api/v2/lab-imports/{document_id}": {
+      "delete": {
+        "operationId": "delete_document_api_v2_lab_imports__document_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabImportDeletion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabImportDeletionReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Document"
+      },
+      "get": {
+        "operationId": "draft_api_v2_lab_imports__document_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabImportDraft"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Draft"
+      }
+    },
+    "/api/v2/lab-imports/{document_id}/commit": {
+      "post": {
+        "operationId": "commit_api_v2_lab_imports__document_id__commit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabImportReview"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabImportReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Commit"
+      }
+    },
+    "/api/v2/lab-imports/{document_id}/deletion": {
+      "get": {
+        "operationId": "deletion_preview_api_v2_lab_imports__document_id__deletion_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabImportDeletionPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deletion Preview"
+      }
+    },
+    "/api/v2/lab-imports/{document_id}/original": {
+      "get": {
+        "operationId": "original_api_v2_lab_imports__document_id__original_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Original"
+      }
+    },
+    "/api/v2/lab-imports/{document_id}/report": {
+      "get": {
+        "operationId": "report_api_v2_lab_imports__document_id__report_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabImportReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Report"
+      }
+    },
+    "/api/v2/labs": {
+      "get": {
+        "description": "Every marker with its results, newest marker first, plus the labs.",
+        "operationId": "list_labs_api_v2_labs_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabsOverview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Labs"
+      }
+    },
+    "/api/v2/labs/{loinc}": {
+      "get": {
+        "description": "One marker's results, oldest first, each with its lab and the lab's range.",
+        "operationId": "get_lab_marker_api_v2_labs__loinc__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loinc",
+            "required": true,
+            "schema": {
+              "title": "Loinc",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabMarkerDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Lab Marker"
+      }
+    },
     "/api/v2/meta": {
       "get": {
         "description": "Return the v2 version axes. Unauthenticated, read-only, no health data.",
@@ -4309,6 +8957,25 @@
                 }
               ],
               "title": "Stream Id"
+            }
+          },
+          {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
             }
           },
           {
@@ -4555,6 +9222,47 @@
         "summary": "Update Moment"
       }
     },
+    "/api/v2/owners": {
+      "get": {
+        "description": "The default owner first (``label`` null), then one entry per participant.\n\nA participant whose keys are all revoked stays listed with\n``active: false``: revoking a key stops new data, it does not delete the\nperson's history.",
+        "operationId": "owners_api_v2_owners_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Owners"
+      }
+    },
     "/api/v2/privacy": {
       "get": {
         "description": "The host's egress posture: provider, local-vs-cloud, and what may leave.\n\n``raw_observations_leave_host`` is always ``false`` \u2014 the privacy promise is\nan invariant, enforced unconditionally by the policy regardless of opt-in.",
@@ -4602,6 +9310,25 @@
         "description": "Per-metric coverage + analyzability, plus source attribution and freshness.",
         "operationId": "readiness_api_v2_readiness_get",
         "parameters": [
+          {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
+            }
+          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -4732,6 +9459,25 @@
                 }
               ],
               "title": "Stream Id"
+            }
+          },
+          {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
             }
           },
           {
@@ -4913,6 +9659,25 @@
             }
           },
           {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
+            }
+          },
+          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -5001,6 +9766,25 @@
             }
           },
           {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
+            }
+          },
+          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -5048,6 +9832,25 @@
               "format": "uuid",
               "title": "Stream Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
             }
           },
           {
@@ -5322,6 +10125,79 @@
           }
         },
         "summary": "Put Sync Run Summary"
+      }
+    },
+    "/api/v2/year/{year}": {
+      "get": {
+        "description": "One year of the record: months, sources, device changes, every gap.",
+        "operationId": "year_in_health_api_v2_year__year__get",
+        "parameters": [
+          {
+            "description": "Calendar year, like 2026",
+            "in": "path",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "description": "Calendar year, like 2026",
+              "maximum": 2200,
+              "minimum": 1970,
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own.",
+              "title": "Owner"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YearInHealth"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Year In Health"
       }
     },
     "/health": {

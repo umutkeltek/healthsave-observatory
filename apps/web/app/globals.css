@@ -39,7 +39,7 @@
   --accent-weak: rgba(0, 122, 255, 0.1);
   --accent-line: rgba(0, 122, 255, 0.3);
   --brand-weak: rgba(0, 122, 255, 0.1);
-  --on-accent: #ffffff; /* text on filled accent — always white */
+  --on-accent: #1d1d1f; /* text on a filled accent (primary .btn) */
 
   /* Signal = physiology / live / local proof — kept on-accent (one blue, no second language). */
   --signal: #007aff;
@@ -76,6 +76,9 @@
 
   --hover: rgba(0, 0, 0, 0.04);
   --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.04), 0 12px 28px rgba(60, 60, 67, 0.08);
+  /* Day ruler lens: the open handle reads as glass lifted off the card. */
+  --lens: #ffffff;
+  --lens-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 14px 34px -8px rgba(0, 0, 0, 0.26), 0 3px 8px rgba(0, 0, 0, 0.08);
 
   /* ── Structural (theme-independent) ── */
   --radius: 14px;
@@ -172,6 +175,8 @@ a {
   position: sticky;
   top: 0;
   height: 100vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   width: 224px;
   flex: 0 0 224px;
   display: flex;
@@ -313,6 +318,30 @@ a {
   margin-top: 4px;
 }
 
+/* Participant switcher (coach / clinic Observatory, migration 029). Shown only
+   when the server holds more than one person; reuses .filter-label and
+   .filter-select for the control itself. */
+.participant-switcher {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 8px 16px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.participant-select {
+  width: 100%;
+  max-width: none;
+}
+
+.participant-note {
+  margin: 0;
+  font-size: var(--fs-2xs);
+  line-height: 1.4;
+  color: var(--muted);
+}
+
 .app-main {
   flex: 1 1 auto;
   min-width: 0;
@@ -429,10 +458,25 @@ a {
     width: 200px;
     flex-basis: 200px;
   }
+  .brand {
+    flex-wrap: wrap;
+  }
   .topbar,
   .content {
     padding-left: 24px;
     padding-right: 24px;
+  }
+  .topbar-status .pill {
+    display: none;
+  }
+  .topbar-status .live-mini {
+    display: inline-flex;
+  }
+  /* Only the dot is left: drop the capsule around it, as phones do. */
+  .topbar-status .topbar-health {
+    padding: 0;
+    border: 0;
+    background: transparent;
   }
 }
 
@@ -459,6 +503,7 @@ a {
     background: rgba(0, 0, 0, 0.5);
     opacity: 0;
     pointer-events: none;
+    touch-action: none;
     transition: opacity var(--dur-1) var(--ease-io);
   }
   .app.nav-open .nav-scrim {
@@ -467,6 +512,7 @@ a {
   }
   .menu-btn {
     display: inline-flex;
+    width: 44px;
   }
   .topbar {
     padding: 16px 18px 13px;
@@ -579,9 +625,12 @@ a {
 
 /* ── Sleep ─────────────────────────────────────────────────────────── */
 
+/* A night is ~100 equal segments. They must all fit the card: with a 2px gap
+   and a 2px floor the row needed 390px, so a phone-width card cut the last
+   fifth to third of the night off behind overflow: hidden. */
 .hypnogram {
   display: flex;
-  gap: 2px;
+  gap: 1px;
   height: 38px;
   margin-top: 6px;
   border-radius: var(--radius-sm);
@@ -589,8 +638,8 @@ a {
 }
 
 .seg {
-  flex: 1 1 auto;
-  min-width: 2px;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .legend {
@@ -661,7 +710,7 @@ a {
   font-family: var(--mono);
   font-size: 11px;
   color: var(--muted);
-  background: var(--bg);
+  background: var(--raise);
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 5px 11px;
@@ -982,7 +1031,7 @@ a {
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--on-accent);
   background: var(--accent);
   border: 1px solid var(--accent);
   border-radius: var(--radius-sm);
@@ -1063,6 +1112,15 @@ a {
 .theme-toggle:hover {
   color: var(--ink);
   border-color: var(--faint);
+}
+
+/* Moon offers dark in light mode, sun offers light in dark mode. */
+.theme-toggle .theme-icon-sun,
+[data-theme="dark"] .theme-toggle .theme-icon-moon {
+  display: none;
+}
+[data-theme="dark"] .theme-toggle .theme-icon-sun {
+  display: inline;
 }
 
 /* Accessibility: a visible focus ring on every interactive element. */
@@ -1168,7 +1226,7 @@ html {
 }
 
 .content > * {
-  animation: rise var(--dur-3) var(--ease-out) both;
+  animation: rise var(--dur-3) var(--ease-out) backwards;
 }
 
 /* Staggered entrance: each top-level section lands a beat after the last. */
@@ -1246,11 +1304,10 @@ html {
   }
 }
 
-/* Hero card - raised, with a faint signature glow */
+/* Hero card - raised; solid surface, colour lives in the data. */
 .hero {
   position: relative;
-  background:
-    radial-gradient(130% 150% at 0% 0%, rgba(124, 131, 255, 0.07), transparent 56%), var(--surface);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
@@ -1428,6 +1485,13 @@ html {
   background: rgba(255, 159, 10, 0.12);
   border-color: rgba(255, 159, 10, 0.32);
 }
+
+/* Posture could not be read: neutral, never the safe-looking local seal. */
+.vault-unknown .vault-seal {
+  color: var(--muted);
+  background: var(--surface-2);
+  border-color: var(--line);
+}
 .chain {
   list-style: none;
   margin: 18px 0 0;
@@ -1568,10 +1632,22 @@ html {
 .prov-head h2 {
   margin: 0;
 }
+/* The count chip keeps "8 connections" on one line; the subtitle beside it wraps instead. */
+.prov-head .chip {
+  white-space: nowrap;
+}
 
 /* Streams table - hairline rows, mono numerals, scrolls on narrow screens. */
 .prov-scroll {
   overflow-x: auto;
+  /* Scroll cue: a soft edge shadow shows on whichever side still hides
+     columns. The surface-coloured covers travel with the content (local) and
+     hide each shadow once that edge is reached. */
+  background:
+    linear-gradient(to right, var(--surface) 40%, transparent) left / 32px 100% no-repeat local,
+    linear-gradient(to left, var(--surface) 40%, transparent) right / 32px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, var(--line-strong), transparent) left / 12px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--line-strong), transparent) right / 12px 100% no-repeat scroll;
 }
 table.prov {
   width: 100%;
@@ -1767,8 +1843,8 @@ table.prov {
 }
 .cov-state.prime {
   color: var(--up);
-  background: rgba(56, 217, 150, 0.12);
-  border: 1px solid rgba(56, 217, 150, 0.3);
+  background: color-mix(in srgb, var(--up) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--up) 30%, transparent);
 }
 .cov-state.steady {
   color: var(--signal);
@@ -1777,13 +1853,13 @@ table.prov {
 }
 .cov-state.caution {
   color: var(--warn);
-  background: rgba(232, 180, 95, 0.12);
-  border: 1px solid rgba(232, 180, 95, 0.32);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 32%, transparent);
 }
 .cov-state.suppressed {
   color: var(--down);
-  background: rgba(255, 107, 138, 0.1);
-  border: 1px solid rgba(255, 107, 138, 0.3);
+  background: color-mix(in srgb, var(--down) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--down) 30%, transparent);
 }
 .cov-verdict {
   margin: 12px 0 0;
@@ -1916,6 +1992,15 @@ table.prov {
   border: 1px solid var(--line);
   border-radius: var(--radius);
 }
+/* URL-driven control bars (Data, Compare, Relationships, Explore) while the
+   server re-render behind a pick is in flight. filter, not opacity: these bars
+   can be `.content > *`, and the `rise` entrance animates opacity while it runs. */
+.filter-bar[data-pending],
+.explore-controls[data-pending],
+.panel-toolbar[data-pending] {
+  filter: opacity(0.6);
+  pointer-events: none;
+}
 .filter-field {
   display: flex;
   flex-direction: column;
@@ -1988,7 +2073,7 @@ table.prov {
 }
 .explore-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
   gap: 16px;
 }
 .explore-panel {
@@ -2037,6 +2122,7 @@ table.prov {
 }
 .panel-tools {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
@@ -2068,6 +2154,10 @@ table.prov {
   margin-top: 4px;
   padding-top: 14px;
   border-top: 1px solid var(--line-soft);
+}
+.saved-views[data-pending] {
+  opacity: 0.6;
+  pointer-events: none;
 }
 .saved-views-label {
   font-size: var(--fs-2xs);
@@ -2160,6 +2250,13 @@ input.filter-select {
     min-width: 0;
     width: 100%;
     max-width: none;
+  }
+  .panel-tools .filter-select {
+    width: auto;
+    flex: 1 1 0;
+  }
+  .explore-control {
+    flex: 1 1 40%;
   }
   .filter-clear {
     margin-left: 0;
@@ -2284,6 +2381,10 @@ input.filter-select {
   color: var(--muted);
 }
 @media (max-width: 620px) {
+  /* Room for the unit label, which sits above the shrunken plot's top edge. */
+  .multi-chart {
+    padding-top: 8px;
+  }
   .cmp-cols {
     grid-template-columns: 1fr;
     gap: 10px;
@@ -2308,6 +2409,13 @@ input.filter-select {
 .heatmap-scroll {
   overflow-x: auto;
   padding-bottom: 4px;
+  /* Same edge-shadow scroll cue as .prov-scroll: the later hours sit
+     off-screen on a phone and the cut otherwise reads as the end of the day. */
+  background:
+    linear-gradient(to right, var(--surface) 40%, transparent) left / 32px 100% no-repeat local,
+    linear-gradient(to left, var(--surface) 40%, transparent) right / 32px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, var(--line-strong), transparent) left / 12px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--line-strong), transparent) right / 12px 100% no-repeat scroll;
 }
 .heat-row {
   display: flex;
@@ -2538,6 +2646,12 @@ input.filter-select {
   background: var(--accent-weak);
   box-shadow: inset 0 0 0 1px var(--accent-line);
 }
+/* In dark the blue tint over the card lifts it enough to pull the muted
+   blurb to 4.05:1; the selected card keeps its well and takes the tint
+   there instead (4.6:1). */
+[data-theme="dark"] .mode-card.sel {
+  background: color-mix(in srgb, var(--accent) 16%, var(--raise));
+}
 .mode-card-title {
   font-size: 15px;
   font-weight: 650;
@@ -2584,6 +2698,16 @@ input.filter-select {
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--faint);
+}
+/* A label wrapping its control (Analytical day, Add a moment). */
+label.field-label {
+  display: grid;
+  gap: 8px;
+}
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
 }
 .field-input {
   font-family: var(--sans);
@@ -2655,24 +2779,26 @@ input.filter-select {
 }
 .test-result.ok {
   color: var(--up);
-  background: rgba(56, 217, 150, 0.1);
+  background: color-mix(in srgb, var(--up) 10%, transparent);
 }
 .test-result.bad {
   color: var(--down);
-  background: rgba(255, 107, 138, 0.1);
+  background: color-mix(in srgb, var(--down) 10%, transparent);
 }
 
 /* fallbacks */
 .fb-row {
   display: grid;
-  grid-template-columns: 120px 1fr 150px 28px;
+  grid-template-columns: 120px 1fr 150px auto;
   gap: 8px;
   margin-bottom: 8px;
   align-items: center;
 }
+/* Narrow: provider, then the full-width model, then key + remove, in DOM order
+   (three equal-ish tracks left provider and key half-width with holes). */
 @media (max-width: 720px) {
   .fb-row {
-    grid-template-columns: 1fr 1fr 28px;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
   .fb-row .fb-model {
     grid-column: 1 / -1;
@@ -2748,9 +2874,9 @@ input.filter-select {
 }
 
 /* Compact traces draw themselves in left-to-right (paths set pathLength={1}).
-   Baseline ribbons are excluded: their non-uniform SVG scaling can make a
-   normalized dash shorter than the visible jagged path and hide its tail. */
-.spark path,
+   Baseline ribbons and the signal sparkline (.spark) are excluded: their
+   non-uniform SVG scaling can make a normalized dash shorter than the visible
+   jagged path and hide its tail (the Data metric view and wide Today cards). */
 .multi-svg path {
   stroke-dasharray: 1;
   stroke-dashoffset: 0;
@@ -2957,6 +3083,28 @@ input.filter-select {
   opacity: 0.5;
 }
 
+/* A refused or failed pin explains itself under the star without taking a
+   grid column from the row it sits in (Library, Settings, signal detail). */
+.pin-control {
+  position: relative;
+  display: inline-flex;
+}
+
+.pin-error {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 5;
+  padding: 6px 10px;
+  color: var(--down);
+  font-size: 12px;
+  white-space: nowrap;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card);
+}
+
 /* Detail page */
 
 .lib-detail-head {
@@ -2982,6 +3130,7 @@ input.filter-select {
 
 .lib-ranges {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--s1);
 }
 
@@ -3227,7 +3376,7 @@ input.filter-select {
 .hover-overlay {
   position: absolute;
   inset: 0;
-  touch-action: none;
+  touch-action: pan-y;
 }
 
 .hover-crosshair {
@@ -3275,6 +3424,373 @@ input.filter-select {
 .hover-tip-label,
 .hover-tip-source {
   color: var(--faint);
+}
+
+/* ── Day ruler: reads a per-day chart one day at a time (chart/DayRuler.tsx).
+   The handle rests as a dark pill with the day's short value; while dragged it
+   opens into a lens with the exact value over magnified ticks. Motion is
+   transform and opacity only; the reduced-motion block keeps opacity. */
+.day-ruler-wrap {
+  position: relative;
+}
+.day-ruler {
+  --f: 0.5;
+  position: relative;
+  z-index: 2;
+  height: 28px;
+  touch-action: pan-y;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
+}
+.day-ruler::before {
+  content: "";
+  position: absolute;
+  inset: -14px -10px;
+}
+.day-ruler.is-dragging {
+  cursor: grabbing;
+}
+.day-ruler-ticks {
+  position: absolute;
+  inset: 0;
+}
+.day-ruler-tick {
+  --h: 13px;
+  position: absolute;
+  top: 50%;
+  width: 1.5px;
+  height: var(--h);
+  margin-left: -0.75px;
+  border-radius: 1px;
+  background: var(--line-strong);
+  transform: translateY(-50%) scaleY(var(--s, 1));
+  transition: background-color 180ms ease, transform 120ms ease;
+}
+.day-ruler-tick.is-maj {
+  --h: 20px;
+}
+.day-ruler-tick.is-dot {
+  --h: 3px;
+  width: 3px;
+  margin-left: -1.5px;
+  border-radius: 50%;
+}
+.day-ruler-tick.is-on {
+  background: var(--ink);
+}
+.day-ruler-at {
+  position: absolute;
+  top: 0;
+  left: calc(var(--f) * 100%);
+  height: 28px;
+}
+.day-ruler-pill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  min-width: 40px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--surface);
+  box-shadow: 0 2px 5px var(--line-strong);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transform: translateX(calc(-50% + var(--nudge, 0px)));
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+/* The ring goes on the handle, as on a native slider thumb, not round the strip. */
+.day-ruler:focus-visible {
+  outline: none;
+}
+.day-ruler:focus-visible .day-ruler-pill {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.day-ruler.is-dragging .day-ruler-pill {
+  opacity: 0;
+  transform: translateX(calc(-50% + var(--nudge, 0px))) scale(1.25);
+}
+.day-ruler-lens {
+  position: absolute;
+  top: -36px;
+  left: 0;
+  height: 72px;
+  pointer-events: none;
+}
+.day-ruler-lens-face {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 20px;
+  background: var(--lens);
+  color: var(--ink);
+  box-shadow: var(--lens-shadow);
+  opacity: 0;
+  transform: scale(0.42, 0.4);
+  transform-origin: var(--origin, 50%) 50%;
+  transition: opacity 180ms ease, transform 280ms var(--ease-out);
+}
+.day-ruler.is-dragging .day-ruler-lens-face {
+  opacity: 1;
+  transform: none;
+}
+.day-ruler-lens-value {
+  position: absolute;
+  top: 10px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+}
+.day-ruler-lens-value b {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.day-ruler-lens-value span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.day-ruler-lens-ticks {
+  position: absolute;
+  top: 36px;
+  left: 0;
+  right: 0;
+  height: 28px;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, black 18%, black 82%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, black 18%, black 82%, transparent 100%);
+}
+.day-ruler-lens-ticks.is-fringe {
+  -webkit-mask-image: linear-gradient(90deg, black 0, black 9%, transparent 22%, transparent 78%, black 91%, black 100%);
+  mask-image: linear-gradient(90deg, black 0, black 9%, transparent 22%, transparent 78%, black 91%, black 100%);
+  filter: drop-shadow(2.5px 0 0 color-mix(in srgb, var(--down) 60%, transparent))
+    drop-shadow(-2.5px 0 0 color-mix(in srgb, var(--accent) 60%, transparent));
+  opacity: 0.8;
+}
+.day-ruler-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+}
+.day-ruler-strip .day-ruler-tick {
+  --h: 17px;
+  width: 2px;
+  margin-left: -1px;
+}
+.day-ruler-strip .day-ruler-tick.is-maj {
+  --h: 26px;
+}
+.day-ruler-strip .day-ruler-tick.is-dot {
+  --h: 4px;
+  width: 4px;
+  margin-left: -2px;
+}
+.day-ruler-axis {
+  position: relative;
+  height: 13px;
+  margin-top: 8px;
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: var(--fs-2xs);
+  line-height: 1;
+}
+.day-ruler-axis span {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+.day-ruler-axis span.is-start {
+  transform: translateX(-18%);
+}
+.day-ruler-axis span.is-end {
+  transform: translateX(-82%);
+}
+.scrub-answer {
+  margin: 14px 0 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-wrap: balance;
+}
+.scrub-answer b {
+  color: var(--ink);
+  font-weight: 600;
+}
+/* The shown answer and, unseen, every other day's answer share one cell, so
+   the line is as tall as its longest answer and nothing below it moves. */
+.scrub-answer-slot {
+  display: grid;
+}
+.scrub-answer-slot > .scrub-answer {
+  grid-area: 1 / 1;
+}
+.scrub-answer-size {
+  visibility: hidden;
+}
+.scrub-caption {
+  margin: 6px 0 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+/* While a day is held, everything but the chart, the ruler and the answer
+   steps back. */
+.scrub-soft {
+  transition: filter 180ms ease, opacity 180ms ease;
+}
+.day-scrub[data-scrubbing] .scrub-soft {
+  filter: blur(5px);
+  opacity: 0.5;
+}
+
+/* Selected day on a per-day ribbon: stem, dot, and a soft glow on the point. */
+.scrub-cursor {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+/* The chart is part of the ruler: pressing or dragging it picks the nearest
+   day. Vertical swipes still scroll the page on touch. */
+.scrub-surface {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  touch-action: pan-y;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.day-scrub[data-scrubbing] .scrub-surface {
+  cursor: grabbing;
+}
+.scrub-glow {
+  position: absolute;
+  inset: -64px calc(-1 * var(--scrub-inset, 0px)) 0;
+  overflow: hidden; /* a mask hides the lamp's overhang but would still scroll */
+  -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent);
+  mask-image: linear-gradient(to bottom, black 70%, transparent);
+}
+.scrub-glow-box {
+  position: absolute;
+  inset: 64px var(--scrub-inset, 0px) 0;
+}
+.scrub-lamp {
+  position: absolute;
+  width: 156px;
+  height: 156px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--accent-line), transparent);
+  opacity: 0.45;
+  transform: translate(-50%, -50%);
+  transition: opacity 180ms ease;
+}
+.day-scrub[data-scrubbing] .scrub-lamp {
+  opacity: 1;
+}
+.scrub-stem {
+  position: absolute;
+  bottom: 0;
+  width: 1px;
+  margin-left: -0.5px;
+  background: var(--ink);
+}
+.scrub-cursor.is-gap .scrub-stem {
+  background: none;
+  border-left: 1px dashed var(--muted);
+}
+.scrub-dot {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--signal);
+  border-radius: 50%;
+  background: var(--surface);
+  transform: translate(-50%, -50%);
+}
+
+/* BaselineRibbon's per-day variant: no value gutter; the band is labelled. */
+.ribbon-daily {
+  position: relative;
+  margin-top: 0;
+}
+.ribbon-daily .ribbon-plot {
+  margin-inline: var(--scrub-inset, 0px);
+  overflow: visible;
+}
+.ribbon-week {
+  stroke: var(--line);
+  stroke-width: 1;
+  stroke-dasharray: 1 5;
+}
+/* Above the selected day's stem: the halo masks the stem where it passes. */
+.ribbon-edge-label {
+  position: absolute;
+  z-index: 1;
+  left: 4px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  -webkit-text-stroke: 3px var(--surface);
+  paint-order: stroke fill;
+  pointer-events: none;
+}
+/* Gap, inset and type size are mirrored in chart/bandLabels.ts, which picks
+   a spot the line does not cross. */
+.ribbon-edge-label.is-above {
+  transform: translateY(calc(-100% - 5px));
+}
+.ribbon-edge-label.is-below {
+  transform: translateY(5px);
+}
+.ribbon-edge-label.is-right {
+  left: auto;
+  right: 4px;
+}
+.ribbon-lone {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--signal);
+  transform: translate(-50%, -50%);
+}
+@media (prefers-reduced-motion: reduce) {
+  /* No blur, no morph, no growing ticks: the lens simply appears. */
+  .day-scrub[data-scrubbing] .scrub-soft {
+    filter: none;
+    opacity: 0.35;
+  }
+  .day-ruler-lens-face {
+    transform: none;
+  }
+  .day-ruler.is-dragging .day-ruler-pill {
+    transform: translateX(calc(-50% + var(--nudge, 0px)));
+  }
+  .day-ruler-tick {
+    transform: translateY(-50%);
+  }
 }
 
 .contrib-stack {
@@ -3403,6 +3919,10 @@ input.filter-select {
   background: var(--raise);
 }
 
+.intg-badge.intg-stale {
+  color: var(--warn);
+}
+
 .intg-kind {
   font-size: var(--fs-2xs);
   color: var(--faint);
@@ -3462,43 +3982,19 @@ input.filter-select {
    category colour identity */
 
 .spark-dot {
-  fill: var(--signal);
+  stroke: var(--signal);
+  stroke-width: 7px;
 }
 
 .spark-dot.out {
-  fill: var(--anomaly);
+  stroke: var(--anomaly);
 }
 
-/* The hero carries the day's state as a quiet ambient glow, not a banner. */
+/* The hero states the day's recovery in its chip and dial; the card itself
+   carries no state-tinted glow (cards are solid surface). */
 .hero {
   position: relative;
   overflow: hidden;
-}
-
-.hero::before {
-  content: "";
-  position: absolute;
-  inset: -40% -20% auto;
-  height: 130%;
-  pointer-events: none;
-  opacity: 0.5;
-  transition: background var(--dur-3) ease;
-}
-
-.hero-state-prime::before {
-  background: radial-gradient(640px 280px at 18% 0%, var(--accent-weak), transparent 70%);
-}
-
-.hero-state-steady::before {
-  background: radial-gradient(640px 280px at 18% 0%, rgba(124, 131, 255, 0.12), transparent 70%);
-}
-
-.hero-state-caution::before {
-  background: radial-gradient(640px 280px at 18% 0%, rgba(232, 180, 95, 0.12), transparent 70%);
-}
-
-.hero-state-suppressed::before {
-  background: radial-gradient(640px 280px at 18% 0%, rgba(255, 107, 138, 0.11), transparent 70%);
 }
 
 .cat-dot {
@@ -3516,6 +4012,7 @@ input.filter-select {
 
 .rel-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--s3);
@@ -3525,6 +4022,9 @@ input.filter-select {
   font-size: var(--fs-sm);
   color: var(--muted);
   max-width: 64ch;
+}
+.rel-table td:first-child {
+  min-width: 9em;
 }
 .rel-pair {
   color: var(--ink);
@@ -3627,6 +4127,17 @@ input.filter-select {
   font-size: 11px;
   fill: var(--faint);
 }
+/* The 520-wide scatter scales to about half size on a phone, taking its 11px
+   SVG tick labels down to 5-6px; draw them larger in viewBox units there and
+   let the widest x label spill into the card padding instead of clipping. */
+@media (max-width: 460px) {
+  .scatter-svg {
+    overflow: visible;
+  }
+  .scatter-tick {
+    font-size: 17px;
+  }
+}
 
 /* MultiSeriesChart HTML axis overlay. */
 .multi-plot {
@@ -3645,12 +4156,17 @@ input.filter-select {
   color: var(--faint);
   white-space: nowrap;
 }
-.chart-y-label,
-.chart-axis-unit {
+/* The unit sits a fixed gap above the top tick and the dates a fixed gap below
+   the plot (both anchored inline to the plot edge), so a panel scaled down to
+   phone width never stacks them on the first/last value tick. */
+.chart-y-label {
   transform: translate(-100%, -50%);
 }
+.chart-axis-unit {
+  transform: translate(-100%, calc(-100% - 7px));
+}
 .chart-x-label {
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, 8px);
 }
 /* End-labels live fully in the right margin gutter: `left` (set inline to the
    plot's right edge) plus `right` fixes their box to the gutter, so a long name
@@ -4122,6 +4638,14 @@ input.filter-select {
   text-decoration: underline;
 }
 
+/* One-line medical note under the brief: present on every brief, quiet in the layout. */
+.brief-disclaimer {
+  justify-self: start;
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+
 /* Experiment proposed from a finding (read-only URL prefill). */
 .exp-prefill {
   margin-bottom: 12px;
@@ -4244,6 +4768,11 @@ input.filter-select {
   font-family: var(--mono);
   font-size: var(--fs-2xs);
   color: var(--faint);
+}
+/* On the dark active row (--hover over the sheet) the grey hint reads 3.8:1;
+   a little ink lifts it to 4.7:1 and keeps it secondary to the row label. */
+[data-theme="dark"] .palette-item.active .palette-hint {
+  color: color-mix(in srgb, var(--faint) 80%, var(--ink));
 }
 .palette-empty {
   margin: 0;
@@ -4426,49 +4955,62 @@ color: var(--accent);
    preserving the current component contracts and route structure.
 ───────────────────────────────────────────────────────────────────── */
 
-[data-theme="dark"] {
-  --bg: #000000;
-  --bg-radial: #1c1c1e;
-  --surface: #2c2c2e;
-  --surface-2: rgba(28, 28, 30, 0.72);
-  --surface-3: #3a3a3c;
-  --raise: #1c1c1e;
-  --line: rgba(84, 84, 88, 0.65);
-  --line-soft: rgba(84, 84, 88, 0.42);
-  --line-strong: rgba(142, 142, 147, 0.42);
-  --line-glow: rgba(10, 132, 255, 0.36);
-  --ink: #f5f5f7;
-  --muted: #98989d;
-  --faint: #8e8e93;
-  --ghost: #636366;
-  --accent: #0a84ff;
-  --brand: #0a84ff;
-  --accent-weak: rgba(10, 132, 255, 0.16);
-  --accent-line: rgba(10, 132, 255, 0.34);
-  --brand-weak: rgba(10, 132, 255, 0.16);
-  --signal: #0a84ff;
-  --signal-weak: rgba(10, 132, 255, 0.16);
-  --signal-line: rgba(10, 132, 255, 0.3);
-  --neutral: #98989d;
-  --up: #30d158;
-  --down: #ff453a;
-  --warn: #ff9f0a;
-  --anomaly: #ff453a;
-  --experiment: #bf5af2;
-  --baseline-fill: rgba(10, 132, 255, 0.14);
-  --baseline-line: rgba(10, 132, 255, 0.32);
-  --sleep-awake: #ffb340;
-  --sleep-rem: #70d7ff;
-  --sleep-core: #0a84ff;
-  --sleep-deep: #7d7aff;
-  --series-1: #0a84ff;
-  --series-2: #ff9f0a;
-  --series-3: #bf5af2;
-  --series-4: #30d158;
-  --series-5: #ff375f;
-  --series-6: #64d2ff;
-  --hover: rgba(255, 255, 255, 0.08);
-  --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.32), 0 16px 36px rgba(0, 0, 0, 0.34);
+/* Dark is a screen theme only: printing (lab report, genetics) always uses
+   the light values, so text never comes out pale grey on white paper. */
+@media screen {
+  [data-theme="dark"] {
+    /* Native controls (date/select popups, checkboxes, scrollbars) and UA
+       defaults such as button text follow the theme, not the light default. */
+    color-scheme: dark;
+    --bg: #000000;
+    --bg-radial: #1c1c1e;
+    --surface: #2c2c2e;
+    --surface-2: rgba(28, 28, 30, 0.72);
+    --surface-3: #3a3a3c;
+    --raise: #1c1c1e;
+    --line: rgba(84, 84, 88, 0.65);
+    --line-soft: rgba(84, 84, 88, 0.42);
+    --line-strong: rgba(142, 142, 147, 0.42);
+    --line-glow: rgba(10, 132, 255, 0.36);
+    --ink: #f5f5f7;
+    --muted: #98989d;
+    --faint: #98989d; /* #8e8e93 read 4.3:1 on cards; this clears 4.5:1 on --surface */
+    --ghost: #636366;
+    /* Apple's increased-contrast dark system blue: #0a84ff read 3.8:1 as
+       link text on cards; this reads 4.9:1. Filled accent takes dark text. */
+    --accent: #409cff;
+    --brand: #409cff;
+    --on-accent: #000000;
+    --accent-weak: rgba(10, 132, 255, 0.16);
+    --accent-line: rgba(10, 132, 255, 0.34);
+    --brand-weak: rgba(10, 132, 255, 0.16);
+    --signal: #409cff;
+    --signal-weak: rgba(10, 132, 255, 0.16);
+    --signal-line: rgba(10, 132, 255, 0.3);
+    --neutral: #98989d;
+    --up: #30d158;
+    /* Apple's increased-contrast dark red: #ff453a read 4.1:1 as text on cards. */
+    --down: #ff6961;
+    --warn: #ff9f0a;
+    --anomaly: #ff6961;
+    --experiment: #bf5af2;
+    --baseline-fill: rgba(10, 132, 255, 0.14);
+    --baseline-line: rgba(10, 132, 255, 0.32);
+    --sleep-awake: #ffb340;
+    --sleep-rem: #70d7ff;
+    --sleep-core: #409cff;
+    --sleep-deep: #7d7aff;
+    --series-1: #409cff;
+    --series-2: #ff9f0a;
+    --series-3: #bf5af2;
+    --series-4: #30d158;
+    --series-5: #ff375f;
+    --series-6: #64d2ff;
+    --hover: rgba(255, 255, 255, 0.08);
+    --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.32), 0 16px 36px rgba(0, 0, 0, 0.34);
+    --lens: #48484a;
+    --lens-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 14px 34px -8px rgba(0, 0, 0, 0.7), 0 3px 8px rgba(0, 0, 0, 0.4);
+  }
 }
 
 html,
@@ -4553,9 +5095,6 @@ html,
 
 .hero {
   min-height: 356px;
-  background:
-    linear-gradient(135deg, rgba(15, 159, 143, 0.11), rgba(66, 119, 232, 0.08) 54%, rgba(255, 255, 255, 0.88)),
-    var(--surface);
   border-color: color-mix(in srgb, var(--accent) 24%, var(--line));
 }
 
@@ -4586,7 +5125,7 @@ html,
 }
 
 .spark-band {
-  fill: rgba(66, 119, 232, 0.09);
+  fill: var(--baseline-fill);
 }
 
 .delta.up,
@@ -4606,9 +5145,29 @@ html,
   border-color: var(--accent-line);
 }
 
+/* Blue-label chips on the blue tint read 4.1:1 in dark. Their label is mixed
+   a little toward ink (4.75:1) so it stays blue; the tint is untouched. */
+[data-theme="dark"] .badge.ready,
+[data-theme="dark"] .badge.both-kept,
+[data-theme="dark"] .vault-seal:not(.vault-egress *, .vault-unknown *),
+[data-theme="dark"] .state-steady,
+[data-theme="dark"] .cov-state.steady,
+[data-theme="dark"] .lib-status.ready,
+[data-theme="dark"] .intg-badge.intg-on,
+[data-theme="dark"] .intg-badge.intg-manage,
+[data-theme="dark"] .metric-state.up,
+[data-theme="dark"] .metric-state.good {
+  color: color-mix(in srgb, var(--accent) 85%, var(--ink));
+}
+
 .badge.waiting {
   color: var(--muted);
   background: var(--surface-3);
+}
+
+/* Dark muted on --surface-3 reads 3.9:1; an inset well keeps it above 4.5:1. */
+[data-theme="dark"] .badge.waiting {
+  background: var(--raise);
 }
 
 .metric-rows {
@@ -4800,7 +5359,10 @@ html,
   }
 
 .badges {
-justify-content: flex-start;
+/* A fixed right-hand column, so rows with and without a sparkline line up. */
+flex: 0 0 auto;
+flex-direction: column;
+align-items: flex-end;
 }
 }
 
@@ -4871,9 +5433,6 @@ body {
 
 .hero {
   padding: 32px;
-  background:
-    linear-gradient(135deg, rgba(0, 122, 255, 0.11), rgba(48, 209, 88, 0.06) 54%, color-mix(in srgb, var(--surface) 92%, transparent)),
-    var(--surface);
 }
 
 .recovery-line {
@@ -5190,7 +5749,7 @@ body {
 
 .topbar {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 16px;
@@ -5276,8 +5835,14 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .policy-status {
+  .policy-status,
+  .intel-runtime .badge {
     justify-self: start;
+  }
+
+  /* The desktop min-height only evens out a multi-column row; stacked, it is dead space. */
+  .intg-card {
+    min-height: 0;
   }
 
   .cluster-list li {
@@ -5316,6 +5881,11 @@ body {
   background: color-mix(in srgb, var(--surface) 88%, transparent);
   border-color: var(--line);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.48) inset;
+}
+
+/* The white top highlight is a light-mode bevel; on a dark pill it glares. */
+[data-theme="dark"] .topbar-search {
+  box-shadow: none;
 }
 
 .topbar-search:focus-visible {
@@ -5419,7 +5989,7 @@ body {
 }
 
 .theme-toggle {
-  min-width: 36px;
+  min-width: 44px;
 }
 
 .metric-card {
@@ -5427,9 +5997,7 @@ body {
   flex-direction: column;
   gap: 16px;
   min-height: 224px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, var(--signal) 6%), var(--surface)),
-    var(--surface);
+  background: var(--surface);
 }
 
 .metric-card-empty {
@@ -5516,21 +6084,17 @@ body {
   padding: 10px 10px 8px;
   border: 0.5px solid var(--line-soft);
   border-radius: 14px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--raise) 82%, transparent), transparent),
-    var(--raise);
+  background: var(--raise);
   /* Hover: the well brightens and the trace thickens — a subtle "inspect"
      affordance without a client-side tooltip island. */
   transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
 .metric-chart-well:hover {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent-weak) 45%, var(--raise) 82%, transparent), transparent),
-    var(--surface);
+  background: var(--surface);
   border-color: var(--accent-line);
 }
 .metric-chart-well:hover .signal-spark .spark-dot {
-  r: 5;
+  stroke-width: 10px;
 }
 .metric-chart-well:hover .signal-spark path {
   stroke-width: 2.4;
@@ -5543,6 +6107,7 @@ body {
 .signal-spark {
   height: 54px;
   margin-top: 0;
+  overflow: visible; /* the end dot sits on the right edge */
 }
 
 .metric-foot {
@@ -5895,9 +6460,7 @@ body {
   padding: 18px;
   border: 0.5px solid var(--line);
   border-radius: 16px;
-  background:
-    radial-gradient(520px 180px at 20% 0%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 70%),
-    var(--raise);
+  background: var(--raise);
 }
 
 .lib-chart-head {
@@ -5976,6 +6539,10 @@ body {
 }
 
 @media (max-width: 620px) {
+  .topbar {
+    gap: 12px;
+  }
+
   .topbar-search,
   .topbar-health,
   .language-switcher.compact {
@@ -6020,8 +6587,7 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .prov-technical dl > div,
-  .lib-row {
+  .prov-technical dl > div {
     grid-template-columns: 1fr;
   }
 }
@@ -6061,7 +6627,7 @@ body {
   padding: 16px;
   border: 1px solid var(--line-soft);
   border-radius: 16px;
-  background: linear-gradient(145deg, color-mix(in srgb, var(--metric-color) 5%, var(--surface)), var(--surface) 75%);
+  background: var(--surface);
   color: var(--ink);
   text-decoration: none;
   transition: border-color 120ms ease, box-shadow 120ms ease;
@@ -6084,6 +6650,7 @@ body {
 .today-total-bars span:last-child { background: var(--metric-color); }
 .today-metric-chart .spark-band { fill: color-mix(in srgb, var(--metric-color) 7%, transparent); }
 .today-metric-empty { display: block; font-size: 12px; color: var(--muted); line-height: 1.4; }
+.today-metric-note { display: block; font-size: 11px; color: var(--muted); line-height: 1.35; }
 .today-metric-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 8px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .today-more-signals { font-size: 13px; color: var(--muted); }
 .today-more-signals summary { padding: 10px 0; cursor: pointer; }
@@ -6095,36 +6662,45 @@ body {
 .today-recovery-evidence { display: inline-flex; align-items: center; gap: 4px; min-height: 24px; margin: -4px 0; color: var(--accent); font-size: 11px; font-weight: 400; text-decoration: none; }
 .today-recovery-evidence:hover { text-decoration: underline; }
 .today-recovery-evidence:focus-visible, .today-trend:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.today-trend, .today-findings { box-shadow: none; border-color: var(--line-soft); padding: 24px; }
-.today-trend { display: flex; flex-direction: column; scroll-margin-top: 112px; }
+.today-findings { box-shadow: none; border-color: var(--line-soft); padding: 24px; }
+/* The reading card holds no padding of its own: the chart runs edge to edge
+   under its top corners and each row pads itself by --trend-pad. */
+.today-trend { --trend-pad: 24px; --scrub-inset: var(--trend-pad); display: flex; flex-direction: column; padding: 0; box-shadow: none; border-color: var(--line-soft); scroll-margin-top: 112px; }
+.today-trend > .day-scrub { display: flex; flex: 1; flex-direction: column; min-width: 0; }
 .today-range { display: flex; flex-shrink: 0; padding: 3px; gap: 2px; border: 1px solid var(--line-soft); border-radius: 9px; background: var(--surface-2); }
 .today-range button { min-height: 32px; padding: 6px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
 .today-range button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px var(--line); }
-.today-range button:focus-visible, .today-metric-picker select:focus-visible, .today-finding-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.today-trend-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 16px 0 12px; }
-.today-trend-controls > a { color: var(--accent); font-size: 12px; white-space: nowrap; }
-.today-metric-picker { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--muted); font-size: 12px; }
-.today-metric-picker select { max-width: 100%; min-width: 0; min-height: 36px; padding: 6px 28px 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-weight: 500; cursor: pointer; }
-.today-trend-summary { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; margin-bottom: 8px; color: var(--muted); font-size: 12px; }
-.today-trend-summary strong { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
-.today-trend-context { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
-.today-trend-empty { display: flex; flex-direction: column; justify-content: center; align-items: start; min-height: 190px; padding: 20px 0; font-size: 13px; }
+.today-range button:focus-visible, .today-finding-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.today-trend-field { display: flex; flex: 1; flex-direction: column; }
+.today-trend-head { display: flex; flex-direction: column; gap: 10px; padding: 16px var(--trend-pad) 0; }
+.today-trend-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.today-trend-top .today-eyebrow { margin: 0; }
+.today-trend h2 { margin: 0; min-width: 0; font-size: 20px; font-weight: 600; line-height: 1.25; letter-spacing: -0.014em; }
+/* The title is the picker: a native select laid invisibly over the name. */
+.today-trend-pick { position: relative; display: inline-flex; align-items: center; gap: 6px; max-width: calc(100% + 14px); margin: 0 -7px; padding: 2px 7px; border-radius: 8px; cursor: pointer; transition: background-color 120ms ease; }
+.today-trend-pick:hover { background: var(--hover); }
+.today-trend-pick:has(select:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
+.today-trend-pick svg { flex: none; width: 11px; height: 11px; fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.today-trend-pick select { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; font-size: 16px; cursor: pointer; appearance: none; }
+.today-trend-help { margin: -4px 0 0; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.today-trend-chart { margin-top: auto; padding-top: 12px; }
+.today-trend-body { padding: 2px var(--trend-pad) 18px; }
+.today-trend-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.today-trend-links { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.today-trend-links > a, .today-trend-links > button { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: none; white-space: nowrap; cursor: pointer; }
+.today-trend-links > a:hover, .today-trend-links > button:hover { text-decoration: underline; }
+.today-trend-empty { display: flex; flex-direction: column; justify-content: center; align-items: start; min-height: 190px; padding: 20px var(--trend-pad); font-size: 13px; }
 .today-trend-empty p { color: var(--muted); line-height: 1.5; }
 .today-trend-empty a { color: var(--accent); }
-.today-trend-data { margin-top: 12px; color: var(--muted); font-size: 12px; }
-.today-trend-data summary { padding: 8px 0; cursor: pointer; }
-.today-trend-table-wrap { max-height: 220px; overflow: auto; margin-top: 8px; border: 1px solid var(--line-soft); border-radius: 8px; }
-.today-trend-data table { width: 100%; border-collapse: collapse; color: var(--ink); font-variant-numeric: tabular-nums; }
-.today-trend-data caption { padding: 10px 12px; text-align: left; color: var(--muted); }
-.today-trend-data th, .today-trend-data td { padding: 8px 12px; border-top: 1px solid var(--line-soft); text-align: left; font-weight: 400; }
-.today-trend-data thead th { font-weight: 600; background: var(--surface-2); }
-.today-trend-data td, .today-trend-data th:last-child { text-align: right; }
+.today-trend-table-wrap { max-height: 220px; overflow: auto; margin-top: 12px; border: 1px solid var(--line-soft); border-radius: 8px; color: var(--muted); font-size: 12px; }
+.today-trend-table-wrap table { width: 100%; border-collapse: collapse; color: var(--ink); font-variant-numeric: tabular-nums; }
+.today-trend-table-wrap caption { padding: 10px 12px; text-align: left; color: var(--muted); }
+.today-trend-table-wrap th, .today-trend-table-wrap td { padding: 8px 12px; border-top: 1px solid var(--line-soft); text-align: left; font-weight: 400; }
+.today-trend-table-wrap thead th { font-weight: 600; background: var(--surface-2); }
+.today-trend-table-wrap td, .today-trend-table-wrap th:last-child { text-align: right; }
 .selected-finding { scroll-margin-top: 112px; }
 .selected-finding > .today-section-heading { margin-bottom: 16px; }
 .today-eyebrow { display: block; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
-.today-trend .ribbon-wrap { margin-top: auto; }
-.today-trend-note { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; color: var(--muted); font-size: 11px; }
-.today-trend-note a { color: var(--accent); }
 .today-finding-list { list-style: none; padding: 0; margin: 12px 0 0; }
 .today-finding-list li { border-bottom: 1px solid var(--line-soft); }
 .today-finding-list li:last-child { border-bottom: 0; }
@@ -6155,21 +6731,7 @@ body {
   .today-overview .today-hero-main { grid-template-columns: minmax(0, 1fr) 150px; }
   .today-overview .hero-lede-head { font-size: 25px; }
   .today-overview .today-contributors { padding-top: 0; }
-}
-@media (max-width: 560px) {
-  .today-trend > .today-section-heading { align-items: start; flex-wrap: wrap; }
-  .today-range button { min-height: 44px; min-width: 44px; }
-  .today-metric-picker { flex: 1 1 100%; }
-  .today-metric-picker select { flex: 1; min-height: 44px; font-size: 16px; }
-  .today-recovery-evidence,
-  .today-section-heading > a,
-  .today-trend-controls > a,
-  .today-trend-note > a {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-  }
-  .today-trend-data > summary { padding-block: 14px; }
+  .today-trend { --trend-pad: 16px; }
 }
 @media (max-width: 380px) {
   .today-overview .today-hero-main { grid-template-columns: minmax(0, 1fr); }
@@ -6194,12 +6756,9 @@ body {
   align-content: start;
   gap: 16px;
   box-shadow: none;
-  /* Solid neutral border (was a washy blue-tinted mix) + one whisper of a
-     top-left glow instead of the heavy double gradient DESIGN.md forbids. */
+  /* Solid neutral border and solid surface: colour lives in the data. */
   border-color: var(--line);
-  background:
-    radial-gradient(680px 280px at 0% 0%, var(--accent-weak), transparent 66%),
-    var(--surface);
+  background: var(--surface);
 }
 
 .today-hero-main {
@@ -6455,6 +7014,19 @@ font-size: 14px;
 line-height: 1.48;
 }
 
+/* The brief's closing suggestion: same label grammar as the main read, no card chrome. */
+.brief-suggestion {
+  display: grid;
+  gap: 4px;
+}
+
+.brief-suggestion p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.48;
+}
+
 .brief-dot {
   width: 7px;
   height: 7px;
@@ -6648,7 +7220,7 @@ font-size: 17px;
 .explore-density {
   display: inline-block;
   padding: 4px 10px;
-  margin: 8px 0 0;
+  margin: 8px 0 12px;
   font-size: 12px;
   color: var(--muted);
   background: var(--surface-2);
@@ -6668,9 +7240,7 @@ font-size: 17px;
   margin-top: 24px;
   padding: 30px 32px;
   border-color: var(--line);
-  background:
-    radial-gradient(520px 220px at 40% 0%, color-mix(in srgb, var(--sleep-deep) 14%, transparent), transparent 60%),
-    var(--surface);
+  background: var(--surface);
 }
 
 .sleep-hero-main {
@@ -6833,15 +7403,17 @@ font-size: 17px;
   font-family: var(--mono);
   font-size: 26px;
   font-weight: 650;
+  line-height: 1;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 
+/* Must fit inside the ring's 80px hole: in capitals the word was wider than
+   the hole at its height and ran into the stroke. */
 .sleep-gauge-cap {
   font-size: 10.5px;
   color: var(--faint);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
 }
 
 .sleep-debt {
@@ -6893,8 +7465,10 @@ font-size: 17px;
     grid-template-columns: 1fr 1fr;
   }
 
+  /* 64px, as on wide screens: "302m 68%" needs ~58px, and at 52px every
+     value broke onto two lines except the shortest. */
   .sleep-breakdown-row {
-    grid-template-columns: 10px minmax(0, 1fr) 52px;
+    grid-template-columns: 10px minmax(0, 1fr) 64px;
     gap: 6px;
   }
   .sleep-breakdown-bar-wrap {
@@ -6909,9 +7483,11 @@ font-size: 17px;
   min-width: 0;
 }
 
+/* Five strain cards. 168px lets all five share one row on a laptop-width
+   content column (about 960px) instead of wrapping four plus one. */
 .activity-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
   gap: 12px;
   margin-top: 20px;
 }
@@ -6975,8 +7551,9 @@ font-size: 17px;
 
 .activity-card-foot {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 8px;
+  gap: 2px 8px;
   font-size: 11.5px;
   color: var(--muted);
   padding-top: 4px;
@@ -6990,6 +7567,7 @@ font-size: 17px;
 
 .activity-fresh {
   color: var(--faint);
+  white-space: nowrap;
 }
 
 .activity-strain-card {
@@ -7043,6 +7621,11 @@ font-size: 17px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  /* Two columns and an odd count: the last card takes the full row, not half of it. */
+  .activity-grid > .activity-card:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
   .activity-big {
     font-size: 28px;
   }
@@ -7066,6 +7649,15 @@ font-size: 17px;
 .activity-note strong {
   color: var(--ink);
   font-weight: 650;
+}
+
+.sleep-note-deep {
+  color: var(--sleep-deep);
+}
+/* The dark deep-sleep hue reads 4.05:1 as a word on a dark card. Mixed a
+   little toward ink it reads 4.9:1 and still matches the chart's deep bars. */
+[data-theme="dark"] .sleep-note-deep {
+  color: color-mix(in srgb, var(--sleep-deep) 85%, var(--ink));
 }
 
 /* ── Dashboard Customizer ─────────────────────────────────────────────────── */
@@ -7106,6 +7698,12 @@ font-size: 17px;
 /* The sheet: slides up from the bottom on desktop, full-screen drawer on mobile. */
 .dashboard-scrim {
   z-index: 50;
+  display: block;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .dashboard-sheet {
@@ -7168,6 +7766,13 @@ font-size: 17px;
   transition: border-color var(--dur-1) ease, background var(--dur-1) ease;
 }
 
+/* Customizer controls while a save is in flight. aria-disabled, not disabled,
+   so the focused control keeps focus (DashboardCustomizer.tsx). */
+.dashboard-sheet [aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: progress;
+}
+
 .template-card:hover {
   border-color: var(--accent-line);
 }
@@ -7182,6 +7787,11 @@ font-size: 17px;
 .template-card.template-active {
   border-color: var(--accent);
   background: var(--accent-weak);
+}
+/* As .mode-card.sel: in dark the tint over the sheet pulls the muted line
+   to 4.05:1, so the active card keeps its well and takes the tint there. */
+[data-theme="dark"] .template-card.template-active {
+  background: color-mix(in srgb, var(--accent) 16%, var(--raise));
 }
 
 .template-card strong {
@@ -7293,5 +7903,985 @@ font-size: 17px;
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
+  }
+}
+
+/* ─── Labs (blood tests) ──────────────────────────────────────────────
+   Each result is drawn against ITS OWN lab's range (a band); labs keep their
+   own series colour and line. Tokens only; reuses the ribbon band tokens. */
+.labs-intro {
+  margin-bottom: var(--s5);
+}
+.labs-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 5fr) minmax(0, 7fr);
+  gap: var(--s5);
+  align-items: start;
+}
+.labs-index-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin-bottom: var(--s3);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.labs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+.labs-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "name value"
+    "spark verdict";
+  gap: var(--s1) var(--s3);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  color: var(--ink);
+  text-decoration: none;
+  transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+}
+.labs-row:hover {
+  background: var(--surface-3);
+}
+.labs-row.is-selected {
+  border-color: var(--accent-line);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.labs-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.labs-row-name {
+  grid-area: name;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.labs-row-title {
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.labs-row-sub {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.labs-row-value {
+  grid-area: value;
+  justify-self: end;
+  font-size: var(--fs-md);
+  font-variant-numeric: tabular-nums;
+}
+.labs-row .labs-verdict {
+  grid-area: verdict;
+  justify-self: end;
+  align-self: center;
+}
+.labs-row-spark {
+  grid-area: spark;
+  min-width: 0;
+}
+/* A marker that cannot be charted shows LabChart's note in the sparkline slot: keep it row-sized. */
+.labs-row-spark > p {
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+  color: var(--muted);
+}
+.labs-verdict {
+  display: inline-block;
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.labs-verdict-ok {
+  color: var(--muted);
+  background: var(--surface-3);
+}
+.labs-verdict-out {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--warn) 22%, transparent);
+}
+.labs-verdict-none {
+  color: var(--faint);
+  background: var(--surface-3);
+}
+/* In dark --surface-3 is lighter than the card and pulls the grey label under 4:1; an inset well keeps it legible. */
+[data-theme="dark"] :is(.labs-verdict-ok, .labs-verdict-none) {
+  background: var(--raise);
+}
+
+/* Chart */
+.labs-chart {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: var(--s2);
+  margin: var(--s3) 0 var(--s2);
+}
+.labs-chart.is-compact {
+  display: block;
+  margin: 0;
+}
+.labs-chart-yaxis {
+  position: relative;
+}
+.labs-chart-unit {
+  top: -14px;
+  right: 0;
+}
+.labs-chart-tick {
+  right: 0;
+  transform: translateY(-50%);
+}
+.labs-chart-plot {
+  position: relative;
+}
+.labs-chart-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.labs-band {
+  fill: var(--baseline-fill);
+}
+.labs-band-edge line {
+  stroke: var(--baseline-line);
+  stroke-width: 1;
+}
+.labs-line {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.labs-dot {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--surface);
+  box-sizing: content-box;
+}
+.labs-chart.is-compact .labs-dot {
+  width: 6px;
+  height: 6px;
+  border-width: 1.5px;
+}
+.labs-dot.is-out {
+  box-shadow: 0 0 0 2px var(--warn);
+}
+.labs-chart-xaxis {
+  grid-column: 2;
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--faint);
+}
+.labs-chart-note { grid-column: 1 / -1; color: var(--muted); font-size: 12px; line-height: 1.5; }
+/* Lab identity colours: the non-semantic hues first (blue, purple, cyan), so
+   the first three labs never look like the orange "outside the range" ring. */
+.labs-s0 { --lab-color: var(--series-1); }
+.labs-s1 { --lab-color: var(--series-3); }
+.labs-s2 { --lab-color: var(--series-6); }
+.labs-s3 { --lab-color: var(--series-2); }
+.labs-s4 { --lab-color: var(--series-4); }
+.labs-s5 { --lab-color: var(--series-5); }
+.labs-line.labs-s0,
+.labs-line.labs-s1,
+.labs-line.labs-s2,
+.labs-line.labs-s3,
+.labs-line.labs-s4,
+.labs-line.labs-s5 {
+  stroke: var(--lab-color);
+}
+.labs-dot,
+.labs-swatch {
+  background: var(--lab-color, var(--series-1));
+}
+
+/* Legend */
+.labs-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s4);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.labs-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.labs-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+.labs-legend-count {
+  color: var(--faint);
+}
+
+/* Detail */
+.labs-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+  min-width: 0;
+}
+.labs-detail-card {
+  padding: var(--s5);
+}
+.labs-detail-title {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.labs-detail-latest {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin: var(--s2) 0 0;
+}
+.labs-detail-value {
+  font-size: var(--fs-2xl);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.labs-detail-meta {
+  margin: var(--s1) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.labs-notes {
+  margin: var(--s4) 0 0;
+  padding-left: 18px;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  color: var(--ink);
+}
+.labs-subhead {
+  margin: 0 0 var(--s2);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.labs-gaps {
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line-soft);
+}
+.labs-gaps-intro {
+  margin: 0 0 var(--s3);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.labs-gap-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+.labs-gap-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s5);
+  font-size: var(--fs-sm);
+}
+.labs-gap-lab {
+  font-weight: 600;
+}
+.labs-gap-note {
+  margin: var(--s1) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.labs-table-drill {
+  margin-top: var(--s5);
+  font-size: var(--fs-sm);
+}
+.labs-table-drill summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+/* The card clips overflow; on a phone the table scrolls inside this instead of losing columns. */
+.labs-table-scroll {
+  overflow-x: auto;
+}
+.labs-table {
+  width: 100%;
+  margin-top: var(--s3);
+  border-collapse: collapse;
+  font-size: var(--fs-xs);
+}
+.labs-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.labs-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line-soft);
+  font-variant-numeric: tabular-nums;
+}
+.labs-code {
+  margin: var(--s3) 0 0;
+  font-size: var(--fs-2xs);
+  color: var(--faint);
+}
+.labs-cross-empty,
+.labs-empty {
+  padding: var(--s4) var(--s5);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.labs-empty h3 {
+  margin: 0 0 var(--s2);
+  font-size: var(--fs-md);
+  color: var(--ink);
+}
+.labs-empty p {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .labs-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 420px) {
+  .labs-table th,
+  .labs-table td {
+    padding: 6px 4px;
+  }
+  .labs-table :is(th, td):first-child {
+    padding-left: 0;
+  }
+  .labs-table :is(th, td):last-child {
+    padding-right: 0;
+  }
+}
+
+/* ─── Year in Health ─────────────────────────────────────────────────
+   One year of the record read as coverage: a 12-month strip of mini
+   calendars, one day strip per kind of data with every gap drawn, sources
+   in their series colours, and the share card preview. Tokens only. */
+.yr-intro {
+  margin-bottom: var(--s5);
+}
+.yr-intro-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s4);
+  flex-wrap: wrap;
+}
+.yr-years {
+  display: flex;
+  gap: var(--s4);
+  font-size: var(--fs-sm);
+}
+.yr-years a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.yr-years a:hover {
+  text-decoration: underline;
+}
+.yr-summary {
+  padding: var(--s4) var(--s5);
+  margin-bottom: var(--s6);
+  border-radius: var(--radius);
+}
+.yr-headlines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--s3) var(--s5);
+}
+.yr-headline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.yr-headline-label {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.yr-headline-source {
+  color: var(--ink);
+}
+.yr-headline-value {
+  font-size: var(--fs-2xl);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.yr-headline-sub {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.yr-headline .yr-chip {
+  align-self: flex-start;
+}
+.yr-window {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin: var(--s4) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.yr-chip {
+  display: inline-block;
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: var(--muted);
+  background: var(--surface-3);
+}
+.yr-chip-low {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--warn) 22%, transparent);
+}
+.yr-chip-new {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--warn) 22%, transparent);
+}
+/* Dark muted on --surface-3 reads 3.95:1; the grey chips ("Not yet",
+   "Stopped") sit in an inset well instead, as .badge.waiting does. */
+[data-theme="dark"] .yr-chip:not(.yr-chip-low, .yr-chip-new) {
+  background: var(--raise);
+}
+.yr-section {
+  margin-top: var(--s7);
+}
+.yr-subhead {
+  margin: 0 0 var(--s2);
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  color: var(--ink);
+}
+.yr-section-note {
+  margin: 0 0 var(--s4);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  max-width: 70ch;
+}
+.yr-months {
+  list-style: none;
+  margin: var(--s3) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--s2);
+}
+.yr-month {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3) var(--s2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  min-width: 0;
+}
+.yr-month-future {
+  background: transparent;
+  border-style: dashed;
+}
+.yr-month-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s1);
+}
+.yr-month-name {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink);
+}
+.yr-month-count {
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.yr-cal {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+.yr-cell {
+  display: inline-block;
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: var(--raise);
+}
+.yr-cell.is-blank,
+.yr-cell.is-future {
+  background: transparent;
+}
+.yr-cell.is-future {
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+.yr-cell.is-gap {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+/* Mixed into the card surface, not transparent, so the legend swatches
+   (which sit on the page canvas) match the cells in both themes. */
+.yr-cell.yr-l1 {
+  background: color-mix(in srgb, var(--accent) 28%, var(--surface));
+}
+.yr-cell.yr-l2 {
+  background: color-mix(in srgb, var(--accent) 50%, var(--surface));
+}
+.yr-cell.yr-l3 {
+  background: color-mix(in srgb, var(--accent) 74%, var(--surface));
+}
+.yr-cell.yr-l4 {
+  background: var(--accent);
+}
+.yr-month-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.yr-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--neutral);
+  flex: none;
+}
+.yr-source-month {
+  height: 10px;
+  border-radius: 2px;
+  background: var(--raise);
+}
+.yr-s1 {
+  background: var(--series-1);
+}
+.yr-s2 {
+  background: var(--series-2);
+}
+.yr-s3 {
+  background: var(--series-3);
+}
+.yr-s4 {
+  background: var(--series-4);
+}
+.yr-s5 {
+  background: var(--series-5);
+}
+.yr-s6 {
+  background: var(--series-6);
+}
+.yr-month-changes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--fs-2xs);
+  line-height: 1.35;
+  color: var(--ink);
+}
+.yr-month-changes li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.yr-change-stop {
+  color: var(--muted);
+}
+.yr-month .yr-chip {
+  align-self: flex-start;
+}
+.yr-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s2);
+  margin: var(--s3) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.yr-legend .yr-cell {
+  width: 10px;
+  margin-left: var(--s2);
+}
+.yr-families,
+.yr-sources,
+.yr-changes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+.yr-family {
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+}
+.yr-family-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s2) var(--s3);
+  margin-bottom: var(--s2);
+}
+.yr-family-name {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--ink);
+}
+.yr-family-count {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.yr-family-strip {
+  display: block;
+  width: 100%;
+  height: 14px;
+  border-radius: 3px;
+}
+.yr-run {
+  fill: var(--accent);
+}
+.yr-run-gap {
+  fill: var(--line-strong);
+}
+.yr-family-gaps {
+  margin: var(--s2) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.yr-drill {
+  margin-top: var(--s2);
+  font-size: var(--fs-sm);
+}
+.yr-drill summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+.yr-gap-list {
+  margin: var(--s2) 0 0;
+  padding-left: var(--s5);
+  color: var(--muted);
+  columns: 2 320px;
+  column-gap: var(--s6);
+}
+.yr-gap-list li {
+  break-inside: avoid;
+  margin-bottom: 2px;
+}
+.yr-source {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+}
+.yr-source-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.yr-source-title {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.yr-source-sub {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.yr-source-months {
+  display: grid;
+  grid-template-columns: repeat(12, 10px);
+  gap: 2px;
+}
+.yr-source-tags {
+  display: flex;
+  gap: var(--s1);
+  justify-content: flex-end;
+}
+.yr-changes {
+  margin-top: var(--s3);
+  gap: var(--s1);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+.yr-totals-note {
+  margin-top: var(--s4);
+  margin-bottom: var(--s2);
+}
+.yr-withheld {
+  margin: var(--s3) 0 0;
+  padding-left: var(--s5);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.yr-share-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 540px) minmax(0, 1fr);
+  gap: var(--s6);
+  align-items: start;
+}
+.yr-card-preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+}
+.yr-share-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.yr-share-controls p {
+  margin: 0;
+  max-width: 52ch;
+}
+.yr-share-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s2);
+  color: var(--ink);
+}
+.yr-share-form label {
+  display: flex;
+  gap: var(--s2);
+  align-items: baseline;
+}
+.yr-share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+.yr-share-error {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--down);
+}
+.yr-limits ul {
+  margin: 0;
+  padding-left: var(--s5);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  max-width: 80ch;
+}
+.yr-empty {
+  padding: var(--s4) var(--s5);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.yr-empty h3 {
+  margin: 0 0 var(--s2);
+  font-size: var(--fs-md);
+  color: var(--ink);
+}
+.yr-empty p {
+  margin: 0;
+}
+
+/* Lab document review extends the existing Observatory tokens. */
+.lab-import, .lab-report { display: grid; gap: 20px; max-width: 1080px; min-width: 0; }
+.genetics { display: grid; gap: 20px; max-width: 1080px; min-width: 0; }
+.genetics .card, .genetics .prov-intro { display: grid; gap: 12px; min-width: 0; }
+.genetics p, .genetics h3, .genetics h4, .genetics li { margin: 0; overflow-wrap: anywhere; }
+.genetics label { display: grid; gap: 8px; font-size: 13px; font-weight: 500; min-width: 0; }
+.genetics input:not([type="checkbox"]), .genetics select { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; }
+.genetics :is(input, select, button, summary, a):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.genetics .genetic-check { display: flex; align-items: flex-start; gap: 12px; line-height: 1.6; }
+.genetic-check input { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 3px; accent-color: var(--accent); }
+.genetics details { padding: 12px 0; }
+.genetics summary { cursor: pointer; font-weight: 500; }
+.genetics details[open] > :not(summary) { margin-top: 12px; }
+.genetic-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin: 0; }
+.genetic-stats dt { color: var(--muted); font-size: 13px; }
+.genetic-stats dd { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; margin: 4px 0 0; }
+.genetic-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 16px; }
+.genetic-annotation { display: grid; gap: 8px; padding: 20px 0; border-top: 1px solid var(--line); }
+.genetic-hash { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; color: var(--muted); }
+@media print {
+  body:has(.genetics) :is(.sidebar, .topbar, .mobile-nav, .lab-no-print) { display: none !important; }
+  body:has(.genetics) .main { margin: 0; padding: 0; }
+  .genetics { display: block; max-width: none; }
+  .genetics .card { box-shadow: none; margin-bottom: 16px; }
+  .genetic-annotation { break-inside: avoid; }
+}
+.lab-import .labs-intro, .lab-report .labs-intro { display: grid; gap: 12px; }
+.lab-import-upload, .lab-import-source { display: grid; gap: 12px; min-width: 0; overflow-wrap: anywhere; }
+.lab-import-heading, .lab-import-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.lab-import-heading h3 { margin: 0; }
+.lab-import-file, .lab-import-bulk label, .lab-review-fields label { display: grid; gap: 8px; font-size: 13px; font-weight: 500; min-width: 0; }
+.lab-import input:not([type="checkbox"]), .lab-import select { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; }
+/* Dark cards are --surface too, so these fields had only a 1.5:1 hairline: sit them in the .field-input well. */
+[data-theme="dark"] :is(.lab-import, .genetics) :is(input:not([type="checkbox"]), select) { background: var(--raise); }
+.lab-import input[aria-invalid="true"] { border-color: var(--down); box-shadow: 0 0 0 1px var(--down); }
+.lab-import :is(input, button, summary, a, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.lab-import input[type="file"] { padding: 16px; }
+.lab-import-bulk { display: grid; grid-template-columns: 1fr 1fr auto; gap: 16px; align-items: end; }
+.lab-import-bulk p { grid-column: 1 / -1; margin: 0; color: var(--muted); }
+.lab-import legend { padding: 0 8px; font-weight: 600; }
+.lab-review-list { display: grid; gap: 20px; }
+.lab-review-row { display: grid; gap: 16px; min-width: 0; scroll-margin-block: 80px; }
+.lab-review-row.is-confirmed { border-color: var(--accent); }
+.lab-review-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-items: end; }
+.lab-review-confirm { display: flex; align-items: flex-start; gap: 12px; font-size: 14px; cursor: pointer; }
+.lab-review-confirm input { width: 18px; height: 18px; flex: 0 0 auto; margin: 1px 0 0; accent-color: var(--accent); }
+.lab-source-text { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 480px; overflow: auto; font-size: 12px; line-height: 1.6; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.lab-import-error { border-left: 3px solid var(--accent); }
+.lab-import-history { list-style: none; padding: 0; }
+.lab-import-history li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.lab-import-history span { color: var(--muted); }
+.lab-report-evidence { display: grid; grid-template-columns: 160px 1fr; gap: 12px; }
+.lab-report-evidence dt { font-weight: 600; }
+.lab-report-evidence dd { margin: 0; }
+.lab-report-observation { font-weight: 600; }
+.lab-report blockquote { margin: 20px 0; border-left: 2px solid var(--line); padding-left: 16px; overflow-wrap: anywhere; }
+.lab-report blockquote footer { color: var(--muted); font-size: 12px; }
+.lab-report-hash { overflow-wrap: anywhere; font-family: var(--mono); }
+@media (pointer: coarse) {
+  .field-input,
+  .filter-select { font-size: 16px; min-height: 44px; }
+  .btn { min-height: 44px; }
+  .topbar-search,
+  .topbar-health { min-height: 44px; }
+  summary { min-height: 44px; padding-block: 12px; box-sizing: border-box; }
+  .density-toggle button { min-height: 44px; }
+  /* 44px to the finger, still 26px in the layout. */
+  .pin-btn { width: 44px; height: 44px; flex-basis: 44px; margin: -9px; }
+  /* Chips that act (range links); status chips stay small. */
+  a.chip { display: inline-flex; align-items: center; min-height: 44px; }
+  .today-range button { min-height: 44px; min-width: 44px; }
+  .today-trend-pick { min-height: 44px; }
+  .today-recovery-evidence,
+  .today-section-heading > a,
+  .today-trend-links > a,
+  .today-trend-links > button {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .today-recovery-context summary { padding-block: 14px; }
+  .lab-import input:not([type="checkbox"]), .lab-import select,
+  .genetics input:not([type="checkbox"]), .genetics select { font-size: 16px; min-height: 44px; }
+  :is(.lab-import, .lab-report, .genetics) :is(button, summary, .lab-review-confirm, .genetic-check) { min-height: 44px; touch-action: manipulation; }
+  .lab-review-confirm, .genetics .genetic-check { align-items: center; }
+  /* No hover on touch, so the coverage row's title tooltip never shows: give the
+     source name its own line and wrap it instead of truncating it to "Appl…". */
+  .cov-row { grid-template-columns: minmax(0, 1fr) 40px; row-gap: 8px; }
+  .cov-label { grid-column: 1 / -1; }
+  .cov-name, .cov-rel { white-space: normal; overflow-wrap: break-word; }
+  /* The 11px "Stream details" toggle was a 13px-tall target; line-height keeps its disclosure marker. */
+  .prov-technical summary { line-height: 44px; margin-block: -10px; padding-block: 0; }
+  .fb-del { width: 44px; height: 44px; }
+  /* Year view: the year links were 15px tall, the gap drill-downs 15–30px and
+     the share-card option rows 19–34px. */
+  .yr-years a { display: inline-flex; align-items: center; min-height: 44px; }
+  .yr-share-form label { align-items: center; min-height: 44px; }
+  .yr-drill summary { min-height: 44px; padding-block: 12px; box-sizing: border-box; }
+  .lib-search, .lib-select { font-size: 16px; min-height: 44px; }
+  .lib-toggle { min-height: 44px; }
+  .lib-open { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; margin-block: -14px; }
+  .panel-move { min-width: 44px; min-height: 44px; touch-action: manipulation; }
+  .panel-remove-btn { min-height: 44px; touch-action: manipulation; }
+  .panel-chip-x { min-width: 40px; min-height: 40px; margin: -10px -8px -10px -6px; align-items: center; justify-content: center; touch-action: manipulation; }
+  .labs-table-drill summary { padding-block: 14px; }
+  /* Grow these one-line text links into the spacing around them: same layout, 42px tap height. */
+  .lab-import-history a, .lab-import-upload > a, :is(.lab-import, .lab-report) .labs-intro > a,
+  .lab-report .lab-import-actions > a:not(.btn), .lab-report-result .lab-no-print a { padding-block: 12px; margin-block: -12px; }
+}
+/* Four columns only fit full dates and lab names once the sidebar leaves enough room. */
+@media (max-width: 1180px) {
+  .lab-review-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .lab-review-fields, .lab-import-bulk { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lab-import-bulk button { grid-column: 1 / -1; }
+  .lab-import-error ul { padding-left: 0; list-style: none; display: grid; gap: 8px; }
+  .lab-import-error li .btn { width: 100%; text-align: left; justify-content: flex-start; }
+  .lab-report-evidence { grid-template-columns: 1fr; gap: 8px; }
+  .lab-report-evidence dd { margin-bottom: 12px; }
+}
+@media (max-width: 420px) {
+  .lab-review-fields, .lab-import-bulk { grid-template-columns: minmax(0, 1fr); }
+}
+@media print {
+  body:has(.lab-report) .sidebar, body:has(.lab-report) .topbar,
+  body:has(.lab-report) .lab-no-print, .lab-report header > a { display: none !important; }
+  .lab-report { max-width: none; }
+  .lab-report .card { break-inside: avoid; box-shadow: none; }
+  .lab-report details { display: block; }
+}
+
+@media (max-width: 1180px) {
+  .yr-months {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  /* Below this width the content pane (beside the sidebar) is too narrow for
+     the 540px card plus a readable controls column, so stack them. */
+  .yr-share-layout {
+    grid-template-columns: minmax(0, 540px);
+  }
+}
+@media (max-width: 620px) {
+  .yr-months {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .yr-source {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .yr-source-months,
+  .yr-source-tags {
+    grid-column: 2;
+    justify-content: flex-start;
   }
 }

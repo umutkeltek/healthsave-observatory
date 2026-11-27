@@ -317,3 +317,59 @@ def test_coerce_result_shapes() -> None:
     coerced = _coerce_result(object())
     assert coerced is not None
     assert "repr" in coerced
+
+
+# ---------------- a job that did nothing is recorded as skipped (M15) ------
+
+
+async def _complete_through_listener(monkeypatch, retval) -> dict:
+    """Drive the real listener with an EVENT_JOB_EXECUTED and capture the ledger write."""
+    import asyncio
+
+    from apscheduler.events import EVENT_JOB_EXECUTED, JobExecutionEvent
+    from worker.listener import make_listener
+
+    captured: dict = {}
+
+    async def ensure_terminal(session, **kwargs):
+        captured.update(kwargs)
+        return 1
+
+    monkeypatch.setattr(runs, "ensure_terminal", ensure_terminal)
+    session = _FakeSession()
+
+    class _Factory:
+        async def __aenter__(self):
+            return session
+
+        async def __aexit__(self, *exc):
+            return False
+
+    listener = make_listener(lambda: _Factory())
+    event = JobExecutionEvent(
+        EVENT_JOB_EXECUTED,
+        "whoop_poll",
+        "default",
+        datetime(2026, 11, 9, 12, 0, tzinfo=UTC),
+        retval=retval,
+    )
+    listener(event)
+    for _ in range(5):
+        await asyncio.sleep(0)
+    assert session.committed
+    return captured
+
+
+@pytest.mark.asyncio
+async def test_a_poll_skipped_for_want_of_a_token_is_recorded_skipped(monkeypatch) -> None:
+    captured = await _complete_through_listener(monkeypatch, {"skipped": "no stored token"})
+    assert captured["status"] == "skipped"
+    assert captured["error"] == "no stored token"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("retval", [None, 7, {"records": 3}, {"skipped": ""}])
+async def test_a_job_that_did_its_work_is_recorded_succeeded(monkeypatch, retval) -> None:
+    captured = await _complete_through_listener(monkeypatch, retval)
+    assert captured["status"] == "succeeded"
+    assert captured["error"] is None

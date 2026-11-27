@@ -8,7 +8,7 @@ Poll-based `Source` plugin that ingests recovery, sleep, workout, and cycle data
 
 ## What it emits
 
-- `heart_rate_variability` → `hrv` — RMSSD from recovery
+- `heart_rate_variability_rmssd` → `quantity_samples` — RMSSD from recovery. Not the SDNN `hrv` table.
 - `blood_oxygen` → `blood_oxygen` — SpO2 from recovery
 - `body_temperature` → `body_temperature` — skin temperature from recovery
 - `workouts` → `workouts` — duration, average/max HR, calories, distance, source label

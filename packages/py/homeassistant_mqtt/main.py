@@ -19,6 +19,7 @@ from .bridge import (
     build_discovery_messages,
     build_legacy_availability_messages,
     build_readiness_discovery_messages,
+    build_retained_clear_message,
     build_source_discovery_messages,
     build_source_state_message,
     build_state_messages,
@@ -46,6 +47,26 @@ def _write_heartbeat(path: str) -> None:
         log.warning("could not write MQTT heartbeat file %s", path, exc_info=True)
 
 
+def build_session_messages(
+    publish_configs: tuple[HomeAssistantMQTTConfig, ...],
+) -> list[MQTTMessage]:
+    """Availability(online) + discovery to (re)assert on every connect.
+
+    Pure (config-only), so it is safe to call from paho's network thread in
+    the on_connect callback. State messages are intentionally *not* here:
+    they need a DB snapshot and flow on the periodic ``publish_once`` cycle
+    (and stay retained on the broker across reconnects).
+    """
+
+    messages: list[MQTTMessage] = []
+    for config in publish_configs:
+        specs = sensor_specs_for_config(config)
+        messages.append(build_availability_message(config))
+        messages.extend(build_legacy_availability_messages(config))
+        messages.extend(build_discovery_messages(config, specs))
+    return messages
+
+
 async def publish_once(
     repository: TimescaleHealthSnapshotRepository,
     publisher: PahoMQTTPublisher,
@@ -53,6 +74,7 @@ async def publish_once(
     *,
     readiness_entities: bool = False,
     source_slugs: frozenset[str] | None = None,
+    retained_source_topics: set[str] | None = None,
 ) -> bool:
     """Fetch one aggregate + per-source snapshot pass and publish them.
 
@@ -67,6 +89,14 @@ async def publish_once(
     Discovery messages for each source go out the same cycle so HA
     picks up newly-appeared sources without needing a separate startup
     event — retained means HA only re-processes when payload changes.
+
+    ``retained_source_topics`` carries, across cycles, the per-source state
+    topics this process left retained on the broker. A topic no longer produced
+    (its source aged out of ``fetch_snapshots_by_source``) gets its retained
+    state cleared, so a Home Assistant restart cannot replay the last reading as
+    current. Discovery is left alone: the entities stay and HA expires them to
+    unavailable (``expire_after``). A cycle whose fetch fails raises before this
+    point, so a DB error is never mistaken for every source aging out.
     """
 
     configs = publish_configs or (publisher.config,)
@@ -75,6 +105,7 @@ async def publish_once(
         source_snapshots = await repository.fetch_snapshots_by_source(session)
 
     published = False
+    live_source_topics: set[str] = set()
     for config in configs:
         specs = sensor_specs_for_config(config)
 
@@ -90,7 +121,20 @@ async def publish_once(
             if source_slugs is not None and source.slug not in source_slugs:
                 continue
             published |= publisher.publish_many(build_source_discovery_messages(config, source))
-            published |= publisher.publish_many([build_source_state_message(config, source)])
+            state_message = build_source_state_message(config, source)
+            live_source_topics.add(state_message[0])
+            if publisher.publish_many([state_message]):
+                published = True
+                if retained_source_topics is not None:
+                    retained_source_topics.add(state_message[0])
+
+    if retained_source_topics is not None:
+        for topic in sorted(retained_source_topics - live_source_topics):
+            # Forget the topic only once the clear actually went out; while the
+            # broker is unreachable it stays queued for the next cycle.
+            if publisher.publish_many([build_retained_clear_message(topic)]):
+                published = True
+                retained_source_topics.discard(topic)
 
     return published
 
@@ -123,6 +167,11 @@ async def _run_loop(
 
     watchdog.mark_start(now())
     _write_heartbeat(heartbeat_path)
+    # Per-source state topics this process left retained; lets a cycle clear a
+    # source that aged out. A restart starts empty, so a source that aged out
+    # under a previous process keeps its retained state on the broker (its HA
+    # entities still expire to unavailable through ``expire_after``).
+    retained_source_topics: set[str] = set()
 
     while not stop_event.is_set():
         published = False
@@ -134,6 +183,7 @@ async def _run_loop(
                     publish_configs=publish_configs,
                     readiness_entities=readiness_entities,
                     source_slugs=source_slugs,
+                    retained_source_topics=retained_source_topics,
                 ),
                 timeout=publish_cycle_timeout_s,
             )
@@ -196,28 +246,14 @@ async def run() -> None:
         log.info("Home Assistant MQTT bridge disabled; set HA_MQTT_ENABLED=true to run")
         return
 
-    repository = TimescaleHealthSnapshotRepository()
+    repository = TimescaleHealthSnapshotRepository(owner_id=bridge_config.owner_id)
     publish_configs = bridge_config.publish_configs
     _warn_for_reserved_prefixes(publish_configs)
 
-    def session_messages() -> list[MQTTMessage]:
-        """Availability(online) + discovery to (re)assert on every connect.
-
-        Pure (config-only), so it is safe to call from paho's network thread in
-        the on_connect callback. State messages are intentionally *not* here:
-        they need a DB snapshot and flow on the periodic ``publish_once`` cycle
-        (and stay retained on the broker across reconnects).
-        """
-
-        messages: list[MQTTMessage] = []
-        for config in publish_configs:
-            specs = sensor_specs_for_config(config)
-            messages.append(build_availability_message(config))
-            messages.extend(build_legacy_availability_messages(config))
-            messages.extend(build_discovery_messages(config, specs))
-        return messages
-
-    publisher = PahoMQTTPublisher(bridge_config.mqtt, on_connect_messages=session_messages)
+    publisher = PahoMQTTPublisher(
+        bridge_config.mqtt,
+        on_connect_messages=lambda: build_session_messages(publish_configs),
+    )
     publisher.connect()
     if not publisher.wait_until_connected(timeout=10.0):
         log.warning(

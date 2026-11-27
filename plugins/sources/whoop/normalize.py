@@ -8,7 +8,10 @@ Each function takes the raw record list returned by the matching
 Routing into Timescale tables — relies on the existing
 ``server.ingestion.mappers.DEDICATED_TABLES`` registry:
 
-  * ``heart_rate_variability`` -> ``hrv`` table
+  * ``heart_rate_variability_rmssd`` -> ``quantity_samples``
+    (Whoop recovery HRV is RMSSD. The wire name ``heart_rate_variability``
+    is SDNN and the ``hrv`` table stores it with ``algorithm=sdnn``, so
+    this sample must not use that name.)
   * ``blood_oxygen`` -> ``blood_oxygen`` table
   * ``body_temperature`` -> ``body_temperature`` table
   * ``heart_rate`` -> ``heart_rate`` table
@@ -49,7 +52,8 @@ from uuid import UUID
 
 from contracts._base import DEFAULT_WORKSPACE_ID, Provenance
 from contracts.observation import Observation, build_dedup_key
-from contracts.values import EventValue
+from contracts.ontology import get_metric
+from contracts.values import EventValue, QuantityValue
 from normalization import identity
 from normalization.fusion import exact_ingest_key
 
@@ -177,7 +181,7 @@ def normalize_recovery(items: list[dict[str, Any]]) -> dict[str, list[dict[str, 
     RHR, recovery score, calibrating flag).
     """
     out: dict[str, list[dict[str, Any]]] = {
-        "heart_rate_variability": [],
+        "heart_rate_variability_rmssd": [],
         "blood_oxygen": [],
         "body_temperature": [],
         "resting_heart_rate": [],
@@ -193,7 +197,7 @@ def normalize_recovery(items: list[dict[str, Any]]) -> dict[str, list[dict[str, 
             continue
 
         if (hrv := score.get("hrv_rmssd_milli")) is not None:
-            out["heart_rate_variability"].append(
+            out["heart_rate_variability_rmssd"].append(
                 {"date": ts, "qty": float(hrv), "source": SOURCE_TAG}
             )
         if (spo2 := score.get("spo2_percentage")) is not None:
@@ -346,6 +350,9 @@ def normalize_workouts(items: list[dict[str, Any]]) -> dict[str, list[dict[str, 
         if (dist := score.get("distance_meter")) is not None:
             sample["distance"] = float(dist)
         if (altitude := score.get("altitude_gain_meter")) is not None:
+            # On the workout itself too (workouts.elevation_gain_m), under the
+            # wire key the phone apps send.
+            sample["elevationGain"] = float(altitude)
             out["workout_altitude_gain_m"].append(
                 {"date": start, "qty": float(altitude), "source": SOURCE_TAG}
             )
@@ -511,3 +518,133 @@ def normalize_cycles(items: list[dict[str, Any]]) -> dict[str, list[dict[str, An
             out["cycle_calories"].append({"date": ts, "qty": float(cal), "source": SOURCE_TAG})
 
     return out
+
+
+# ─── recovery readings into the canonical store ─────────────────────────
+#
+# Whoop's recovery carries three readings the Observatory shows as metrics of
+# their own: HRV (Whoop measures RMSSD, never SDNN), resting heart rate and
+# blood oxygen. Each lands on the Whoop stream, so a day with both an Apple
+# Watch and a Whoop reading keeps two rows from two sources; nothing here
+# merges or averages them with another device.
+#
+# The identity of a reading is (Whoop source, metric, the recovery's
+# timestamp), not a Whoop record id: the per-metric tables older versions
+# wrote keep only the timestamp, so the back-fill
+# (``scripts.backfill_whoop_recovery``) rebuilds the same key from them and a
+# reading never lands twice.
+
+#: (field in score, canonical metric, unit)
+RECOVERY_READINGS: tuple[tuple[str, str, str], ...] = (
+    ("hrv_rmssd_milli", "vital.hrv_rmssd", "ms"),
+    ("resting_heart_rate", "vital.resting_heart_rate", "bpm"),
+    ("spo2_percentage", "vital.blood_oxygen", "%"),
+)
+RECOVERY_METRIC_IDS: tuple[str, ...] = tuple(metric for _, metric, _ in RECOVERY_READINGS)
+
+
+def whoop_stream_id(owner_id: UUID) -> UUID:
+    """The one Whoop stream every Whoop observation of an owner lands on."""
+
+    return identity.stream_id(owner_id, ORIGIN_PROVIDER, identity.normalize_origin(SOURCE_TAG))
+
+
+def recovery_observation(
+    *,
+    owner_id: UUID,
+    metric_id: str,
+    value: float,
+    at: datetime,
+    captured_at: datetime | None = None,
+    provenance_ref: str | None = None,
+) -> Observation | None:
+    """One Whoop recovery reading as a canonical observation, or None when the
+    value is outside the metric's valid range (never stored, never guessed)."""
+
+    units = {metric: unit for _, metric, unit in RECOVERY_READINGS}
+    if metric_id not in units:
+        raise ValueError(f"{metric_id} is not a Whoop recovery reading")
+    if metric_id == "vital.blood_oxygen" and 0 <= value <= 1:
+        value = value * 100  # a fraction, as older per-metric rows may hold it
+    definition = get_metric(metric_id)
+    rng = definition.valid_range if definition else None
+    if rng is not None and (
+        (rng.min_value is not None and value < rng.min_value)
+        or (rng.max_value is not None and value > rng.max_value)
+    ):
+        return None
+    at = at if at.tzinfo is not None else at.replace(tzinfo=UTC)
+    source_id = identity.source_uuid(owner_id, ORIGIN_PROVIDER)
+    reading_key = f"recovery:{metric_id}:{at.astimezone(UTC).isoformat()}"
+    unit = units[metric_id]
+    return Observation(
+        owner_id=owner_id,
+        workspace_id=DEFAULT_WORKSPACE_ID,
+        metric_id=metric_id,
+        value=QuantityValue(
+            type="quantity",
+            value=float(value),
+            unit=unit,
+            canonical_value=float(value),
+            canonical_unit=unit,
+        ),
+        interval_start=at,
+        interval_end=at,
+        recorded_at=at,
+        source_id=source_id,
+        stream_id=whoop_stream_id(owner_id),
+        exact_ingest_key=exact_ingest_key(
+            owner_id, source_id, "recovery_reading", provider_object_id=reading_key
+        ),
+        source_record_uid=reading_key,
+        provenance=Provenance(
+            source_plugin_id=ORIGIN_PROVIDER,
+            sdk_version=NORMALIZER_VERSION,
+            captured_at=captured_at or datetime.now(UTC),
+            raw_payload_ref=provenance_ref,
+        ),
+        normalizer_id=NORMALIZER_ID,
+        normalizer_version=NORMALIZER_VERSION,
+        dedup_key=build_dedup_key(
+            owner_id=owner_id,
+            workspace_id=DEFAULT_WORKSPACE_ID,
+            source_id=source_id,
+            metric_id=metric_id,
+            interval_start=at,
+            interval_end=at,
+            device_id=None,
+            source_record_uid=reading_key,
+        ),
+    )
+
+
+def canonical_recovery_observations(
+    items: list[dict[str, Any]],
+    *,
+    owner_id: UUID,
+    captured_at: datetime | None = None,
+) -> list[Observation]:
+    """Scored Whoop recoveries -> HRV (RMSSD), resting heart rate, blood oxygen."""
+
+    observations: list[Observation] = []
+    for item in items:
+        if not _is_scored(item):
+            continue
+        at = _parse_ts(item.get("created_at"))
+        if at is None:
+            continue
+        score = item["score"]
+        for field, metric_id, _unit in RECOVERY_READINGS:
+            raw = score.get(field)
+            if raw is None:
+                continue
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                continue
+            obs = recovery_observation(
+                owner_id=owner_id, metric_id=metric_id, value=value, at=at, captured_at=captured_at
+            )
+            if obs is not None:
+                observations.append(obs)
+    return observations

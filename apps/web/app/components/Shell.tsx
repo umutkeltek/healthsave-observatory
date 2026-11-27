@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 
 import type { Density } from "../lib/prefs";
-import { useOptimisticDensity } from "./DensityToggle";
+import { DensityProvider, useOptimisticDensity } from "./DensityToggle";
 import { useI18n } from "./I18nProvider";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
@@ -15,13 +15,18 @@ import { Topbar } from "./Topbar";
 // in the layout) so the chrome never blocks on backend reads.
 export function Shell({
   sidebarStatus,
+  participantSwitcher,
   topbarStatus,
   density,
+  renderedSettled,
   children,
 }: {
   sidebarStatus: ReactNode;
+  participantSwitcher?: ReactNode;
   topbarStatus: ReactNode;
   density: Density;
+  // Cache refreshes landed at render, for the live poll's redraw (LiveStatus).
+  renderedSettled?: number;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -29,25 +34,28 @@ export function Shell({
   const { dict } = useI18n();
 
   return (
-    <div className={`app density-${shownDensity} ${open ? "nav-open" : ""}`}>
-      <Sidebar
-        status={sidebarStatus}
-        density={shownDensity}
-        onDensityChange={pickDensity}
-        onNavigate={() => setOpen(false)}
-      />
-      <button
-        type="button"
-        className="nav-scrim"
-        aria-label={dict.chrome.closeNavigation}
-        hidden={!open}
-        tabIndex={open ? 0 : -1}
-        onClick={() => setOpen(false)}
-      />
-      <div className="app-main">
-        <Topbar status={topbarStatus} onMenu={() => setOpen((v) => !v)} />
-        <main className="content">{children}</main>
+    <DensityProvider value={{ density: shownDensity, pick: pickDensity }}>
+      <div className={`app density-${shownDensity} ${open ? "nav-open" : ""}`}>
+        <Sidebar
+          status={sidebarStatus}
+          participantSwitcher={participantSwitcher}
+          density={shownDensity}
+          onDensityChange={pickDensity}
+          onNavigate={() => setOpen(false)}
+        />
+        <button
+          type="button"
+          className="nav-scrim"
+          aria-label={dict.chrome.closeNavigation}
+          hidden={!open}
+          tabIndex={open ? 0 : -1}
+          onClick={() => setOpen(false)}
+        />
+        <div className="app-main">
+          <Topbar status={topbarStatus} renderedSettled={renderedSettled} onMenu={() => setOpen((v) => !v)} />
+          <main className="content">{children}</main>
+        </div>
       </div>
-    </div>
+    </DensityProvider>
   );
 }

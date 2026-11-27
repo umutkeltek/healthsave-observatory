@@ -27,6 +27,7 @@ export type WebAuthState =
   | { source: "settings"; mode: "unreadable"; credential: "" };
 
 // One limiter for every place a password is checked: sign-in, change, turn off.
+// It counts per client address under a process-wide ceiling (lib/webAuth.ts).
 export const passwordAttempts = new FailedLoginLimiter();
 
 export function webAuthFilePath(env: Record<string, string | undefined> = process.env): string {

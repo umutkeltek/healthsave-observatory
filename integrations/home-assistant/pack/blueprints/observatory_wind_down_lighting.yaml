@@ -1,0 +1,200 @@
+blueprint:
+  name: "HealthSave Observatory: wind-down lighting from sleep need"
+  description: >-
+    At your wind-down time, this compares last night's sleep from HealthSave Observatory with the
+    sleep you need. If last night came up short by at least the margin you set, it dims and warms
+    the lights you pick, so the evening winds down earlier.
+
+
+    Observatory publishes no bedtime or sleep-debt entity. This blueprint uses the length of the
+    most recent sleep session against a number you set, or against a baseline sensor you create
+    (for example a Statistics helper with the 7-day mean of last sleep). It skips the evening when
+    Observatory's data is older than your limit, because "last sleep" could then be an older night.
+
+
+    A comfort automation for your own home. It makes no health judgement and is not medical advice.
+  domain: automation
+  author: HealthSave
+  source_url: https://github.com/umutkeltek/healthsave-observatory/blob/main/integrations/home-assistant/pack/blueprints/observatory_wind_down_lighting.yaml
+  homeassistant:
+    min_version: "2024.10.0"
+  input:
+    lights:
+      name: Lights
+      description: The lights or light groups to dim and warm.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: light
+    wind_down_time:
+      name: Wind-down time
+      description: When to look at last night's sleep and adjust the lights.
+      default: "21:30:00"
+      selector:
+        time: {}
+    sleep_sensor:
+      name: Last sleep (hours)
+      description: >-
+        Observatory's length of the most recent sleep session, in hours. The bridge publishes it as
+        "Last Sleep Hours" on the HealthSave Observatory device.
+      default: sensor.healthsave_observatory_last_sleep_hours
+      selector:
+        entity:
+          filter:
+            - integration: mqtt
+              domain: sensor
+    sleep_need_hours:
+      name: Sleep you need (hours)
+      description: Your own number. Used when no baseline sensor is set below.
+      default: 7.5
+      selector:
+        number:
+          min: 4
+          max: 12
+          step: 0.25
+          unit_of_measurement: h
+          mode: slider
+    baseline_sensor:
+      name: Sleep baseline sensor (optional)
+      description: >-
+        A sensor that holds your usual sleep in hours, for example a Statistics helper (mean, max
+        age 7 days) built on the last-sleep sensor. When it has a number, it replaces the sleep you
+        need above. Leave empty to use the number.
+      default: ""
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+    shortfall_margin_hours:
+      name: Shortfall that starts wind-down (hours)
+      description: Dim the lights when last night was at least this much shorter than you need.
+      default: 1
+      selector:
+        number:
+          min: 0.25
+          max: 4
+          step: 0.25
+          unit_of_measurement: h
+          mode: slider
+    brightness_pct:
+      name: Brightness
+      description: Brightness to fade to.
+      default: 35
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+          mode: slider
+    color_temp_kelvin:
+      name: Colour temperature
+      description: Warmer is lower. Lights without colour temperature only change brightness.
+      default: 2700
+      selector:
+        number:
+          min: 2000
+          max: 4000
+          step: 100
+          unit_of_measurement: K
+          mode: slider
+    transition_seconds:
+      name: Fade time
+      description: How long the fade takes, in seconds. Not every light supports a fade.
+      default: 120
+      selector:
+        number:
+          min: 0
+          max: 1800
+          step: 30
+          unit_of_measurement: s
+          mode: slider
+    only_lights_that_are_on:
+      name: Only lights that are already on
+      description: When on, lights that are off stay off. When off, the chosen lights turn on dimmed.
+      default: true
+      selector:
+        boolean: {}
+    check_data_freshness:
+      name: Skip when Observatory data is old
+      description: >-
+        When on, nothing happens if the data freshness sensor below is older than the limit.
+      default: true
+      selector:
+        boolean: {}
+    sync_timestamp_sensor:
+      name: Data freshness sensor
+      description: >-
+        A timestamp sensor that moves when Observatory receives new data. The default is the time
+        of the last step sync from your phone ("Steps Synced At" on the Observatory device).
+      default: sensor.healthsave_observatory_steps_synced_at
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+              device_class: timestamp
+    max_data_age_hours:
+      name: Oldest data to act on (hours)
+      description: Skip the evening when the freshness sensor is older than this.
+      default: 18
+      selector:
+        number:
+          min: 1
+          max: 72
+          step: 1
+          unit_of_measurement: h
+          mode: slider
+
+mode: single
+max_exceeded: silent
+
+triggers:
+  - trigger: time
+    at: !input wind_down_time
+
+variables:
+  light_entities: !input lights
+  sleep_entity: !input sleep_sensor
+  need_hours: !input sleep_need_hours
+  baseline_entity: !input baseline_sensor
+  margin_hours: !input shortfall_margin_hours
+  only_on: !input only_lights_that_are_on
+  check_freshness: !input check_data_freshness
+  freshness_entity: !input sync_timestamp_sensor
+  max_age_hours: !input max_data_age_hours
+  slept: "{{ states(sleep_entity) | float(none) }}"
+  baseline: >-
+    {%- set b = states(baseline_entity) | float(0) if baseline_entity else 0 -%}
+    {{ b if b > 0 else need_hours | float }}
+  shortfall: "{{ (baseline | float - slept) | round(2) if slept is number else none }}"
+  data_age_hours: >-
+    {%- set ts = as_timestamp(states(freshness_entity), none) -%}
+    {{ ((as_timestamp(now()) - ts) / 3600) | round(1) if ts is not none else none }}
+  targets: >-
+    {%- set all = [light_entities] if light_entities is string else light_entities -%}
+    {{ all | select('is_state', 'on') | list if only_on else all | list }}
+
+conditions:
+  - alias: Observatory has a last-sleep number
+    condition: template
+    value_template: "{{ slept is number and slept > 0 }}"
+  - alias: Observatory data is fresh enough
+    condition: template
+    value_template: >-
+      {{ not check_freshness or (data_age_hours is number and data_age_hours <= max_age_hours) }}
+  - alias: Last night fell short by at least the margin
+    condition: template
+    value_template: "{{ shortfall is number and shortfall >= margin_hours }}"
+  - alias: There is a light to adjust
+    condition: template
+    value_template: "{{ targets | count > 0 }}"
+
+actions:
+  - action: light.turn_on
+    target:
+      entity_id: "{{ targets }}"
+    data:
+      brightness_pct: !input brightness_pct
+      color_temp_kelvin: !input color_temp_kelvin
+      transition: !input transition_seconds

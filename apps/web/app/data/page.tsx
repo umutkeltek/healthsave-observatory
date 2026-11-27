@@ -5,6 +5,7 @@ import {
   type DataFilters,
   DataExportSection,
   DataReadinessSection,
+  DEFAULT_DATA_RANGE,
   ExplorerSection,
   RANGES,
 } from "../components/sections/DataSections";
@@ -28,7 +29,7 @@ export default async function DataPage({ searchParams }: { searchParams: Promise
     sourceSel: one(sp.source),
     deviceSel: one(sp.device),
     sortSel: one(sp.sort),
-    range: RANGES.includes(one(sp.range)) ? one(sp.range) : "7d",
+    range: RANGES.includes(one(sp.range)) ? one(sp.range) : DEFAULT_DATA_RANGE,
   };
   // Re-mount the explorer when filters change so stale cards never linger
   // behind a slow re-fetch - the skeleton is the honest in-between state.

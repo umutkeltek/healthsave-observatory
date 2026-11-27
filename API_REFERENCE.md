@@ -248,6 +248,109 @@ Personal-context moments: illness, travel, lifestyle events that may explain or 
 ### `PUT /api/v2/moments/{id}` · `DELETE /api/v2/moments/{id}` — keyed
 Update or delete one personal-context moment by id.
 
+### Private reviewed lab imports — admin key
+
+These routes operate on the primary person's record. Participant ingest/read keys
+cannot call them. User data is never sent to a remote extraction or AI service.
+
+| Route | Behavior |
+|---|---|
+| `GET /api/v2/lab-imports` | Latest 100 documents, including draft/committed timestamps. |
+| `POST /api/v2/lab-imports` | Raw CSV/PDF bytes; URL-encoded simple file name in `X-File-Name`. Returns a draft (201). Bounded to 5 MB, 12 pages, and 250 rows. |
+| `GET /api/v2/lab-imports/catalog` | Supported LOINC test metadata. |
+| `GET /api/v2/lab-imports/{document_id}` | Draft with extracted pages, editable rows and warnings. |
+| `GET /api/v2/lab-imports/{document_id}/deletion` | Preview deletion and count observations last written by this document. |
+| `DELETE /api/v2/lab-imports/{document_id}` | JSON `{ "confirmation": "<document UUID>", "delete_results": false }`. Deletes the document/report; optionally deletes observations whose current provenance names this document. Later corrections survive. |
+| `POST /api/v2/lab-imports/{document_id}/commit` | Body `{ "rows": [...] }`, retaining draft `row_id` values; manually added rows use `manual-` followed by an alphanumeric/hyphen identifier. Every row requires `confirmed: true`. |
+| `GET /api/v2/lab-imports/{document_id}/original` | Original bytes as an attachment; private, no-store. |
+| `GET /api/v2/lab-imports/{document_id}/report` | Immutable report with provenance, reference-range descriptions, evidence limits, and source URLs. |
+
+Review fields are `specimen_datetime`, `loinc`, `marker_name`, `value`, `unit`,
+`reference_low`, `reference_high`, `lab`, and `panel`; they are revalidated on the
+server. Unknown/missing values must be corrected before confirmation. Optional
+ownership fields must match the default owner/workspace. The response receipt
+includes inserted/updated/unchanged counts and the report URL. Save uses a row
+lock and one transaction; an identical retry returns the saved receipt. A changed
+retry returns 409 and requires a new draft. Missing documents return 404;
+invalid files/rows return 422, oversized uploads 413, busy extraction 429,
+and unavailable extraction tools or transient storage failures 503.
+
+The browser proxy requires a signed-in web session when sign-in is enabled,
+checks same-origin mutation metadata, and rejects non-primary person views.
+The original is retained, and no cache or external AI receives its bytes.
+See [lab import and review](docs/capture/labs-csv.md).
+
+### `GET /api/v2/labs` — keyed
+Blood test results imported with `healthsave labs import` (docs/capture/labs-csv.md). One entry per marker (LOINC code), newest first, each result with the reference range its lab printed and the lab stream it came from. Results from different labs are separate rows, never averaged. Host-local — raw lab rows never egress.
+
+Every reading is computed by the statistical engine (`analysis/statistical/labs.py`): `band` places each result against **its own lab's** range (`below` / `within` / `above` / `no_range` / `censored`; `band_fraction` is 0 at the low bound, 1 at the high bound); `assessment` compares the latest result with the previous one (withheld, with a reason, when a value is a `<`/`>` limit or the units differ) and with the person's earlier range; `gap_count` counts pairs of results from different labs within 14 days.
+```json
+{ "markers": [{ "loinc": "2276-4", "metric_id": "loinc:2276-4", "name": "Ferritin",
+  "unit": "ng/mL", "display_unit": "ng/mL", "result_count": 1, "lab_count": 1,
+  "first_specimen_at": "2026-09-08T05:50:00Z", "last_specimen_at": "2026-09-08T05:50:00Z",
+  "results": [{ "id": "…", "specimen_at": "2026-09-08T05:50:00Z", "date_only": false,
+    "value": 24.0, "comparator": null, "unit": "ng/mL", "display_unit": "ng/mL",
+    "reference_low": 30.0, "reference_high": 400.0, "lab": "Northfield Diagnostics",
+    "stream_id": "…", "source_plugin_id": "labs-csv", "panel": "Iron studies",
+    "quality_flags": [], "band": "below", "band_fraction": -0.0162 }],
+  "assessment": { "latest_band": "below", "previous_specimen_at": null,
+    "previous_from_other_lab": false, "change": null, "change_pct": null, "direction": null,
+    "change_withheld": "first result", "prior_count": 0, "prior_min": null, "prior_max": null,
+    "versus_history": null, "outside_streak": 1 },
+  "gap_count": 0, "related_metric_id": "vital.resting_heart_rate" }],
+  "labs": [{ "stream_id": "…", "lab": "Northfield Diagnostics", "source_plugin_id": "labs-csv",
+    "result_count": 1, "first_specimen_at": "2026-09-08T05:50:00Z",
+    "last_specimen_at": "2026-09-08T05:50:00Z" }],
+  "count": 1, "result_count": 1 }
+```
+
+### `GET /api/v2/labs/{loinc}` — keyed
+One marker's results, oldest first, in the same shape as one `markers[]` entry above, plus:
+
+- `gaps[]` — two labs that measured the marker within 14 days: both values, both band verdicts, the difference (`difference`, `difference_pct`, relative to the earlier result). Never a mean.
+- `cross_match` — for markers with a paired wearable signal (ferritin → resting heart rate, hemoglobin → HRV SDNN): a Finding Card (`finding_type: "lab_wearable_cross_match"`) comparing the 30 days of that signal before each draw on **one** wearable stream, with coverage (21 of 30 days needed), effect size (Spearman ρ across 4+ draws, otherwise Cohen's d between the last two windows), confidence and limitations. When coverage is missing, `card` is `null` and `reason` says what is missing. `null` for markers without a pairing.
+
+`422` when `{loinc}` is not a valid LOINC code (the check digit must match), `404` when there are no results for it.
+
+### `GET /api/v2/year/{year}` — keyed
+Year in Health: one calendar year of the record read as coverage, for one owner (`?owner=`, like the other person-scoped reads). Days are the person's analytical days (`/api/v2/settings/analytical-time`: time zone and day start); a daily total stamped at local midnight stays on its own day. The current year runs to today; `422` for a year that has not started, and for a year outside 1970-2200.
+
+Every value comes from the statistical engine (`analysis/statistical/year.py`); nothing is narrated:
+
+- `mask` and each `families[].mask` hold one character per day of the window (`1` data, `0` none). `gaps[]` (overall) and `families[].gaps[]` partition every `0` into runs, none filtered by length: `kind` is `before_first` (the record had not started), `inside`, `after_last` or `no_data`. `day_family_counts[]` counts the kinds of data recorded each day.
+- `months[]` — twelve entries: days in the window, days with data, `coverage`, the families and `source_ids` seen that month, the sources first or last seen that month, and `confidence` (`ok`, `low` under half the days, `none`, `future`).
+- `sources[]` — device streams with readings this year (all-source daily totals count as data but are not a device), each with its first and last day this year and its all-time first and last observation; `device_changes[]` lists `first_seen` / `last_seen` (a source silent for 14+ days before the end of the window).
+- `headlines[]` — record counts (`days_recorded`, `sources`, `longest_gap`), then per-source medians (`basis: "median_one_source"`: `value` is p50, `low`/`high` p10/p90) for resting heart rate and daily steps. Two sources are never averaged; fewer than 7 days moves a source to `withheld[]`, under 30 days is `confidence: "low"`.
+- `limitations[]` — codes with their facts (`time_basis`, `day_presence_only`, `partial_year`, `record_starts_late`, `no_data`, `device_labels`, `unattributed`, `derived_excluded`, `headline_thin`); the web view words them.
+
+Cached per owner and year under the owner's last ingest time, so a sync shows on the next read.
+```json
+{ "year": 2026, "owner_id": "00000000-0000-0000-0000-000000000001", "time_zone": "UTC",
+  "day_boundary": "04:00", "window_start": "2026-01-01", "window_end": "2026-11-06",
+  "days_in_window": 310, "days_with_data": 303, "mask": "1111…", "day_family_counts": [3, 4, 3, …],
+  "gaps": [{ "start": "2026-08-04", "end": "2026-08-10", "days": 7, "kind": "inside" }],
+  "longest_inside_gap": 7,
+  "months": [{ "month": 4, "days": 30, "days_with_data": 30, "coverage": 1.0,
+               "families": ["heart", "sleep", "activity", "body"], "source_ids": ["…"],
+               "first_seen_ids": ["…"], "last_seen_ids": [], "confidence": "ok" }],
+  "families": [{ "id": "heart", "label": "Heart and vitals", "metric_ids": ["vital.heart_rate"],
+                 "days_with_data": 301, "days_without_data": 9, "first_day": "2026-01-01",
+                 "last_day": "2026-11-06", "mask": "1111…", "longest_inside_gap": 8,
+                 "gaps": [{ "start": "2026-08-03", "end": "2026-08-10", "days": 8, "kind": "inside" }],
+                 "confidence": "ok" }],
+  "sources": [{ "stream_id": "…", "label": "Oura Ring", "source_plugin_id": "apple_health",
+                "first_day": "2026-04-10", "last_day": "2026-11-06", "days_with_data": 202,
+                "months": [4, 5, 6, 7, 8, 9, 10, 11], "families": ["heart"],
+                "first_seen_at": "2026-04-10T06:30:00Z", "last_seen_at": "2026-11-06T06:30:00Z",
+                "new_this_year": true, "stopped_this_year": false }],
+  "device_changes": [{ "day": "2026-04-10", "kind": "first_seen", "stream_id": "…", "label": "Oura Ring" }],
+  "headlines": [{ "id": "resting_heart_rate", "label": "Resting heart rate", "value": 54.0, "unit": "bpm",
+                  "stream_id": "…", "source_label": "Oura Ring", "low": 52.0, "high": 56.0, "days": 202,
+                  "of_days": null, "basis": "median_one_source", "confidence": "ok" }],
+  "withheld": [], "limitations": [{ "code": "partial_year", "day": "2026-11-06", "count": null }],
+  "confidence": "ok", "generated_at": "2026-11-07T02:00:00Z" }
+```
+
 ### `GET /api/v2/intelligence` · `PUT /api/v2/intelligence` — keyed
 The LLM-narrator ("Intelligence") settings. `GET` returns the current posture with **no secrets** (only `key_last4`); `managed_by_env` is true when deploy-time env config is still the effective source. `PUT` applies `mode` (off/local/cloud) + the primary provider/model (+ optional write-only `api_key`) + the fallback chain. The server classifies each route's trust zone; `PUT` does **not** grant cloud egress (see `/consent`).
 ```json
@@ -282,6 +385,22 @@ Probe the known local Ollama endpoints (the bundled sidecar / host) so the UI ca
 { "candidates": [ { "url": "http://ollama:11434", "reachable": true, "models": ["llama3.1:8b"] },
                   { "url": "http://host.docker.internal:11434", "reachable": false, "models": [] } ] }
 ```
+
+### `GET /api/v2/owners` — admin key
+Who this Observatory holds data for: the default owner first (`label: null`), then one entry per participant (migration 029). `active` is false once every key of that person is revoked; their data stays. Participant keys get 403. The web shell shows its participant switcher only when `count` is above 1.
+
+```json
+{ "count": 2,
+  "owners": [ { "id": "00000000-0000-0000-0000-000000000001", "label": null, "is_default": true,
+                "active": true, "scopes": [], "created_at": null, "last_ingest_at": "2026-11-02T08:10:00Z" },
+              { "id": "7d0c4f8e-2b6a-4a51-9a7e-0d6a3c2b1f00", "label": "Alice", "is_default": false,
+                "active": true, "scopes": ["ingest"], "created_at": "2026-11-01T09:00:00Z",
+                "last_ingest_at": "2026-11-02T07:55:00Z" } ] }
+```
+
+The owner-scoped reads (`/api/v2/metrics/{metric_id}/series`, `/api/v2/series`, `/api/v2/export/metrics`, `/api/v2/export`, `/api/v2/sources`, `/api/v2/devices`, `/api/v2/streams`, `/api/v2/streams/{stream_id}`, `/api/v2/readiness`) take an optional `owner=<uuid>` query parameter: the admin key may name any owner (default: the default owner), a participant `read` key only its own (403 otherwise), and a malformed value is 422.
+
+A `read` key minted for the primary person (`healthsave mcp key`, used by the MCP server in `docs/mcp.md`) reads the same owner-scoped routes for the default owner, plus `GET /api/v2/insights/findings`, `GET /api/v2/insights/correlations`, `GET /api/v2/labs`, `GET /api/v2/labs/{loinc}` and `GET /api/v2/settings/analytical-time`. A participant's `read` key gets 403 on those, and no `read` key may call any route that writes.
 
 ### `GET /api/v2/readiness` — keyed
 Per-metric data sufficiency (is there enough history to run anomaly/trend analysis). Drives the dashboard "what can I analyze yet" view.
@@ -435,7 +554,7 @@ Other typed shapes: `AnomaliesListResponse {count, anomalies[{id,metric,severity
 ## 6. Webhooks
 
 ### `POST /api/v2/sources/whoop/webhook` · caller: Whoop
-Inbound Whoop events. Verifies `base64(HMAC-SHA256(secret, ts + raw_body))` against `X-WHOOP-Signature` (constant-time). Unset secret → warn + allow (unconfigured no-op).
+Inbound Whoop events. Verifies `base64(HMAC-SHA256(secret, ts + raw_body))` against `X-WHOOP-Signature` (constant-time). `X-WHOOP-Signature-Timestamp` (milliseconds since the epoch) must be within 5 minutes of the server clock either way, else `401`. The same signed delivery sent again inside that window answers `200` with `result.duplicate: 1` and is not applied twice. Unset secret → warn + allow (unconfigured no-op).
 
 ---
 
@@ -516,3 +635,18 @@ The Local Vault's inspectable chain of custody: the stored intelligence audit tr
 | **Worker / scheduler** | internal (writes findings consumed via `/api/v2/insights/*`) |
 | **Operator** | `GET /ready`, `GET /api/v2/setup/diagnostics`, `GET /api/v2/sync/coverage`, `GET /metrics` |
 | **Whoop** | `POST /api/v2/sources/whoop/webhook` |
+
+
+## Private genetic evidence
+
+Admin-only, primary-person uploads and immutable local ClinVar evidence.
+See [the workflow](docs/capture/genetic-evidence.md) and [request details](API.md#private-genetic-evidence-v2).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET, POST | `/api/v2/genetics` | List documents or import a private genotype file |
+| GET, POST | `/api/v2/genetics/reference` | Read reference status or confirm a public reference update |
+| GET, DELETE | `/api/v2/genetics/{document_id}` | Read a document or confirm deletion of all its versions |
+| GET, DELETE | `/api/v2/genetics/{document_id}/original` | Download or remove the optional retained original |
+| POST | `/api/v2/genetics/{document_id}/reanalyze` | Reanalyze a retained file using the installed reference |
+| GET | `/api/v2/genetics/{document_id}/reports/{report_id}` | Read an immutable saved report |

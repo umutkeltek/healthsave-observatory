@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Protocol
 
+from plugin_sdk.http import get_with_retry
+
 GOOGLE_HEALTH_API_BASE = "https://health.googleapis.com"
 DATA_TYPE_STEPS = "steps"
 DEFAULT_PAGE_SIZE = 1000
@@ -12,6 +14,13 @@ DEFAULT_PAGE_SIZE = 1000
 
 class GoogleHealthFetchError(Exception):
     """Raised when Google Health API response cannot be used."""
+
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        # The HTTP status when the API answered with one; None for a malformed
+        # body or a page-cap overflow. The worker reads it to tell a rejected
+        # window from an outage or an auth failure.
+        self.status_code = status_code
 
 
 class _HttpResponse(Protocol):
@@ -61,13 +70,14 @@ async def fetch_data_points(
     points: list[dict[str, Any]] = []
 
     for _ in range(max_pages):
-        response = await http_client.get(
-            _data_points_url(data_type), params=params, headers=headers
+        response = await get_with_retry(
+            http_client, _data_points_url(data_type), params=dict(params), headers=headers
         )
         if response.status_code != 200:
             body = getattr(response, "text", "<no body>")
             raise GoogleHealthFetchError(
-                f"GET dataPoints/{data_type} returned HTTP {response.status_code}: {body}"
+                f"GET dataPoints/{data_type} returned HTTP {response.status_code}: {body}",
+                status_code=response.status_code,
             )
         try:
             payload = response.json()

@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 import { config as proxyConfig, proxy } from "../../proxy";
 import {
   BARE_LAYOUT_HEADER,
+  clientAddress,
   configuredWebPassword,
   createSessionToken,
   FailedLoginLimiter,
@@ -135,11 +136,90 @@ describe("cross-site form posts", () => {
 });
 
 describe("failed sign-in limiter", () => {
+  const A = "192.168.1.20";
+  const B = "192.168.1.31";
+
   test("blocks after the limit and recovers when the window passes", () => {
-    const limiter = new FailedLoginLimiter(3, 1000);
-    for (let i = 0; i < 3; i++) limiter.recordFailure(NOW + i);
-    expect(limiter.isBlocked(NOW + 10)).toBe(true);
-    expect(limiter.isBlocked(NOW + 1003)).toBe(false);
+    const limiter = new FailedLoginLimiter({ limit: 3, windowMs: 1000, globalLimit: 10 });
+    for (let i = 0; i < 3; i++) limiter.recordFailure(A, NOW + i);
+    expect(limiter.blocked(A, NOW + 10)).not.toBeNull();
+    expect(limiter.blocked(A, NOW + 1003)).toBeNull();
+  });
+
+  // The bug: one process-wide bucket, so ten wrong guesses from anywhere that
+  // reaches the port locked the owner out of their own dashboard.
+  test("one address's wrong passwords do not lock out another address", () => {
+    const limiter = new FailedLoginLimiter({ limit: 3, windowMs: 60_000, globalLimit: 10 });
+    for (let i = 0; i < 3; i++) limiter.recordFailure(A, NOW + i);
+    expect(limiter.blocked(A, NOW + 10)?.scope).toBe("client");
+    expect(limiter.blocked(B, NOW + 10)).toBeNull();
+  });
+
+  test("a flood from many addresses still stops at the process-wide ceiling", () => {
+    const limiter = new FailedLoginLimiter({ limit: 3, windowMs: 60_000, globalLimit: 5 });
+    for (let i = 0; i < 5; i++) limiter.recordFailure(`10.0.0.${i}`, NOW + i);
+    expect(limiter.blocked("10.0.0.99", NOW + 10)?.scope).toBe("everyone");
+    expect(limiter.blocked(null, NOW + 10)?.scope).toBe("everyone");
+  });
+
+  test("requests with no known address share one bucket, as before", () => {
+    const limiter = new FailedLoginLimiter({ limit: 3, windowMs: 60_000, globalLimit: 10 });
+    for (let i = 0; i < 3; i++) limiter.recordFailure(null, NOW + i);
+    expect(limiter.blocked(null, NOW + 10)?.scope).toBe("client");
+    expect(limiter.blocked(A, NOW + 10)).toBeNull();
+  });
+
+  test("the wait is how long until the oldest counted failure leaves the window", () => {
+    const limiter = new FailedLoginLimiter({ limit: 3, windowMs: 60_000, globalLimit: 10 });
+    for (const offset of [0, 10_000, 20_000]) limiter.recordFailure(A, NOW + offset);
+    expect(limiter.blocked(A, NOW + 30_000)?.retryAfterSeconds).toBe(30);
+    expect(limiter.blocked(A, NOW + 59_500)?.retryAfterSeconds).toBe(1);
+    expect(limiter.blocked(A, NOW + 60_000)).toBeNull();
+  });
+
+  test("a forgiven attempt no longer counts", () => {
+    const limiter = new FailedLoginLimiter({ limit: 2, windowMs: 60_000, globalLimit: 2 });
+    limiter.recordFailure(A, NOW);
+    const ok = limiter.recordFailure(A, NOW + 1);
+    expect(limiter.blocked(A, NOW + 2)?.scope).toBe("client");
+    limiter.forgive(A, ok);
+    expect(limiter.blocked(A, NOW + 2)).toBeNull();
+  });
+
+  test("the number of addresses it remembers is bounded", () => {
+    const limiter = new FailedLoginLimiter({ limit: 3, windowMs: 60_000, globalLimit: 1_000_000, maxClients: 4 });
+    for (let i = 0; i < 10; i++) limiter.recordFailure(`10.0.1.${i}`, NOW + i);
+    expect(limiter.trackedClients()).toBeLessThanOrEqual(4);
+  });
+});
+
+describe("client address for the limiter", () => {
+  const h = (init: Record<string, string>) => new Headers(init);
+  const behindProxy = { WEB_TRUST_PROXY: "true" };
+
+  // Without a trusted proxy in front, X-Forwarded-For and X-Real-IP come from
+  // the client, so they must not pick the bucket (review of web #15).
+  test("by default no header decides the address: one shared bucket", () => {
+    expect(clientAddress(h({ "x-forwarded-for": "6.6.6.6" }), {})).toBeNull();
+    expect(clientAddress(h({ "x-real-ip": "6.6.6.6" }), {})).toBeNull();
+    expect(clientAddress(h({ "x-forwarded-for": "6.6.6.6" }), { WEB_TRUST_PROXY: "" })).toBeNull();
+    expect(clientAddress(h({ "x-forwarded-for": "6.6.6.6" }), { WEB_TRUST_PROXY: "no" })).toBeNull();
+  });
+
+  test("behind a trusted proxy: the hop nearest this app, the last X-Forwarded-For entry", () => {
+    // The proxy appends the address it saw; anything to its left came from
+    // the client and can be made up.
+    expect(clientAddress(h({ "x-forwarded-for": "6.6.6.6, 192.168.1.20" }), behindProxy)).toBe("192.168.1.20");
+    expect(clientAddress(h({ "x-forwarded-for": " 192.168.1.20 " }), { WEB_TRUST_PROXY: "1" })).toBe("192.168.1.20");
+  });
+
+  test("behind a trusted proxy: X-Real-IP when there is no X-Forwarded-For", () => {
+    expect(clientAddress(h({ "x-real-ip": "192.168.1.31" }), behindProxy)).toBe("192.168.1.31");
+  });
+
+  test("behind a trusted proxy with no address at all: the shared bucket", () => {
+    expect(clientAddress(h({}), behindProxy)).toBeNull();
+    expect(clientAddress(h({ "x-forwarded-for": " , " }), behindProxy)).toBeNull();
   });
 });
 
@@ -216,6 +296,16 @@ describe("proxy", () => {
     expect((await proxy(request("/api/v2/meta"))).status).toBe(401);
     expect((await proxy(request("/settings", { method: "POST", headers: { "next-action": "abc" } }))).status).toBe(401);
     expect((await proxy(request("/login", { method: "POST", headers: { "next-action": "abc" } }))).status).toBe(401);
+  });
+
+  test("an expired session on a server action answers text/plain, which the page can tell apart from a bug", async () => {
+    await signIn();
+    const response = await proxy(request("/settings", { method: "POST", headers: { "next-action": "abc" } }));
+    expect(response.status).toBe(401);
+    // Next's action client rejects with a text/plain error body as the message;
+    // anything else becomes "An unexpected response was received from the server."
+    expect(response.headers.get("content-type")).toBe("text/plain");
+    expect(await response.text()).toBe("sign_in_required");
   });
 
   test("a valid session cookie passes", async () => {

@@ -1,6 +1,21 @@
 // Typed client for the HealthSave Observatory v2 read API (the same contract the LLM narrator
 // consumes). Shapes mirror server/api/v2_metrics.py responses.
 
+import { cookies } from "next/headers";
+import { cache } from "react";
+
+import {
+  ownerScope,
+  PARTICIPANT_COOKIE,
+  parseOwnerCookie,
+  PRIMARY_ONLY,
+  readOwner,
+  resolveViewedPerson,
+  scopePath,
+  type ViewedPerson,
+} from "./participants";
+import { clearSwrCache, invalidateSwr, swrCache } from "./ttlCache";
+
 export type MetricSummary = {
   id: string;
   display_name: string;
@@ -83,7 +98,57 @@ async function readDetail(res: Response): Promise<string | null> {
   }
 }
 
-async function getJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+// Shared with safeOwners (lib/load.ts): one cache key for the owner list.
+export const OWNERS_CACHE_KEY = "owners";
+export const OWNERS_TTL_MS = 30_000;
+
+export type ParticipantView = { person: ViewedPerson; owners: OwnerView[] | null };
+
+// Who this request is about, decided once (React cache) from the cookie AND the
+// server's owner list - see resolveViewedPerson. The list is only read when a
+// participant cookie is set, so a single-person install pays nothing. Outside a
+// request (tests, build) there is no cookie: the primary person.
+export const participantView = cache(async (): Promise<ParticipantView> => {
+  let raw: string | undefined;
+  try {
+    raw = (await cookies()).get(PARTICIPANT_COOKIE)?.value;
+  } catch {
+    return { person: { kind: "primary" }, owners: null };
+  }
+  const requested = parseOwnerCookie(raw);
+  if (requested === null) return { person: { kind: "primary" }, owners: null };
+  let owners: OwnerView[] | null;
+  try {
+    owners = (await swrCache(OWNERS_CACHE_KEY, OWNERS_TTL_MS, fetchOwners)).owners;
+  } catch {
+    owners = null;
+  }
+  return { person: resolveViewedPerson(requested, owners), owners };
+});
+
+// The owner reads go to (null = the primary person).
+export async function currentOwner(): Promise<string | null> {
+  return readOwner((await participantView()).person);
+}
+
+// Writes go to the primary person's records only (moments, experiments,
+// settings): refuse them while a participant is selected instead of quietly
+// writing into the coach's own data.
+async function assertWritable(path: string): Promise<void> {
+  if ((await currentOwner()) !== null && ownerScope(path) === "primary") {
+    throw new Error(`${PRIMARY_ONLY}: switch back to the primary person to change this`);
+  }
+}
+
+async function getJson<T>(requestedPath: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+  // A neutral path reads the same for everyone, so it never asks who is being
+  // viewed - which is also what lets participantView read the owner list.
+  const owner = ownerScope(requestedPath) === "neutral" ? null : await currentOwner();
+  const path = scopePath(requestedPath, owner);
+  if (path === null) {
+    // Primary-only surface while a participant is selected: no data, not an outage.
+    throw new ApiError(`${requestedPath} -> ${PRIMARY_ONLY}`, 409, PRIMARY_ONLY);
+  }
   const headers: Record<string, string> = {};
   if (API_KEY) headers["X-API-Key"] = API_KEY;
   let res: Response;
@@ -106,7 +171,22 @@ async function getJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise
 // Server-side POST - used by the experiment write actions. The key never
 // reaches the browser (these run in server actions). On error we surface the
 // backend's `detail` (e.g. a 422 readiness rationale) so the UI can show it.
-async function postJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+// Which cached reads (lib/ttlCache.ts key prefixes) a successful write
+// changes: "all" when it can change any of them, nothing for a read-only POST.
+type Invalidation = readonly string[] | "all";
+
+function invalidate(changed: Invalidation): void {
+  if (changed === "all") clearSwrCache();
+  else if (changed.length > 0) invalidateSwr(changed);
+}
+
+async function postJson<T>(
+  path: string,
+  body: unknown,
+  changed: Invalidation,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+): Promise<T> {
+  await assertWritable(path);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (API_KEY) headers["X-API-Key"] = API_KEY;
   let res: Response;
@@ -131,13 +211,16 @@ async function postJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIME
     } catch {
       // non-JSON error body - keep the status line
     }
-    throw new Error(detail);
+    throw new ApiError(detail, res.status, detail);
   }
+  // No cached read may show what this write changed as it was before.
+  invalidate(changed);
   return res.json() as Promise<T>;
 }
 
 // Server-side PUT - mirrors postJson. Used by the Intelligence settings apply.
-async function putJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+async function putJson<T>(path: string, body: unknown, changed: Invalidation, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+  await assertWritable(path);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (API_KEY) headers["X-API-Key"] = API_KEY;
   let res: Response;
@@ -162,13 +245,16 @@ async function putJson<T>(path: string, body: unknown, timeoutMs = DEFAULT_TIMEO
     } catch {
       // non-JSON error body - keep the status line
     }
-    throw new Error(detail);
+    throw new ApiError(detail, res.status, detail);
   }
+  // No cached read may show what this write changed as it was before.
+  invalidate(changed);
   return res.json() as Promise<T>;
 }
 
 // Server-side DELETE. The key never reaches the browser.
-async function deleteJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+async function deleteJson<T>(path: string, changed: Invalidation, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+  await assertWritable(path);
   const headers: Record<string, string> = {};
   if (API_KEY) headers["X-API-Key"] = API_KEY;
   let res: Response;
@@ -192,8 +278,10 @@ async function deleteJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Prom
     } catch {
       // non-JSON error body - keep the status line
     }
-    throw new Error(detail);
+    throw new ApiError(detail, res.status, detail);
   }
+  // No cached read may show what this write changed as it was before.
+  invalidate(changed);
   return res.json() as Promise<T>;
 }
 
@@ -278,7 +366,9 @@ export type TriggerType =
 export function postInsightsTrigger(type: TriggerType): Promise<TriggerResult> {
   // Analysis runs inline server-side (daily_briefing includes a real LLM
   // narration round-trip) - give it well past the default timeout.
-  return postJson<TriggerResult>("/api/v2/insights/trigger", { type }, 90_000);
+  // Analysis results are not in the read cache, but a run can log audit events
+  // (narrator_failover) that /api/v2/receipts returns.
+  return postJson<TriggerResult>("/api/v2/insights/trigger", { type }, ["receipts"], 90_000);
 }
 
 // Version axes (open endpoint). Mirrors server/api/v2_meta.py.
@@ -313,7 +403,8 @@ export function fetchAnalyticalTime(): Promise<AnalyticalTimeSettings> {
 export function updateAnalyticalTime(
   payload: UpdateAnalyticalTimePayload,
 ): Promise<AnalyticalTimeSettings> {
-  return putJson<AnalyticalTimeSettings>("/api/v2/settings/analytical-time", payload);
+  // The time basis decides day buckets, so any cached read can change.
+  return putJson<AnalyticalTimeSettings>("/api/v2/settings/analytical-time", payload, "all");
 }
 
 export type MomentKind =
@@ -358,15 +449,15 @@ export function fetchMoments(limit = 50): Promise<MomentListResponse> {
 }
 
 export function createMoment(payload: CreateMomentPayload): Promise<Moment> {
-  return postJson<Moment>("/api/v2/moments", payload);
+  return postJson<Moment>("/api/v2/moments", payload, ["moments"]);
 }
 
 export function updateMoment(id: number, payload: CreateMomentPayload): Promise<Moment> {
-  return putJson<Moment>(`/api/v2/moments/${id}`, payload);
+  return putJson<Moment>(`/api/v2/moments/${id}`, payload, ["moments"]);
 }
 
 export function deleteMoment(id: number): Promise<{ ok: boolean }> {
-  return deleteJson<{ ok: boolean }>(`/api/v2/moments/${id}`);
+  return deleteJson<{ ok: boolean }>(`/api/v2/moments/${id}`, ["moments"]);
 }
 
 // Data-readiness - Insight Action Loop card #1. Mirrors server/api/v2_readiness.py.
@@ -628,15 +719,8 @@ export function fetchPrivacy(): Promise<Privacy> {
   return getJson<Privacy>("/api/v2/privacy");
 }
 
-// A deployment with no LLM narrator (provider "disabled"/empty) performs zero
-// egress - it is the *most* private posture, not "cloud". The egress classifier
-// only knows ollama→local / everything-else→cloud, so a narrator-off host is
-// bucketed as cloud; callers special-case it here so the UI never mislabels a
-// no-egress host as a cloud one.
-export function isNarratorOff(provider: string | null | undefined): boolean {
-  const p = (provider ?? "").trim().toLowerCase();
-  return p === "" || p === "disabled" || p === "none";
-}
+// Re-exported for server callers; client components import it from ./narrator.
+export { isNarratorOff } from "./narrator";
 
 // Experiments - committed n-of-1 ABAB runs. Mirrors the lifecycle routes in
 // server/api/v2_experiments.py (ExperimentView et al.).
@@ -716,15 +800,15 @@ export function createExperiment(body: {
   start_date?: string;
   hypothesis?: string | null;
 }): Promise<Experiment> {
-  return postJson<Experiment>("/api/v2/experiments", body);
+  return postJson<Experiment>("/api/v2/experiments", body, []);
 }
 
 export function analyzeExperiment(id: string): Promise<Experiment> {
-  return postJson<Experiment>(`/api/v2/experiments/${id}/analyze`, {});
+  return postJson<Experiment>(`/api/v2/experiments/${id}/analyze`, {}, []);
 }
 
 export function abandonExperiment(id: string): Promise<Experiment> {
-  return postJson<Experiment>(`/api/v2/experiments/${id}/abandon`, {});
+  return postJson<Experiment>(`/api/v2/experiments/${id}/abandon`, {}, []);
 }
 
 // Identity - Source / Device / Stream provenance (R2). Mirrors
@@ -854,15 +938,17 @@ export function fetchDetectLocal(): Promise<DetectLocalResult> {
 }
 
 export function applyIntelligence(body: ApplyIntelligencePayload): Promise<IntelligenceView> {
-  return putJson<IntelligenceView>("/api/v2/intelligence", body);
+  // Privacy setting changes are logged as receipt events (the Today vault note).
+  return putJson<IntelligenceView>("/api/v2/intelligence", body, ["receipts"]);
 }
 
 export function postConsent(body: ConsentPayload): Promise<IntelligenceView> {
-  return postJson<IntelligenceView>("/api/v2/intelligence/consent", body);
+  return postJson<IntelligenceView>("/api/v2/intelligence/consent", body, ["receipts"]);
 }
 
 export function postTestConnection(body: TestConnectionPayload): Promise<TestConnectionResult> {
-  return postJson<TestConnectionResult>("/api/v2/intelligence/test-connection", body);
+  // The probe logs a provider_healthcheck audit event, which /api/v2/receipts returns.
+  return postJson<TestConnectionResult>("/api/v2/intelligence/test-connection", body, ["receipts"]);
 }
 
 // Export - the per-metric CSV/JSON dump surface. Mirrors server/api/v2_export.py;
@@ -891,4 +977,247 @@ export function fetchStreams(): Promise<StreamsResponse> {
 
 export function fetchDevices(): Promise<DevicesResponse> {
   return getJson<DevicesResponse>("/api/v2/devices");
+}
+
+// Labs - blood test results (GET /api/v2/labs*). Mirrors server/api/v2_labs.py.
+// Every result carries its own lab's printed range; results from different
+// labs are separate rows and the server never averages them.
+export type LabBand = "below" | "within" | "above" | "no_range" | "censored" | "unverified";
+
+export type LabResult = {
+  id: string;
+  specimen_at: string;
+  date_only: boolean;
+  value: number;
+  comparator: string | null;
+  unit: string;
+  display_unit: string;
+  reference_low: number | null;
+  reference_high: number | null;
+  lab: string;
+  stream_id: string;
+  source_plugin_id: string;
+  panel: string | null;
+  quality_flags: string[];
+  band: LabBand;
+  band_fraction: number | null;
+};
+
+export type LabAssessment = {
+  latest_band: LabBand;
+  previous_specimen_at: string | null;
+  previous_from_other_lab: boolean;
+  change: number | null;
+  change_pct: number | null;
+  direction: "up" | "down" | "flat" | null;
+  change_withheld: string | null;
+  prior_count: number;
+  prior_min: number | null;
+  prior_max: number | null;
+  versus_history: "below_prior_range" | "within_prior_range" | "above_prior_range" | null;
+  outside_streak: number;
+};
+
+export type LabMarker = {
+  loinc: string;
+  metric_id: string;
+  name: string;
+  unit: string;
+  display_unit: string;
+  result_count: number;
+  lab_count: number;
+  first_specimen_at: string;
+  last_specimen_at: string;
+  results: LabResult[];
+  assessment: LabAssessment | null;
+  gap_count: number;
+  related_metric_id: string | null;
+};
+
+export type LabSource = {
+  stream_id: string;
+  lab: string;
+  source_plugin_id: string;
+  result_count: number;
+  first_specimen_at: string;
+  last_specimen_at: string;
+};
+
+export type LabsOverview = { markers: LabMarker[]; labs: LabSource[]; count: number; result_count: number };
+
+export type LabGap = {
+  earlier_id: string;
+  later_id: string;
+  earlier_lab: string;
+  later_lab: string;
+  earlier_specimen_at: string;
+  later_specimen_at: string;
+  earlier_value: number;
+  later_value: number;
+  unit: string;
+  days_apart: number;
+  difference: number | null;
+  difference_pct: number | null;
+  earlier_band: LabBand;
+  later_band: LabBand;
+  bands_disagree: boolean;
+};
+
+export type LabCrossMatch = {
+  related_metric_id: string;
+  related_label: string;
+  related_unit: string;
+  stream_id: string | null;
+  stream_label: string | null;
+  card: FindingCard | null;
+  reason: string | null;
+};
+
+export type LabMarkerDetail = LabMarker & { gaps: LabGap[]; cross_match: LabCrossMatch | null };
+
+export function fetchLabs(): Promise<LabsOverview> {
+  return getJson<LabsOverview>("/api/v2/labs");
+}
+
+export function fetchLabMarker(loinc: string): Promise<LabMarkerDetail> {
+  return getJson<LabMarkerDetail>(`/api/v2/labs/${encodeURIComponent(loinc)}`);
+}
+
+// Year in Health (server/api/v2_year.py): one calendar year read as coverage.
+// Masks hold one character per day of the window ("1" data, "0" none); the gap
+// runs partition every "0". Headline numbers are per source, never averaged.
+export type YearConfidence = "ok" | "low" | "none" | "future";
+
+export type YearGap = {
+  start: string;
+  end: string;
+  days: number;
+  kind: "before_first" | "inside" | "after_last" | "no_data";
+};
+
+export type YearFamily = {
+  id: string;
+  label: string;
+  metric_ids: string[];
+  days_with_data: number;
+  days_without_data: number;
+  first_day: string | null;
+  last_day: string | null;
+  mask: string;
+  gaps: YearGap[];
+  longest_inside_gap: number;
+  confidence: YearConfidence;
+};
+
+export type YearSource = {
+  stream_id: string;
+  label: string;
+  source_plugin_id: string;
+  first_day: string;
+  last_day: string;
+  days_with_data: number;
+  months: number[];
+  families: string[];
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  new_this_year: boolean;
+  stopped_this_year: boolean;
+};
+
+export type YearDeviceChange = {
+  day: string;
+  kind: "first_seen" | "last_seen";
+  stream_id: string;
+  label: string;
+};
+
+export type YearMonth = {
+  month: number;
+  days: number;
+  days_with_data: number;
+  coverage: number | null;
+  families: string[];
+  source_ids: string[];
+  first_seen_ids: string[];
+  last_seen_ids: string[];
+  confidence: YearConfidence;
+};
+
+export type YearHeadline = {
+  id: string;
+  label: string;
+  value: number;
+  unit: string | null;
+  stream_id: string | null;
+  source_label: string | null;
+  low: number | null;
+  high: number | null;
+  days: number | null;
+  of_days: number | null;
+  basis: string;
+  confidence: YearConfidence;
+};
+
+export type YearWithheld = {
+  id: string;
+  label: string;
+  stream_id: string | null;
+  source_label: string | null;
+  days: number;
+  reason: string;
+};
+
+export type YearLimitation = { code: string; day: string | null; count: number | null };
+
+export type YearInHealth = {
+  year: number;
+  owner_id: string;
+  time_zone: string;
+  day_boundary: string;
+  generated_at: string;
+  window_start: string;
+  window_end: string;
+  days_in_window: number;
+  days_with_data: number;
+  first_day: string | null;
+  last_day: string | null;
+  day_family_counts: number[];
+  mask: string;
+  gaps: YearGap[];
+  longest_inside_gap: number;
+  months: YearMonth[];
+  families: YearFamily[];
+  sources: YearSource[];
+  device_changes: YearDeviceChange[];
+  headlines: YearHeadline[];
+  withheld: YearWithheld[];
+  limitations: YearLimitation[];
+  confidence: YearConfidence;
+};
+
+// A year of the canonical store is a heavy read on a large record (the API
+// caches it); give it longer than the default card timeout.
+const YEAR_TIMEOUT_MS = Number(process.env.API_YEAR_TIMEOUT_MS ?? 30000);
+
+export function fetchYear(year: number): Promise<YearInHealth> {
+  return getJson<YearInHealth>(`/api/v2/year/${year}`, YEAR_TIMEOUT_MS);
+}
+
+// People this Observatory holds data for (participant keys, migration 029).
+// Mirrors server/api/v2_owners.py. The default owner comes first with a null
+// label; a participant whose keys are all revoked stays listed (active false).
+export type OwnerView = {
+  id: string;
+  label: string | null;
+  is_default: boolean;
+  active: boolean;
+  scopes: string[];
+  created_at: string | null;
+  last_ingest_at: string | null;
+};
+
+export type OwnersResponse = { count: number; owners: OwnerView[] };
+
+export function fetchOwners(): Promise<OwnersResponse> {
+  return getJson<OwnersResponse>("/api/v2/owners");
 }

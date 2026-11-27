@@ -63,9 +63,16 @@ describe("finding presentation", () => {
   });
 
   test("turns engine metric ids into readable titles", () => {
-    expect(userFindingTitle(finding({ metric: "vital.hrv_sdnn" }))).toBe("Heart rate variability");
+    expect(userFindingTitle(finding({ metric: "vital.hrv_sdnn" }))).toBe("Heart rate variability (SDNN)");
+    expect(userFindingTitle(finding({ metric: "vital.hrv_rmssd" }))).toBe("Heart rate variability (RMSSD)");
     expect(userFindingTitle(finding({ metric: "activity.steps" }))).toBe("Steps");
-    expect(userFindingTitle(finding({ metric: "custom.metric_name" }))).toBe("Metric Name");
+    expect(userFindingTitle(finding({ metric: "custom.metric_name" }))).toBe("Metric name");
+    // Short names the trend and anomaly checks store, and "a~b" relationships.
+    expect(userFindingTitle(finding({ metric: "hrv" }))).toBe("Heart rate variability (SDNN)");
+    expect(userFindingTitle(finding({ metric: "heart_rate" }))).toBe("Heart rate");
+    expect(userFindingTitle(finding({ metric: "activity.steps~activity.active_energy" }))).toBe(
+      "Steps and active energy",
+    );
   });
 
   test("accepts only evidence-qualified recovery findings for the hero", () => {
@@ -239,6 +246,8 @@ describe("finding card presentation", () => {
     expect(chip(-1.7, "down")).toBe("↓ 1.7%");
     expect(chip(4.2, "up")).toBe("↑ 4.2%");
     expect(chip(0, "flat")).toBe("→ 0%");
+    expect(chip(-0.04, "down")).toBe("→ 0%");
+    expect(chip(-1.7, "up")).toBe("-1.7%");
     // No direction word: a signed number is the whole statement.
     expect(chip(-1.7, null)).toBe("-1.7%");
     expect(chip(4.2, null)).toBe("+4.2%");

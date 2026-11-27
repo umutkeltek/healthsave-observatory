@@ -304,7 +304,9 @@ async def test_upsert_device_identity_link_records_directional_confirmed_link() 
         },
     )
 
-    assert len(session.calls) == 1
+    # The upsert, then the sweep that unfuses pairs of links that no longer qualify.
+    assert len(session.calls) == 2
+    assert "UPDATE canonical_observations" in session.calls[1][0]
     sql, params = session.calls[0]
     assert "INSERT INTO device_identity_links" in sql
     assert "ON CONFLICT (owner_id, direct_stream_id, relayed_stream_id)" in sql

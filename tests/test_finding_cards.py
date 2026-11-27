@@ -12,7 +12,7 @@ from analysis.statistical.finding_cards import build_card
 from contracts.findings import FINDING_CARD_SCHEMA_VERSION, FindingCard
 
 
-def test_anomaly_card_carries_zscore_delta_and_confidence():
+def test_anomaly_card_carries_zscore_without_confusing_severity_with_confidence():
     sd = {
         "magnitude": 3.2,
         "direction": "up",
@@ -22,13 +22,13 @@ def test_anomaly_card_carries_zscore_delta_and_confidence():
     assert isinstance(card, FindingCard)
     assert card.schema_version == FINDING_CARD_SCHEMA_VERSION
     assert card.metric == "vital.resting_heart_rate"
-    assert "resting heart rate" in card.claim and "above" in card.claim
+    assert card.claim == "Resting heart rate was 3.2σ above your personal baseline"
     assert card.effect_size.kind == "z_score"
     assert card.effect_size.value == 3.2
     assert card.effect_size.label == "large"
     assert card.delta.absolute == 72.0 - 55.0
     assert card.delta.direction == "up"
-    assert card.confidence == "high"  # alert → high
+    assert card.confidence is None  # alert severity is not certainty
     assert card.coverage.is_sufficient is True
     assert card.next_question is not None
 
@@ -45,7 +45,7 @@ def test_anomaly_card_post_workout_suppression_becomes_confounder():
     assert "below" in card.claim
 
 
-def test_trend_card_uses_slope_effect_and_confidence_passthrough():
+def test_trend_card_does_not_promote_legacy_heuristic_confidence():
     sd = {
         "slope": -0.8,
         "direction": "down",
@@ -61,7 +61,7 @@ def test_trend_card_uses_slope_effect_and_confidence_passthrough():
     # count, and the span would overstate coverage — a 30-day fit ≈ 21 points).
     assert card.current_window.label == "last 30 days"
     assert card.current_window.n is None
-    assert card.confidence == "high"
+    assert card.confidence is None
     assert card.limitations  # linear-fit caveat present
 
 
@@ -86,7 +86,7 @@ def test_correlation_card_testable_pair_carries_experiment_candidate():
     assert ec.verdict == "testable"
     assert ec.metric_a == "activity.steps" and ec.metric_b == "vital.resting_heart_rate"
     assert ec.required_days == 28
-    assert card.confidence == "high"  # p < 0.01
+    assert card.confidence is None  # a small p-value does not establish confidence
 
 
 def test_correlation_card_non_controllable_pair_has_prose_only():
@@ -119,7 +119,7 @@ def test_recovery_card_exposes_evidence_completeness_and_missing_inputs():
     assert card.claim == "Recovery score 63"
     assert card.coverage.observation_count == 3
     assert card.coverage.note == "3 of 5 recovery inputs available"
-    assert card.confidence == "medium"
+    assert card.confidence is None  # coverage remains in its own field
     assert "temperature unavailable" in card.limitations
     assert "sleep_efficiency unavailable" in card.limitations
 
@@ -139,36 +139,12 @@ def test_summary_card_uses_delta_when_sufficient_samples():
     card = build_card("summary", "vital.resting_heart_rate", sd, "info")
     assert card.delta.pct == -6.4
     assert card.delta.direction == "down"
-    # Direction word and magnitude agree — not "ran -6.4%" / "decreased by -6.4%".
-    assert card.claim == "resting heart rate decreased by 6.4% vs your recent baseline"
-    assert "-6.4" not in card.claim
     # Truthful baseline prose — the aggregator baseline is 30 − window days long,
     # not a flat 30 days, and the length isn't derivable from builder inputs.
+    assert "recent baseline" in card.claim
     assert "30-day" not in card.claim
     assert card.baseline_window.label == "recent baseline"
     assert card.coverage.observation_count == 42
-
-
-def test_summary_card_positive_and_zero_deltas_agree_with_direction():
-    up = build_card(
-        "summary",
-        "vital.hrv_sdnn",
-        {"avg": 55.0, "delta_pct_vs_baseline": 1.7, "count": 10},
-        "info",
-    )
-    assert up.delta.direction == "up"
-    assert up.claim == "hrv sdnn increased by 1.7% vs your recent baseline"
-    assert "+" not in up.claim
-
-    flat = build_card(
-        "summary",
-        "activity.steps",
-        {"avg": 8000.0, "delta_pct_vs_baseline": 0.0, "count": 10},
-        "info",
-    )
-    assert flat.delta.direction == "flat"
-    assert flat.claim == "steps unchanged (0.0%) vs your recent baseline"
-    assert "-" not in flat.claim
 
 
 def test_summary_card_below_sample_floor_suppresses_delta_and_flags_coverage():
@@ -211,3 +187,39 @@ def test_all_card_fields_json_serializable():
     dumped = card.model_dump(mode="json")
     assert dumped["schema_version"] == FINDING_CARD_SCHEMA_VERSION
     assert dumped["next_question"]["experiment_candidate"]["lever"] == "nutrition.caffeine"
+
+
+def test_claims_use_catalog_names_in_sentence_case():
+    trend = build_card(
+        "trend", "hrv", {"slope": 0.32, "direction": "up", "period_days": 30}, "info"
+    )
+    assert trend.claim == "Heart rate variability (SDNN) is trending up over the last 30 days"
+    assert "heart rate variability (SDNN) trend" in trend.next_question.prose
+
+    pair = build_card(
+        "correlation",
+        "activity.steps~activity.active_energy",
+        {
+            "metric_a": "activity.steps",
+            "metric_b": "activity.active_energy",
+            "coefficient": 0.88,
+            "period_days": 90,
+        },
+        "info",
+    )
+    assert pair.claim == "Steps and active energy moved together (ρ=0.88) over 90 days"
+    assert pair.next_question.prose.startswith("Both metrics are behaviors")
+
+
+def test_summary_average_reads_like_a_number_a_person_writes():
+    card = build_card("summary", "activity.steps", {"avg": 8357.0, "count": 1}, "info")
+    assert card.claim == "Steps averaged 8,357 over the period"
+    card = build_card("summary", "body.weight", {"avg": 73.24, "count": 1}, "info")
+    assert card.claim == "Body weight averaged 73.2 over the period"
+
+
+def test_unknown_metric_falls_back_to_its_id():
+    card = build_card(
+        "trend", "custom.my_signal", {"slope": -0.1, "direction": "down", "period_days": 14}, "info"
+    )
+    assert card.claim == "My signal is trending down over the last 14 days"

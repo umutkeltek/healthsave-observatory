@@ -25,7 +25,7 @@ def _install_fake_apscheduler(monkeypatch):
             self.started = False
             FakeScheduler.instances.append(self)
 
-        def add_job(self, func, trigger, *, id, max_instances, coalesce):
+        def add_job(self, func, trigger, *, id, max_instances, coalesce, kwargs=None):
             self.jobs.append(
                 {
                     "func": func,
@@ -33,6 +33,7 @@ def _install_fake_apscheduler(monkeypatch):
                     "id": id,
                     "max_instances": max_instances,
                     "coalesce": coalesce,
+                    "kwargs": kwargs,
                 }
             )
 
@@ -133,3 +134,35 @@ def test_scheduler_does_not_start_when_all_jobs_disabled(monkeypatch):
     # All jobs default-disabled → scheduler never constructed/started.
     assert fake_scheduler.instances == []
     assert scheduler.scheduler is None
+
+
+def test_every_scheduled_job_skips_when_a_run_of_its_type_is_in_progress(monkeypatch):
+    """Scheduled ticks are turned away by a run in progress (skip_if_busy);
+    only trigger routes wait for it."""
+    fake_scheduler = _install_fake_apscheduler(monkeypatch)
+    config = AnalysisConfig.model_validate(
+        {
+            "analysis": {
+                "daily_briefing": {"enabled": True},
+                "anomaly_detection": {"enabled": True},
+                "trend_analysis": {"enabled": True},
+                "correlation_analysis": {"enabled": True},
+                "weekly_summary": {"enabled": True},
+                "recovery": {"enabled": True},
+            }
+        }
+    )
+    names = (
+        "run_daily_briefing",
+        "run_anomaly_check",
+        "run_trend_analysis",
+        "run_correlation_analysis",
+        "run_weekly_summary",
+        "run_recovery_check",
+    )
+    engine = type("Engine", (), {name: AsyncMock() for name in names})()
+    AnalysisScheduler(engine, config).start()
+
+    jobs = fake_scheduler.instances[0].jobs
+    assert len(jobs) == 6
+    assert all(job["kwargs"] == {"skip_if_busy": True} for job in jobs)

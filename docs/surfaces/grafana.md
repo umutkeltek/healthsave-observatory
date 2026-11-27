@@ -46,6 +46,17 @@ Dashboards load automatically:
 | Cross-Device Insights | `deploy/grafana/dashboards/insights.json` | canonical source/device/stream tables | Source comparison and data-quality panels |
 | Workouts | `deploy/grafana/dashboards/workouts.json` | `workouts`, activity streams | Workout volume and session panels |
 
+### Import Apple Health into an existing Grafana
+
+Download [Apple Health (HealthSave Observatory)](../../deploy/grafana/public/apple-health-observatory.json).
+In Grafana, create a PostgreSQL datasource connected to your Observatory TimescaleDB
+database. Use a database user with read-only access. In **Dashboards → New → Import**,
+upload the JSON and choose that datasource for **HealthSave Observatory database**.
+
+The dashboard shows data synced from the HealthSave iPhone app for the primary
+person. Set the dashboard time range to a period with synced data. Sleep and
+daily activity dates are grouped in UTC.
+
 Grafana reads the canonical TimescaleDB schema directly. Any panel you can express in SQL can work.
 
 For multi-person households, add an `owner_id` dashboard variable and filter panel queries by owner.

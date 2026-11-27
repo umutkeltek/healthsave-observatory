@@ -71,6 +71,18 @@ docker compose --env-file "$REMOTE_ENV_DIR/.env" \
 `deploy.sh` is intentionally not modified (it must never re-mint secrets on
 redeploy). Adopting the proxy in the remote flow is an explicit operator step.
 
+## Web sign-in behind the proxy
+
+The web app's wrong-password limiter keeps one shared count (ten a minute) by
+default, because a browser that reaches the web port directly can put any
+address in `X-Forwarded-For`. When this proxy is the only way browsers reach
+the web app (the `web` port is not published beyond the host, for example
+`WEB_BIND=127.0.0.1`), you can set `WEB_TRUST_PROXY=true` in `.env`: the limiter
+then counts per client address from the address nginx appends, so a guesser
+cannot lock you out, with a ceiling of thirty a minute across all addresses.
+Leave it `false` while the web port is published directly (the remote-VM
+override publishes it on all interfaces).
+
 ## Tuning
 
 Rate limits live in `nginx.conf` (`limit_req_zone ... rate=`). A single iOS

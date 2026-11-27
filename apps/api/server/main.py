@@ -48,17 +48,22 @@ from .api import (
     v2_changes,
     v2_experiments,
     v2_export,
+    v2_genetics,
     v2_identity,
     v2_insights,
     v2_intelligence,
+    v2_lab_imports,
+    v2_labs,
     v2_meta,
     v2_metrics,
     v2_moments,
+    v2_owners,
     v2_privacy,
     v2_readiness,
     v2_receipts,
     v2_settings,
     v2_sources,
+    v2_year,
 )
 from .api.deps import warn_if_auth_disabled
 from .api.swr import v2_read_cache
@@ -170,7 +175,7 @@ async def lifespan(a: FastAPI):
         await engine.dispose()
 
 
-app = FastAPI(title="HealthSave Observatory", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title="HealthSave Observatory", version="1.5.3", lifespan=lifespan)
 
 
 @app.exception_handler(json.JSONDecodeError)
@@ -186,13 +191,18 @@ MAX_REQUEST_BODY_BYTES = int(os.getenv("MAX_REQUEST_BODY_BYTES", str(16 * 1024 *
 
 @app.middleware("http")
 async def limit_request_body_size(request: Request, call_next):
+    # The bounded genotype reader supports larger files than the frozen ingest
+    # endpoints. Keep the exception exact; every other endpoint keeps its cap.
+    limit = MAX_REQUEST_BODY_BYTES
+    if request.method == "POST" and request.url.path == "/api/v2/genetics":
+        limit = 50 * 1024 * 1024
     content_length = request.headers.get("content-length")
     if content_length is not None:
         try:
             declared = int(content_length)
         except ValueError:
             return JSONResponse(status_code=400, content={"detail": "invalid Content-Length"})
-        if declared > MAX_REQUEST_BODY_BYTES:
+        if declared > limit:
             return JSONResponse(status_code=413, content={"detail": "request body too large"})
     return await call_next(request)
 
@@ -212,11 +222,16 @@ app.include_router(v2_export.router)
 app.include_router(v2_identity.router)
 app.include_router(v2_insights.router)
 app.include_router(v2_intelligence.router)
+app.include_router(v2_labs.router)
+app.include_router(v2_lab_imports.router)
+app.include_router(v2_genetics.router)
 app.include_router(v2_meta.router)
 app.include_router(v2_metrics.router)
 app.include_router(v2_moments.router)
+app.include_router(v2_owners.router)
 app.include_router(v2_privacy.router)
 app.include_router(v2_readiness.router)
 app.include_router(v2_receipts.router)
 app.include_router(v2_settings.router)
 app.include_router(v2_sources.router)
+app.include_router(v2_year.router)

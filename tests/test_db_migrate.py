@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -22,10 +24,15 @@ class RecordingConnection:
     def __init__(
         self,
         *,
-        applied: set[str] | None = None,
+        applied: set[str] | dict[str, str | None] | None = None,
         fail_on_sql: str | None = None,
     ) -> None:
-        self.applied = applied or set()
+        # A set means tracked rows with no recorded checksum (the pre-checksum
+        # table); a dict maps each tracked filename to its stored checksum.
+        if isinstance(applied, dict):
+            self.applied = dict(applied)
+        else:
+            self.applied = dict.fromkeys(applied or set())
         self.fail_on_sql = fail_on_sql
         self.events: list[tuple[str, Any]] = []
         self.closed = False
@@ -38,7 +45,10 @@ class RecordingConnection:
 
     async def fetch(self, query: str, *args: Any) -> list[dict[str, str]]:
         self.events.append(("fetch", (query, args)))
-        return [{"filename": filename} for filename in sorted(self.applied)]
+        return [
+            {"filename": filename, "checksum": checksum}
+            for filename, checksum in sorted(self.applied.items())
+        ]
 
     def transaction(self) -> RecordingTransaction:
         return RecordingTransaction(self)
@@ -58,6 +68,20 @@ def executed_sql(conn: RecordingConnection) -> list[str]:
     return [
         query for event, payload in conn.events if event == "execute" for query, _args in [payload]
     ]
+
+
+def executed(conn: RecordingConnection, fragment: str) -> list[tuple[str, tuple]]:
+    return [
+        (query, args)
+        for event, payload in conn.events
+        if event == "execute"
+        for query, args in [payload]
+        if fragment in query
+    ]
+
+
+def sha256_of(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def connector_for(conn: RecordingConnection):
@@ -276,3 +300,106 @@ def test_canonical_fusion_metadata_migration_is_additive() -> None:
     assert "CREATE TABLE IF NOT EXISTS device_identity_links" in text
     assert "idx_canonical_obs_semantic_key" in text
     assert "DROP " not in text.upper()
+
+
+# ── checksums: an edited applied migration is noticed, never fatal ────
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_adds_the_checksum_column_under_the_lock(tmp_path: Path) -> None:
+    conn = RecordingConnection()
+
+    await apply_migrations("postgresql://u:p@db/h", tmp_path, connect=connector_for(conn))
+
+    queries = executed_sql(conn)
+    assert "pg_advisory_lock" in queries[0]
+    bootstrap = next(q for q in queries if "CREATE TABLE IF NOT EXISTS schema_migrations" in q)
+    assert "ADD COLUMN IF NOT EXISTS checksum" in bootstrap
+    assert queries.index(bootstrap) > 0
+
+
+@pytest.mark.asyncio
+async def test_applied_migration_records_the_sha256_of_its_file(tmp_path: Path) -> None:
+    path = write_migration(tmp_path, "001_new.sql", "-- header\nBEGIN;\nSELECT 1;\nCOMMIT;\n")
+    conn = RecordingConnection()
+
+    await apply_migrations("postgresql://u:p@db/h", tmp_path, connect=connector_for(conn))
+
+    [(query, args)] = executed(conn, "INSERT INTO schema_migrations")
+    assert "checksum" in query
+    # The whole file as shipped, not the BEGIN/COMMIT-stripped body.
+    assert args == ("001_new.sql", sha256_of(path))
+
+
+@pytest.mark.asyncio
+async def test_tracked_migration_without_a_checksum_is_backfilled(tmp_path: Path) -> None:
+    path = write_migration(tmp_path, "001_old.sql", "SELECT 1;")
+    conn = RecordingConnection(applied={"001_old.sql"})  # no checksum recorded
+
+    result = await apply_migrations("postgresql://u:p@db/h", tmp_path, connect=connector_for(conn))
+
+    assert result.applied == []
+    assert result.checksum_mismatches == []
+    [(query, args)] = executed(conn, "UPDATE schema_migrations")
+    assert "checksum IS NULL" in query  # never overwrites a recorded one
+    assert args == ("001_old.sql", sha256_of(path))
+
+
+@pytest.mark.asyncio
+async def test_matching_checksum_is_quiet(tmp_path: Path, caplog) -> None:
+    path = write_migration(tmp_path, "001_old.sql", "SELECT 1;")
+    conn = RecordingConnection(applied={"001_old.sql": sha256_of(path)})
+
+    with caplog.at_level(logging.INFO, logger="healthsave.db.migrate"):
+        result = await apply_migrations(
+            "postgresql://u:p@db/h", tmp_path, connect=connector_for(conn)
+        )
+
+    assert result.checksum_mismatches == []
+    assert executed(conn, "UPDATE schema_migrations") == []
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+
+@pytest.mark.asyncio
+async def test_edited_applied_migration_logs_a_loud_error_and_the_run_continues(
+    tmp_path: Path, caplog
+) -> None:
+    write_migration(tmp_path, "001_edited.sql", "SELECT 1; -- edited after it shipped")
+    write_migration(tmp_path, "002_new.sql", "SELECT 2;")
+    recorded = "0" * 64
+    conn = RecordingConnection(applied={"001_edited.sql": recorded})
+
+    with caplog.at_level(logging.INFO, logger="healthsave.db.migrate"):
+        result = await apply_migrations(
+            "postgresql://u:p@db/h", tmp_path, connect=connector_for(conn)
+        )
+
+    # Not fatal: the api waits on migrate, so a raise would take the stack down.
+    assert result.applied == ["002_new.sql"]
+    assert result.checksum_mismatches == ["001_edited.sql"]
+    errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert len(errors) == 1
+    assert "001_edited.sql" in errors[0].getMessage()
+    # The recorded checksum stays, so the alarm repeats until someone acts.
+    assert executed(conn, "UPDATE schema_migrations") == []
+    assert "pg_advisory_unlock" in executed_sql(conn)[-1]
+    assert conn.closed is True
+
+
+@pytest.mark.asyncio
+async def test_cli_reports_checksum_mismatches_on_stderr_and_exits_zero(
+    monkeypatch, capsys
+) -> None:
+    import db.migrate as migrate_module
+    from db.migrate import MigrationResult
+
+    from scripts import migrate as cli
+
+    async def fake_apply(_url, _dir):
+        return MigrationResult(skipped=["001_edited.sql"], checksum_mismatches=["001_edited.sql"])
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@db/h")
+    monkeypatch.setattr(migrate_module, "apply_migrations", fake_apply)
+
+    assert await cli._run() == 0
+    assert "001_edited.sql" in capsys.readouterr().err

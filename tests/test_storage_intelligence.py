@@ -13,6 +13,7 @@ this repo owns:
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -239,8 +240,12 @@ async def test_set_fallback_routes_replaces_and_orders_by_position(repo):
 
     await repo.set_fallback_routes(session, routes=routes)
 
-    # Delete first, then one insert per route with priority = list index.
-    delete_sql = session.calls[0][0]
+    # Lock the owner's chain, delete, then one insert per route with
+    # priority = list index.
+    lock_sql, lock_params = session.calls[0]
+    assert "pg_advisory_xact_lock" in lock_sql
+    assert lock_params["owner_id"] == str(OWNER)
+    delete_sql = session.calls[1][0]
     assert "DELETE FROM llm_fallback_routes" in delete_sql
     inserts = [(s, p) for s, p in session.calls if "INSERT INTO llm_fallback_routes" in s]
     assert [p["priority"] for _, p in inserts] == [0, 1]
@@ -336,3 +341,47 @@ async def test_record_audit_serializes_metadata_as_json(repo):
     _, params = session.find("INSERT INTO intelligence_audit_events")
     assert '"connection_id": 3' in params["metadata"]  # JSON-encoded
     assert params["event_type"] == "provider_healthcheck"
+
+
+async def test_revoking_consent_audits_the_reason(repo):
+    session = _FakeSession()
+
+    await repo.record_consent(session, granted=False, reason="egress_scope_changed")
+
+    _, update = session.find("UPDATE intelligence_settings")
+    assert update == {"owner_id": str(OWNER)}
+    _, audit = session.find("INSERT INTO intelligence_audit_events")
+    assert audit["event_type"] == "consent_revoked"
+    assert json.loads(audit["metadata"]) == {"reason": "egress_scope_changed"}
+
+
+# ── consent is a settings change: it bumps revision too ───────────────
+
+
+@pytest.mark.parametrize(
+    ("granted", "event_type"),
+    [(True, "consent_granted"), (False, "consent_revoked")],
+)
+async def test_consent_change_bumps_revision_and_audits_before_after(repo, granted, event_type):
+    session = _FakeSession().on("UPDATE intelligence_settings", row=SimpleNamespace(revision=7))
+
+    await repo.record_consent(session, granted=granted, consent_version="v1", actor="api")
+
+    update_sql, _ = session.find("UPDATE intelligence_settings")
+    # Bumped in-SQL like update_settings, never read-modify-write.
+    assert "revision = intelligence_settings.revision + 1" in update_sql
+    assert "RETURNING revision" in update_sql
+    _, audit = session.find("INSERT INTO intelligence_audit_events")
+    assert audit["event_type"] == event_type
+    assert audit["before_revision"] == 6
+    assert audit["after_revision"] == 7
+
+
+async def test_consent_change_without_a_head_row_audits_no_revision(repo):
+    session = _FakeSession()  # UPDATE matched no row
+
+    await repo.record_consent(session, granted=False, reason="egress_scope_changed")
+
+    _, audit = session.find("INSERT INTO intelligence_audit_events")
+    assert audit["before_revision"] is None
+    assert audit["after_revision"] is None

@@ -587,6 +587,7 @@ class ExperimentRepository(Protocol):
         experiment_id: UUID,
         status: str,
         owner_id: UUID = ...,
+        expected_status: str | None = ...,
     ) -> ExperimentRow | None: ...
 
     async def insert_result(
@@ -618,9 +619,13 @@ class ExperimentRepository(Protocol):
 class SyncReceiptRepository(Protocol):
     """Operator-facing HealthSave sync receipt reads."""
 
-    async def latest_sync_run(self, session: Any) -> dict[str, Any]: ...
+    async def latest_sync_run(
+        self, session: Any, owner_id: UUID | None = None
+    ) -> dict[str, Any]: ...
 
-    async def sync_run(self, session: Any, sync_run_id: str) -> dict[str, Any]: ...
+    async def sync_run(
+        self, session: Any, sync_run_id: str, owner_id: UUID | None = None
+    ) -> dict[str, Any]: ...
 
     async def record_sync_run_summary(self, session: Any, **fields: Any) -> dict[str, Any]: ...
 

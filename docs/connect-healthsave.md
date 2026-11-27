@@ -6,14 +6,36 @@ HealthSave expects a **base server URL** and appends API paths itself.
 
 ## Pair The App
 
+With the QR code (sending the last 7 days works without Pro):
+
+1. On the server, run `healthsave pair`. It prints the server URL, the API key and a QR code.
+2. Scan the QR code with the iPhone Camera. HealthSave opens **Server Sync** with the URL and key filled in.
+3. Tap **Sync Latest Changes** to send the last 7 days. To send your whole history, tap **Backfill Past Data** (needs Pro).
+
+By typing it in (needs Pro):
+
 1. Open **HealthSave -> Settings -> Server Sync**.
 2. Set **Server URL** to the backend URL printed by `healthsave pair`, for example `http://<server-lan-ip>:8000`.
 3. Set the **API key** that `healthsave pair` prints. Setup generates one, and the server refuses requests without it.
-4. Tap **Sync New Data**.
+4. Tap **Sync Latest Changes**.
 
 iOS will not sync to `localhost` from the phone; use the backend's LAN IP. Running `healthsave doctor` prints the exact URL to paste into the app.
 
-Manual sync, **Sync New Data**, works for testing without Pro unlock. Ongoing background uploads need the one-time Pro unlock in the iOS app.
+## Free and Pro
+
+Observatory is free. In the HealthSave app, HealthSave Pro is a one-time purchase (no subscription).
+
+| In the app | Without Pro | With Pro |
+|---|---|---|
+| Send the last 7 days by hand (**Sync Latest Changes**) | Yes, on the Server Sync screen that opens after you scan the pairing QR code. To send again later, scan the code again | Yes, any time |
+| Send your whole history (**Backfill Past Data**) | No. The button shows the Pro offer | Yes, any time |
+| Open **Settings -> Server Sync** | Shows the Pro offer | Yes |
+| Automatic sync: in the background, and each time you open the app | No | Yes. iOS decides when background work runs, so it can be hours late |
+| Sync alerts when sending stops | No | Yes |
+| Home Assistant sensors from the app | No | Yes |
+| What is sent | Your Data Scope choice, same as Pro | Your Data Scope choice |
+
+Installed HealthSave before version 1.9.8? Sending by hand works as it did for you: the screen the QR code opens also sends your whole history without Pro.
 
 ## Building Another Client?
 

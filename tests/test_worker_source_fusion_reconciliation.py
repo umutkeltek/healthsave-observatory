@@ -105,6 +105,10 @@ class _FusionRepo:
         self.find_calls: list[dict] = []
         self.reconcile_calls: list[dict] = []
 
+    async def revoke_unqualified_assignments(self, session, **kwargs):
+        session.events.append("fusion_revoke")
+        return 0
+
     async def find_session_candidate_pairs(self, session, **kwargs):
         session.events.append("fusion_find")
         self.find_calls.append(kwargs)
@@ -125,6 +129,20 @@ class _Session:
 
     async def rollback(self) -> None:
         self.events.append("rollback")
+
+
+def _record_cursor_events(monkeypatch) -> None:
+    from storage.timescale import source_poll_cursors
+
+    async def read(session, **_kwargs):
+        session.events.append("cursor_read")
+        return None
+
+    async def write(session, **_kwargs):
+        session.events.append("cursor_write")
+
+    monkeypatch.setattr(source_poll_cursors, "get_poll_cursor", read)
+    monkeypatch.setattr(source_poll_cursors, "record_successful_poll", write)
 
 
 class _SessionFactory:
@@ -183,6 +201,7 @@ async def test_make_source_poll_runs_fusion_after_successful_ingest_commit(monke
     monkeypatch.setattr(sources, "_load_entrypoint", lambda entrypoint: _FakePlugin)
     monkeypatch.setattr(plugin_sdk, "load_manifest", lambda path: _manifest())
     monkeypatch.setattr(httpx, "AsyncClient", lambda timeout: _HttpClient())
+    _record_cursor_events(monkeypatch)
 
     poll = sources.make_source_poll(
         _SessionFactory(session),
@@ -196,7 +215,17 @@ async def test_make_source_poll_runs_fusion_after_successful_ingest_commit(monke
 
     await poll()
 
-    assert session.events == ["ingest", "commit", "fusion_find", "fusion_reconcile", "commit"]
+    # The cursor moves in the same transaction as the poll's data.
+    assert session.events == [
+        "cursor_read",
+        "ingest",
+        "cursor_write",
+        "commit",
+        "fusion_revoke",
+        "fusion_find",
+        "fusion_reconcile",
+        "commit",
+    ]
     assert repo.find_calls[0]["owner_id"] == DEFAULT_OWNER_ID
     assert repo.find_calls[0]["workspace_id"] == DEFAULT_WORKSPACE_ID
     assert repo.reconcile_calls[0]["provider_subject_id"] == "polar-user-10579"

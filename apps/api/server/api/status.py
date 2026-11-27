@@ -18,19 +18,42 @@ stays stable. Pair with a Grafana alert on
 ``rate(hdh_status_query_failures[5m]) > 0``.
 """
 
+import contextlib
 import logging
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..ingestion.owner import OWNER_HEADER, resolve_owner_id
+from ..ingestion.owner import OWNER_HEADER, participant_owner_id, resolve_owner_id
 from .deps import get_session, verify_api_key
 from .metrics import STATUS_QUERY_FAILURES
 
 log = logging.getLogger("healthsave")
 
 router = APIRouter()
+
+_STATEMENT_TIMEOUT_SQLSTATE = "57014"
+SKIPPED_AFTER_TIMEOUT = "SkippedAfterStatementTimeout"
+
+
+def is_statement_timeout(exc: BaseException) -> bool:
+    """True when ``exc`` is PostgreSQL cancelling a statement (SQLSTATE 57014).
+
+    SQLAlchemy wraps asyncpg's ``QueryCanceledError``; the sqlstate lives on
+    the wrapped error or further down its cause chain.
+    """
+    seen: set[int] = set()
+    error: BaseException | None = exc
+    while error is not None and id(error) not in seen:
+        seen.add(id(error))
+        if _STATEMENT_TIMEOUT_SQLSTATE in (
+            getattr(error, "sqlstate", None),
+            getattr(error, "pgcode", None),
+        ):
+            return True
+        error = getattr(error, "orig", None) or error.__cause__
+    return False
 
 
 @router.get("/api/apple/status", dependencies=[Depends(verify_api_key)])
@@ -41,7 +64,7 @@ async def apple_status(request: Request, session: AsyncSession = Depends(get_ses
     # another owner's data. The wire shape (and OpenAPI description) is unchanged,
     # and a single-user install (all rows under DEFAULT_OWNER_ID) returns exactly
     # the same numbers. `request: Request` is excluded from the OpenAPI schema.
-    owner_id = resolve_owner_id(request.headers.get(OWNER_HEADER))
+    owner_id = participant_owner_id(request) or resolve_owner_id(request.headers.get(OWNER_HEADER))
     queries = {
         "heart_rate": (
             "SELECT count(*), min(time), max(time) FROM heart_rate WHERE status = 'active'"
@@ -60,7 +83,16 @@ async def apple_status(request: Request, session: AsyncSession = Depends(get_ses
     }
     params = {"owner_id": str(owner_id)}
     status = {}
+    timed_out = False
     for metric, base_sql in queries.items():
+        if timed_out:
+            # After a statement timeout the old aborted transaction made every
+            # remaining query fail at once; keep that, rather than letting each
+            # one wait the full timeout again. Same empty value, same shape.
+            status[metric] = {"count": 0, "oldest": None, "newest": None}
+            with contextlib.suppress(Exception):  # metrics import optional
+                STATUS_QUERY_FAILURES.labels(metric=metric, exception=SKIPPED_AFTER_TIMEOUT).inc()
+            continue
         connector = "AND" if "WHERE" in base_sql else "WHERE"
         sql = f"{base_sql} {connector} owner_id = :owner_id"
         try:
@@ -72,11 +104,18 @@ async def apple_status(request: Request, session: AsyncSession = Depends(get_ses
                 "newest": str(row[2]) if row and row[2] else None,
             }
         except Exception as exc:
+            timed_out = is_statement_timeout(exc)
             # iOS contract preserved: keep the silent {count:0} fallback.
             # Operator-side surface added: bump a counter labelled with
             # the exception type so Prometheus + Grafana can alert.
             log.exception("Status query failed for %s", metric)
             status[metric] = {"count": 0, "oldest": None, "newest": None}
+            # The failed statement aborted the PostgreSQL transaction; without a
+            # rollback every later metric query in this loop fails and reads 0.
+            try:
+                await session.rollback()
+            except Exception:
+                log.debug("rollback after failed status query failed", exc_info=True)
             try:
                 STATUS_QUERY_FAILURES.labels(metric=metric, exception=type(exc).__name__).inc()
             except Exception:  # pragma: no cover - metrics import optional

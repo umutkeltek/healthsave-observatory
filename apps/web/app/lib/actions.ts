@@ -10,6 +10,7 @@ import { cookies } from "next/headers";
 import {
   abandonExperiment,
   analyzeExperiment,
+  ApiError,
   applyIntelligence,
   type ApplyIntelligencePayload,
   type ConsentPayload,
@@ -18,6 +19,7 @@ import {
   createMoment,
   type DetectCandidate,
   fetchDetectLocal,
+  fetchOwners,
   postConsent,
   postInsightsTrigger,
   postTestConnection,
@@ -27,6 +29,9 @@ import {
   updateAnalyticalTime,
 } from "./api";
 import {
+  type Dictionary,
+  fillTemplate,
+  getDictionary,
   LOCALE_COOKIE,
   resolveAvailableLocale,
   type Locale,
@@ -36,6 +41,7 @@ import {
   DENSITY_COOKIE,
   DASHBOARD_COOKIE,
   appendSavedPanel,
+  evictedPanels,
   type FocusGoal,
   FOCUS_GOAL_COOKIE,
   MAX_PINS,
@@ -50,9 +56,19 @@ import {
   type TemplateId,
   TEMPLATES,
 } from "./prefs";
+import { deserializeExploreState } from "./explore";
+import { PARTICIPANT_COOKIE, parseOwnerCookie } from "./participants";
 import { assertWebSession } from "./webSession.server";
 
 export type ActionResult = { ok: boolean; error?: string };
+
+// The catalog in the interface language, for messages an action returns.
+async function interfaceDictionary(): Promise<Dictionary> {
+  const jar = await cookies();
+  return getDictionary(
+    resolveAvailableLocale(jar.get(LOCALE_COOKIE)?.value, process.env.HEALTHSAVE_EXPERIMENTAL_LOCALES === "1"),
+  );
+}
 
 function failure(error: unknown, fallback: string): ActionResult {
   return { ok: false, error: error instanceof Error ? error.message : fallback };
@@ -189,9 +205,11 @@ export async function togglePinAction(metricId: string): Promise<ActionResult> {
   try {
     const jar = await cookies();
     const pinned = parsePinned(jar.get(PINNED_COOKIE)?.value);
-    const next = pinned.includes(metricId)
-      ? pinned.filter((id) => id !== metricId)
-      : [...pinned, metricId].slice(0, MAX_PINS);
+    if (!pinned.includes(metricId) && pinned.length >= MAX_PINS) {
+      // Refused out loud: the pin would otherwise not be kept.
+      return { ok: false, error: fillTemplate((await interfaceDictionary()).prefs.pinLimit, { max: MAX_PINS }) };
+    }
+    const next = pinned.includes(metricId) ? pinned.filter((id) => id !== metricId) : [...pinned, metricId];
     jar.set(PINNED_COOKIE, JSON.stringify(next), {
       path: "/",
       maxAge: 60 * 60 * 24 * 365,
@@ -223,6 +241,34 @@ export async function setDensityAction(mode: Density): Promise<ActionResult> {
     return { ok: true };
   } catch (error) {
     return failure(error, "Could not switch the view mode.");
+  }
+}
+
+// Participant view (migration 029). The choice is a session cookie, so a closed
+// browser comes back to the primary person. Only an owner the server actually
+// lists can be chosen; anything else (or the primary person) clears it.
+export async function setParticipantAction(ownerId: string): Promise<ActionResult> {
+  await assertWebSession();
+  // The switcher is translated: answer in the interface language.
+  const jar = await cookies();
+  const { participants } = getDictionary(
+    resolveAvailableLocale(jar.get(LOCALE_COOKIE)?.value, process.env.HEALTHSAVE_EXPERIMENTAL_LOCALES === "1"),
+  );
+  try {
+    const owner = parseOwnerCookie(ownerId);
+    if (owner === null) {
+      jar.delete(PARTICIPANT_COOKIE);
+      return { ok: true };
+    }
+    const { owners } = await fetchOwners();
+    if (!owners.some((entry) => entry.id.toLowerCase() === owner && !entry.is_default)) {
+      return { ok: false, error: participants.notListed };
+    }
+    jar.set(PARTICIPANT_COOKIE, owner, { path: "/", sameSite: "lax", httpOnly: true });
+    return { ok: true };
+  } catch {
+    // Not the raw API error: the switcher shows this in its own language.
+    return { ok: false, error: participants.switchFailed };
   }
 }
 
@@ -336,10 +382,11 @@ export async function resetSectionsAction(): Promise<ActionResult> {
 
 // ── Saved Explore panels → Today bridge ─────────────────────────────────
 
+// `removed`: labels of older views this save pushed off Today to make room.
 export async function saveExplorePanelAction(
   state: string,
   label: string,
-): Promise<ActionResult> {
+): Promise<ActionResult & { removed?: string[] }> {
   await assertWebSession();
   try {
     const cleanLabel = label.trim().slice(0, MAX_SAVED_PANEL_LABEL);
@@ -347,10 +394,16 @@ export async function saveExplorePanelAction(
     if (!state || state.length > MAX_SAVED_PANEL_STATE) {
       return { ok: false, error: "This Explore view is too large to save to Today." };
     }
+    // An emptied dashboard would draw nothing on Today, with no way to remove it.
+    if (!deserializeExploreState(state)?.panels.length) {
+      return { ok: false, error: (await interfaceDictionary()).prefs.emptyView };
+    }
     const jar = await cookies();
     const panels = parseSavedPanels(jar.get(SAVED_PANELS_COOKIE)?.value);
     const id = `panel_${Date.now()}`;
-    const next = appendSavedPanel(panels, { id, label: cleanLabel, state });
+    const added = { id, label: cleanLabel, state };
+    const next = appendSavedPanel(panels, added);
+    const removed = evictedPanels(panels, next, added).map((panel) => panel.label);
     jar.set(SAVED_PANELS_COOKIE, JSON.stringify(next), {
       path: "/",
       maxAge: 60 * 60 * 24 * 365,
@@ -358,7 +411,7 @@ export async function saveExplorePanelAction(
       httpOnly: true,
     });
     revalidatePath("/");
-    return { ok: true };
+    return { ok: true, removed };
   } catch (error) {
     return failure(error, "Could not save this panel to Today.");
   }
@@ -386,7 +439,11 @@ export async function removeSavedPanelAction(id: string): Promise<ActionResult> 
   }
 }
 
-export type TriggerAnalysisResult = ActionResult & { status?: string };
+// What a trigger did, from the server's own answer (v2_insights.py):
+// completed / skipped (200, nothing new produced) / disabled (409) / failed.
+// Callers decide on this, never on the wording of an error.
+export type TriggerOutcome = "completed" | "skipped" | "disabled" | "failed";
+export type TriggerAnalysisResult = ActionResult & { status?: string; outcome?: TriggerOutcome };
 
 // On-demand narration/analysis refresh (the Weekly Brief card's button). A
 // 409 means the analysis block is disabled - the card surfaces that calmly
@@ -400,8 +457,9 @@ export async function triggerAnalysisAction(
     revalidatePath("/");
     revalidatePath("/findings");
     revalidatePath("/relationships");
-    return { ok: true, status: result.status };
+    return { ok: true, status: result.status, outcome: result.status === "completed" ? "completed" : "skipped" };
   } catch (error) {
-    return failure(error, "Could not run the analysis.");
+    const outcome: TriggerOutcome = error instanceof ApiError && error.status === 409 ? "disabled" : "failed";
+    return { ...failure(error, "Could not run the analysis."), outcome };
   }
 }

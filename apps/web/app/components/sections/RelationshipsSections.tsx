@@ -17,8 +17,14 @@ import {
   pearson,
 } from "../../lib/analytics";
 import type { Correlation, MetricSeries, MetricSummary } from "../../lib/api";
-import { DEMO_CORRELATIONS, DEMO_RELATE_METRICS, demoRelatedPair } from "../../lib/demoSeries";
-import { agoLabel, safeAnalyticalTime, safeCorrelations, safeMetrics, safeSeries } from "../../lib/load";
+import {
+  agoLabel,
+  safeAnalyticalTime,
+  safeCorrelations,
+  safeMetrics,
+  safeSeries,
+  viewingParticipant,
+} from "../../lib/load";
 
 export const REL_RANGES = ["30d", "90d", "1y", "all"];
 
@@ -86,21 +92,36 @@ function CorrelationRow({
   );
 }
 
-// Both reads failed ⇒ backend unreachable ⇒ clearly-labelled demo (the
-// fresh-clone idiom). A reachable backend with zero correlations is a
-// DIFFERENT state: honest empty + the compute button.
+// Both reads failed ⇒ backend unreachable, and the page says so: demo
+// correlations never stand in for the person's own outside /demo. `rows` is
+// null when the correlation read failed - a DIFFERENT state from a reachable
+// backend with zero correlations (honest empty + the compute button).
 async function loadCatalog() {
-  const [metrics, correlations] = await Promise.all([safeMetrics(), safeCorrelations()]);
-  const unreachable = metrics === null && correlations === null;
+  const [metrics, correlations, participant] = await Promise.all([
+    safeMetrics(),
+    safeCorrelations(),
+    viewingParticipant(),
+  ]);
   return {
-    unreachable,
-    rows: unreachable ? DEMO_CORRELATIONS : (correlations ?? []),
-    catalog: metrics ?? DEMO_RELATE_METRICS,
+    unreachable: metrics === null && correlations === null,
+    rows: correlations,
+    rowsState: correlationsState(correlations, participant),
+    catalog: metrics ?? [],
   };
 }
 
+// Correlations are the primary person's analysis: with a participant selected
+// the read is withheld, which is not an outage.
+export function correlationsState(
+  correlations: Correlation[] | null,
+  viewingParticipant: boolean,
+): "data" | "not-for-person" | "unreachable" {
+  if (correlations !== null) return "data";
+  return viewingParticipant ? "not-for-person" : "unreachable";
+}
+
 export async function ComputedRelationshipsSection({ range }: { range: string }) {
-  const { rows, catalog } = await loadCatalog();
+  const { rows, rowsState, catalog } = await loadCatalog();
   return (
     <section className="lead">
       <article className="card">
@@ -112,7 +133,13 @@ export async function ComputedRelationshipsSection({ range }: { range: string })
           Cross-metric correlations the statistical engine computed and persisted - with method,
           p-value, and window. Click a pair to explore it below.
         </p>
-        {rows.length === 0 ? (
+        {rows === null ? (
+          <p className="empty">
+            {rowsState === "not-for-person"
+              ? "Computed relationships cover the primary person only."
+              : "The Observatory API did not answer, so computed relationships cannot be shown right now."}
+          </p>
+        ) : rows.length === 0 ? (
           <p className="empty">
             No correlations computed yet - they appear once the engine runs over enough paired
             days. Use “Compute now”, or pick a pair below to explore directly.
@@ -162,24 +189,13 @@ export async function ExplorePairSection({
   const [{ unreachable, catalog }, analyticalTime] = await Promise.all([loadCatalog(), safeAnalyticalTime()]);
   const timeBasis = analyticalTime ?? UTC_TIME_BASIS;
 
-  // Pair series: live when reachable, the coupled demo pair when not.
+  // Pair series are read live. With the backend unreachable there is nothing
+  // to read, and the section says so instead of drawing a demo pair.
   let seriesA: MetricSeries | null = null;
   let seriesB: MetricSeries | null = null;
   const pairChosen = Boolean(aId && bId && aId !== bId);
-  if (pairChosen) {
-    if (unreachable) {
-      const summary = (id: string): MetricSummary =>
-        catalog.find((m) => m.id === id) ?? {
-          id,
-          display_name: prettyName(catalog, id),
-          category: id.split(".")[0] ?? "",
-          value_type: "numeric",
-          canonical_unit: null,
-        };
-      ({ a: seriesA, b: seriesB } = demoRelatedPair(summary(aId), summary(bId)));
-    } else {
-      [seriesA, seriesB] = await Promise.all([safeSeries(aId, range), safeSeries(bId, range)]);
-    }
+  if (pairChosen && !unreachable) {
+    [seriesA, seriesB] = await Promise.all([safeSeries(aId, range), safeSeries(bId, range)]);
   }
 
   const pairs: AlignedPair[] = seriesA && seriesB ? alignDaily(seriesA.points, seriesB.points, timeBasis) : [];
@@ -216,7 +232,7 @@ export async function ExplorePairSection({
             Day means over shared days - both signals kept verbatim, each on its own scale.
           </p>
           <p className="meta">{timeBasisLabel(timeBasis)}</p>
-          <RelateControls metrics={options} ranges={REL_RANGES} />
+          <RelateControls metrics={options} ranges={REL_RANGES} selected={{ a: aId, b: bId, range }} />
 
           {!pairChosen && aId && aId === bId && (
             <p className="empty">Pick two different signals.</p>
@@ -224,7 +240,10 @@ export async function ExplorePairSection({
           {!pairChosen && !(aId && aId === bId) && (
             <p className="empty">Pick two signals - or click a computed pair above.</p>
           )}
-          {pairChosen && (!seriesA || !seriesB) && (
+          {pairChosen && unreachable && (
+            <p className="empty">The Observatory API did not answer, so this pair cannot be explored right now.</p>
+          )}
+          {pairChosen && !unreachable && (!seriesA || !seriesB) && (
             <p className="empty">Couldn’t load one of the series - try another pair or range.</p>
           )}
           {pairChosen && seriesA && seriesB && pairs.length < CORRELATION_MIN_DAYS && (
@@ -255,7 +274,7 @@ export async function ExplorePairSection({
 
       <footer className="foot">
         {unreachable
-          ? "demo data · illustrative relationships · nothing left this host"
+          ? "relationships unavailable · nothing left this host"
           : "correlation ≠ causation · computed on this host · nothing left this host"}
       </footer>
     </>

@@ -12,7 +12,7 @@ This split is the whole point. The thing that pushes data *in* (the App Store bi
 | Surface | Prefix | Stability | Who calls it |
 |---|---|---|---|
 | **v1 ingest** | `/api/apple/*`, `/api/health` | Frozen — byte-stable | HealthSave iOS app, compatible third-party clients, importers |
-| **v2 read/query** | `/api/v2/*` | Evolving — pre-stable | Your scripts, the Observatory web app, Home Assistant, (planned) `healthsave` CLI + MCP server |
+| **v2 read/query** | `/api/v2/*` | Evolving — pre-stable | Your scripts, the Observatory web app, Home Assistant, the [MCP server](../mcp.md) |
 
 The legacy `/api/insights/*` endpoints are also frozen (typed and locked alongside v1); their v2 equivalents under `/api/v2/insights/*` are the surface that continues to evolve.
 
@@ -40,4 +40,4 @@ Run `./healthsave doctor` to print the exact URL to paste into the HealthSave ap
 
 ## Licensing of the API surface
 
-The contract definitions, the generated API client, and the plugin SDK (`contracts/`, the api-client, the Source/storage SDK) are **Apache-2.0**, so anything can speak the format. The product core that implements them is **source-available** under the Elastic License 2.0 — self-host freely, but not as a managed service for third parties. See [`LICENSING.md`](../../LICENSING.md) for the per-path map.
+The contract definitions, the generated API client, and the plugin SDK (`contracts/`, the api-client, the Source/storage SDK) are licensed under Apache-2.0, so other software can speak the format. The product core that implements them is licensed under the Elastic License 2.0. You can self-host it; offering it as a managed service for third parties is not permitted. See [`LICENSING.md`](../../LICENSING.md) for the per-path map.

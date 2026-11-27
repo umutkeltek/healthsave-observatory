@@ -3,6 +3,8 @@
 // whitelisted and re-validated here so the route can't be steered anywhere
 // but the one upstream endpoint; the backend enforces its own row cap.
 
+import { currentOwner } from "../../lib/api";
+
 export const dynamic = "force-dynamic";
 
 const API_BASE = process.env.API_BASE ?? "http://localhost:8000";
@@ -32,6 +34,12 @@ export async function GET(request: Request): Promise<Response> {
   if (DAYS.has(days)) qs.set("days", days);
   if (DATE_RE.test(from)) qs.set("from", from);
   if (DATE_RE.test(to)) qs.set("to", to);
+  // Participant view (migration 029): export the person on screen. The same
+  // per-request decision the pages use (lib/api.ts participantView), so a
+  // cookie naming someone the server no longer lists exports the primary
+  // person, exactly as the page shows.
+  const owner = await currentOwner();
+  if (owner) qs.set("owner", owner);
 
   const headers: Record<string, string> = {};
   if (API_KEY) headers["X-API-Key"] = API_KEY;

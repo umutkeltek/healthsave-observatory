@@ -100,7 +100,7 @@ async def test_google_health_ingest_noops_when_token_missing() -> None:
         }
     )
 
-    assert result == {"accepted": 0, "rejected": 0}
+    assert result == {"accepted": 0, "rejected": 0, "skipped_no_token": 1}
 
 
 @pytest.mark.asyncio

@@ -88,6 +88,14 @@ class _RecordingStorage:
         return len(samples)
 
 
+class _Session:
+    def __init__(self) -> None:
+        self.commits = 0
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+
 @dataclass
 class _TokenStore:
     initial_token: OAuthToken | None = None
@@ -188,6 +196,8 @@ async def test_handle_webhook_recovery_event_fetches_and_ingests():
             "event": {"type": "recovery.updated", "id": "rec-1"},
             "storage": storage,
             "session": object(),
+            "stream_registry": _StreamRegistry(),
+            "canonical_repository": _InsertRepo(),
             "http_client": http,
             "token_store": token_store,
             "oauth_config": _oauth_config(),
@@ -197,7 +207,8 @@ async def test_handle_webhook_recovery_event_fetches_and_ingests():
     assert result["accepted"] > 0
     assert any(f"{PATH_RECOVERY}/rec-1" in call["url"] for call in http.get_calls)
     written_metrics = {call.metric for call in storage.ingest_calls}
-    assert "heart_rate_variability" in written_metrics
+    assert "heart_rate_variability_rmssd" in written_metrics
+    assert "heart_rate_variability" not in written_metrics
     assert "blood_oxygen" in written_metrics
 
 
@@ -212,6 +223,7 @@ async def test_handle_webhook_sleep_event_fetches_and_ingests():
             "event": {"type": "sleep.updated", "id": "slp-1"},
             "storage": storage,
             "session": object(),
+            "stream_registry": _StreamRegistry(),
             "http_client": http,
             "token_store": token_store,
             "oauth_config": _oauth_config(),
@@ -236,6 +248,7 @@ async def test_handle_webhook_workout_event_fetches_and_ingests():
             "event": {"type": "workout.updated", "id": "wk-1"},
             "storage": storage,
             "session": object(),
+            "stream_registry": _StreamRegistry(),
             "http_client": http,
             "token_store": token_store,
             "oauth_config": _oauth_config(),
@@ -259,6 +272,7 @@ async def test_handle_webhook_unknown_event_type_is_noop():
             "event": {"type": "user.something", "id": "x"},
             "storage": storage,
             "session": object(),
+            "stream_registry": _StreamRegistry(),
             "http_client": http,
             "token_store": token_store,
             "oauth_config": _oauth_config(),
@@ -282,6 +296,7 @@ async def test_handle_webhook_missing_type_or_id_raises_value_error():
                 "event": {},
                 "storage": storage,
                 "session": object(),
+                "stream_registry": _StreamRegistry(),
                 "http_client": http,
                 "token_store": token_store,
                 "oauth_config": _oauth_config(),
@@ -309,11 +324,14 @@ async def test_handle_webhook_refreshes_expired_token_then_ingests():
         },
     )
 
+    session = _Session()
     result = await _plugin().handle_webhook(
         {
             "event": {"type": "recovery.updated", "id": "rec-1"},
             "storage": storage,
-            "session": object(),
+            "session": session,
+            "stream_registry": _StreamRegistry(),
+            "canonical_repository": _InsertRepo(),
             "http_client": http,
             "token_store": token_store,
             "oauth_config": _oauth_config(),
@@ -321,6 +339,8 @@ async def test_handle_webhook_refreshes_expired_token_then_ingests():
     )
 
     assert result["accepted"] > 0
+    # The rotated token is committed before the fetch, on its own.
+    assert session.commits == 1
     assert len(http.post_calls) == 1
     assert http.post_calls[0]["data"]["grant_type"] == "refresh_token"
     assert len(token_store.put_calls) == 1
@@ -338,6 +358,8 @@ async def test_handle_webhook_with_no_stored_token_is_noop():
             "event": {"type": "recovery.updated", "id": "rec-1"},
             "storage": storage,
             "session": object(),
+            "stream_registry": _StreamRegistry(),
+            "canonical_repository": _InsertRepo(),
             "http_client": http,
             "token_store": token_store,
             "oauth_config": _oauth_config(),
@@ -346,3 +368,258 @@ async def test_handle_webhook_with_no_stored_token_is_noop():
 
     assert result == {"accepted": 0, "rejected": 0}
     assert http.get_calls == []
+
+
+# ── Deletions, vanished resources, and failure classification (M13) ────────
+
+
+class _CanonicalRepo:
+    def __init__(self, superseded: int = 1) -> None:
+        self.calls: list[dict[str, Any]] = []
+        self._superseded = superseded
+
+    async def supersede_source_records(self, session, **kwargs):
+        self.calls.append(kwargs)
+        return self._superseded
+
+
+class _FusionRepo:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    async def revoke_unqualified_assignments(self, session, **kwargs):
+        self.calls.append(kwargs)
+        return 1
+
+
+@pytest.mark.asyncio
+async def test_a_deleted_workout_is_superseded_without_fetching_it():
+    http = _HttpClient()  # any GET would raise: the resource is gone
+    canonical = _CanonicalRepo()
+    fusion = _FusionRepo()
+
+    result = await _plugin().handle_webhook(
+        {
+            "event": {"type": "workout.deleted", "id": "wk-9"},
+            "storage": _RecordingStorage(),
+            "session": object(),
+            "stream_registry": _StreamRegistry(),
+            "http_client": http,
+            "token_store": _TokenStore(initial_token=_fresh_token()),
+            "canonical_repository": canonical,
+            "fusion_repository": fusion,
+        }
+    )
+
+    assert result == {"accepted": 0, "rejected": 0, "deleted": 1}
+    assert http.get_calls == []
+    assert canonical.calls == [
+        {
+            "owner_id": DEFAULT_OWNER_ID,
+            "normalizer_id": "whoop-healthsave",
+            "source_record_uids": ["wk-9"],
+        }
+    ]
+    # A fused partner of the deleted workout counts again.
+    assert fusion.calls == [{"owner_id": DEFAULT_OWNER_ID, "decided_by": "whoop-webhook"}]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("event_type", ["sleep.deleted", "recovery.deleted"])
+async def test_a_deleted_sleep_or_recovery_is_acknowledged_without_fetching(event_type):
+    http = _HttpClient()
+    canonical = _CanonicalRepo()
+
+    result = await _plugin().handle_webhook(
+        {
+            "event": {"type": event_type, "id": "res-9"},
+            "storage": _RecordingStorage(),
+            "session": object(),
+            "stream_registry": _StreamRegistry(),
+            "http_client": http,
+            "token_store": _TokenStore(initial_token=_fresh_token()),
+            "canonical_repository": canonical,
+        }
+    )
+
+    assert result == {"accepted": 0, "rejected": 0, "deleted": 0}
+    assert http.get_calls == []
+    assert canonical.calls == []
+
+
+@pytest.mark.asyncio
+async def test_an_updated_resource_that_is_gone_is_acknowledged_not_failed():
+    storage = _RecordingStorage()
+    http = _HttpClient(get_responses={PATH_SLEEP: _Response(404, {"message": "not found"})})
+
+    result = await _plugin().handle_webhook(
+        {
+            "event": {"type": "sleep.updated", "id": "slp-9"},
+            "storage": storage,
+            "session": object(),
+            "stream_registry": _StreamRegistry(),
+            "http_client": http,
+            "token_store": _TokenStore(initial_token=_fresh_token()),
+        }
+    )
+
+    assert result == {"accepted": 0, "rejected": 0, "missing": 1}
+    assert storage.ingest_calls == []
+
+
+def _route_client(monkeypatch, failure: BaseException):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from server.api import v2_sources
+    from server.api.deps import get_session
+
+    class _RouteSession:
+        def __init__(self) -> None:
+            self.rollbacks = 0
+
+        async def commit(self) -> None:
+            pass
+
+        async def rollback(self) -> None:
+            self.rollbacks += 1
+
+    async def failing(self, payload):
+        raise failure
+
+    monkeypatch.delenv("WHOOP_CLIENT_SECRET", raising=False)
+    monkeypatch.setattr(WhoopSource, "handle_webhook", failing)
+    app = FastAPI()
+    app.include_router(v2_sources.router)
+    session = _RouteSession()
+
+    async def _session():
+        yield session
+
+    app.dependency_overrides[get_session] = _session
+    return TestClient(app, raise_server_exceptions=False), session
+
+
+@pytest.mark.parametrize(
+    ("failure", "status"),
+    [
+        ("fetch-400", 422),
+        ("fetch-403", 422),
+        ("fetch-500", 503),
+        ("fetch-429", 503),
+        ("oauth-400", 422),
+        ("oauth-503", 503),
+        ("connect", 503),
+        ("data-error", 422),
+        ("key-error", 422),
+    ],
+)
+def test_the_webhook_route_answers_deterministic_failures_with_422_never_500(
+    monkeypatch, failure, status
+):
+    import httpx
+    from sqlalchemy.exc import DataError
+
+    from plugins.sources.whoop.fetch import WhoopFetchError
+    from plugins.sources.whoop.oauth import WhoopOAuthError
+
+    exc = {
+        "fetch-400": WhoopFetchError("HTTP 400", status_code=400),
+        "fetch-403": WhoopFetchError("HTTP 403", status_code=403),
+        "fetch-500": WhoopFetchError("HTTP 500", status_code=500),
+        "fetch-429": WhoopFetchError("HTTP 429", status_code=429),
+        "oauth-400": WhoopOAuthError("HTTP 400: invalid_grant", status_code=400),
+        "oauth-503": WhoopOAuthError("HTTP 503", status_code=503),
+        "connect": httpx.ConnectError("refused"),
+        "data-error": DataError("INSERT", {}, Exception("value out of range")),
+        "key-error": KeyError("score"),
+    }[failure]
+    client, session = _route_client(monkeypatch, exc)
+
+    response = client.post("/api/v2/sources/whoop/webhook", json={"type": "x.updated", "id": "1"})
+
+    assert response.status_code == status
+    assert session.rollbacks == 1
+
+
+@pytest.mark.asyncio
+async def test_a_webhook_fetch_refused_with_401_refreshes_once_and_ingests():
+    class _Http(_HttpClient):
+        async def get(self, url, *, params=None, headers=None):
+            if (headers or {}).get("Authorization") == "Bearer AT-fresh":
+                self.get_calls.append({"url": url, "params": {}})
+                return _Response(401, {"message": "Authorization was not valid"})
+            return await super().get(url, params=params, headers=headers)
+
+    http = _Http(
+        get_responses={PATH_WORKOUT: _Response(200, _WORKOUT_RECORD)},
+        post_responses={
+            "oauth2/token": _Response(
+                200,
+                {
+                    "access_token": "AT-new",
+                    "refresh_token": "RT-new",
+                    "expires_in": 3600,
+                    "token_type": "Bearer",
+                },
+            )
+        },
+    )
+    token_store = _TokenStore(initial_token=_fresh_token())
+
+    result = await _plugin().handle_webhook(
+        {
+            "event": {"type": "workout.updated", "id": "wk-1"},
+            "storage": _RecordingStorage(),
+            "session": _Session(),
+            "stream_registry": _StreamRegistry(),
+            "http_client": http,
+            "token_store": token_store,
+            "oauth_config": _oauth_config(),
+        }
+    )
+
+    assert result["accepted"] > 0
+    assert [kind for _, kind in token_store.put_calls] == ["refreshed"]
+
+
+class _StreamRegistry:
+    """Records the Whoop stream registration instead of writing it."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    async def record_origins(self, session, **kwargs):
+        self.calls.append(kwargs)
+        return 1
+
+
+class _InsertRepo:
+    def __init__(self) -> None:
+        self.inserted: list[Any] = []
+
+    async def insert_many(self, session, observations):
+        self.inserted.extend(observations)
+        return len(observations)
+
+
+@pytest.mark.asyncio
+async def test_a_recovery_webhook_writes_rmssd_rhr_and_spo2_as_whoops_own_readings():
+    repo = _InsertRepo()
+    registry = _StreamRegistry()
+    http = _HttpClient(get_responses={PATH_RECOVERY: _Response(200, _RECOVERY_RECORD)})
+    await _plugin().handle_webhook(
+        {
+            "event": {"type": "recovery.updated", "id": "rec-1"},
+            "storage": _RecordingStorage(),
+            "session": object(),
+            "stream_registry": registry,
+            "canonical_repository": repo,
+            "http_client": http,
+            "token_store": _TokenStore(initial_token=_fresh_token()),
+            "oauth_config": _oauth_config(),
+        }
+    )
+    metrics = sorted(o.metric_id for o in repo.inserted)
+    assert "vital.hrv_rmssd" in metrics and "vital.hrv_sdnn" not in metrics
+    assert set(metrics) <= {"vital.hrv_rmssd", "vital.resting_heart_rate", "vital.blood_oxygen"}
+    assert len(registry.calls) == 1

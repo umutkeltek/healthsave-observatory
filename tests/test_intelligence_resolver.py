@@ -230,3 +230,69 @@ async def test_fallback_routes_become_self_describing_entries(monkeypatch):
     assert fb.model == "openrouter/a:free"
     assert fb.base_url == "https://openrouter.ai/api/v1"
     assert fb.api_key == "or-key"
+
+
+# Fail closed on cloud egress (M17). The env may opt in to cloud egress
+# (LLM_ALLOW_CLOUD_EGRESS=true) while the person, in the UI, chose local,
+# revoked consent, or consented to a different destination. Once the UI may
+# have taken over, a fallback to the env must not carry the env's opt-in.
+
+
+class _UndefinedTable(Exception):
+    sqlstate = "42P01"
+
+
+async def test_failing_settings_read_withdraws_the_env_cloud_opt_in(monkeypatch):
+    base = LLMConfig(provider="openai", allow_cloud_egress=True)
+    _install(monkeypatch, settings=None, settings_exc=RuntimeError("connection reset"))
+    result = await resolve_llm_config(SESSION, base=base)
+    assert result.allow_cloud_egress is False
+    assert result.provider == "openai"
+
+
+async def test_missing_settings_table_keeps_the_env_floor(monkeypatch):
+    # Before migration 017 the UI cannot have been used: the env is the decision.
+    base = LLMConfig(provider="openai", allow_cloud_egress=True)
+    wrapped = RuntimeError("relation does not exist")
+    wrapped.orig = _UndefinedTable()
+    _install(monkeypatch, settings=None, settings_exc=wrapped)
+    assert await resolve_llm_config(SESSION, base=base) is base
+
+
+async def test_no_settings_row_keeps_the_env_cloud_opt_in(monkeypatch):
+    base = LLMConfig(provider="openai", allow_cloud_egress=True)
+    _install(monkeypatch, settings=None)
+    assert await resolve_llm_config(SESSION, base=base) is base
+
+
+async def test_mode_off_keeps_the_env_cloud_opt_in(monkeypatch):
+    base = LLMConfig(provider="openai", allow_cloud_egress=True)
+    _install(monkeypatch, settings=_settings(mode="off"))
+    assert await resolve_llm_config(SESSION, base=base) is base
+
+
+async def test_local_mode_without_a_primary_does_not_fall_back_to_env_cloud(monkeypatch):
+    base = LLMConfig(provider="openai", allow_cloud_egress=True)
+    _install(monkeypatch, settings=_settings(mode="local", primary_connection_id=None))
+    assert (await resolve_llm_config(SESSION, base=base)).allow_cloud_egress is False
+
+
+async def test_disabled_primary_does_not_fall_back_to_env_cloud(monkeypatch):
+    base = LLMConfig(provider="openai", allow_cloud_egress=True)
+    _install(
+        monkeypatch,
+        settings=_settings(mode="local"),
+        connections={1: _conn(enabled=False)},
+    )
+    assert (await resolve_llm_config(SESSION, base=base)).allow_cloud_egress is False
+
+
+async def test_failing_connection_resolve_does_not_fall_back_to_env_cloud(monkeypatch):
+    base = LLMConfig(provider="openai", allow_cloud_egress=True)
+    _install(monkeypatch, settings=_settings(mode="cloud"), connections={1: _conn()})
+
+    async def broken(session, *, connection_id, owner_id):
+        raise RuntimeError("decrypt failed")
+
+    monkeypatch.setattr(repo_mod, "get_connection_secret", broken)
+    assert (await resolve_llm_config(SESSION, base=base)).allow_cloud_egress is False

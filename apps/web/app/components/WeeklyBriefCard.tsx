@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
 import type { InsightsLatest, Narrative, NarratorRun, NarrativeHistoryItem } from "../lib/api";
-import { briefParagraphs } from "../lib/textPresentation";
+import { BRIEF_NOTE, briefParagraphs, briefRead } from "../lib/textPresentation";
 import { RefreshInsightsButton } from "./RefreshInsightsButton";
 
 function formatDate(iso: string | null): string {
@@ -9,9 +9,28 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function hoursOld(iso: string | null): number | null {
+function hoursOld(iso: string | null, now: number = Date.now()): number | null {
   if (!iso) return null;
-  return (Date.now() - new Date(iso).getTime()) / 3_600_000;
+  return (now - new Date(iso).getTime()) / 3_600_000;
+}
+
+// A weekly brief is current for 8 days, a daily briefing for 36 hours.
+const WEEKLY_STALE_HOURS = 24 * 8;
+const DAILY_STALE_HOURS = 36;
+
+/**
+ * The brief the card shows: the weekly rollup while it is current, otherwise
+ * whichever brief is newer - a weekly from weeks ago never hides today's
+ * briefing. With only one brief, that one (the card marks it stale).
+ */
+export function pickBrief(latest: InsightsLatest, now: number = Date.now()): Narrative | null {
+  const weekly = latest.weekly_summary;
+  const daily = latest.daily_briefing;
+  if (!weekly || !daily) return weekly ?? daily ?? null;
+  const weeklyAge = hoursOld(weekly.created_at, now);
+  if (weeklyAge !== null && weeklyAge <= WEEKLY_STALE_HOURS) return weekly;
+  const time = (brief: Narrative) => Date.parse(brief.created_at ?? "") || 0;
+  return time(daily) > time(weekly) ? daily : weekly;
 }
 
 function lastNarratorRun(latest: InsightsLatest): NarratorRun | null {
@@ -46,32 +65,13 @@ function RunStatusLine({ run }: { run: NarratorRun | null }) {
   return null;
 }
 
-function stripBriefLabel(text: string): string {
-  return text.replace(/^(Recovery|Summary|Today|This week|Weekly brief):\s*/i, "").trim();
-}
-
-function splitBriefSentences(paragraphs: string[]): string[] {
-  return paragraphs
-    .flatMap((paragraph) => {
-      const cleaned = stripBriefLabel(paragraph);
-      return cleaned.split(/(?<=[.!?])\s+/);
-    })
-    .map((sentence) => sentence.trim())
-    .filter(Boolean);
-}
-
 function briefParts(brief: Narrative) {
   const paragraphs = briefParagraphs(brief.narrative);
-  const sentences = splitBriefSentences(paragraphs);
-  const lead = sentences[0] ?? paragraphs[0] ?? "Your recent data is ready to review.";
-  const takeaways = sentences
-    .slice(1)
-    .filter((sentence) => sentence !== lead)
-    .slice(0, 2);
-
+  const read = briefRead(brief.narrative);
   return {
-    lead,
-    takeaways,
+    lead: read.lead ?? paragraphs[0] ?? "Your recent data is ready to review.",
+    takeaways: read.takeaways,
+    suggestion: read.suggestion,
     paragraphs,
   };
 }
@@ -98,8 +98,8 @@ export function WeeklyBriefCard({
     );
   }
 
-  // Prefer the weekly rollup; fall back to today's briefing until the week lands.
-  const brief: Narrative | null = latest.weekly_summary ?? latest.daily_briefing;
+  // Prefer the weekly rollup while it is current; otherwise the newer brief.
+  const brief: Narrative | null = pickBrief(latest);
   const lastRun = lastNarratorRun(latest);
 
   if (!brief) {
@@ -134,9 +134,9 @@ export function WeeklyBriefCard({
   const scope = brief.insight_type === "weekly_summary" ? "This week" : "Today";
   const when = brief.created_at ? ` - ${formatDate(brief.created_at)}` : "";
   const age = hoursOld(brief.created_at);
-  const staleAfter = brief.insight_type === "weekly_summary" ? 24 * 8 : 36;
+  const staleAfter = brief.insight_type === "weekly_summary" ? WEEKLY_STALE_HOURS : DAILY_STALE_HOURS;
   const stale = age !== null && age > staleAfter;
-  const { lead, takeaways, paragraphs } = briefParts(brief);
+  const { lead, takeaways, suggestion, paragraphs } = briefParts(brief);
   const previous = history.filter((item) => item.narrative !== brief.narrative).slice(0, 5);
 
   return (
@@ -174,6 +174,15 @@ export function WeeklyBriefCard({
           ))}
         </ul>
       )}
+
+      {suggestion && (
+        <section className="brief-suggestion" aria-label="Try this">
+          <span className="brief-label">Try this</span>
+          <p>{suggestion}</p>
+        </section>
+      )}
+
+      <p className="brief-disclaimer">{BRIEF_NOTE}</p>
 
       {evidenceHref && (
         <a className="brief-evidence-link" href={evidenceHref}>

@@ -18,11 +18,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from analysis.config import AnalysisConfig  # noqa: E402
-from analysis.engine import (  # noqa: E402
-    AnalysisEngine,
-    _format_period_summary,
-    _format_week_comparison,
-)
+from analysis.engine import AnalysisEngine  # noqa: E402
 from analysis.llm.client import InsightResult, LLMUnavailableError  # noqa: E402
 from analysis.statistical.aggregator import DataAggregator  # noqa: E402
 from analysis.statistical.finding_cards import build_card  # noqa: E402
@@ -47,20 +43,40 @@ class _Result:
         return list(self._rows)
 
 
+class _Savepoint:
+    def __init__(self) -> None:
+        self.state = "open"
+
+    async def commit(self) -> None:
+        self.state = "released"
+
+    async def rollback(self) -> None:
+        self.state = "rolled_back"
+
+
 class _FakeSession:
     """Async session stub recording every SQL statement.
 
     ``run_queue`` supplies the ``RETURNING id`` rows (first call: run_id,
     second call: finding_id). Other ``execute`` calls return an empty
     ``_Result`` - the engine only reads rows from the INSERT...RETURNING
-    statements.
+    statements. The run-type advisory lock answers ``lock_available``
+    (another run of the same type holds it when False).
     """
 
-    def __init__(self, run_queue: list[int], select_queue: list[list[_Row]] | None = None):
+    def __init__(
+        self,
+        run_queue: list[int],
+        select_queue: list[list[_Row]] | None = None,
+        *,
+        lock_available: bool = True,
+    ):
         self.calls: list[tuple[str, dict]] = []
         self.committed = False
+        self.savepoints: list[_Savepoint] = []
         self._queue = list(run_queue)
         self._select_queue = list(select_queue or [])
+        self.lock_available = lock_available
 
     async def __aenter__(self):
         return self
@@ -71,6 +87,10 @@ class _FakeSession:
     async def execute(self, statement, params=None):
         sql = " ".join(str(statement).split())
         self.calls.append((sql, params or {}))
+        if "pg_try_advisory_xact_lock" in sql:
+            return _Result(_Row(locked=self.lock_available))
+        if "pg_advisory_xact_lock" in sql:
+            return _Result()  # the blocking lock: returns once the holder commits
         if sql.startswith("SELECT") and self._select_queue:
             rows = self._select_queue.pop(0)
             return _Result(row=rows[0] if rows else None, rows=rows)
@@ -80,6 +100,11 @@ class _FakeSession:
 
     async def commit(self):
         self.committed = True
+
+    async def begin_nested(self):
+        savepoint = _Savepoint()
+        self.savepoints.append(savepoint)
+        return savepoint
 
     def all_insert_params_for(self, table_name: str) -> list[dict]:
         needle = f"INSERT INTO {table_name}"
@@ -227,6 +252,10 @@ async def test_failover_audit_write_failure_does_not_fail_the_briefing(monkeypat
 
     assert run_id == 101
     assert session.committed is True
+    # On PostgreSQL the failed INSERT aborts the transaction; only rolling
+    # back to the savepoint keeps the brief's later writes alive
+    # (tests/e2e/test_intelligence_audit_e2e.py proves it on a real DB).
+    assert [savepoint.state for savepoint in session.savepoints] == ["rolled_back"]
 
 
 @pytest.mark.asyncio
@@ -312,13 +341,10 @@ async def test_run_daily_briefing_persists_anomaly_findings_and_includes_them_in
     insight_inserts = session.all_insert_params_for("analysis_insights")
     assert insight_inserts[0]["findings_used"] == [901, 902, 903]
 
-    # Anomalies were formatted into the LLM prompt. Direction and z agree:
-    # magnitude is absolute because the bullet already says "down".
+    # Anomalies were formatted into the LLM prompt.
     prompt_arg = llm_mock.generate_insight.await_args.args[0]
-    assert "hrv: down deviation" in prompt_arg
-    assert "severity=alert" in prompt_arg
-    assert "z=3.10" in prompt_arg
-    assert "z=-" not in prompt_arg
+    assert "Heart rate variability (SDNN): below your usual range" in prompt_arg
+    assert "(severity alert)" in prompt_arg
 
 
 @pytest.mark.asyncio
@@ -356,10 +382,7 @@ async def test_run_daily_briefing_persists_hrv_only_summary_and_reports_data_ava
     assert findings[0]["finding_type"] == "summary"
     assert findings[0]["metric"] == "hrv"
     prompt_arg = llm_mock.generate_insight.await_args.args[0]
-    assert "Data sufficiency: 1/1 days of history." in prompt_arg
-    assert "decreased by 23.0%" in prompt_arg
-    assert "delta_pct_vs_baseline" not in prompt_arg
-    assert "-23.0" not in prompt_arg
+    assert "Days with data in this period: 1." in prompt_arg
 
 
 @pytest.mark.asyncio
@@ -529,6 +552,134 @@ async def test_run_anomaly_check_dedupes_already_persisted_anomalies():
     findings = session.all_insert_params_for("analysis_findings")
     assert len(findings) == 1
     assert findings[0]["metric"] == "hrv"
+
+
+# Every run method and what it returns when it did no work.
+_RUN_METHODS = [
+    ("run_daily_briefing", None),
+    ("run_anomaly_check", None),
+    ("run_weekly_summary", None),
+    ("run_trend_analysis", []),
+    ("run_correlation_analysis", []),
+    ("run_recovery_check", None),
+]
+
+
+def _engine_with_mocked_collaborators(session):
+    engine = _make_plain_engine(session)
+    engine.aggregator.summarize_period = AsyncMock(
+        return_value=PeriodSummary(period="daily", metrics={})
+    )
+    engine.anomaly_detector.detect = AsyncMock(return_value=[])
+    engine.trend_analyzer.analyze = AsyncMock(return_value=None)
+    engine.correlation_analyzer.analyze = AsyncMock(return_value=[])
+    return engine
+
+
+def _lock_calls(session) -> list[dict]:
+    return [params for sql, params in session.calls if "pg_try_advisory_xact_lock" in sql]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("method_name", "skipped"), _RUN_METHODS)
+async def test_run_skips_without_a_run_row_while_another_run_of_its_type_holds_the_lock(
+    method_name, skipped
+):
+    """M16: a scheduled run (or the per-batch anomaly check) that finds another
+    run of its type in progress does no work and returns the run's ordinary
+    "skipped" value. Trigger routes wait instead (see the test below)."""
+    session = _FakeSession(run_queue=[7000, 7001], lock_available=False)
+    engine = _engine_with_mocked_collaborators(session)
+
+    result = await getattr(engine, method_name)(skip_if_busy=True)
+
+    assert result == skipped
+    assert len(_lock_calls(session)) == 1
+    assert len(session.calls) == 1  # the lock attempt is the only statement
+    assert session.all_insert_params_for("analysis_runs") == []
+    assert not session.committed
+    engine.aggregator.summarize_period.assert_not_awaited()
+    engine.anomaly_detector.detect.assert_not_awaited()
+    engine.trend_analyzer.analyze.assert_not_awaited()
+    engine.correlation_analyzer.analyze.assert_not_awaited()
+    engine.llm_client.generate_insight.assert_not_awaited()
+
+
+# The routes that trigger a run (/api/insights/trigger, /api/v2/insights/trigger)
+# call these with no arguments. From their caller's view a run must behave as
+# it did before the lock: never answer "skipped" because another run of the
+# type is in progress. They wait for it, then run.
+_TRIGGERABLE = [
+    ("run_daily_briefing", "daily_briefing"),
+    ("run_weekly_summary", "weekly_summary"),
+    ("run_trend_analysis", "trend_analysis"),
+    ("run_correlation_analysis", "correlation_analysis"),
+    ("run_recovery_check", "recovery_check"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("method_name", "run_type"), _TRIGGERABLE)
+async def test_a_triggered_run_waits_for_a_run_in_progress_then_runs(method_name, run_type):
+    session = _FakeSession(run_queue=[7300, 7301], lock_available=False)
+    engine = _engine_with_mocked_collaborators(session)
+
+    await getattr(engine, method_name)()
+
+    statements = [sql for sql, _params in session.calls]
+    assert "pg_advisory_xact_lock" in statements[0], "the blocking lock, not the try-lock"
+    assert not any("pg_try_advisory_xact_lock" in sql for sql in statements)
+    assert [p["run_type"] for p in session.all_insert_params_for("analysis_runs")] == [run_type]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("method_name", "_skipped"), _RUN_METHODS)
+async def test_run_takes_its_lock_in_the_transaction_that_writes_its_run_row(method_name, _skipped):
+    """The lock is transaction-scoped: it is taken first, on the session that
+    inserts the ``analysis_runs`` row, and lasts until that run commits or
+    rolls back."""
+    session = _FakeSession(run_queue=[7100, 7101])
+    engine = _engine_with_mocked_collaborators(session)
+
+    await getattr(engine, method_name)(skip_if_busy=True)
+
+    statements = [sql for sql, _params in session.calls]
+    assert "pg_try_advisory_xact_lock" in statements[0]
+    run_insert = next(i for i, sql in enumerate(statements) if "INSERT INTO analysis_runs" in sql)
+    assert run_insert > 0
+    assert not any("pg_try_advisory_xact_lock" in sql for sql in statements[1:])
+
+
+@pytest.mark.asyncio
+async def test_each_run_type_has_its_own_lock():
+    """Different run types never turn each other away."""
+    keys = []
+    for method_name, _skipped in _RUN_METHODS:
+        session = _FakeSession(run_queue=[], lock_available=False)
+        await getattr(_engine_with_mocked_collaborators(session), method_name)(skip_if_busy=True)
+        (params,) = _lock_calls(session)
+        keys.append(tuple(sorted(params.items())))
+
+    assert len(set(keys)) == len(_RUN_METHODS)
+
+
+@pytest.mark.asyncio
+async def test_run_anomaly_check_reads_the_cooldown_only_after_it_holds_the_lock():
+    """A check that waited out another one must see that run once it commits."""
+    session = _FakeSession(run_queue=[7200], select_queue=[[_Row(id=7199)]])
+    config = AnalysisConfig.model_validate(
+        {"analysis": {"anomaly_detection": {"enabled": True, "cooldown_minutes": 15}}}
+    )
+    engine = _make_plain_engine(session, config)
+    engine.anomaly_detector.detect = AsyncMock(return_value=[])
+
+    assert await engine.run_anomaly_check() is None
+
+    statements = [sql for sql, _params in session.calls]
+    assert len(statements) == 2
+    assert "pg_try_advisory_xact_lock" in statements[0]
+    assert "FROM analysis_runs" in statements[1]
+    assert session.all_insert_params_for("analysis_runs") == []
 
 
 @pytest.mark.asyncio
@@ -854,12 +1005,8 @@ async def test_run_daily_briefing_folds_recent_trends_and_correlations_into_prom
     await engine.run_daily_briefing()
 
     prompt = llm_mock.generate_insight.await_args.args[0]
-    assert "heart_rate: down trend" in prompt
-    assert "slope=0.5" in prompt
-    assert "slope=-" not in prompt
-    assert "vital.hrv_sdnn ~ vital.resting_heart_rate" in prompt
-    # Correlation sign is the relationship, not a percent change.
-    assert "r=-0.8" in prompt or "-0.8" in prompt
+    assert "Heart rate: trending down" in prompt
+    assert "Heart rate variability (SDNN) and resting heart rate: moved" in prompt
 
 
 @pytest.mark.asyncio
@@ -897,43 +1044,14 @@ async def test_run_weekly_summary_success_writes_run_finding_and_insight():
     insight_inserts = session.all_insert_params_for("analysis_insights")
     assert insight_inserts[0]["insight_type"] == "weekly_summary"
     assert insight_inserts[0]["findings_used"] == [701]
-    # Week-over-baseline delta was folded into the prompt as magnitude + direction.
-    # The stored finding keeps the signed number; only the narrator input is phrased.
+    # Week-over-baseline delta was folded into the prompt.
     prompt = llm_mock.generate_insight.await_args.args[0]
-    assert "hrv: decreased by 7.7% vs 30-day baseline" in prompt
-    assert "delta_pct_vs_baseline" not in prompt
-    assert "-7.7" not in prompt
-    finding_inserts = session.all_insert_params_for("analysis_findings")
-    assert "delta_pct_vs_baseline" in finding_inserts[0]["structured_data"]
-    assert "-7.7" in finding_inserts[0]["structured_data"]
+    assert "Heart rate variability (SDNN): decreased by 7.7% vs your recent baseline" in prompt
+    assert "-7.7%" not in prompt
     updates = session.all_update_statements()
     assert any(
         "status = 'completed'" in sql and params.get("tokens_in") == 60 for sql, params in updates
     )
-
-
-def test_prompt_percent_phrases_cover_negative_positive_and_zero():
-    metrics = {
-        "hrv": {"avg": 40.0, "delta_pct_vs_baseline": -1.7},
-        "steps": {"avg": 8000.0, "delta_pct_vs_baseline": 4.2},
-        "rhr": {"avg": 52.0, "delta_pct_vs_baseline": 0.0},
-        "weight": {"avg": 70.0},
-    }
-    comparison = _format_week_comparison(metrics)
-    assert "hrv: decreased by 1.7% vs 30-day baseline" in comparison
-    assert "steps: increased by 4.2% vs 30-day baseline" in comparison
-    assert "rhr: unchanged (0.0%) vs 30-day baseline" in comparison
-    assert "weight" not in comparison
-    assert "-1.7%" not in comparison
-    assert "+4.2%" not in comparison
-
-    summary = _format_period_summary(metrics)
-    assert '"change_vs_baseline": "decreased by 1.7%"' in summary
-    assert '"change_vs_baseline": "increased by 4.2%"' in summary
-    assert '"change_vs_baseline": "unchanged (0.0%)"' in summary
-    assert "delta_pct_vs_baseline" not in summary
-    # The caller's metric dict is what gets stored; phrasing must not mutate it.
-    assert metrics["hrv"]["delta_pct_vs_baseline"] == -1.7
 
 
 @pytest.mark.asyncio
@@ -981,6 +1099,52 @@ async def test_run_daily_briefing_marks_failed_when_llm_raises():
     failed_update = [(sql, params) for sql, params in updates if "status = 'failed'" in sql]
     assert failed_update, "expected an UPDATE ... status = 'failed' statement"
     assert "ollama unreachable" in failed_update[0][1]["error"]
+    assert session.committed is True
+
+
+class _AbortedTransactionSession(_FakeSession):
+    """After a database error PostgreSQL refuses every statement until rollback."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.aborted = False
+        self.rolled_back = False
+
+    async def execute(self, statement, params=None):
+        if self.aborted:
+            raise RuntimeError("current transaction is aborted")
+        return await super().execute(statement, params)
+
+    async def rollback(self):
+        self.aborted = False
+        self.rolled_back = True
+
+
+@pytest.mark.asyncio
+async def test_run_that_hit_a_database_error_is_still_recorded_as_failed():
+    """The failed UPDATE cannot run in the aborted transaction, and the
+    rollback takes the 'running' row with it: write the run again, failed."""
+    session = _AbortedTransactionSession(run_queue=[8000])
+    engine = _make_plain_engine(session)
+    engine.anomaly_detector.detect = AsyncMock(
+        return_value=[Anomaly(metric="hrv", magnitude=-3.2, direction="down", severity="alert")]
+    )
+
+    async def failing_filter(session_, anomalies):
+        session_.aborted = True
+        raise RuntimeError('relation "analysis_findings" does not exist')
+
+    engine._filter_existing_anomalies = failing_filter
+
+    with pytest.raises(RuntimeError, match="analysis_findings"):
+        await engine.run_anomaly_check()
+
+    assert session.rolled_back
+    begin, rewrite = session.all_insert_params_for("analysis_runs")
+    assert rewrite["id"] == 8000
+    assert rewrite["run_type"] == begin["run_type"] == "anomaly_check"
+    assert rewrite["started_at"] is not None
+    assert "analysis_findings" in rewrite["error"]
     assert session.committed is True
 
 
@@ -1095,6 +1259,4 @@ async def test_weekly_summary_injects_finding_cards_into_narrator_prompt():
 
     prompt = llm_mock.generate_insight.await_args.args[0]
     # The computed summary card's claim (via _finding_cards_for_brief) is present.
-    assert "decreased by 6.4% vs your recent baseline" in prompt
-    assert "ran -6.4%" not in prompt
-    assert "-6.4" not in prompt
+    assert "Resting heart rate decreased by 6.4% vs your recent baseline" in prompt

@@ -28,7 +28,8 @@ export default async function ExplorePage({
     stat: one(sp.stat),
     from: one(sp.from),
     to: one(sp.to),
-    panels: one(sp.panels),
+    // Absent (the default dashboard) is not the same as empty (every panel removed).
+    panels: sp.panels === undefined ? undefined : one(sp.panels),
   });
 
   return (

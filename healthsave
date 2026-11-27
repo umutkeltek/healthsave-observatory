@@ -7,6 +7,8 @@ set -euo pipefail
 
 VERSION="0.3.0"
 CLI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Where the command was run from, for file arguments given as relative paths.
+CALLER_DIR="$PWD"
 cd "$CLI_DIR"
 
 # Reuse existing setup functions without running setup.sh dispatch.
@@ -29,6 +31,8 @@ Examples:
   healthsave setup advanced
   healthsave doctor
   healthsave pair
+  healthsave participants add "Alice Smith"
+  healthsave mcp
   healthsave backup
   healthsave --json doctor
   healthsave layers
@@ -52,12 +56,21 @@ Commands:
   layers                    Explain API, DB, worker, web, Grafana, AI layers
   doctor                    Check platform, config, services, and URLs
   pair [--new-key]          Show the server URL, API key and pairing QR for the app
+  participants add|list|revoke  One key per participant (coach or clinic, one Observatory)
+  mcp [key|--check]         Let your own AI client (Claude Code, Claude Desktop) read your record
   update [--to TAG] [--yes] Move to the newest release (takes a backup first)
+  update --rollback [--yes] Care: go back to the release before the last update
   web-password reset        Forget the Settings password; WEB_PASSWORD in .env applies again
   backup [--out DIR]        Save the database, .env and config.yaml to one file
+  backup --encrypt|--offsite R|--schedule daily|weekly  Care: encrypted, off-site, scheduled
   restore FILE [--yes]      Replace the database with a backup (takes a safety backup first)
+  restore --drill FILE      Care: test-restore a backup into a throwaway database
+  license activate FILE|CODE  Install an Observatory Care licence (checked offline)
+  license fetch CODE        Download the licence for a purchase code, then activate it
+  license status            Show the installed licence
   verify                    Run lint, tests, TS/web checks, Docker E2E
   status                    Show layer-aware Docker Compose service status
+  labs import FILE.csv      Import blood test results from a CSV file
   logs [layer|service]      Show recent Docker Compose logs
   up [flags]                Start stack
   down                      Stop stack
@@ -195,6 +208,30 @@ The key and password are printed in full. Treat this output like a password.
 EOF
 }
 
+print_participants_usage() {
+    cat <<'EOF'
+HealthSave participants
+
+One Observatory for a coach or clinic. Each participant gets their own key,
+and the phone that holds it writes that person's data. The HealthSave app
+needs nothing new: the participant scans the QR exactly as with 'pair'.
+
+Usage:
+  healthsave participants add NAME [--url URL] [--read]
+  healthsave participants list
+  healthsave participants revoke NAME
+
+Options:
+  --url URL   Address the phone should use (default: http://<this machine's LAN IP>:8000)
+  --read      Mint a read-only key for the participant's own tools instead of a phone key
+  -h, --help  Show this help
+
+The key is printed once and only its SHA-256 is stored. Treat the output like
+a password. 'revoke' stops new data from that key; the person's history stays.
+Adding a revoked NAME again gives a new key for the same person.
+EOF
+}
+
 print_web_password_usage() {
     cat <<'EOF'
 HealthSave web-password
@@ -250,15 +287,23 @@ Usage:
   healthsave update
   healthsave update --to v1.2.0
   healthsave update --yes
+  healthsave update --rollback
 
 Options:
   --to TAG        Release tag to move to (default: the newest vX.Y.Z tag)
   --yes           Skip the confirmation (for scripts)
+  --rollback      Undo the last update (Care): check out the release it came
+                  from and restart the services that were running then
   -h, --help      Show this help
 
 Migrations run automatically when the API starts; they only add tables and
 columns, so going back to the previous release keeps working. Read the
 release notes in CHANGELOG.md before a major version jump.
+
+Each update records the release it came from, the services that were running
+and its pre-update backup (in .git/healthsave-last-update). A rollback uses
+that record; it leaves the database as it is, and tells you which backup to
+restore if the data itself needs to go back too.
 EOF
 }
 
@@ -272,15 +317,38 @@ database, plus copies of .env and config.yaml, in one .tar file.
 Usage:
   healthsave backup
   healthsave backup --out /mnt/nas/healthsave
+  healthsave backup --encrypt
+  healthsave backup --offsite b2:my-bucket/healthsave
+  healthsave backup --schedule daily --offsite b2:my-bucket/healthsave --yes
+  healthsave backup --schedule off
 
 Options:
-  --out DIR       Where to write the file (default: ./backups)
-  -h, --help      Show this help
+  --out DIR          Where to write the file (default: ./backups)
+  --encrypt          Encrypt the file with BACKUP_PASSPHRASE from .env (Care)
+  --offsite REMOTE   Also copy the file to an rclone remote; implies --encrypt (Care)
+  --schedule daily|weekly
+                     Print a job that runs 'backup --encrypt' (plus --out and
+                     --offsite as given) at 03:15 every day or Sunday (Care)
+  --schedule off     Remove the installed job (works without a licence)
+  --yes              With --schedule: install the job instead of printing it
+  -h, --help         Show this help
 
-The file holds your health data and the secrets in .env, unencrypted. Keep it
-on a disk you trust, or encrypt it before it leaves this machine, e.g.
+A plain backup is free. It holds your health data and the secrets in .env,
+unencrypted. Keep it on a disk you trust, or encrypt it before it leaves this
+machine, e.g.
   gpg -c healthsave-backup-<time>.tar
-Restore it with: healthsave restore <file>
+
+The Care options need an Observatory Care licence (healthsave license status).
+Encryption is AES-256 with a passphrase:
+  openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -md sha256
+Keep BACKUP_PASSPHRASE in a password manager too: without it an encrypted
+backup cannot be read. Off-site copies need rclone (https://rclone.org/install/)
+with a configured remote. The schedule uses launchd on macOS and cron elsewhere
+(set HEALTHSAVE_SCHEDULER=cron or launchd to choose).
+
+Restore either kind with: healthsave restore <file>
+Decrypt by hand with:
+  openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -md sha256 -in FILE.tar.enc -out FILE.tar
 EOF
 }
 
@@ -290,19 +358,54 @@ HealthSave restore
 
 Replaces this Observatory's database with the one in a 'healthsave backup' file.
 Before it touches anything it saves the current database to ./backups as a
-pre-restore backup, so a wrong file can be undone.
+pre-restore backup, so a wrong file can be undone. Encrypted backups (.tar.enc)
+are decrypted with BACKUP_PASSPHRASE from .env or the environment; restoring
+never needs a licence.
 
 Usage:
   healthsave restore backups/healthsave-backup-20261027-120000Z.tar
   healthsave restore FILE --yes
+  healthsave restore --drill FILE
 
 Options:
   --yes           Skip the confirmation (for scripts)
+  --drill         Prove FILE restores, without touching this Observatory (Care):
+                  restore it into a throwaway TimescaleDB container with no
+                  network, compare every table's row count with the counts the
+                  backup recorded, print PASS or FAIL, and delete the container
+  --image IMAGE   With --drill: the TimescaleDB image to use (default:
+                  TIMESCALE_IMAGE from .env, else the one docker-compose.yml uses)
   -h, --help      Show this help
 
 The services that read the database stop during the restore and start again
 after. .env and config.yaml are not changed: the copies inside the backup are
 for moving to a new machine (tar -xf FILE env config.yaml).
+EOF
+}
+
+print_license_usage() {
+    cat <<'EOF'
+HealthSave licence
+
+An Observatory Care licence is a small signed file. Observatory checks it on
+this machine against a public key built into the code. It never contacts a
+server, and nothing about you or your data is sent anywhere.
+
+Usage:
+  healthsave license activate FILE   Check FILE and install it next to config.yaml
+  healthsave license activate CODE   Same as 'license fetch CODE'
+  healthsave license fetch CODE [--url BASE]
+                                     Download the licence file for the 24-character
+                                     code from your purchase, then activate it
+  healthsave license status          Show the installed licence
+
+'license fetch' is the only licence command that uses the network, and only
+when you run it: one HTTPS request to BASE/license/CODE (default
+https://billing.healthsave.app) that sends nothing but the code. Checking the
+licence afterwards happens on this machine.
+
+Renewing means fetching or activating the new file. After a licence expires,
+Care features keep working for 14 more days. Everything free works without one.
 EOF
 }
 
@@ -1352,6 +1455,388 @@ cmd_pair() {
     print_pairing_block "$server_url" "$(read_env_value API_KEY)"
 }
 
+participants_exec() {
+    # participants_exec <args...> - the key is minted, hashed and stored inside
+    # the API container, so the plaintext never sits on a command line.
+    docker compose exec -T api python -m scripts.participants "$@"
+}
+
+require_api_running() {
+    require_docker
+    if ! running_services | grep -qx api; then
+        log_error "The API is not running. Start the stack with 'healthsave up' first."
+        exit 1
+    fi
+}
+
+cmd_participants_add() {
+    local label=""
+    local server_url=""
+    local scope="ingest"
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help|help)
+                print_participants_usage
+                return 0
+                ;;
+            --url)
+                shift
+                if [ "$#" -eq 0 ] || [ -z "$1" ]; then
+                    log_error "--url needs a value."
+                    exit 2
+                fi
+                server_url="$1"
+                ;;
+            --read) scope="read" ;;
+            -*)
+                log_error "Unknown participants add argument: $1"
+                print_participants_usage
+                exit 2
+                ;;
+            *)
+                if [ -n "$label" ]; then
+                    log_error "Give one NAME (quote a name with spaces)."
+                    exit 2
+                fi
+                label="$1"
+                ;;
+        esac
+        shift
+    done
+    if [ -z "$label" ]; then
+        log_error "participants add needs a NAME."
+        print_participants_usage
+        exit 2
+    fi
+    if [ ! -f "$ENV_FILE" ]; then
+        log_error "$ENV_FILE is missing - run 'healthsave setup basic' first."
+        exit 1
+    fi
+    require_api_running
+
+    local output=""
+    local rc=0
+    output="$(participants_exec add "$label" --scope "$scope")" || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        exit "$rc"
+    fi
+    local key=""
+    local owner_id=""
+    local stored_label="$label"
+    local field value
+    while IFS='=' read -r field value; do
+        case "$field" in
+            key) key="$value" ;;
+            owner_id) owner_id="$value" ;;
+            label) stored_label="$value" ;;
+        esac
+    done <<<"$output"
+    if [ -z "$key" ]; then
+        log_error "The API container did not return a key."
+        exit 1
+    fi
+    if [ -z "$server_url" ]; then
+        server_url="$(default_server_url)"
+    fi
+
+    log_ok "Added ${stored_label} (owner ${owner_id})."
+    echo
+    if [ "$scope" = "ingest" ]; then
+        echo "  For ${stored_label}'s phone. Shown once; only its hash is stored."
+        print_pairing_block "$server_url" "$key"
+    else
+        echo "  Read-only key for ${stored_label}'s own tools. Shown once; only its hash is stored."
+        echo "    Server URL:  ${server_url}"
+        echo "    API key:     ${key}"
+    fi
+}
+
+cmd_participants() {
+    local sub="${1:-}"
+    if [ "$#" -gt 0 ]; then
+        shift
+    fi
+    case "$sub" in
+        add)
+            cmd_participants_add "$@"
+            ;;
+        list|ls)
+            require_api_running
+            participants_exec list
+            ;;
+        revoke)
+            if [ "$#" -ne 1 ] || [ -z "$1" ]; then
+                log_error "participants revoke needs one NAME (quote a name with spaces)."
+                exit 2
+            fi
+            require_api_running
+            local output=""
+            local rc=0
+            output="$(participants_exec revoke "$1")" || rc=$?
+            if [ "$rc" -ne 0 ]; then
+                exit "$rc"
+            fi
+            log_ok "Revoked ${output#revoked=} key(s) for $1. That phone stops syncing; the data already sent stays."
+            ;;
+        ""|-h|--help|help)
+            print_participants_usage
+            ;;
+        *)
+            log_error "Unknown participants command: $sub"
+            print_participants_usage
+            exit 2
+            ;;
+    esac
+}
+
+# ─── healthsave mcp: your own AI client reads this Observatory ────────────
+
+MCP_KEY_LABEL="MCP read key"
+MCP_IN_IMAGE="/opt/healthsave-mcp/bin/healthsave-mcp"
+MCP_REPO_URL="https://github.com/umutkeltek/healthsave-observatory"
+
+print_mcp_usage() {
+    cat <<'EOF'
+HealthSave MCP
+
+Lets your own AI client (Claude Code, Claude Desktop, any MCP client) read
+summaries of your health record from this Observatory: sleep, activity, today
+against your usual, findings, blood tests, your year. Read-only.
+
+Usage:
+  healthsave mcp [--url URL] [--client claude-code|claude-desktop|docker|chatgpt]
+  healthsave mcp key [--rotate]
+  healthsave mcp --check
+
+  healthsave mcp          Print one setup line per AI client, with this server's
+                          address and a read-only key filled in. Makes the key
+                          the first time (the stack must be running).
+  healthsave mcp key      Show the read key. --rotate replaces it; the old key
+                          stops working at once.
+  healthsave mcp --check  Start the MCP server against this stack the way an AI
+                          client does, and call one tool.
+
+Options:
+  --url URL      Address the AI's computer uses (default: http://<this machine's LAN IP>:8000)
+  --client NAME  Print one client's setup only
+  -h, --help     Show help
+
+The key can read, never write. It is kept in .env as MCP_READ_KEY; treat it
+like a password. What your AI reads goes to that AI's provider: see docs/mcp.md.
+EOF
+}
+
+mcp_release_tag() {
+    # The release this checkout runs: HEALTHSAVE_VERSION in .env, else the
+    # default image tag in docker-compose.yml. The MCP server comes from the
+    # same tag, so a client never runs a newer server than the stack.
+    local tag=""
+    tag="$(read_env_value HEALTHSAVE_VERSION)"
+    if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+        tag="$(grep -oE 'healthsave-observatory:\$\{HEALTHSAVE_VERSION:-v[0-9]+\.[0-9]+\.[0-9]+\}' docker-compose.yml 2>/dev/null \
+            | head -n 1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' || true)"
+    fi
+    printf '%s' "${tag:-v1.5.3}"
+}
+
+mcp_mint_key() {
+    # mcp_mint_key - mint a read key for the primary person inside the API
+    # container and save it to .env as MCP_READ_KEY. Prints nothing.
+    local output=""
+    local rc=0
+    local key=""
+    local field value
+    output="$(participants_exec add "$MCP_KEY_LABEL" --scope read --primary)" || rc=$?
+    if [ "$rc" -eq 2 ]; then
+        log_error "A read key for your AI client already exists but is not in .env. Replace it: healthsave mcp key --rotate"
+        exit 2
+    fi
+    if [ "$rc" -ne 0 ]; then
+        log_error "Could not make the read key (exit $rc). Is this stack 1.4.0 or newer? Run 'healthsave update'."
+        exit "$rc"
+    fi
+    while IFS='=' read -r field value; do
+        if [ "$field" = "key" ]; then
+            key="$value"
+        fi
+    done <<<"$output"
+    if [ -z "$key" ]; then
+        log_error "The API container did not return a key."
+        exit 1
+    fi
+    ensure_env_value "MCP_READ_KEY" "$key"
+}
+
+mcp_revoke_key() {
+    local rc=0
+    participants_exec revoke "$MCP_KEY_LABEL" >/dev/null || rc=$?
+    # 1 = no live key with that label: nothing to revoke.
+    if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then
+        exit "$rc"
+    fi
+}
+
+mcp_key_or_mint() {
+    if [ -z "$(read_env_value MCP_READ_KEY)" ]; then
+        require_api_running
+        mcp_mint_key
+        # stderr: this function's stdout is the key itself.
+        log_ok "Made a read-only key for your AI client and saved it to .env (MCP_READ_KEY)." >&2
+    fi
+    read_env_value MCP_READ_KEY
+}
+
+mcp_check() {
+    local key="$1"
+    require_api_running
+    local rc=0
+    # The key travels on stdin, never on a command line.
+    printf '%s\n' "$key" | docker compose exec -T api sh -c '
+        if [ ! -x '"$MCP_IN_IMAGE"' ]; then
+            echo "This stack'"'"'s API image has no MCP server. Run: healthsave update (1.4.0 or newer)." >&2
+            exit 3
+        fi
+        IFS= read -r HEALTHSAVE_API_KEY
+        export HEALTHSAVE_API_KEY
+        HEALTHSAVE_URL=http://127.0.0.1:8000 exec '"$MCP_IN_IMAGE"' --check
+    ' || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        log_error "MCP check failed (exit $rc)."
+        exit 1
+    fi
+}
+
+mcp_print_setup() {
+    local url="$1"
+    local key="$2"
+    local tag="$3"
+    local client="$4"
+    local from="git+${MCP_REPO_URL}@${tag}#subdirectory=packages/mcp"
+    local image="ghcr.io/umutkeltek/healthsave-observatory:${tag}"
+
+    echo
+    echo "  Server URL:  ${url}"
+    echo "  Read key:    ${key}"
+    echo "  (read-only; shown in full, treat it like a password)"
+    if [ "$client" = "all" ] || [ "$client" = "claude-code" ]; then
+        echo
+        echo "Claude Code - run this once on the computer where Claude Code runs (needs uv):"
+        echo
+        echo "  claude mcp add healthsave -e HEALTHSAVE_URL=${url} -e HEALTHSAVE_API_KEY=${key} -- uvx --from \"${from}\" healthsave-mcp"
+    fi
+    if [ "$client" = "all" ] || [ "$client" = "claude-desktop" ]; then
+        echo
+        echo "Claude Desktop - Settings > Developer > Edit Config, add inside \"mcpServers\", restart Claude:"
+        echo
+        cat <<EOF
+  "healthsave": {
+    "command": "uvx",
+    "args": ["--from", "${from}", "healthsave-mcp"],
+    "env": { "HEALTHSAVE_URL": "${url}", "HEALTHSAVE_API_KEY": "${key}" }
+  }
+EOF
+    fi
+    if [ "$client" = "all" ] || [ "$client" = "docker" ]; then
+        echo
+        echo "No uv on that computer? Docker runs the same server from this release's image:"
+        echo
+        echo "  claude mcp add healthsave -e HEALTHSAVE_URL=${url} -e HEALTHSAVE_API_KEY=${key} -- docker run -i --rm -e HEALTHSAVE_URL -e HEALTHSAVE_API_KEY ${image} ${MCP_IN_IMAGE}"
+    fi
+    if [ "$client" = "all" ] || [ "$client" = "chatgpt" ]; then
+        echo
+        echo "ChatGPT - not yet. ChatGPT reaches MCP servers from OpenAI's cloud, so it would need"
+        echo "  this Observatory open to the internet. This release runs on your own computer only."
+    fi
+    echo
+    echo "Uninstall any time: claude mcp remove healthsave. Revoke the key: healthsave mcp key --rotate."
+    echo "Check it: healthsave mcp --check. More: docs/mcp.md"
+}
+
+cmd_mcp() {
+    local sub=""
+    local server_url=""
+    local client="all"
+    local rotate=0
+    local check=0
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help|help)
+                print_mcp_usage
+                return 0
+                ;;
+            key)
+                sub="key"
+                ;;
+            --rotate)
+                rotate=1
+                ;;
+            --check)
+                check=1
+                ;;
+            --url)
+                shift
+                if [ "$#" -eq 0 ] || [ -z "$1" ]; then
+                    log_error "--url needs a value."
+                    exit 2
+                fi
+                server_url="$1"
+                ;;
+            --client)
+                shift
+                case "${1:-}" in
+                    claude-code|claude-desktop|docker|chatgpt|all) client="$1" ;;
+                    *)
+                        log_error "--client must be claude-code, claude-desktop, docker, chatgpt or all."
+                        exit 2
+                        ;;
+                esac
+                ;;
+            *)
+                log_error "Unknown mcp argument: $1"
+                print_mcp_usage
+                exit 2
+                ;;
+        esac
+        shift
+    done
+
+    if [ ! -f "$ENV_FILE" ]; then
+        log_error "$ENV_FILE is missing - run 'healthsave setup basic' first."
+        exit 1
+    fi
+    if [ "$rotate" = "1" ] && [ "$sub" != "key" ]; then
+        log_error "--rotate goes with 'healthsave mcp key'."
+        exit 2
+    fi
+
+    if [ "$sub" = "key" ]; then
+        if [ "$rotate" = "1" ]; then
+            require_api_running
+            mcp_revoke_key
+            # Revoked first (one live key per label), and dropped from .env, so a
+            # failed mint leaves no dead key behind: 'healthsave mcp' mints again.
+            sed -i.bak '/^MCP_READ_KEY=/d' "$ENV_FILE" && rm -f "${ENV_FILE}.bak"
+            mcp_mint_key
+            log_ok "Replaced the read key. The old one no longer works; update your AI client's setup."
+        fi
+        local shown=""
+        shown="$(mcp_key_or_mint)"
+        echo "  Read key:    ${shown}"
+        return 0
+    fi
+
+    local key=""
+    key="$(mcp_key_or_mint)"
+    if [ "$check" = "1" ]; then
+        mcp_check "$key"
+        return 0
+    fi
+    if [ -z "$server_url" ]; then
+        server_url="$(default_server_url)"
+    fi
+    mcp_print_setup "$server_url" "$key" "$(mcp_release_tag)" "$client"
+}
+
 newest_release_tag() {
     git -C "$CLI_DIR" tag --list 'v[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1
 }
@@ -1359,6 +1844,7 @@ newest_release_tag() {
 cmd_update() {
     local target=""
     local assume_yes=0
+    local rollback=0
     while [ "$#" -gt 0 ]; do
         case "$1" in
             -h|--help|help)
@@ -1366,6 +1852,7 @@ cmd_update() {
                 return 0
                 ;;
             --yes|-y) assume_yes=1 ;;
+            --rollback) rollback=1 ;;
             --to)
                 shift
                 if [ "$#" -eq 0 ] || [ -z "$1" ]; then
@@ -1390,6 +1877,14 @@ cmd_update() {
     if [ -n "$(git -C "$CLI_DIR" status --porcelain --untracked-files=no)" ]; then
         log_error "This checkout has local changes to tracked files. Commit or undo them first (git status shows them); .env, config.yaml and backups/ are not affected."
         exit 1
+    fi
+    if [ "$rollback" = "1" ]; then
+        if [ -n "$target" ]; then
+            log_error "--rollback goes back to the release before the last update; it takes no --to."
+            exit 2
+        fi
+        cmd_update_rollback "$assume_yes"
+        return 0
     fi
 
     log_info "Checking for releases..."
@@ -1442,6 +1937,7 @@ cmd_update() {
         fi
     fi
 
+    write_update_record "$current_commit" "$current_label" "$target" "$target_commit" "$running" "$safety"
     git -C "$CLI_DIR" -c advice.detachedHead=false checkout --quiet "$target"
     log_ok "Checked out ${target}."
 
@@ -1456,6 +1952,7 @@ cmd_update() {
     if ! docker compose up -d --build $running; then
         log_error "The new release did not start. To go back:"
         log_error "  git checkout ${current_label} && healthsave up"
+        log_error "  (with Observatory Care, 'healthsave update --rollback' does this for you)"
         [ -n "$safety" ] && log_error "  and, only if data looks wrong: healthsave restore ${safety} --yes"
         exit 1
     fi
@@ -1473,7 +1970,122 @@ cmd_update() {
     [ -n "$safety" ] && log_info "Pre-update backup kept in ${safety}"
 }
 
+UPDATE_RECORD_FORMAT="healthsave-update-1"
+FEATURE_UPDATE_ROLLBACK="care.update.rollback"
+
+update_record_file() {
+    # Inside the git directory: never tracked, and kept across checkouts.
+    local path
+    path="$(git -C "$CLI_DIR" rev-parse --git-path healthsave-last-update)"
+    case "$path" in
+        /*) printf '%s' "$path" ;;
+        *) printf '%s' "$CLI_DIR/$path" ;;
+    esac
+}
+
+write_update_record() {
+    # write_update_record <from commit> <from label> <to tag> <to commit> <services> <backup>
+    local record
+    record="$(update_record_file)"
+    {
+        echo "format=${UPDATE_RECORD_FORMAT}"
+        echo "updated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "from_commit=$1"
+        echo "from_label=$2"
+        echo "to_tag=$3"
+        echo "to_commit=$4"
+        echo "services=$(printf '%s' "$5" | tr -s ' ' ' ' | sed 's/^ //; s/ $//')"
+        echo "backup=$6"
+    } >"$record"
+}
+
+cmd_update_rollback() {
+    local assume_yes="$1"
+    require_care_feature "$FEATURE_UPDATE_ROLLBACK" "update --rollback"
+
+    local record
+    record="$(update_record_file)"
+    if [ ! -f "$record" ] || [ "$(manifest_value "$record" format)" != "$UPDATE_RECORD_FORMAT" ]; then
+        log_error "There is no update to roll back: 'healthsave update' has not moved this checkout yet (or the last one was already rolled back)."
+        exit 1
+    fi
+    local from_commit from_label to_tag to_commit services backup head
+    from_commit="$(manifest_value "$record" from_commit)"
+    from_label="$(manifest_value "$record" from_label)"
+    to_tag="$(manifest_value "$record" to_tag)"
+    to_commit="$(manifest_value "$record" to_commit)"
+    services="$(manifest_value "$record" services)"
+    backup="$(manifest_value "$record" backup)"
+    head="$(git -C "$CLI_DIR" rev-parse HEAD)"
+    if [ "$head" != "$to_commit" ]; then
+        log_error "This checkout is no longer on ${to_tag}, which the last update installed, so the rollback record does not apply."
+        log_error "Go back by hand if you need to: git checkout ${from_label} && healthsave up"
+        exit 1
+    fi
+    if ! git -C "$CLI_DIR" cat-file -e "${from_commit}^{commit}" 2>/dev/null; then
+        log_error "The release before the update (${from_label}) is not in this checkout any more."
+        exit 1
+    fi
+    if [ -n "$services" ]; then
+        require_docker
+    fi
+
+    log_info "Roll back ${to_tag} -> ${from_label} (updated $(manifest_value "$record" updated_at))."
+    if [ "$assume_yes" != "1" ]; then
+        if [ ! -t 0 ]; then
+            log_error "Re-run with --yes to roll back without a prompt."
+            exit 2
+        fi
+        if ! prompt_yes_no "Roll back now?" "N"; then
+            log_info "Nothing changed."
+            return 0
+        fi
+    fi
+
+    git -C "$CLI_DIR" -c advice.detachedHead=false checkout --quiet "$from_commit"
+    mv -f "$record" "${record}.rolled-back"
+    log_ok "Checked out ${from_label}."
+
+    if [ -z "$services" ]; then
+        log_info "The stack was not running before the update. Start it with 'healthsave up'."
+        return 0
+    fi
+    # shellcheck disable=SC2086
+    if ! docker compose up -d --build $services; then
+        log_error "${from_label} did not start. Check 'healthsave logs'."
+        exit 1
+    fi
+    if printf ' %s ' "$services" | grep -q ' api '; then
+        log_info "Waiting for API readiness on ${API_URL_DEFAULT}/ready..."
+        if ! wait_for_api_ready; then
+            log_warn "The API is not ready yet. Check 'healthsave logs api'."
+            exit 1
+        fi
+    fi
+    log_ok "Rolled back to ${from_label}."
+    log_info "Data written since the update stays: migrations only add tables and columns, so ${from_label} reads it."
+    if [ -n "$backup" ]; then
+        log_info "If the data itself has to go back too: healthsave restore ${backup} --yes"
+    fi
+}
+
 BACKUP_FORMAT="healthsave-backup-1"
+# Encrypted backups: openssl enc, readable by LibreSSL (macOS) and OpenSSL 1.1.1+
+# alike. The parameters are part of the file format; never change them.
+BACKUP_CIPHER_ARGS=(-aes-256-cbc -pbkdf2 -iter 600000 -md sha256)
+BACKUP_SCHEDULE_MARKER="# healthsave-scheduled-backup"
+# One line per table: schema.table=row count. Hypertable parents count their
+# chunks; TimescaleDB's own schemas are left out.
+TABLE_COUNT_SQL="SELECT format('%I.%I', table_schema, table_name) || '=' ||
+    (xpath('/row/n/text()', query_to_xml(format('SELECT count(*) AS n FROM %I.%I',
+        table_schema, table_name), false, true, '')))[1]::text
+FROM information_schema.tables
+WHERE table_type = 'BASE TABLE'
+  AND table_schema NOT IN ('pg_catalog', 'information_schema')
+  AND table_schema NOT LIKE '\_timescaledb%'
+  AND table_schema NOT LIKE 'timescaledb\_%'
+ORDER BY 1"
+BACKUP_LAUNCHD_LABEL="com.healthsave.observatory.backup"
 # Services that hold database connections; a restore stops the running ones.
 DB_CLIENT_SERVICES="api worker web grafana homeassistant-mqtt agents"
 
@@ -1489,6 +2101,39 @@ db_query() {
 manifest_value() {
     # manifest_value <MANIFEST file> <key>
     grep -E "^$2=" "$1" 2>/dev/null | head -n 1 | cut -d= -f2- || true
+}
+
+sha256_of() {
+    # sha256_of <file> - hex digest, empty when no tool is available.
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | cut -d' ' -f1
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$1" | cut -d' ' -f1
+    fi
+}
+
+merge_row_counts() {
+    # merge_row_counts <counts before dump> <counts after dump> - MANIFEST rows.* lines.
+    # Equal counts give rows.T=N; a table that changed gives rows.T=LOW..HIGH.
+    [ -n "$1" ] && [ -n "$2" ] || return 0
+    awk -F= '
+        NR == FNR { before[$1] = $2; next }
+        NF == 2 {
+            lo = ($1 in before) ? before[$1] + 0 : 0
+            hi = $2 + 0
+            if (lo > hi) { t = lo; lo = hi; hi = t }
+            if (lo == hi) printf "rows.%s=%.0f\n", $1, hi
+            else printf "rows.%s=%.0f..%.0f\n", $1, lo, hi
+        }' <(printf '%s\n' "$1") <(printf '%s\n' "$2")
+}
+
+backup_dump_intact() {
+    # backup_dump_intact <dir with MANIFEST and db.dump> - true unless a recorded checksum differs.
+    local want have
+    want="$(manifest_value "$1/MANIFEST" db_sha256)"
+    [ -n "$want" ] || return 0
+    have="$(sha256_of "$1/db.dump")"
+    [ -z "$have" ] || [ "$have" = "$want" ]
 }
 
 require_db_running() {
@@ -1508,11 +2153,16 @@ write_backup() {
     mkdir -p "$out_dir"
     file="${out_dir%/}/healthsave-${label}-${stamp}.tar"
 
+    # Row counts just before and after the dump bracket what it holds, for
+    # 'restore --drill'. A table that changed while pg_dump ran gets a range.
+    local rows_before rows_after
+    rows_before="$(db_query healthsave "$TABLE_COUNT_SQL" 2>/dev/null || true)"
     if ! (umask 077 && docker compose exec -T db pg_dump -U healthsave -d healthsave -Fc >"$work/db.dump"); then
         rm -rf "$work"
         log_error "pg_dump failed; no backup was written."
         return 1
     fi
+    rows_after="$(db_query healthsave "$TABLE_COUNT_SQL" 2>/dev/null || true)"
     ts_version="$(db_query healthsave "SELECT extversion FROM pg_extension WHERE extname = 'timescaledb'")"
     migrations="$(db_query healthsave "SELECT CASE WHEN to_regclass('schema_migrations') IS NULL THEN 0 ELSE (SELECT count(*) FROM schema_migrations) END")"
     [ -f "$ENV_FILE" ] && cp "$ENV_FILE" "$work/env"
@@ -1523,6 +2173,8 @@ write_backup() {
         echo "cli_version=${VERSION}"
         echo "timescaledb=${ts_version}"
         echo "migrations=${migrations}"
+        echo "db_sha256=$(sha256_of "$work/db.dump")"
+        merge_row_counts "$rows_before" "$rows_after"
     } >"$work/MANIFEST"
 
     local members=(MANIFEST db.dump)
@@ -1535,8 +2187,342 @@ write_backup() {
     printf '%s' "$file"
 }
 
+env_file_value() {
+    # env_file_value <KEY> - the whole value from .env ('=' kept), quotes removed.
+    local value
+    [ -f "$ENV_FILE" ] || return 0
+    value="$(grep -E "^$1=" "$ENV_FILE" 2>/dev/null | head -n 1 | cut -d= -f2- || true)"
+    case "$value" in
+        \"*\") value="${value#\"}"; value="${value%\"}" ;;
+        \'*\') value="${value#\'}"; value="${value%\'}" ;;
+    esac
+    printf '%s' "$value"
+}
+
+backup_passphrase() {
+    # BACKUP_PASSPHRASE from the environment (e.g. restoring on a new machine), else .env.
+    if [ -n "${BACKUP_PASSPHRASE:-}" ]; then
+        printf '%s' "$BACKUP_PASSPHRASE"
+    else
+        env_file_value BACKUP_PASSPHRASE
+    fi
+}
+
+require_openssl() {
+    if ! command -v openssl >/dev/null 2>&1; then
+        log_error "Encrypted backups need openssl. Install it with your package manager."
+        exit 1
+    fi
+}
+
+require_backup_passphrase() {
+    require_openssl
+    if [ -z "$(backup_passphrase)" ]; then
+        log_error "Encrypted backups need a passphrase in ${CLI_DIR}/.env, for example:"
+        log_error "  echo \"BACKUP_PASSPHRASE=\$(openssl rand -base64 32)\" >> ${CLI_DIR}/.env"
+        log_error "Save the same passphrase in your password manager: without it an encrypted backup cannot be restored."
+        exit 1
+    fi
+}
+
+require_rclone() {
+    if ! command -v rclone >/dev/null 2>&1; then
+        log_error "Off-site copies use rclone, which is not installed. Install it (https://rclone.org/install/), run 'rclone config' to add a remote, then try again."
+        exit 1
+    fi
+}
+
+encrypt_file() {
+    # encrypt_file <in> <out>. The passphrase travels in the environment, never in argv.
+    (umask 077 && HEALTHSAVE_BACKUP_PASSPHRASE="$(backup_passphrase)" \
+        openssl enc "${BACKUP_CIPHER_ARGS[@]}" -salt -pass env:HEALTHSAVE_BACKUP_PASSPHRASE -in "$1" -out "$2")
+}
+
+decrypt_file() {
+    # decrypt_file <in> <out>
+    (umask 077 && HEALTHSAVE_BACKUP_PASSPHRASE="$(backup_passphrase)" \
+        openssl enc -d "${BACKUP_CIPHER_ARGS[@]}" -pass env:HEALTHSAVE_BACKUP_PASSPHRASE -in "$1" -out "$2" 2>/dev/null)
+}
+
+is_encrypted_backup() {
+    [ "$(head -c 8 "$1" 2>/dev/null | tr -d '\000')" = "Salted__" ]
+}
+
+open_backup_archive() {
+    # open_backup_archive <file> <work_dir> - prints the path of a plain .tar to read:
+    # the file itself, or its decrypted copy inside work_dir.
+    local file="$1"
+    local work="$2"
+    if ! is_encrypted_backup "$file"; then
+        printf '%s' "$file"
+        return 0
+    fi
+    require_openssl
+    if [ -z "$(backup_passphrase)" ]; then
+        log_error "$file is encrypted. Put its BACKUP_PASSPHRASE in .env, or run: BACKUP_PASSPHRASE='...' healthsave restore $file"
+        return 1
+    fi
+    if ! decrypt_file "$file" "$work/decrypted.tar"; then
+        log_error "Could not decrypt $file: the BACKUP_PASSPHRASE is wrong, or the file is damaged."
+        return 1
+    fi
+    printf '%s' "$work/decrypted.tar"
+}
+
+write_encrypted_backup() {
+    # write_encrypted_backup <out_dir> <label> - prints the path of the new .tar.enc file.
+    # The unencrypted .tar only ever exists in a private temporary directory.
+    local out_dir="$1"
+    local label="$2"
+    local scratch plain file
+    scratch="$(mktemp -d)"
+    plain="$(write_backup "$scratch" "$label")" || {
+        rm -rf "$scratch"
+        return 1
+    }
+    mkdir -p "$out_dir"
+    file="${out_dir%/}/$(basename "$plain").enc"
+    if ! encrypt_file "$plain" "$file"; then
+        rm -rf "$scratch"
+        rm -f "$file"
+        log_error "openssl could not encrypt the backup; no backup was written."
+        return 1
+    fi
+    chmod 600 "$file"
+    rm -rf "$scratch"
+    printf '%s' "$file"
+}
+
+FEATURE_BACKUP_OFFSITE="care.backup.offsite"
+
+require_care_feature() {
+    # require_care_feature <feature> <command> - exit unless the licence allows <feature> now.
+    local feature="$1"
+    local what="$2"
+    local file
+    file="$(license_file)"
+    if [ ! -f "$file" ]; then
+        log_error "'healthsave ${what}' is part of Observatory Care, and no licence is installed."
+        log_error "Activate one with: healthsave license activate CODE (or the licence FILE). Everything free keeps working without one."
+        exit 1
+    fi
+    if ! licensing_run check "$feature" --file - <"$file"; then
+        log_error "'healthsave ${what}' needs an Observatory Care licence that includes ${feature}. Nothing was changed."
+        exit 1
+    fi
+}
+
+backup_scheduler() {
+    if [ -n "${HEALTHSAVE_SCHEDULER:-}" ]; then
+        printf '%s' "$HEALTHSAVE_SCHEDULER"
+    elif [ "$(platform_id)" = "macos" ]; then
+        printf 'launchd'
+    else
+        printf 'cron'
+    fi
+}
+
+shell_quote() {
+    # POSIX single-quoted form of $1.
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+xml_escape() {
+    printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+}
+
+launchd_plist_path() {
+    printf '%s' "$HOME/Library/LaunchAgents/${BACKUP_LAUNCHD_LABEL}.plist"
+}
+
+backup_cron_line() {
+    # backup_cron_line <daily|weekly> <backup args...>
+    local when="$1"
+    shift
+    local timing="15 3 * * *"
+    [ "$when" = "weekly" ] && timing="15 3 * * 0"
+    local command
+    command="cd $(shell_quote "$CLI_DIR") && mkdir -p backups && PATH=$(shell_quote "$PATH") ./healthsave"
+    local arg
+    for arg in "$@"; do
+        command="$command $(shell_quote "$arg")"
+    done
+    command="$command >>backups/scheduled-backup.log 2>&1"
+    case "$command" in
+        *%*)
+            log_error "cron cannot run a command containing '%' (check the path, --out, --offsite and PATH)."
+            return 1
+            ;;
+    esac
+    printf '%s %s %s' "$timing" "$command" "$BACKUP_SCHEDULE_MARKER"
+}
+
+backup_launchd_plist() {
+    # backup_launchd_plist <daily|weekly> <backup args...>
+    local when="$1"
+    shift
+    local arg weekday=""
+    [ "$when" = "weekly" ] && weekday="
+        <key>Weekday</key><integer>0</integer>"
+    cat <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>${BACKUP_LAUNCHD_LABEL}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$(xml_escape "$CLI_DIR/healthsave")</string>
+EOF
+    for arg in "$@"; do
+        printf '        <string>%s</string>\n' "$(xml_escape "$arg")"
+    done
+    cat <<EOF
+    </array>
+    <key>WorkingDirectory</key>
+    <string>$(xml_escape "$CLI_DIR")</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>$(xml_escape "$PATH")</string>
+    </dict>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key><integer>3</integer>
+        <key>Minute</key><integer>15</integer>${weekday}
+    </dict>
+    <key>StandardOutPath</key>
+    <string>$(xml_escape "$CLI_DIR/backups/scheduled-backup.log")</string>
+    <key>StandardErrorPath</key>
+    <string>$(xml_escape "$CLI_DIR/backups/scheduled-backup.log")</string>
+</dict>
+</plist>
+EOF
+}
+
+crontab_without_backup_job() {
+    # The current crontab minus the healthsave backup line (empty if there is none).
+    crontab -l 2>/dev/null | grep -vF "$BACKUP_SCHEDULE_MARKER" || true
+}
+
+remove_backup_schedule() {
+    local scheduler="$1"
+    if [ "$scheduler" = "launchd" ]; then
+        local plist
+        plist="$(launchd_plist_path)"
+        if [ ! -f "$plist" ]; then
+            log_info "No scheduled backup is installed."
+            return 0
+        fi
+        launchctl bootout "gui/$(id -u)/${BACKUP_LAUNCHD_LABEL}" >/dev/null 2>&1 || true
+        rm -f "$plist"
+        log_ok "Removed the scheduled backup (${plist})."
+        return 0
+    fi
+    if ! command -v crontab >/dev/null 2>&1; then
+        log_error "crontab is not available, so there is no cron job to remove."
+        exit 1
+    fi
+    if ! crontab -l 2>/dev/null | grep -qF "$BACKUP_SCHEDULE_MARKER"; then
+        log_info "No scheduled backup is installed."
+        return 0
+    fi
+    # Read the whole crontab before writing it back.
+    local remaining
+    remaining="$(crontab_without_backup_job)"
+    if [ -n "$remaining" ]; then
+        printf '%s\n' "$remaining" | crontab -
+    else
+        printf '' | crontab -
+    fi
+    log_ok "Removed the scheduled backup from your crontab."
+}
+
+cmd_backup_schedule() {
+    # cmd_backup_schedule <daily|weekly|off> <assume_yes> <out_dir or ""> <offsite or "">
+    local when="$1"
+    local assume_yes="$2"
+    local out_dir="$3"
+    local offsite="$4"
+    local scheduler
+    scheduler="$(backup_scheduler)"
+    case "$scheduler" in
+        cron|launchd) ;;
+        *)
+            log_error "HEALTHSAVE_SCHEDULER must be cron or launchd."
+            exit 2
+            ;;
+    esac
+    case "$when" in
+        off)
+            remove_backup_schedule "$scheduler"
+            return 0
+            ;;
+        daily|weekly) ;;
+        *)
+            log_error "--schedule takes daily, weekly or off."
+            exit 2
+            ;;
+    esac
+
+    require_care_feature "$FEATURE_BACKUP_OFFSITE" "backup --schedule"
+    require_backup_passphrase
+    [ -n "$offsite" ] && require_rclone
+
+    local args=(backup --encrypt)
+    [ -n "$out_dir" ] && args+=(--out "$out_dir")
+    [ -n "$offsite" ] && args+=(--offsite "$offsite")
+
+    if [ "$scheduler" = "cron" ]; then
+        local line current
+        line="$(backup_cron_line "$when" "${args[@]}")" || exit 2
+        if [ "$assume_yes" != "1" ]; then
+            log_info "Add this line to your crontab (crontab -e), or re-run with --yes to install it:"
+            printf '%s\n' "$line"
+            return 0
+        fi
+        if ! command -v crontab >/dev/null 2>&1; then
+            log_error "crontab is not available. Add the line above to your system's scheduler by hand."
+            printf '%s\n' "$line"
+            exit 1
+        fi
+        mkdir -p "$CLI_DIR/backups"
+        current="$(crontab_without_backup_job)"
+        {
+            [ -n "$current" ] && printf '%s\n' "$current"
+            printf '%s\n' "$line"
+        } | crontab -
+        log_ok "Scheduled a ${when} encrypted backup in your crontab. Log: ${CLI_DIR}/backups/scheduled-backup.log"
+        return 0
+    fi
+
+    local plist
+    plist="$(launchd_plist_path)"
+    if [ "$assume_yes" != "1" ]; then
+        log_info "Save this as ${plist} and load it with: launchctl bootstrap gui/\$(id -u) ${plist}"
+        log_info "Or re-run with --yes to install it."
+        backup_launchd_plist "$when" "${args[@]}"
+        return 0
+    fi
+    mkdir -p "$(dirname "$plist")" "$CLI_DIR/backups"
+    backup_launchd_plist "$when" "${args[@]}" >"$plist"
+    launchctl bootout "gui/$(id -u)/${BACKUP_LAUNCHD_LABEL}" >/dev/null 2>&1 || true
+    if ! launchctl bootstrap "gui/$(id -u)" "$plist"; then
+        log_error "launchctl could not load ${plist}."
+        exit 1
+    fi
+    log_ok "Scheduled a ${when} encrypted backup with launchd (${plist}). Log: ${CLI_DIR}/backups/scheduled-backup.log"
+    log_info "It runs while you are logged in and Docker is running."
+}
+
 cmd_backup() {
     local out_dir="backups"
+    local out_given=""
+    local encrypt=0
+    local offsite=""
+    local schedule=""
+    local assume_yes=0
     while [ "$#" -gt 0 ]; do
         case "$1" in
             -h|--help|help)
@@ -1550,7 +2536,27 @@ cmd_backup() {
                     exit 2
                 fi
                 out_dir="$1"
+                out_given="$1"
                 ;;
+            --encrypt) encrypt=1 ;;
+            --offsite)
+                shift
+                if [ "$#" -eq 0 ] || [ -z "$1" ]; then
+                    log_error "--offsite needs an rclone remote, e.g. b2:my-bucket/healthsave."
+                    exit 2
+                fi
+                offsite="$1"
+                encrypt=1
+                ;;
+            --schedule)
+                shift
+                if [ "$#" -eq 0 ] || [ -z "$1" ]; then
+                    log_error "--schedule takes daily, weekly or off."
+                    exit 2
+                fi
+                schedule="$1"
+                ;;
+            --yes|-y) assume_yes=1 ;;
             *)
                 log_error "Unknown backup argument: $1"
                 print_backup_usage
@@ -1560,17 +2566,50 @@ cmd_backup() {
         shift
     done
 
+    if [ -n "$schedule" ]; then
+        cmd_backup_schedule "$schedule" "$assume_yes" "$out_given" "$offsite"
+        return 0
+    fi
+    if [ "$assume_yes" = "1" ]; then
+        log_error "--yes only applies to --schedule."
+        exit 2
+    fi
+
+    local what="backup --encrypt"
+    [ -n "$offsite" ] && what="backup --offsite"
+    if [ "$encrypt" = "1" ]; then
+        require_care_feature "$FEATURE_BACKUP_OFFSITE" "$what"
+        require_backup_passphrase
+    fi
+    [ -n "$offsite" ] && require_rclone
+
     require_docker
     require_db_running
     local file
-    file="$(write_backup "$out_dir" backup)"
-    log_ok "Backup written: ${file} ($(du -h "$file" | cut -f1))"
-    log_warn "It holds your health data and your .env secrets, unencrypted. Encrypt it before it leaves this machine, e.g. gpg -c ${file}"
+    if [ "$encrypt" != "1" ]; then
+        file="$(write_backup "$out_dir" backup)"
+        log_ok "Backup written: ${file} ($(du -h "$file" | cut -f1))"
+        log_warn "It holds your health data and your .env secrets, unencrypted. Encrypt it before it leaves this machine, e.g. gpg -c ${file}"
+        return 0
+    fi
+
+    file="$(write_encrypted_backup "$out_dir" backup)" || exit 1
+    log_ok "Encrypted backup written: ${file} ($(du -h "$file" | cut -f1))"
+    if [ -n "$offsite" ]; then
+        log_info "Copying it to ${offsite} with rclone..."
+        if ! rclone copy "$file" "$offsite"; then
+            log_error "rclone could not copy the backup to ${offsite}. The local copy is kept: ${file}"
+            exit 1
+        fi
+        log_ok "Copied off-site: ${offsite%/}/$(basename "$file")"
+    fi
 }
 
 cmd_restore() {
     local file=""
     local assume_yes=0
+    local drill=0
+    local image=""
     while [ "$#" -gt 0 ]; do
         case "$1" in
             -h|--help|help)
@@ -1578,6 +2617,15 @@ cmd_restore() {
                 return 0
                 ;;
             --yes|-y) assume_yes=1 ;;
+            --drill) drill=1 ;;
+            --image)
+                shift
+                if [ "$#" -eq 0 ] || [ -z "$1" ]; then
+                    log_error "--image needs a TimescaleDB image, e.g. timescale/timescaledb:2.17.2-pg16"
+                    exit 2
+                fi
+                image="$1"
+                ;;
             -*)
                 log_error "Unknown restore argument: $1"
                 print_restore_usage
@@ -1603,10 +2651,22 @@ cmd_restore() {
         log_error "No such file: $file"
         exit 1
     fi
+    if [ "$drill" = "1" ]; then
+        cmd_restore_drill "$file" "$image"
+        return
+    fi
+    if [ -n "$image" ]; then
+        log_error "--image only applies to --drill."
+        exit 2
+    fi
 
-    local work
+    local work archive
     work="$(mktemp -d)"
-    if ! tar -C "$work" -xf "$file" MANIFEST db.dump 2>/dev/null; then
+    archive="$(open_backup_archive "$file" "$work")" || {
+        rm -rf "$work"
+        exit 1
+    }
+    if ! tar -C "$work" -xf "$archive" MANIFEST db.dump 2>/dev/null; then
         rm -rf "$work"
         log_error "$file is not a healthsave backup (MANIFEST or db.dump missing)."
         exit 1
@@ -1614,6 +2674,11 @@ cmd_restore() {
     if [ "$(manifest_value "$work/MANIFEST" format)" != "$BACKUP_FORMAT" ]; then
         rm -rf "$work"
         log_error "$file was made by an unsupported backup format."
+        exit 1
+    fi
+    if ! backup_dump_intact "$work"; then
+        rm -rf "$work"
+        log_error "$file is damaged: its database dump does not match the checksum in its MANIFEST."
         exit 1
     fi
 
@@ -1697,6 +2762,440 @@ cmd_restore() {
     log_info "Previous database kept in ${safety}"
 }
 
+LICENSE_FILE_NAME="healthsave.license"
+# Where 'healthsave license fetch' downloads licence files (the billing worker).
+LICENSE_FETCH_URL_DEFAULT="https://billing.healthsave.app"
+LICENSE_CODE_PATTERN='^[A-Za-z0-9]{24}$'
+
+resolve_user_path() {
+    # resolve_user_path <path> - a path the user typed, read from where they ran
+    # the command (the CLI itself runs from the checkout).
+    case "$1" in
+        /*) printf '%s' "$1" ;;
+        *)
+            if [ -e "$CALLER_DIR/$1" ]; then
+                printf '%s' "$CALLER_DIR/$1"
+            else
+                printf '%s' "$1"
+            fi
+            ;;
+    esac
+}
+
+license_file() {
+    # The installed licence sits next to config.yaml unless HEALTHSAVE_LICENSE_FILE moves it.
+    printf '%s' "${HEALTHSAVE_LICENSE_FILE:-$CLI_DIR/$LICENSE_FILE_NAME}"
+}
+
+licensing_python() {
+    # Prints a host Python that can check licences (3.11+ with cryptography), or fails.
+    if [ -n "${HEALTHSAVE_PYTHON:-}" ]; then
+        printf '%s' "$HEALTHSAVE_PYTHON"
+        return 0
+    fi
+    command -v python3 >/dev/null 2>&1 || return 1
+    python3 -c 'import sys; from cryptography.hazmat.primitives.asymmetric import ed25519; sys.exit(sys.version_info < (3, 11))' >/dev/null 2>&1 || return 1
+    printf '%s' python3
+}
+
+licensing_run() {
+    # licensing_run <args> - `python -m licensing <args>` with the licence on stdin.
+    # Host Python when it can check licences, else the Observatory api image.
+    # Either way the check is local: packages/py/licensing opens no connection.
+    local py
+    if py="$(licensing_python)"; then
+        PYTHONPATH="$CLI_DIR/packages/py${PYTHONPATH:+:$PYTHONPATH}" "$py" -m licensing "$@"
+        return
+    fi
+    if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+        docker compose run --rm --no-deps -T api python -m licensing "$@"
+        return
+    fi
+    log_error "Checking a licence needs Docker (it uses the Observatory api image) or Python 3.11+ with the cryptography package."
+    return 2
+}
+
+install_license_file() {
+    # install_license_file <file> - verify, then install next to config.yaml.
+    local file="$1"
+    if ! licensing_run show --file - <"$file"; then
+        log_error "Not activated. Any licence already installed is unchanged."
+        exit 1
+    fi
+    local dest tmp
+    dest="$(license_file)"
+    tmp="${dest}.tmp.$$"
+    (umask 077 && cp "$file" "$tmp")
+    chmod 600 "$tmp"
+    mv -f "$tmp" "$dest"
+    log_ok "Licence activated: ${dest}"
+    log_info "It is checked on this machine only; nothing is sent anywhere."
+}
+
+is_license_code() {
+    printf '%s' "$1" | grep -Eq "$LICENSE_CODE_PATTERN"
+}
+
+cmd_license_fetch() {
+    local code=""
+    local base="$LICENSE_FETCH_URL_DEFAULT"
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help|help)
+                print_license_usage
+                return 0
+                ;;
+            --url)
+                shift
+                if [ "$#" -eq 0 ] || [ -z "$1" ]; then
+                    log_error "--url needs a base URL, e.g. https://billing.healthsave.app"
+                    exit 2
+                fi
+                base="$1"
+                ;;
+            -*)
+                log_error "Unknown license fetch argument: $1"
+                exit 2
+                ;;
+            *)
+                if [ -n "$code" ]; then
+                    log_error "license fetch takes one code."
+                    exit 2
+                fi
+                code="$1"
+                ;;
+        esac
+        shift
+    done
+    if ! is_license_code "$code"; then
+        log_error "A licence code is 24 letters and digits, as shown after your purchase."
+        exit 2
+    fi
+    base="${base%/}"
+    case "$base" in
+        https://*|http://localhost|http://localhost:*|http://127.0.0.1|http://127.0.0.1:*) ;;
+        *)
+            log_error "The licence server URL must use https://."
+            exit 2
+            ;;
+    esac
+    if ! command -v curl >/dev/null 2>&1; then
+        log_error "Fetching a licence needs curl. Download the file from your purchase page and run: healthsave license activate FILE"
+        exit 1
+    fi
+
+    local work status
+    work="$(mktemp -d)"
+    log_info "Downloading the licence for this code from ${base} (nothing else is sent)..."
+    status="$(curl -sS --max-time 30 --max-filesize 65536 -o "$work/license" -w '%{http_code}' \
+        "${base}/license/${code}")" || status="000"
+    case "$status" in
+        200) ;;
+        404)
+            rm -rf "$work"
+            log_error "No licence for that code. Check the code; right after a purchase it can take a minute to appear."
+            exit 1
+            ;;
+        429)
+            rm -rf "$work"
+            log_error "Too many tries from this address. Wait a minute and try again."
+            exit 1
+            ;;
+        000)
+            rm -rf "$work"
+            log_error "Could not reach ${base}. Check the connection, or download the file from your purchase page and run: healthsave license activate FILE"
+            exit 1
+            ;;
+        *)
+            rm -rf "$work"
+            log_error "The licence server answered HTTP ${status}. Try again later, or download the file from your purchase page."
+            exit 1
+            ;;
+    esac
+    install_license_file "$work/license"
+    rm -rf "$work"
+}
+
+cmd_license_activate() {
+    local file=""
+    local url_args=()
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help|help)
+                print_license_usage
+                return 0
+                ;;
+            --url)
+                shift
+                if [ "$#" -eq 0 ] || [ -z "$1" ]; then
+                    log_error "--url needs a base URL."
+                    exit 2
+                fi
+                url_args=(--url "$1")
+                ;;
+            -*)
+                log_error "Unknown license activate argument: $1"
+                exit 2
+                ;;
+            *)
+                if [ -n "$file" ]; then
+                    log_error "license activate takes one file or code."
+                    exit 2
+                fi
+                file="$1"
+                ;;
+        esac
+        shift
+    done
+    if [ -z "$file" ]; then
+        log_error "Name the licence file or code: healthsave license activate FILE|CODE"
+        exit 2
+    fi
+    local path
+    path="$(resolve_user_path "$file")"
+    if [ ! -f "$path" ] && is_license_code "$file"; then
+        cmd_license_fetch "$file" ${url_args[@]+"${url_args[@]}"}
+        return 0
+    fi
+    if [ ! -f "$path" ]; then
+        log_error "No such file: $path"
+        exit 1
+    fi
+    install_license_file "$path"
+}
+
+cmd_license_status() {
+    case "${1:-}" in
+        "") ;;
+        -h|--help|help)
+            print_license_usage
+            return 0
+            ;;
+        *)
+            log_error "Unknown license status argument: $1"
+            exit 2
+            ;;
+    esac
+    local file
+    file="$(license_file)"
+    if [ ! -f "$file" ]; then
+        log_info "No licence installed. This is Observatory Community: every free feature works."
+        log_info "Observatory Care adds encrypted off-site and scheduled backups, restore drills and update rollback."
+        log_info "Activate a licence with: healthsave license activate CODE (or the licence FILE)"
+        return 0
+    fi
+    log_info "Licence file: ${file}"
+    if ! licensing_run show --file - <"$file"; then
+        exit 1
+    fi
+}
+
+cmd_license() {
+    local sub="${1:-status}"
+    if [ "$#" -gt 0 ]; then
+        shift
+    fi
+    case "$sub" in
+        -h|--help|help) print_license_usage ;;
+        activate) cmd_license_activate "$@" ;;
+        fetch) cmd_license_fetch "$@" ;;
+        status) cmd_license_status "$@" ;;
+        *)
+            log_error "Unknown license command: ${sub}"
+            print_license_usage
+            exit 2
+            ;;
+    esac
+}
+
+FEATURE_RESTORE_DRILL="care.restore.drill"
+DRILL_CONTAINER=""
+DRILL_WORK=""
+
+drill_image() {
+    local image
+    image="$(env_file_value TIMESCALE_IMAGE)"
+    if [ -z "$image" ] && [ -f docker-compose.yml ]; then
+        # shellcheck disable=SC2016 # matches the literal ${TIMESCALE_IMAGE:-...} in the file
+        image="$(sed -n 's/.*image: \${TIMESCALE_IMAGE:-\([^}]*\)}.*/\1/p' docker-compose.yml | head -n 1)"
+    fi
+    printf '%s' "${image:-timescale/timescaledb:2.17.2-pg16}"
+}
+
+drill_cleanup() {
+    if [ -n "$DRILL_CONTAINER" ]; then
+        # -v: the image keeps its data in an anonymous volume, which holds a copy
+        # of the restored health data; it must go with the container.
+        docker rm -f -v "$DRILL_CONTAINER" >/dev/null 2>&1 || true
+        DRILL_CONTAINER=""
+    fi
+    if [ -n "$DRILL_WORK" ]; then
+        rm -rf "$DRILL_WORK"
+        DRILL_WORK=""
+    fi
+}
+
+drill_query() {
+    # drill_query <database> <sql> - inside the throwaway container only.
+    docker exec -i "$DRILL_CONTAINER" psql -U healthsave -d "$1" -v ON_ERROR_STOP=1 -Atc "$2"
+}
+
+drill_compare() {
+    # drill_compare <MANIFEST> <restored counts> - the per-table report, then
+    # "SUMMARY <tables checked> <mismatches> <rows restored>".
+    awk -F= '
+        NR == FNR { if (NF == 2) restored[$1] = $2; next }
+        $1 ~ /^rows\./ && NF == 2 {
+            table = substr($1, 6)
+            want = $2
+            lo = want
+            hi = want
+            if (index(want, "..")) {
+                lo = substr(want, 1, index(want, "..") - 1)
+                hi = substr(want, index(want, "..") + 2)
+            }
+            checked++
+            seen[table] = 1
+            if (!(table in restored)) {
+                have = "-"
+                status = "MISSING"
+                bad++
+            } else {
+                have = restored[table]
+                rows += have
+                if (have + 0 >= lo + 0 && have + 0 <= hi + 0) {
+                    status = "ok"
+                } else {
+                    status = "MISMATCH"
+                    bad++
+                }
+            }
+            printf "  %-46s %16s %12s  %s\n", table, want, have, status
+        }
+        END {
+            for (table in restored) {
+                if (!(table in seen)) {
+                    printf "  %-46s %16s %12s  %s\n", table, "-", restored[table], "not in backup"
+                }
+            }
+            printf "SUMMARY %d %d %.0f\n", checked, bad, rows
+        }' "$2" "$1"
+}
+
+drill_fail() {
+    # drill_fail <reason> - print the FAIL verdict and exit 1 (the EXIT trap cleans up).
+    printf '\nRESULT: FAIL - %s\n' "$1"
+    exit 1
+}
+
+cmd_restore_drill() {
+    local file="$1"
+    local image="$2"
+    require_care_feature "$FEATURE_RESTORE_DRILL" "restore --drill"
+    require_docker
+
+    DRILL_WORK="$(mktemp -d)"
+    trap drill_cleanup EXIT
+    trap 'drill_cleanup; exit 130' INT TERM
+
+    local archive
+    archive="$(open_backup_archive "$file" "$DRILL_WORK")" || exit 1
+    if ! tar -C "$DRILL_WORK" -xf "$archive" MANIFEST db.dump 2>/dev/null; then
+        log_error "$file is not a healthsave backup (MANIFEST or db.dump missing)."
+        exit 1
+    fi
+    local manifest="$DRILL_WORK/MANIFEST"
+    if [ "$(manifest_value "$manifest" format)" != "$BACKUP_FORMAT" ]; then
+        log_error "$file was made by an unsupported backup format."
+        exit 1
+    fi
+    [ -n "$image" ] || image="$(drill_image)"
+    local want_ts want_migrations
+    want_ts="$(manifest_value "$manifest" timescaledb)"
+    want_migrations="$(manifest_value "$manifest" migrations)"
+
+    printf 'Restore drill: %s\n' "$file"
+    printf '  Backup made %s, TimescaleDB %s, %s migrations\n' \
+        "$(manifest_value "$manifest" created_at)" "${want_ts:-unknown}" "${want_migrations:-?}"
+    printf '  Throwaway database: %s, no network. This Observatory is not touched.\n\n' "$image"
+
+    if ! backup_dump_intact "$DRILL_WORK"; then
+        drill_fail "the database dump does not match the checksum in the backup's MANIFEST."
+    fi
+    if ! grep -q '^rows\.' "$manifest"; then
+        drill_fail "this backup records no row counts to check against (it was made before restore drills existed). Make a new backup and drill that one."
+    fi
+
+    local password
+    password="$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')"
+    DRILL_CONTAINER="healthsave-drill-$(date -u +%Y%m%d%H%M%S)-$$"
+    if ! docker run -d --rm --name "$DRILL_CONTAINER" --network none \
+        --label com.healthsave.restore-drill=1 \
+        -e POSTGRES_USER=healthsave -e POSTGRES_PASSWORD="$password" -e POSTGRES_DB=postgres \
+        -e TIMESCALEDB_TELEMETRY=off \
+        "$image" -c timescaledb.telemetry_level=off >/dev/null; then
+        drill_fail "could not start ${image}."
+    fi
+
+    # The image's init runs a temporary server on the Unix socket only, so
+    # wait for TCP on loopback: that is the real server.
+    local tries=0
+    until docker exec "$DRILL_CONTAINER" pg_isready -h 127.0.0.1 -U healthsave -q >/dev/null 2>&1; do
+        tries=$((tries + 1))
+        if [ "$tries" -ge 120 ]; then
+            drill_fail "the throwaway database did not start within two minutes."
+        fi
+        sleep 1
+    done
+
+    local create_ext="CREATE EXTENSION timescaledb"
+    [ -n "$want_ts" ] && create_ext="CREATE EXTENSION timescaledb VERSION '${want_ts}'"
+    drill_query postgres "CREATE DATABASE healthsave TEMPLATE template0" >/dev/null \
+        || drill_fail "could not create the scratch database."
+    if ! drill_query healthsave "$create_ext" >/dev/null 2>"$DRILL_WORK/extension.log"; then
+        drill_fail "${image} cannot run TimescaleDB ${want_ts:-?}, the version this backup was made with. Pass --image with a matching timescale/timescaledb tag."
+    fi
+    drill_query healthsave "SELECT timescaledb_pre_restore()" >/dev/null \
+        || drill_fail "timescaledb_pre_restore() failed."
+    local started=$SECONDS
+    # Same flags as a real restore. TimescaleDB dumps restore with harmless
+    # warnings, so the verdict comes from the counts, not pg_restore's exit code.
+    docker exec -i "$DRILL_CONTAINER" pg_restore -U healthsave -d healthsave --no-owner \
+        <"$DRILL_WORK/db.dump" 2>"$DRILL_WORK/pg_restore.log" || true
+    drill_query healthsave "SELECT timescaledb_post_restore()" >/dev/null \
+        || drill_fail "timescaledb_post_restore() failed."
+    local took=$((SECONDS - started))
+
+    drill_query healthsave "$TABLE_COUNT_SQL" >"$DRILL_WORK/restored" 2>/dev/null || true
+    local have_migrations
+    have_migrations="$(drill_query healthsave "SELECT CASE WHEN to_regclass('schema_migrations') IS NULL THEN 0 ELSE (SELECT count(*) FROM schema_migrations) END" 2>/dev/null || true)"
+
+    printf '  %-46s %16s %12s\n' "TABLE" "IN BACKUP" "RESTORED"
+    local report summary
+    report="$(drill_compare "$manifest" "$DRILL_WORK/restored")"
+    printf '%s\n' "$report" | grep -v '^SUMMARY '
+    summary="$(printf '%s\n' "$report" | grep '^SUMMARY ' | tail -n 1)"
+    local checked bad rows
+    read -r _ checked bad rows <<<"$summary"
+
+    local problems=""
+    if [ "${bad:-1}" != "0" ]; then
+        problems="${bad} of ${checked} tables do not match the counts recorded in the backup."
+    fi
+    if [ -n "$want_migrations" ] && [ "$have_migrations" != "$want_migrations" ]; then
+        problems="${problems:+$problems }schema_migrations: expected ${want_migrations}, found ${have_migrations:-none}."
+    fi
+    if [ -n "$problems" ]; then
+        if [ -s "$DRILL_WORK/pg_restore.log" ]; then
+            printf '\nLast pg_restore messages:\n'
+            tail -n 15 "$DRILL_WORK/pg_restore.log" | sed 's/^/  /'
+        fi
+        drill_fail "$problems"
+    fi
+    printf '\nRESULT: PASS - %s tables and %s rows restored in %ss, matching the backup; %s migrations.\n' \
+        "$checked" "$rows" "$took" "${have_migrations:-0}"
+}
+
 cmd_down() {
     require_docker
     docker compose down
@@ -1715,6 +3214,93 @@ cmd_verify() {
   fi
 
   exec make verify-local
+}
+
+print_labs_usage() {
+    cat <<'EOF'
+Usage:
+  healthsave labs import FILE.csv [--dry-run]
+
+Import blood test results from a CSV file. The file is read on this machine
+and handed to the running API container; it does not cross the network.
+Template and columns: docs/capture/labs-csv.md
+
+The whole file is checked first. If any row has a problem, nothing is
+written and every problem is listed with its row and column.
+
+Options:
+  --dry-run   Check the file and show what would be imported; write nothing.
+
+Exit codes:
+  0   imported (or the dry run passed)
+  2   usage error
+  65  file rejected; nothing written. Fix the listed rows and run it again.
+  75  database not reachable; nothing written. Safe to run again.
+EOF
+}
+
+cmd_labs() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            print_labs_usage
+            return 0
+            ;;
+        import)
+            shift
+            ;;
+        *)
+            log_error "Unknown labs command: $1"
+            print_labs_usage
+            exit 2
+            ;;
+    esac
+
+    local file=""
+    local dry_run=""
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help)
+                print_labs_usage
+                return 0
+                ;;
+            --dry-run) dry_run="--dry-run" ;;
+            -*)
+                log_error "Unknown labs import argument: $1"
+                print_labs_usage
+                exit 2
+                ;;
+            *)
+                if [ -n "$file" ]; then
+                    log_error "Give one CSV file at a time."
+                    exit 2
+                fi
+                file="$1"
+                ;;
+        esac
+        shift
+    done
+
+    if [ -z "$file" ]; then
+        log_error "labs import needs a CSV file."
+        print_labs_usage
+        exit 2
+    fi
+    if [ ! -f "$file" ]; then
+        log_error "No such file: $file"
+        exit 2
+    fi
+
+    require_docker
+    if ! running_services | grep -qx api; then
+        log_error "The API is not running. Start the stack with 'healthsave up' and run this again."
+        exit 75
+    fi
+
+    local rc=0
+    # shellcheck disable=SC2086 # $dry_run is a single optional flag
+    docker compose exec -T api python -m scripts.import_labs $dry_run \
+        --name "$(basename "$file")" - <"$file" || rc=$?
+    exit "$rc"
 }
 
 validate_cli_command_name() {
@@ -2301,6 +3887,20 @@ case "$cmd" in
         # any more of it.
         exit 0
         ;;
+    participants)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for participants."
+            exit 2
+        fi
+        cmd_participants "$@"
+        ;;
+    mcp)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for mcp."
+            exit 2
+        fi
+        cmd_mcp "$@"
+        ;;
     web-password)
         if [ "$json_mode" = "1" ]; then
             log_error "--json is not supported for web-password."
@@ -2322,12 +3922,26 @@ case "$cmd" in
         fi
         cmd_restore "$@"
         ;;
+    license|licence)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for license."
+            exit 2
+        fi
+        cmd_license "$@"
+        ;;
     verify)
         if [ "$json_mode" = "1" ]; then
             log_error "--json is not supported for verify."
             exit 2
         fi
         cmd_verify "$@"
+        ;;
+    labs)
+        if [ "$json_mode" = "1" ]; then
+            log_error "--json is not supported for labs."
+            exit 2
+        fi
+        cmd_labs "$@"
         ;;
     status)
         if [ "${1:-}" = "--json" ]; then

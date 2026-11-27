@@ -161,10 +161,22 @@ _INSERT_SQL = text(
         device_id = EXCLUDED.device_id,
         stream_id = EXCLUDED.stream_id,
         exact_ingest_key = EXCLUDED.exact_ingest_key,
-        semantic_key = EXCLUDED.semantic_key,
-        semantic_key_version = EXCLUDED.semantic_key_version,
+        -- Fusion owns semantic_key/is_primary once it assigned them (no
+        -- normalizer sets them): a re-sent copy of a fused row keeps its
+        -- fusion instead of counting twice until nothing re-fuses it.
+        semantic_key = COALESCE(EXCLUDED.semantic_key, canonical_observations.semantic_key),
+        semantic_key_version = CASE
+            WHEN EXCLUDED.semantic_key IS NULL
+            THEN canonical_observations.semantic_key_version
+            ELSE EXCLUDED.semantic_key_version
+        END,
         aggregation_scope = EXCLUDED.aggregation_scope,
-        is_primary = EXCLUDED.is_primary,
+        is_primary = CASE
+            WHEN EXCLUDED.semantic_key IS NULL
+                 AND canonical_observations.semantic_key IS NOT NULL
+            THEN canonical_observations.is_primary
+            ELSE EXCLUDED.is_primary
+        END,
         raw_payload_id = EXCLUDED.raw_payload_id,
         source_record_uid = EXCLUDED.source_record_uid,
         confidence = EXCLUDED.confidence,
@@ -177,7 +189,12 @@ _INSERT_SQL = text(
     WHERE canonical_observations.aggregation_scope = EXCLUDED.aggregation_scope
       AND canonical_observations.normalizer_id = 'apple_health'
       AND EXCLUDED.normalizer_id = 'apple_health'
-      AND canonical_observations.status = 'active'
+      -- 'superseded' on an Apple row means deleted (only the deletions
+      -- channel sets it). HKSample.uuid survives delete-and-reinsert, so the
+      -- same sample re-added in a LATER request than its deletion (the
+      -- recency ladder below) is active again. A deletion in the same request
+      -- still wins: the v2 route writes a batch's samples before its deletions.
+      AND canonical_observations.status IN ('active', 'superseded')
       AND CASE
             WHEN pg_input_is_valid(
                     COALESCE(EXCLUDED.provenance->>'raw_payload_ref', ''),
@@ -371,6 +388,41 @@ class CanonicalObservationRepository:
         rows = _coalesce_conflict_rows([observation_columns(obs) for obs in observations])
         await session.execute(_INSERT_SQL, rows)
         return len(observations)
+
+    async def supersede_source_records(
+        self,
+        session: AsyncSession,
+        *,
+        owner_id: UUID,
+        normalizer_id: str,
+        source_record_uids: list[str],
+    ) -> int:
+        """Mark one normalizer's active rows for these upstream record ids superseded.
+
+        For a vendor that reports a deletion by its own record id (a Whoop
+        ``workout.deleted`` webhook). Scoped to ``normalizer_id`` so another
+        source's identical id is never touched. Idempotent; returns rows changed.
+        """
+        if not source_record_uids:
+            return 0
+        result = await session.execute(
+            text(
+                """
+                UPDATE canonical_observations
+                   SET status = 'superseded'
+                 WHERE owner_id = :owner_id
+                   AND normalizer_id = :normalizer_id
+                   AND status = 'active'
+                   AND source_record_uid = ANY(:uids)
+                """
+            ),
+            {
+                "owner_id": str(owner_id),
+                "normalizer_id": normalizer_id,
+                "uids": list(source_record_uids),
+            },
+        )
+        return result.rowcount or 0
 
     async def query_series(
         self,

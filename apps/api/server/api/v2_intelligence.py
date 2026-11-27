@@ -176,6 +176,28 @@ async def _upsert_provider_connection(
     return saved.id
 
 
+async def _cloud_egress_scope(session: AsyncSession) -> tuple:
+    """What a cloud-egress consent was given for.
+
+    The mode plus every cloud destination ``(provider, base_url)`` the
+    narrator can reach, primary and fallbacks. Consent is a decision about
+    where derived data goes, so it holds only while this stays the same; a
+    model change or a key rotation for the same destination keeps it.
+    """
+    settings = await _repo.get_settings(session)
+    if settings is None:
+        return ("off", ())
+    connections = {c.id: c for c in await _repo.list_connections(session)}
+    reachable = [settings.primary_connection_id]
+    reachable += [route.connection_id for route in await _repo.get_fallback_routes(session)]
+    cloud = {
+        (conn.provider, conn.base_url or "")
+        for conn in (connections.get(cid) for cid in reachable)
+        if conn is not None and conn.destination == "cloud"
+    }
+    return (settings.mode, tuple(sorted(cloud)))
+
+
 async def _build_view(session: AsyncSession, *, env_provider: str | None) -> dict:
     """Compose the current posture for the UI — secrets stripped to last4."""
     settings = await _repo.get_settings(session)
@@ -263,6 +285,13 @@ async def put_intelligence(
 ) -> dict:
     """Apply mode + primary + fallback. Does NOT grant cloud egress (see consent)."""
     trusted = _trusted_local_hosts(request)
+    # A change of mode or of any cloud destination revokes an existing consent:
+    # consent given for one provider must not let data reach another. (Kept out
+    # of the docstring, which is this route's locked OpenAPI description.)
+    scope_before = await _cloud_egress_scope(session)
+    # Turning prompt redaction off changes what leaves the box: ask again too.
+    settings_before = await _repo.get_settings(session)
+    redacted_before = settings_before is not None and bool(settings_before.redact_cloud_prompts)
 
     fields: dict = {"mode": body.mode}
     if body.primary is not None:
@@ -284,6 +313,19 @@ async def put_intelligence(
         await _repo.default_repository.set_fallback_routes(session, routes=routes)
 
     await _repo.default_repository.update_settings(session, actor="api", **fields)
+
+    settings = await _repo.get_settings(session)
+    consented = settings is not None and (
+        settings.allow_cloud_egress or settings.consented_at is not None
+    )
+    if consented and await _cloud_egress_scope(session) != scope_before:
+        await _repo.default_repository.record_consent(
+            session, granted=False, actor="api", reason="egress_scope_changed"
+        )
+    elif consented and redacted_before and not settings.redact_cloud_prompts:
+        await _repo.default_repository.record_consent(
+            session, granted=False, actor="api", reason="redaction_turned_off"
+        )
     await session.commit()
     return await _build_view(session, env_provider=os.getenv("LLM_PROVIDER") or None)
 
@@ -312,6 +354,11 @@ async def post_consent(
     return await _build_view(session, env_provider=os.getenv("LLM_PROVIDER") or None)
 
 
+SAVED_KEY_UNREADABLE_MESSAGE = (
+    "This server can't open the saved API key. Enter the key again and save."
+)
+
+
 @router.post("/test-connection")
 async def test_connection(
     request: Request,
@@ -325,7 +372,22 @@ async def test_connection(
             raise HTTPException(status_code=404, detail="connection not found")
         provider, base_url = conn.provider, conn.base_url
         model = body.model or (await _stored_model(session, conn.id))
-        api_key = await _repo.get_connection_secret(session, connection_id=conn.id) or ""
+        try:
+            api_key = await _repo.get_connection_secret(session, connection_id=conn.id) or ""
+        except repo_module.SavedKeyUnreadable:
+            # The key is saved but this server cannot open it (its encryption
+            # keys changed). Say what fixes it; never call the provider keyless.
+            await _repo.default_repository.record_test_result(
+                session, connection_id=conn.id, status="failed"
+            )
+            await session.commit()
+            return {
+                "ok": False,
+                "destination": conn.destination,
+                "model": model,
+                "latency_ms": None,
+                "error": SAVED_KEY_UNREADABLE_MESSAGE,
+            }
     else:
         if not body.provider or not body.model:
             raise HTTPException(

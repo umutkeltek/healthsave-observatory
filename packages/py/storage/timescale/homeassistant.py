@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime
+from uuid import UUID
 
+from contracts._base import DEFAULT_OWNER_ID
 from homeassistant_mqtt.snapshot import (
     HealthSnapshot,
     MetricReadinessSnapshot,
@@ -15,6 +17,7 @@ from homeassistant_mqtt.snapshot import (
 )
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import TextClause
 
 from storage.timescale.sync_receipts import sync_coverage
 
@@ -68,16 +71,46 @@ def _datetime_or_none(value: object) -> datetime | None:
 
 
 class TimescaleHealthSnapshotRepository:
-    """Read-only TimescaleDB queries for current HA sensor values."""
+    """Read-only TimescaleDB queries for current HA sensor values.
+
+    Every query is scoped to ONE owner (``owner_id``, default: the default
+    owner that the ``.env`` admin key maps to). On an Observatory that also
+    holds participants (migration 029) the bridge must never publish another
+    person's rows to the operator's Home Assistant. Metric tables carry a
+    NOT NULL ``owner_id``; receipts written before migration 024 carry a NULL
+    owner that belongs to the default owner (same rule as ``sync_receipts``).
+    """
+
+    def __init__(self, owner_id: UUID = DEFAULT_OWNER_ID) -> None:
+        self._owner_id = owner_id
+
+    @property
+    def owner_id(self) -> UUID:
+        return self._owner_id
+
+    def _text(self, sql: str) -> TextClause:
+        """``text()`` with the owner scope filled in and ``:owner_id`` bound."""
+
+        if self._owner_id == DEFAULT_OWNER_ID:
+            receipt = "(owner_id = CAST(:owner_id AS UUID) OR owner_id IS NULL)"
+        else:
+            receipt = "owner_id = CAST(:owner_id AS UUID)"
+        sql = sql.replace("{OWNER_RECEIPT}", receipt).replace(
+            "{OWNER}", "owner_id = CAST(:owner_id AS UUID)"
+        )
+        statement = text(sql)
+        if ":owner_id" in sql:
+            statement = statement.bindparams(owner_id=str(self._owner_id))
+        return statement
 
     async def _latest_quantity_value(self, session: AsyncSession, metric_name: str) -> object:
         return (
             await session.execute(
-                text(
+                self._text(
                     """
                     SELECT value
                     FROM quantity_samples
-                    WHERE metric_name = :metric_name
+                    WHERE {OWNER} AND metric_name = :metric_name
                     ORDER BY time DESC
                     LIMIT 1
                     """
@@ -92,11 +125,11 @@ class TimescaleHealthSnapshotRepository:
         heart_rate = int_or_none(
             (
                 await session.execute(
-                    text(
+                    self._text(
                         """
                         SELECT bpm
                         FROM heart_rate
-                        WHERE time > now() - make_interval(hours => :hrs)
+                        WHERE {OWNER} AND time > now() - make_interval(hours => :hrs)
                           AND status = 'active'
                         ORDER BY time DESC
                         LIMIT 1
@@ -107,11 +140,11 @@ class TimescaleHealthSnapshotRepository:
             ).scalar_one_or_none()
         )
         resting_heart_rate_raw = await session.execute(
-            text(
+            self._text(
                 """
                     SELECT bpm
                     FROM heart_rate
-                    WHERE context = 'resting'
+                    WHERE {OWNER} AND context = 'resting'
                       AND status = 'active'
                     ORDER BY time DESC
                     LIMIT 1
@@ -127,11 +160,11 @@ class TimescaleHealthSnapshotRepository:
         hrv_7d_avg = round_float(
             (
                 await session.execute(
-                    text(
+                    self._text(
                         """
                         SELECT AVG(value_ms)
                         FROM hrv
-                        WHERE time >= now() - interval '7 days'
+                        WHERE {OWNER} AND time >= now() - interval '7 days'
                           AND status = 'active'
                         """
                     )
@@ -142,11 +175,11 @@ class TimescaleHealthSnapshotRepository:
         hrv = round_float(
             (
                 await session.execute(
-                    text(
+                    self._text(
                         """
                         SELECT value_ms
                         FROM hrv
-                        WHERE status = 'active'
+                        WHERE {OWNER} AND status = 'active'
                         ORDER BY time DESC
                         LIMIT 1
                         """
@@ -158,11 +191,11 @@ class TimescaleHealthSnapshotRepository:
         steps_today = int_or_none(
             (
                 await session.execute(
-                    text(
+                    self._text(
                         """
                         SELECT max(steps)
                         FROM daily_activity
-                        WHERE date >= current_date - 1
+                        WHERE {OWNER} AND date >= current_date - 1
                           AND steps IS NOT NULL
                         """
                     )
@@ -171,11 +204,11 @@ class TimescaleHealthSnapshotRepository:
         )
         steps_today_synced_at = (
             await session.execute(
-                text(
+                self._text(
                     """
                     SELECT received_at
                     FROM healthsave_sync_receipts
-                    WHERE metric = 'step_count'
+                    WHERE {OWNER_RECEIPT} AND metric = 'step_count'
                       AND status = 'processed'
                       AND records_received > 0
                     ORDER BY received_at DESC
@@ -187,11 +220,11 @@ class TimescaleHealthSnapshotRepository:
         active_calories = int_or_none(
             (
                 await session.execute(
-                    text(
+                    self._text(
                         """
                         SELECT active_calories
                         FROM daily_activity
-                        WHERE active_calories IS NOT NULL
+                        WHERE {OWNER} AND active_calories IS NOT NULL
                         ORDER BY date DESC
                         LIMIT 1
                         """
@@ -202,11 +235,11 @@ class TimescaleHealthSnapshotRepository:
         last_sleep_hours = round_float(
             (
                 await session.execute(
-                    text(
+                    self._text(
                         """
                         SELECT total_duration_ms / 3600000.0
                         FROM sleep_sessions
-                        WHERE status = 'active'
+                        WHERE {OWNER} AND status = 'active'
                         ORDER BY start_time DESC
                         LIMIT 1
                         """
@@ -216,7 +249,7 @@ class TimescaleHealthSnapshotRepository:
             2,
         )
         sleep_efficiency_raw = await session.execute(
-            text(
+            self._text(
                 """
                     SELECT CASE
                       WHEN (total_duration_ms + COALESCE(awake_ms, 0)) > 0
@@ -224,7 +257,7 @@ class TimescaleHealthSnapshotRepository:
                         / (total_duration_ms + COALESCE(awake_ms, 0)) * 100.0
                     END
                     FROM sleep_sessions
-                    WHERE status = 'active'
+                    WHERE {OWNER} AND status = 'active'
                     ORDER BY start_time DESC
                     LIMIT 1
                     """
@@ -239,11 +272,11 @@ class TimescaleHealthSnapshotRepository:
         blood_oxygen = round_float(
             (
                 await session.execute(
-                    text(
+                    self._text(
                         """
                         SELECT spo2_pct
                         FROM blood_oxygen
-                        WHERE status = 'active'
+                        WHERE {OWNER} AND status = 'active'
                         ORDER BY time DESC
                         LIMIT 1
                         """
@@ -253,10 +286,11 @@ class TimescaleHealthSnapshotRepository:
             1,
         )
         recovery_score_raw = await session.execute(
-            text(
+            self._text(
                 """
                     SELECT score
                     FROM recovery
+                    WHERE {OWNER}
                     ORDER BY time DESC
                     LIMIT 1
                     """
@@ -269,30 +303,30 @@ class TimescaleHealthSnapshotRepository:
         strain = round_float(await self._latest_quantity_value(session, "strain"), 1)
         source_model = (
             await session.execute(
-                text(
+                self._text(
                     """
                     WITH recent_sources AS (
                         SELECT source_id, max(time) AS observed_at
                         FROM hrv
-                        WHERE time >= now() - interval '7 days'
+                        WHERE {OWNER} AND time >= now() - interval '7 days'
                           AND status = 'active'
                         GROUP BY source_id
                         UNION ALL
                         SELECT source_id, max(time) AS observed_at
                         FROM blood_oxygen
-                        WHERE time >= now() - interval '7 days'
+                        WHERE {OWNER} AND time >= now() - interval '7 days'
                           AND status = 'active'
                         GROUP BY source_id
                         UNION ALL
                         SELECT source_id, max(start_time) AS observed_at
                         FROM sleep_sessions
-                        WHERE start_time >= now() - interval '7 days'
+                        WHERE {OWNER} AND start_time >= now() - interval '7 days'
                           AND status = 'active'
                         GROUP BY source_id
                         UNION ALL
                         SELECT source_id, max(date::timestamptz) AS observed_at
                         FROM daily_activity
-                        WHERE date >= current_date - interval '7 days'
+                        WHERE {OWNER} AND date >= current_date - interval '7 days'
                         GROUP BY source_id
                     ),
                     ranked AS (
@@ -320,17 +354,18 @@ class TimescaleHealthSnapshotRepository:
         ).scalar_one_or_none() or "HealthSave"
         medication_table_exists = (
             await session.execute(
-                text("SELECT to_regclass('public.medication_dose_events') IS NOT NULL")
+                self._text("SELECT to_regclass('public.medication_dose_events') IS NOT NULL")
             )
         ).scalar_one_or_none()
         latest_medication_status = None
         if medication_table_exists:
             latest_medication_status = (
                 await session.execute(
-                    text(
+                    self._text(
                         """
                         SELECT status
                         FROM medication_dose_events
+                        WHERE {OWNER}
                         ORDER BY coalesce(scheduled_time, time) DESC, time DESC
                         LIMIT 1
                         """
@@ -383,7 +418,7 @@ class TimescaleHealthSnapshotRepository:
         )
 
     async def _metric_readiness(self, session: AsyncSession) -> dict[str, MetricReadinessSnapshot]:
-        coverage = await sync_coverage(session)
+        coverage = await sync_coverage(session, owner_id=self._owner_id)
         rows = coverage.get("decision_readiness", {}).get("per_metric", [])
         readiness: dict[str, MetricReadinessSnapshot] = {}
         for row in rows:
@@ -429,11 +464,11 @@ class TimescaleHealthSnapshotRepository:
         # "<source> available" sensors, not a ghost.
         hr_rows = (
             await session.execute(
-                text(
+                self._text(
                     """
                     SELECT DISTINCT ON (source_id) source_id, bpm
                     FROM heart_rate
-                    WHERE time > now() - make_interval(hours => :hrs)
+                    WHERE {OWNER} AND time > now() - make_interval(hours => :hrs)
                       AND status = 'active'
                     ORDER BY source_id, time DESC
                     """
@@ -445,11 +480,11 @@ class TimescaleHealthSnapshotRepository:
         # Latest hrv per source within 7d.
         hrv_rows = (
             await session.execute(
-                text(
+                self._text(
                     """
                     SELECT DISTINCT ON (source_id) source_id, value_ms
                     FROM hrv
-                    WHERE time > now() - interval '7 days'
+                    WHERE {OWNER} AND time > now() - interval '7 days'
                       AND status = 'active'
                     ORDER BY source_id, time DESC
                     """
@@ -460,11 +495,11 @@ class TimescaleHealthSnapshotRepository:
         # Today's steps per source.
         steps_rows = (
             await session.execute(
-                text(
+                self._text(
                     """
                     SELECT source_id, steps
                     FROM daily_activity
-                    WHERE date >= current_date - 1 AND steps IS NOT NULL
+                    WHERE {OWNER} AND date >= current_date - 1 AND steps IS NOT NULL
                     """
                 )
             )
@@ -473,11 +508,11 @@ class TimescaleHealthSnapshotRepository:
         # Last sleep session per source (latest by start_time).
         sleep_rows = (
             await session.execute(
-                text(
+                self._text(
                     """
                     SELECT DISTINCT ON (source_id) source_id, total_duration_ms
                     FROM sleep_sessions
-                    WHERE total_duration_ms IS NOT NULL
+                    WHERE {OWNER} AND total_duration_ms IS NOT NULL
                       AND status = 'active'
                     ORDER BY source_id, start_time DESC
                     """

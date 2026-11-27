@@ -1,6 +1,7 @@
 import { cache } from "react";
 import Link from "next/link";
 import { type Finding, isNarratorOff, type Privacy, type Readiness } from "../../lib/api";
+import { type NarratorState, narratorState } from "../../lib/narrator";
 import {
   agoLabel,
   dataState,
@@ -26,7 +27,7 @@ import { friendlyName } from "../../lib/provenance";
 import { hasOwnerDailyTotalSemantics } from "../../lib/series";
 import { TodayFindings } from "../TodayFindings";
 import { TodayMetricCard } from "../TodayMetricCard";
-import { DEFAULT_TODAY_METRICS, recoveryRecency, findingEvidenceHref, dailyReadings, sleepDurationFromStages, todayReadings, type TodayTrendOption } from "../../lib/todayPresentation";
+import { DEFAULT_TODAY_METRICS, presentTodayDefs, recoveryRecency, findingEvidenceHref, dailyReadings, sleepDurationFromStages, todayReadings, type TodayTrendOption } from "../../lib/todayPresentation";
 import { ExperimentsCard } from "../ExperimentsCard";
 import { FocusGoalPicker } from "../FocusGoalPicker";
 import { GoalRibbon } from "../GoalRibbon";
@@ -107,22 +108,41 @@ function todaySummary(score: number | null, findings: Finding[] | null, readines
   return `Recovery is low today. Focus on rest, sleep, and heart-rate signals first. ${readyLine}`;
 }
 
-function vaultSteps(privacy: Privacy | null, readiness: Readiness | null): VaultStep[] {
+// The Today vault's posture. A privacy read that failed is "unknown": it never
+// falls back to the green "Stays local" seal or a blocked cloud step.
+export type VaultReceipt = {
+  steps: VaultStep[];
+  title: string;
+  seal: string;
+  variant: "local" | "egress" | "unknown";
+};
+
+export function vaultReceipt(privacy: Privacy | null, readiness: Readiness | null): VaultReceipt {
   const sourceCount = readiness?.sources?.length ?? 0;
   const totalRows = (readiness?.sources ?? []).reduce((n, s) => n + (s.observation_count ?? 0), 0);
-  const provider = privacy?.provider ?? "ollama";
-  const local = privacy?.is_local ?? true;
-  const cloudActive = privacy?.cloud_active ?? false;
-  const narratorOff = isNarratorOff(privacy?.provider);
-  return [
+  const head: VaultStep[] = [
     { label: "HealthSave sync", meta: sourceCount > 1 ? `${sourceCount} sources` : agoLabel(readiness?.last_ingested_at) },
     { label: "Local store", meta: totalRows ? `${totalRows.toLocaleString()} rows` : "ready" },
     { label: "Pattern checks", meta: "on this server" },
-    narratorOff
-      ? { label: "Briefs", meta: "off" }
-      : { label: local ? "Private briefs" : "Cloud briefs", meta: local ? "local" : provider },
-    { label: "Cloud sharing", meta: cloudActive ? "on" : "off", blocked: !cloudActive },
   ];
+  if (privacy === null) {
+    return {
+      steps: [...head, { label: "Briefs", meta: "unknown" }, { label: "Cloud sharing", meta: "unknown" }],
+      title: "Data privacy",
+      seal: "Privacy status unknown",
+      variant: "unknown",
+    };
+  }
+  const cloudActive = privacy.cloud_active;
+  const briefs: VaultStep = isNarratorOff(privacy.provider)
+    ? { label: "Briefs", meta: "off" }
+    : { label: privacy.is_local ? "Private briefs" : "Cloud briefs", meta: privacy.is_local ? "local" : privacy.provider };
+  return {
+    steps: [...head, briefs, { label: "Cloud sharing", meta: cloudActive ? "on" : "off", blocked: !cloudActive }],
+    title: cloudActive ? "Data sharing" : "Data privacy",
+    seal: cloudActive ? "Cloud briefs on" : "Stays local",
+    variant: cloudActive ? "egress" : "local",
+  };
 }
 
 async function EmptyToday({ state }: { state: "empty" | "unreachable" }) {
@@ -162,7 +182,7 @@ async function EmptyToday({ state }: { state: "empty" | "unreachable" }) {
             <div>
               <strong>Pair HealthSave app.</strong>
               <span className="firstrun-hint">
-                Open <strong>HealthSave → Settings → Server Sync</strong> on your phone and enter this server&apos;s URL.
+                Open <strong>HealthSave → Settings → Server Sync</strong>{" "}on your phone and enter this server&apos;s URL.
               </span>
             </div>
           </li>
@@ -285,7 +305,7 @@ export async function HeroSection({ showSignals = true }: { showSignals?: boolea
 export async function VaultSection() {
   if (!(await hasAnyData())) return null;
   const [privacy, readiness, receipts] = await Promise.all([safePrivacy(), safeReadiness(), safeReceipts()]);
-  const cloudActive = privacy?.cloud_active ?? false;
+  const receipt = vaultReceipt(privacy, readiness);
   const lastEvent = receipts?.events?.[0];
   const auditNote = lastEvent
     ? `Privacy setting changed - ${agoLabel(lastEvent.created_at)}`
@@ -295,10 +315,10 @@ export async function VaultSection() {
 
   return (
     <LocalVaultReceipt
-      steps={vaultSteps(privacy, readiness)}
-      title={cloudActive ? "Data sharing" : "Data privacy"}
-      seal={cloudActive ? "Cloud briefs on" : "Stays local"}
-      variant={cloudActive ? "egress" : "local"}
+      steps={receipt.steps}
+      title={receipt.title}
+      seal={receipt.seal}
+      variant={receipt.variant}
       auditNote={auditNote}
     />
   );
@@ -317,7 +337,7 @@ const todaySeries30d = cache(async () => {
     const sleep = sleepDurationFromStages(stages);
     if (sleep) displayMap.set("sleep.duration", sleep);
   }
-  return { defs, pinned, displayMap };
+  return { defs: presentTodayDefs(defs, pinned, displayMap), pinned, displayMap };
 });
 
 async function trendOptions(): Promise<TodayTrendOption[]> {
@@ -339,6 +359,10 @@ async function trendOptions(): Promise<TodayTrendOption[]> {
   });
 }
 
+export function briefSummaryLabel(state: NarratorState): string {
+  return state === "off" ? "Briefs are off" : state === "unknown" ? "Status unknown" : "Not available yet";
+}
+
 export async function TodayStorySection() {
   if (!(await hasAnyData())) return null;
   const [latest, findings, privacy, narratives, candidates, experiments, trends] =
@@ -351,6 +375,8 @@ export async function TodayStorySection() {
       safeExperiments(),
       trendOptions(),
     ]);
+  // A failed privacy read is "unknown": briefs are not reported as off.
+  const narrator = narratorState(privacy);
   const hasBrief = Boolean(latest?.weekly_summary || latest?.daily_briefing);
   return (
     <>
@@ -365,7 +391,7 @@ export async function TodayStorySection() {
         {hasBrief ? (
           <WeeklyBriefCard
             latest={latest}
-            narratorOff={isNarratorOff(privacy?.provider)}
+            narratorOff={narrator === "off"}
             history={narratives ?? []}
           />
         ) : (
@@ -373,14 +399,12 @@ export async function TodayStorySection() {
             <summary>
               Weekly brief
               <span>
-                {isNarratorOff(privacy?.provider)
-                  ? "Briefs are off"
-                  : "Not available yet"}
+                {briefSummaryLabel(narrator)}
               </span>
             </summary>
             <WeeklyBriefCard
               latest={latest}
-              narratorOff={isNarratorOff(privacy?.provider)}
+              narratorOff={narrator === "off"}
               history={narratives ?? []}
             />
           </details>
@@ -398,10 +422,14 @@ export async function TodayStorySection() {
 
 export async function SignalsSection() {
   if (!(await hasAnyData())) return null;
-  const [{ defs: baseDefs, pinned, displayMap }, goal] = await Promise.all([
+  const [{ defs: baseDefs, pinned, displayMap }, goal, streams] = await Promise.all([
     todaySeries30d(),
     getFocusGoal(),
+    safeStreams(),
   ]);
+  const sourceLabels: Record<string, string> = Object.fromEntries(
+    (streams ?? []).map((s) => [s.id, s.device_label ?? friendlyName(s.source_plugin_id)]),
+  );
   let defs = baseDefs;
   if (goal) {
     const goalSet = new Set(goal.metricIds);
@@ -410,6 +438,9 @@ export async function SignalsSection() {
       ...defs.filter((d) => !goalSet.has(d.id)),
     ];
   }
+  // Pinned lists fold after six; the default list is short and shows whole
+  // (six cards, seven when RMSSD streams beside SDNN).
+  const shown = pinned ? 6 : defs.length;
   return (
     <section
       className="today-signals"
@@ -422,25 +453,27 @@ export async function SignalsSection() {
         </Link>
       </div>
       <div className="today-signal-grid">
-        {defs.slice(0, 6).map((metric) => (
+        {defs.slice(0, shown).map((metric) => (
           <TodayMetricCard
             key={metric.id}
             id={metric.id}
             title={metric.title}
             series={displayMap.get(metric.id) ?? null}
+            sourceLabels={sourceLabels}
           />
         ))}
       </div>
-      {defs.length > 6 && (
+      {defs.length > shown && (
         <details className="today-more-signals">
-          <summary>{defs.length - 6} more pinned readings</summary>
+          <summary>{defs.length - shown} more pinned readings</summary>
           <div className="today-signal-grid">
-            {defs.slice(6).map((metric) => (
+            {defs.slice(shown).map((metric) => (
               <TodayMetricCard
                 key={metric.id}
                 id={metric.id}
                 title={metric.title}
                 series={displayMap.get(metric.id) ?? null}
+                sourceLabels={sourceLabels}
               />
             ))}
           </div>

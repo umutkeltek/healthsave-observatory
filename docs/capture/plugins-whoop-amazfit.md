@@ -24,7 +24,7 @@ OAuth-based poll plugin against the [Whoop developer API](https://developer.whoo
 
 ### What it emits
 
-- `heart_rate_variability` → `hrv` (RMSSD from recovery)
+- `heart_rate_variability_rmssd` → `quantity_samples` (RMSSD from recovery; not the SDNN `hrv` table)
 - `blood_oxygen` → `blood_oxygen` (SpO2 from recovery)
 - `body_temperature` → `body_temperature` (skin temperature from recovery)
 - `workouts` → `workouts` (duration, average/max HR, calories, distance, source label)

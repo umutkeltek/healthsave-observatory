@@ -54,10 +54,17 @@ collapsed single value.
 
 ## Connecting the app
 
+The quickest way: run `healthsave pair` on the server and scan its QR code with
+the iPhone Camera. HealthSave opens **Server Sync** with the address and key
+filled in; without Pro it sends the last 7 days, and your whole history needs Pro. To type it in instead (needs HealthSave Pro):
+
 1. Open HealthSave → **Settings → Server Sync**.
 2. Set **Server URL** to `http://your-server-ip:8000` (the app appends the API paths).
 3. (Optional) Set your API key if you configured one.
-4. Tap **Sync New Data**.
+4. Tap **Sync Latest Changes**.
+
+Automatic sync needs Pro. What is free and what needs Pro:
+[Connect HealthSave](../connect-healthsave.md#free-and-pro).
 
 Running `./healthsave doctor` on the server prints the exact URL to paste into
 the app. See [Quick start](../quick-start.md) for bringing the stack up.

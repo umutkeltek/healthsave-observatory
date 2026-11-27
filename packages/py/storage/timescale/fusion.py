@@ -72,6 +72,10 @@ class SessionCandidatePair:
     direct: SessionObservationCandidate
     relayed: SessionObservationCandidate
     device_link: DeviceLinkConfidence
+    # (direct, relayed) row revisions: the raw payload and capture time each
+    # row was last written from. A rejection is recorded against them, so the
+    # pair is offered again only when one of the rows changes.
+    revisions: tuple[str, str] = ("", "")
 
 
 SESSION_METRIC_ID = "workout.session"
@@ -118,7 +122,11 @@ _SELECT_SESSION_CANDIDATE_PAIRS_SQL = text(
             relayed.value_json->'summary'->>'provider_object_id',
             relayed.source_record_uid
         ) AS relayed_provider_object_id,
-        link.confidence AS device_link_confidence
+        link.confidence AS device_link_confidence,
+        COALESCE(direct.provenance->>'raw_payload_ref', '') || '@'
+            || COALESCE(direct.provenance->>'captured_at', '') AS direct_revision,
+        COALESCE(relayed.provenance->>'raw_payload_ref', '') || '@'
+            || COALESCE(relayed.provenance->>'captured_at', '') AS relayed_revision
       FROM device_identity_links link
       JOIN canonical_observations direct
         ON direct.owner_id = link.owner_id
@@ -146,6 +154,24 @@ _SELECT_SESSION_CANDIDATE_PAIRS_SQL = text(
            <= :boundary_tolerance_s
        AND ABS(EXTRACT(EPOCH FROM direct.interval_end - relayed.interval_end))
            <= :boundary_tolerance_s
+       -- A pair this matcher already rejected, with neither row changed since,
+       -- would be rejected again: skip it instead of appending another
+       -- 'rejected' row every poll and holding a slot in the limit.
+       AND NOT EXISTS (
+           SELECT 1
+             FROM fusion_decisions rejected
+            WHERE rejected.owner_id = link.owner_id
+              AND rejected.decision = 'rejected'
+              AND rejected.matcher_id = :matcher_id
+              AND rejected.matcher_version = :matcher_version
+              AND rejected.variant_observation_ids = ARRAY[direct.id, relayed.id]
+              AND rejected.evidence->>'direct_revision'
+                  = COALESCE(direct.provenance->>'raw_payload_ref', '') || '@'
+                    || COALESCE(direct.provenance->>'captured_at', '')
+              AND rejected.evidence->>'relayed_revision'
+                  = COALESCE(relayed.provenance->>'raw_payload_ref', '') || '@'
+                    || COALESCE(relayed.provenance->>'captured_at', '')
+       )
      ORDER BY direct.interval_start DESC
      LIMIT :limit
     """
@@ -201,6 +227,73 @@ _UPSERT_DEVICE_IDENTITY_LINK_SQL = text(
         evidence = EXCLUDED.evidence,
         valid_from = EXCLUDED.valid_from,
         valid_to = EXCLUDED.valid_to
+    """
+)
+
+# Undo the fusion of every pair whose latest decision is 'assigned' but that
+# no longer stands: its device link no longer qualifies (not confirmed, too
+# weak, expired or gone), or one of its rows is no longer active (deleted at
+# the vendor or in Apple Health). The candidate query would never fuse it
+# today, so it must not stay fused: the surviving copy is primary again. Only
+# rows still carrying that decision's semantic key are touched, which makes
+# the sweep idempotent.
+_REVOKE_UNQUALIFIED_ASSIGNMENTS_SQL = text(
+    """
+    WITH latest AS (
+        SELECT DISTINCT ON (d.workspace_id, d.semantic_key)
+               d.workspace_id,
+               d.semantic_key,
+               d.decision,
+               d.variant_observation_ids,
+               d.evidence->>'direct_stream_id' AS direct_stream_id,
+               d.evidence->>'relayed_stream_id' AS relayed_stream_id
+          FROM fusion_decisions d
+         WHERE d.owner_id = CAST(:owner_id AS UUID)
+           AND d.matcher_id = :matcher_id
+           AND d.decision IN ('assigned', 'revoked')
+         ORDER BY d.workspace_id, d.semantic_key, d.created_at DESC
+    ),
+    judged AS (
+        SELECT latest.*,
+               NOT EXISTS (
+                   SELECT 1
+                     FROM device_identity_links link
+                    WHERE link.owner_id = CAST(:owner_id AS UUID)
+                      AND link.direct_stream_id::text = latest.direct_stream_id
+                      AND link.relayed_stream_id::text = latest.relayed_stream_id
+                      AND link.status = 'confirmed'
+                      AND link.confidence IN ('medium', 'strong')
+                      AND (link.valid_to IS NULL OR link.valid_to > now())
+               ) AS link_gone,
+               EXISTS (
+                   SELECT 1
+                     FROM canonical_observations variant
+                    WHERE variant.owner_id = CAST(:owner_id AS UUID)
+                      AND variant.workspace_id = latest.workspace_id
+                      AND variant.id = ANY(latest.variant_observation_ids)
+                      AND variant.status <> 'active'
+               ) AS variant_gone
+          FROM latest
+         WHERE latest.decision = 'assigned'
+    ),
+    unqualified AS (
+        SELECT * FROM judged WHERE link_gone OR variant_gone
+    )
+    UPDATE canonical_observations AS obs
+       SET semantic_key = NULL,
+           semantic_key_version = NULL,
+           is_primary = TRUE
+      FROM unqualified
+     WHERE obs.owner_id = CAST(:owner_id AS UUID)
+       AND obs.workspace_id = unqualified.workspace_id
+       AND obs.id = ANY(unqualified.variant_observation_ids)
+       AND obs.semantic_key = unqualified.semantic_key
+    RETURNING obs.id AS observation_id,
+              unqualified.workspace_id,
+              unqualified.semantic_key,
+              unqualified.direct_stream_id,
+              unqualified.relayed_stream_id,
+              unqualified.link_gone
     """
 )
 
@@ -272,6 +365,65 @@ class FusionReconciliationRepository:
                 "valid_to": valid_to.isoformat() if valid_to else None,
             },
         )
+        # A link that stops qualifying takes back what it fused.
+        await self.revoke_unqualified_assignments(
+            session, owner_id=owner_id, decided_by="device-identity-link"
+        )
+
+    async def revoke_unqualified_assignments(
+        self,
+        session: AsyncSession,
+        *,
+        owner_id: UUID,
+        decided_by: str = "system",
+    ) -> int:
+        """Unfuse pairs that no longer stand; return the number revoked.
+
+        A pair no longer stands when its device link no longer qualifies or
+        one of its rows is no longer active (deleted). Each unfused pair gets
+        a ``revoked`` decision. Runs when a link is saved, before each
+        reconciliation pass (which also catches a link whose ``valid_to`` has
+        passed and an Apple deletion), and after a vendor deletion.
+        """
+        result = await session.execute(
+            _REVOKE_UNQUALIFIED_ASSIGNMENTS_SQL,
+            {"owner_id": str(owner_id), "matcher_id": MATCHER_ID},
+        )
+        revoked: dict[tuple[UUID, str], dict[str, object]] = {}
+        for row in result.mappings().all():
+            key = (_as_uuid(row["workspace_id"]), str(row["semantic_key"]))
+            entry = revoked.setdefault(
+                key,
+                {
+                    "ids": [],
+                    "direct_stream_id": row["direct_stream_id"],
+                    "relayed_stream_id": row["relayed_stream_id"],
+                    "reason": (
+                        "device link no longer confirmed with medium or strong confidence"
+                        if row["link_gone"]
+                        else "a fused copy was deleted"
+                    ),
+                },
+            )
+            entry["ids"].append(_as_uuid(row["observation_id"]))  # type: ignore[union-attr]
+        for (workspace_id, sem_key), entry in revoked.items():
+            await self._record_decision(
+                session,
+                owner_id=owner_id,
+                workspace_id=workspace_id,
+                semantic_key=sem_key,
+                decision="revoked",
+                confidence=0.0,
+                primary_observation_id=None,
+                variant_observation_ids=tuple(entry["ids"]),  # type: ignore[arg-type]
+                decided_by=decided_by,
+                evidence={
+                    "reason": str(entry["reason"]),
+                    "direct_stream_id": str(entry["direct_stream_id"]),
+                    "relayed_stream_id": str(entry["relayed_stream_id"]),
+                },
+            )
+        return len(revoked)
 
     async def find_session_candidate_pairs(
         self,
@@ -289,6 +441,8 @@ class FusionReconciliationRepository:
                 "metric_id": SESSION_METRIC_ID,
                 "boundary_tolerance_s": BOUNDARY_TOLERANCE_S,
                 "limit": limit,
+                "matcher_id": MATCHER_ID,
+                "matcher_version": MATCHER_VERSION,
             },
         )
         pairs: list[SessionCandidatePair] = []
@@ -309,6 +463,7 @@ class FusionReconciliationRepository:
         relayed: SessionObservationCandidate,
         device_link: DeviceLinkConfidence,
         decided_by: str = "system",
+        revisions: tuple[str, str] | None = None,
     ) -> FusionReconciliationResult:
         sem_key = semantic_key(
             direct.vendor_family,
@@ -360,6 +515,11 @@ class FusionReconciliationRepository:
                 "direct_stream_id": str(direct.stream_id),
                 "relayed_stream_id": str(relayed.stream_id),
                 "device_link_confidence": device_link.value,
+                **(
+                    {"direct_revision": revisions[0], "relayed_revision": revisions[1]}
+                    if revisions is not None
+                    else {}
+                ),
             },
         )
 
@@ -487,4 +647,5 @@ def _row_to_session_candidate_pair(row: dict) -> SessionCandidatePair | None:
         direct=direct,
         relayed=relayed,
         device_link=device_link,
+        revisions=(str(row.get("direct_revision") or ""), str(row.get("relayed_revision") or "")),
     )

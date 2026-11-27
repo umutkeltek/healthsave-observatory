@@ -5,6 +5,16 @@ Re-normalize stored raw source payloads through the *current* normalizer to
 supersede is deferred (see :mod:`replay.orchestrator`).
 """
 
-from .orchestrator import ReplayReport, replay_apple_raw_payloads
+from .orchestrator import (
+    MetricBackfillReport,
+    ReplayReport,
+    backfill_metric_from_raw,
+    replay_apple_raw_payloads,
+)
 
-__all__ = ["ReplayReport", "replay_apple_raw_payloads"]
+__all__ = [
+    "MetricBackfillReport",
+    "ReplayReport",
+    "backfill_metric_from_raw",
+    "replay_apple_raw_payloads",
+]

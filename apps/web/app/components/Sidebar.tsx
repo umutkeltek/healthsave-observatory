@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { NAV, type NavGroup, type NavItem } from "../lib/nav";
 import type { Density } from "../lib/prefs";
 import { DensityToggle } from "./DensityToggle";
 import { useI18n } from "./I18nProvider";
@@ -23,6 +24,22 @@ const ICONS: Record<string, ReactNode> = {
   activity: (
     <>
       <path d="M2.5 13.5 5.5 7l2.5 5 3-9 2.5 6.5" />
+    </>
+  ),
+  year: (
+    <>
+      <circle cx="8" cy="8" r="5.5" />
+      <path d="M8 2.5v2" />
+      <path d="M13.5 8h-2" />
+      <path d="M8 13.5v-2" />
+      <path d="M2.5 8h2" />
+    </>
+  ),
+  labs: (
+    <>
+      <path d="M6 2.5h4" />
+      <path d="M6.8 2.5v8.7a1.2 1.2 0 0 0 2.4 0V2.5" />
+      <path d="M6.8 8h2.4" />
     </>
   ),
   overview: (
@@ -112,50 +129,7 @@ const ICONS: Record<string, ReactNode> = {
 // holds the analytical / power surfaces; Manage holds config + routes. All three
 // show by default so no feature is hidden — the density toggle can slim the nav
 // to Essentials-only for a calmer view (Explore/Manage stay URL-reachable).
-//
-// The three-pillar structure mirrors Whoop's Strain / Recovery / Sleep:
-//   Today = Recovery (the hero instrument)
-//   Sleep = Sleep quality, stages, consistency, debt
-//   Activity = Strain (cardio load, steps, exercise)
-type NavGroup = "essentials" | "explore" | "manage";
-type NavKey =
-  | "today"
-  | "sleep"
-  | "activity"
-  | "findings"
-  | "data"
-  | "sources"
-  | "privacy"
-  | "explore"
-  | "library"
-  | "compare"
-  | "relationships"
-  | "experiments"
-  | "timeline"
-  | "integrations"
-  | "intelligence"
-  | "settings";
-type NavItem = { href: string; labelKey: NavKey; icon: string; group: NavGroup };
-
-const NAV: readonly NavItem[] = [
-  { href: "/", labelKey: "today", icon: "overview", group: "essentials" },
-  { href: "/sleep", labelKey: "sleep", icon: "sleep", group: "essentials" },
-  { href: "/activity", labelKey: "activity", icon: "activity", group: "essentials" },
-  { href: "/findings", labelKey: "findings", icon: "findings", group: "essentials" },
-  { href: "/data", labelKey: "data", icon: "data", group: "essentials" },
-  { href: "/sources", labelKey: "sources", icon: "sources", group: "essentials" },
-  { href: "/privacy", labelKey: "privacy", icon: "privacy", group: "essentials" },
-  { href: "/explore", labelKey: "explore", icon: "explore", group: "explore" },
-  { href: "/library", labelKey: "library", icon: "library", group: "explore" },
-  { href: "/compare", labelKey: "compare", icon: "compare", group: "explore" },
-  { href: "/relationships", labelKey: "relationships", icon: "relationships", group: "explore" },
-  { href: "/experiments", labelKey: "experiments", icon: "experiments", group: "explore" },
-  { href: "/timeline", labelKey: "timeline", icon: "findings", group: "explore" },
-  { href: "/integrations", labelKey: "integrations", icon: "integrations", group: "manage" },
-  { href: "/intelligence", labelKey: "intelligence", icon: "intelligence", group: "manage" },
-  { href: "/settings", labelKey: "settings", icon: "settings", group: "manage" },
-];
-
+// The page list itself lives in lib/nav.ts, shared with the ⌘K search.
 const GROUP_ORDER: readonly { id: NavGroup }[] = [
   { id: "essentials" },
   { id: "explore" },
@@ -184,11 +158,13 @@ function NavIcon({ name }: { name: string }) {
 
 export function Sidebar({
   status,
+  participantSwitcher,
   density,
   onDensityChange,
   onNavigate,
 }: {
   status: ReactNode;
+  participantSwitcher?: ReactNode;
   density: Density;
   onDensityChange: (mode: Density) => void;
   onNavigate?: () => void;
@@ -221,6 +197,7 @@ export function Sidebar({
         <span className="brand-sub">Observatory</span>
       </div>
 
+      {participantSwitcher}
       <nav className="nav">
         {groups.map((g) => (
           <div className="nav-group" key={g.id}>

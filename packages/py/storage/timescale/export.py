@@ -5,7 +5,8 @@ metrics maps each public metric name to a real datahub table + a fixed column
 list, so the route never lets a caller name a table/column. Every query is
 owner-scoped to the single-user sentinel and parameterized; date filters and the
 row cap are bound params. Mirrors the legacy healthtrack export service but maps
-to datahub's actual schema (e.g. workouts has no altitude_gain_m here).
+to datahub's actual schema (workouts carry ``elevation_gain_m``, not the
+legacy ``altitude_gain_m``).
 """
 
 from __future__ import annotations
@@ -20,6 +21,8 @@ from typing import TYPE_CHECKING, Any
 from contracts._base import DEFAULT_OWNER_ID
 from sqlalchemy import text
 
+from storage.timescale.measurements import SOURCE_UUID_TABLES
+
 if TYPE_CHECKING:
     from uuid import UUID
 
@@ -30,6 +33,12 @@ log = logging.getLogger("healthsave.storage.export")
 # Default + hard cap on exported rows. Truncation past the cap is logged, never silent.
 DEFAULT_ROW_LIMIT = 10_000
 MAX_ROW_LIMIT = 100_000
+
+
+# Tables that keep a revised or deleted HealthKit sample as a 'superseded' row
+# (migration 025). Only the active row is the person's data; every read
+# surface filters on it, and so does the export.
+_SUPERSEDABLE_TABLES = frozenset(SOURCE_UUID_TABLES)
 
 
 @dataclass(frozen=True)
@@ -119,6 +128,7 @@ METRIC_EXPORTS: dict[str, MetricExportSpec] = {
             "max_hr",
             "calories",
             "distance_m",
+            "elevation_gain_m",
             "source_id",
         ),
         "Workouts",
@@ -251,6 +261,9 @@ class TimescaleExportRepository:
             raise KeyError(metric)
 
         where_parts = ["owner_id = :owner_id"]
+
+        if spec.table in _SUPERSEDABLE_TABLES:
+            where_parts.append("status = 'active'")
         params: dict[str, Any] = {"owner_id": str(owner_id)}
 
         if spec.metric_filter is not None:
@@ -334,6 +347,8 @@ class TimescaleExportRepository:
         metrics: list[dict] = []
         for metric, spec in METRIC_EXPORTS.items():
             where_parts = ["owner_id = :owner_id"]
+            if spec.table in _SUPERSEDABLE_TABLES:
+                where_parts.append("status = 'active'")
             params: dict[str, Any] = {"owner_id": str(owner_id)}
             if spec.metric_filter is not None:
                 where_parts.append("metric_name = :metric_filter")

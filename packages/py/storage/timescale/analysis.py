@@ -28,6 +28,7 @@ so eager imports are safe here.
 from __future__ import annotations
 
 import json
+import zlib
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -66,6 +67,60 @@ def _fetchall(result) -> list[Any]:
 # ──────────────────────────────────────────────────────────────────
 #  analysis_runs lifecycle  (was: analysis.engine internals)
 # ──────────────────────────────────────────────────────────────────
+
+
+# First key of the run-type advisory locks. PostgreSQL keeps the two-int4 key
+# space apart from the single-bigint one (the migration runner's lock).
+_RUN_LOCK_NAMESPACE = 0x48534152  # "HSAR"
+
+
+def _run_type_lock_key(run_type: str) -> int:
+    """Stable signed int4 for ``run_type`` (crc32), the second lock key."""
+    key = zlib.crc32(run_type.encode("utf-8"))
+    return key - (1 << 32) if key >= (1 << 31) else key
+
+
+async def try_lock_run_type(session, run_type: str) -> bool:
+    """Take the advisory lock that lets one ``run_type`` run at a time.
+
+    Transaction-scoped and non-blocking: True when this transaction now
+    holds it (until its commit or rollback), False when another transaction
+    holds it, from this process or any other. Take it before the run reads
+    anything, in the transaction that writes the run: a run's 'running' row
+    and findings are invisible to other sessions until it commits, so this
+    lock is the only thing another run of the same type can see.
+    """
+    result = await session.execute(
+        text(
+            """
+            SELECT pg_try_advisory_xact_lock(
+                CAST(:namespace AS integer), CAST(:key AS integer)
+            ) AS locked
+            """
+        ),
+        {"namespace": _RUN_LOCK_NAMESPACE, "key": _run_type_lock_key(run_type)},
+    )
+    row = result.fetchone()
+    return bool(row is not None and row.locked)
+
+
+async def wait_for_run_type_lock(session, run_type: str) -> None:
+    """Take the same lock as :func:`try_lock_run_type`, waiting while it is held.
+
+    For a run a caller asked for and waits on (a trigger route): it runs after
+    the run in progress commits, so it sees that run's rows, instead of being
+    turned away.
+    """
+    await session.execute(
+        text(
+            """
+            SELECT pg_advisory_xact_lock(
+                CAST(:namespace AS integer), CAST(:key AS integer)
+            )
+            """
+        ),
+        {"namespace": _RUN_LOCK_NAMESPACE, "key": _run_type_lock_key(run_type)},
+    )
 
 
 async def begin_run(session, run_type: str) -> int | None:
@@ -132,9 +187,10 @@ async def mark_run_failed(session, run_id: int, error_message: str) -> None:
     """Best-effort ``status='failed'`` UPDATE.
 
     Caller is responsible for swallowing secondary errors so the
-    ORIGINAL exception propagates; this function commits its own
-    transaction so the failed-row write is durable even when the
-    enclosing transaction rolls back.
+    ORIGINAL exception propagates. Runs in, and commits, the run's own
+    transaction (with whatever the run already wrote); when a database
+    error has aborted that transaction this fails, and the caller rolls
+    back and uses :func:`record_failed_run` instead.
     """
     await session.execute(
         text(
@@ -147,6 +203,40 @@ async def mark_run_failed(session, run_id: int, error_message: str) -> None:
             """
         ),
         {"now": datetime.now(tz=UTC), "error": error_message, "id": run_id},
+    )
+    await session.commit()
+
+
+async def record_failed_run(
+    session,
+    *,
+    run_id: int,
+    run_type: str,
+    started_at: datetime,
+    error_message: str,
+) -> None:
+    """Write run ``run_id`` as ``failed`` after its transaction rolled back.
+
+    A database error aborts the run's transaction, so :func:`mark_run_failed`
+    cannot run in it, and the rollback takes the 'running' row with it. This
+    inserts the run again under the same id (a sequence value is never handed
+    out twice) and commits, so the failure is still on record.
+    """
+    await session.execute(
+        text(
+            """
+            INSERT INTO analysis_runs
+                (id, run_type, status, started_at, completed_at, error_message)
+            VALUES (:id, :run_type, 'failed', :started_at, :now, :error)
+            """
+        ),
+        {
+            "id": run_id,
+            "run_type": run_type,
+            "started_at": started_at,
+            "now": datetime.now(tz=UTC),
+            "error": error_message,
+        },
     )
     await session.commit()
 
@@ -356,30 +446,61 @@ async def hrv_summary(session, start: datetime, end: datetime) -> dict[str, Any]
 # ──────────────────────────────────────────────────────────────────
 
 
-async def fetch_hr_observations(
-    session, start: datetime, end: datetime
-) -> list[tuple[datetime, float]]:
-    """Return ``(bucket, avg_bpm)`` pairs from ``hr_hourly`` with a raw fallback.
+async def _heart_rate_is_single_owner(session, owner_id: UUID) -> bool:
+    """True when every ``heart_rate`` row belongs to ``owner_id``.
 
-    Falls back to bucketed raw ``heart_rate`` rows when ``hr_hourly``
-    is empty (mirrors the aggregator's fallback so the detector stays
-    usable on fresh installs).
+    ``hr_hourly`` groups by ``(bucket, device_id)`` only and ``devices`` is
+    global, so once a second person (a participant key, or an
+    ``ALLOW_MULTI_USER`` household) has heart-rate rows the aggregate mixes
+    them. Readers use it only while this holds; otherwise they bucket the raw
+    table filtered by owner. Two index range probes on migration 025's
+    ``(owner_id, time DESC)`` index — no scan of a single-owner table.
     """
     result = await session.execute(
         text(
             """
-            SELECT bucket, avg_bpm::float AS value
-            FROM hr_hourly
-            WHERE bucket >= :start AND bucket < :end
-              AND avg_bpm IS NOT NULL
-            ORDER BY bucket ASC
+            SELECT NOT (
+                EXISTS (SELECT 1 FROM heart_rate WHERE owner_id < CAST(:owner_id AS UUID))
+                OR EXISTS (SELECT 1 FROM heart_rate WHERE owner_id > CAST(:owner_id AS UUID))
+            ) AS single_owner
             """
         ),
-        {"start": start, "end": end},
+        {"owner_id": str(owner_id)},
     )
-    rows = _fetchall(result)
-    if rows:
-        return [(row.bucket, float(row.value)) for row in rows if row.value is not None]
+    row = result.fetchone()
+    return bool(row.single_owner) if row is not None else True
+
+
+async def fetch_hr_observations(
+    session,
+    start: datetime,
+    end: datetime,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+) -> list[tuple[datetime, float]]:
+    """Return ``(bucket, avg_bpm)`` pairs for one owner.
+
+    Reads ``hr_hourly`` while it holds only this owner's rows, with a raw
+    fallback when it is empty (keeps the detector usable on fresh installs).
+    With more than one owner the hourly aggregate would mix people, so the
+    owner-filtered raw buckets are the only source.
+    """
+    if await _heart_rate_is_single_owner(session, owner_id):
+        result = await session.execute(
+            text(
+                """
+                SELECT bucket, avg_bpm::float AS value
+                FROM hr_hourly
+                WHERE bucket >= :start AND bucket < :end
+                  AND avg_bpm IS NOT NULL
+                ORDER BY bucket ASC
+                """
+            ),
+            {"start": start, "end": end},
+        )
+        rows = _fetchall(result)
+        if rows:
+            return [(row.bucket, float(row.value)) for row in rows if row.value is not None]
 
     result = await session.execute(
         text(
@@ -389,20 +510,25 @@ async def fetch_hr_observations(
             FROM heart_rate
             WHERE time >= :start AND time < :end
               AND status = 'active'
+              AND owner_id = CAST(:owner_id AS UUID)
             GROUP BY bucket
             ORDER BY bucket ASC
             """
         ),
-        {"start": start, "end": end},
+        {"start": start, "end": end, "owner_id": str(owner_id)},
     )
     rows = _fetchall(result)
     return [(row.bucket, float(row.value)) for row in rows if row.value is not None]
 
 
 async def fetch_hrv_observations(
-    session, start: datetime, end: datetime
+    session,
+    start: datetime,
+    end: datetime,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
 ) -> list[tuple[datetime, float]]:
-    """Return ``(time, value_ms)`` pairs from the raw ``hrv`` hypertable."""
+    """Return ``(time, value_ms)`` pairs from the raw ``hrv`` hypertable for one owner."""
     result = await session.execute(
         text(
             """
@@ -410,27 +536,35 @@ async def fetch_hrv_observations(
             FROM hrv
             WHERE time >= :start AND time < :end
               AND status = 'active'
+              AND owner_id = CAST(:owner_id AS UUID)
             ORDER BY time ASC
             """
         ),
-        {"start": start, "end": end},
+        {"start": start, "end": end, "owner_id": str(owner_id)},
     )
     rows = _fetchall(result)
     return [(row.time, float(row.value)) for row in rows if row.value is not None]
 
 
-async def fetch_workouts(session, start: datetime, end: datetime) -> list[dict[str, Any]]:
-    """Return ``[{start, end}, ...]`` for workouts overlapping the window."""
+async def fetch_workouts(
+    session,
+    start: datetime,
+    end: datetime,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+) -> list[dict[str, Any]]:
+    """Return ``[{start, end}, ...]`` for one owner's workouts overlapping the window."""
     result = await session.execute(
         text(
             """
             SELECT start_time, end_time
             FROM workouts
             WHERE start_time <= :end AND end_time >= :start
+              AND owner_id = CAST(:owner_id AS UUID)
             ORDER BY start_time ASC
             """
         ),
-        {"start": start, "end": end},
+        {"start": start, "end": end, "owner_id": str(owner_id)},
     )
     rows = _fetchall(result)
     return [
@@ -440,12 +574,26 @@ async def fetch_workouts(session, start: datetime, end: datetime) -> list[dict[s
     ]
 
 
-# ──────────────────────────────────────────────────────────────────
-#  Trend daily-value fetches  (was: analysis.statistical.trends)
-# ──────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────
+# Trend daily-value fetches (was: analysis.statistical.trends)
+# ──────────────────────────────────────────────────────────────────────
 
 
-async def fetch_heart_rate_daily_from_hourly(session, start: datetime, end: datetime) -> list[Any]:
+async def fetch_heart_rate_daily_from_hourly(
+    session,
+    start: datetime,
+    end: datetime,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+) -> list[Any]:
+    """Daily heart rate from ``hr_hourly`` — empty once it would mix owners.
+
+    The caller already falls back to :func:`fetch_heart_rate_daily_from_raw`
+    on an empty answer, so returning nothing is how a multi-owner install
+    reaches the owner-filtered path.
+    """
+    if not await _heart_rate_is_single_owner(session, owner_id):
+        return []
     result = await session.execute(
         text(
             """
@@ -464,7 +612,13 @@ async def fetch_heart_rate_daily_from_hourly(session, start: datetime, end: date
     return _fetchall(result)
 
 
-async def fetch_heart_rate_daily_from_raw(session, start: datetime, end: datetime) -> list[Any]:
+async def fetch_heart_rate_daily_from_raw(
+    session,
+    start: datetime,
+    end: datetime,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+) -> list[Any]:
     result = await session.execute(
         text(
             """
@@ -474,16 +628,23 @@ async def fetch_heart_rate_daily_from_raw(session, start: datetime, end: datetim
             FROM heart_rate
             WHERE time >= :start AND time < :end
               AND status = 'active'
+              AND owner_id = CAST(:owner_id AS UUID)
             GROUP BY day
             ORDER BY day ASC
             """
         ),
-        {"start": start, "end": end},
+        {"start": start, "end": end, "owner_id": str(owner_id)},
     )
     return _fetchall(result)
 
 
-async def fetch_hrv_daily(session, start: datetime, end: datetime) -> list[Any]:
+async def fetch_hrv_daily(
+    session,
+    start: datetime,
+    end: datetime,
+    *,
+    owner_id: UUID = DEFAULT_OWNER_ID,
+) -> list[Any]:
     result = await session.execute(
         text(
             """
@@ -493,11 +654,12 @@ async def fetch_hrv_daily(session, start: datetime, end: datetime) -> list[Any]:
             FROM hrv
             WHERE time >= :start AND time < :end
               AND status = 'active'
+              AND owner_id = CAST(:owner_id AS UUID)
             GROUP BY day
             ORDER BY day ASC
             """
         ),
-        {"start": start, "end": end},
+        {"start": start, "end": end, "owner_id": str(owner_id)},
     )
     return _fetchall(result)
 
@@ -534,6 +696,31 @@ async def summarize_metric_window(
               AND numeric_value IS NOT NULL
               AND status = 'active'
               AND aggregation_scope = :aggregation_scope
+              AND (
+                   :aggregation_scope = 'owner_all_source_day_total'
+                   OR stream_id IS NOT DISTINCT FROM (
+                       -- One device per metric: never average two sources (an
+                       -- Apple Watch and a Whoop) into one number. The stream
+                       -- with the most readings in the last 60 days, then the
+                       -- most recent; fixed per run, so a window and its
+                       -- baseline always read the same device.
+                       SELECT pick.stream_id
+                         FROM canonical_observations AS pick
+                        WHERE pick.owner_id = :owner_id
+                          AND pick.workspace_id = :workspace_id
+                          AND pick.metric_id = :metric_id
+                          AND pick.numeric_value IS NOT NULL
+                          AND pick.status = 'active'
+                          AND pick.aggregation_scope = :aggregation_scope
+                        GROUP BY pick.stream_id
+                        ORDER BY count(*) FILTER (
+                                     WHERE pick.interval_start >= now() - interval '60 days'
+                                 ) DESC,
+                                 max(pick.interval_start) DESC,
+                                 pick.stream_id
+                        LIMIT 1
+                   )
+              )
             """
         ),
         {
@@ -595,6 +782,31 @@ async def fetch_metric_daily_series(
               AND numeric_value IS NOT NULL
               AND status = 'active'
               AND aggregation_scope = :aggregation_scope
+              AND (
+                   :aggregation_scope = 'owner_all_source_day_total'
+                   OR stream_id IS NOT DISTINCT FROM (
+                       -- One device per metric: never average two sources (an
+                       -- Apple Watch and a Whoop) into one number. The stream
+                       -- with the most readings in the last 60 days, then the
+                       -- most recent; fixed per run, so a window and its
+                       -- baseline always read the same device.
+                       SELECT pick.stream_id
+                         FROM canonical_observations AS pick
+                        WHERE pick.owner_id = :owner_id
+                          AND pick.workspace_id = :workspace_id
+                          AND pick.metric_id = :metric_id
+                          AND pick.numeric_value IS NOT NULL
+                          AND pick.status = 'active'
+                          AND pick.aggregation_scope = :aggregation_scope
+                        GROUP BY pick.stream_id
+                        ORDER BY count(*) FILTER (
+                                     WHERE pick.interval_start >= now() - interval '60 days'
+                                 ) DESC,
+                                 max(pick.interval_start) DESC,
+                                 pick.stream_id
+                        LIMIT 1
+                   )
+              )
             GROUP BY day
             ORDER BY day ASC
             """

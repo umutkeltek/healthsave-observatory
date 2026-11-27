@@ -10,6 +10,10 @@ Per-event behaviour (Phase 5G — race-safe via INSERT … ON CONFLICT):
   * EVENT_JOB_EXECUTED   → ``runs.ensure_terminal(status='succeeded')``
                           which UPDATEs the claim row OR inserts a
                           terminal row if the claim hasn't committed.
+                          A job that returns ``{SKIPPED_KEY: "<reason>"}``
+                          (a source poll with no stored token) did
+                          nothing: it is recorded 'skipped' with that
+                          reason instead.
   * EVENT_JOB_ERROR      → same shape, status='failed' with traceback.
   * EVENT_JOB_MISSED     → ``runs.ensure_terminal(status='skipped')``
                           (Phase 5G fix; pre-5G this only logged).
@@ -49,6 +53,20 @@ def _ledger_listener_failures():
     from observability.metrics import LEDGER_LISTENER_FAILURES
 
     return LEDGER_LISTENER_FAILURES
+
+
+# A job returns ``{SKIPPED_KEY: "<reason>"}`` when it ran but did no work, so
+# the ledger does not show a skip as a success.
+SKIPPED_KEY = "skipped"
+
+
+def skipped_reason(retval: Any) -> str | None:
+    """The reason a job reported for doing nothing, or None if it did its work."""
+    if isinstance(retval, dict):
+        reason = retval.get(SKIPPED_KEY)
+        if isinstance(reason, str) and reason:
+            return reason
+    return None
 
 
 def _idempotency_key(job_id: str, scheduled_run_time: Any) -> str:
@@ -102,8 +120,8 @@ def make_listener(
                 key = _idempotency_key(event.job_id, event.scheduled_run_time)
                 if succeeded:
                     result = _coerce_result(event.retval)
-                    error = None
-                    status: runs.PipelineStatus = "succeeded"
+                    error = skipped_reason(event.retval)
+                    status: runs.PipelineStatus = "succeeded" if error is None else "skipped"
                 else:
                     result = None
                     error = str(event.exception) if event.exception is not None else "unknown error"

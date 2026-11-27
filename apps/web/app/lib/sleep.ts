@@ -295,6 +295,38 @@ export function sleepTrends(nights: SleepNight[]): SleepTrend {
   };
 }
 
+// One duration per bedtime date for a per-night chart. When a date holds more
+// than one sleep session (a nap and the night, or a split night), the longest
+// is shown and the day says so; durations are never averaged or summed here.
+export function nightlyDurations(
+  nights: Pick<SleepNight, "date" | "durationMin">[],
+): { date: string; value: number; note?: string }[] {
+  const byDate = new Map<string, number[]>();
+  for (const night of nights) {
+    const list = byDate.get(night.date) ?? [];
+    list.push(night.durationMin);
+    byDate.set(night.date, list);
+  }
+  return [...byDate]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, durations]) => ({
+      date,
+      value: Math.max(...durations),
+      ...(durations.length > 1 ? { note: `longest of ${durations.length} sleep sessions` } : {}),
+    }));
+}
+
+// "Last night" only when the night actually ended within the last 36 hours;
+// an older one (the all-time fallback, or a gap in syncing) says when it was.
+export function nightLabel(night: Pick<SleepNight, "wakeTime">, now: number): string {
+  const ended = Date.parse(night.wakeTime);
+  if (Number.isFinite(ended) && now - ended <= 36 * 3_600_000) return "Last night";
+  const date = Number.isFinite(ended)
+    ? new Date(ended).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    : night.wakeTime;
+  return `Latest night · ${date}`;
+}
+
 export function bedtimeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, {
     hour: "2-digit",

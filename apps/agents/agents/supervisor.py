@@ -28,12 +28,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, get_args, runtime_checkable
 from uuid import UUID
 
 from plugin_sdk import (
@@ -45,7 +46,7 @@ from plugin_sdk import (
 )
 from prometheus_client import Counter
 from storage.ports import AgentRepository
-from storage.timescale.agents import DEFAULT_OWNER_ID, default_repository
+from storage.timescale.agents import DEFAULT_OWNER_ID, ActionKind, default_repository
 
 from .config import AgentSettings
 
@@ -61,6 +62,65 @@ AGENT_RUNTIME_FAILURES = Counter(
     "Agent plugin call failures, labeled by plugin id and lifecycle phase.",
     ["plugin_id", "phase"],
 )
+
+PROPOSAL_INVALID_PHASE = "proposal_invalid"
+"""``AGENT_RUNTIME_FAILURES`` phase for a proposal the supervisor dropped
+because the store could never accept it (see :func:`proposal_problem`)."""
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Proposal validation — what action_proposals can never accept
+# ──────────────────────────────────────────────────────────────────────
+
+_KNOWN_ACTION_KINDS: frozenset[str] = frozenset(get_args(ActionKind))
+
+
+def _contains_nul(value: Any) -> bool:
+    if isinstance(value, str):
+        return "\x00" in value
+    if isinstance(value, Mapping):
+        return any(_contains_nul(key) or _contains_nul(item) for key, item in value.items())
+    if isinstance(value, list | tuple):
+        return any(_contains_nul(item) for item in value)
+    return False
+
+
+def proposal_problem(proposal: Any) -> str | None:
+    """Why ``action_proposals`` would reject ``proposal`` on every retry,
+    or ``None`` when it is storable.
+
+    Mirrors the table (migration 006): the ``action_kind`` CHECK, NOT NULL
+    ``rationale`` / ``capability`` text, a JSON-object ``payload`` (every
+    reader types it as a dict), and nothing PostgreSQL cannot store (NaN or
+    Infinity in jsonb, NUL in text or jsonb). The supervisor drops such a
+    proposal instead of letting it fail the tick: a deterministic rejection
+    would otherwise hold the cursor, re-feed the same observations, and
+    produce the same proposal forever.
+    """
+    if not isinstance(proposal, Mapping):
+        return f"proposal is a {type(proposal).__name__}, not a mapping"
+    action_kind = proposal.get("action_kind")
+    if not isinstance(action_kind, str) or action_kind not in _KNOWN_ACTION_KINDS:
+        return f"unknown action_kind {action_kind!r}"
+    for column in ("rationale", "capability"):
+        value = proposal.get(column, "")
+        if not isinstance(value, str):
+            return f"{column} is a {type(value).__name__}, not text"
+        if "\x00" in value:
+            return f"{column} contains a NUL character"
+    subject_id = proposal.get("subject_id")
+    if subject_id is not None and "\x00" in str(subject_id):
+        return "subject_id contains a NUL character"
+    payload = proposal.get("payload", {})
+    if not isinstance(payload, Mapping):
+        return f"payload is a {type(payload).__name__}, not a JSON object"
+    try:
+        json.dumps(payload, allow_nan=False)
+    except (TypeError, ValueError, RecursionError) as exc:
+        return f"payload is not storable JSON ({exc})"
+    if _contains_nul(payload):
+        return "payload contains a NUL character"
+    return None
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -98,6 +158,11 @@ class ObservationFeed(Protocol):
         from — keep storage queries inside the feed, not the supervisor.
       * Return order MUST be ascending by ``occurred_at`` so the
         supervisor's ``max(occurred_at)`` cursor advance is correct.
+      * The next call excludes everything at or before that cursor, so a
+        capped batch MUST be the OLDEST observations after the cursor
+        (newest-first would skip the rest of a backlog) and MUST NOT end
+        in the middle of a group sharing one ``occurred_at`` (the rest of
+        the group would be skipped).
     """
 
     async def fetch_since(
@@ -106,8 +171,8 @@ class ObservationFeed(Protocol):
         owner_id: UUID,
         cursor: datetime | None,
     ) -> list[Observation]:
-        """Return observations newer than ``cursor`` (or all observations
-        when ``cursor`` is ``None`` — initial-load shape).
+        """Return observations strictly newer than ``cursor`` (or all
+        observations when ``cursor`` is ``None`` — initial-load shape).
         """
         ...
 
@@ -270,6 +335,13 @@ class Supervisor:
         Cursor advances ONLY after ``commit()`` returns. A failure in
         any phase short-circuits the remaining phases for this tick and
         bumps :data:`AGENT_RUNTIME_FAILURES`.
+
+        Between propose and persist, a proposal the store would reject on
+        every retry (:func:`proposal_problem`) is dropped and counted under
+        ``phase="proposal_invalid"``; the rest persist and the cursor
+        advances. Holding the cursor for it would replay the same proposal
+        forever. A store error while persisting still fails the phase and
+        holds the cursor.
         """
         observations: list[Observation] = []
         proposals: list[dict[str, Any]] = []
@@ -309,6 +381,10 @@ class Supervisor:
             log.warning("agent %s propose failed: %s", ref.plugin_id, exc)
             return
 
+        # Drop what the store can never accept. Retrying it cannot help, and
+        # a failed persist would hold the cursor and replay it forever.
+        proposals = self._storable_proposals(ref, proposals)
+
         # Phase 3: persist + commit + cursor advance
         try:
             async with error_boundary(ref.plugin_id, phase="persist_proposal"):
@@ -318,9 +394,48 @@ class Supervisor:
             log.warning("agent %s persist_proposal failed: %s", ref.plugin_id, exc)
             return
 
-        # Cursor advance — ONLY after persist commit succeeded.
+        # Cursor advance — ONLY after persist commit succeeded. It never moves
+        # back: a feed may also return rows behind the cursor that committed
+        # late (see AnalysisFindingsAnomalyFeed); those must not rewind it.
         if observations:
-            ref.cursor = max(obs.occurred_at for obs in observations)
+            newest = max(obs.occurred_at for obs in observations)
+            ref.cursor = newest if ref.cursor is None else max(ref.cursor, newest)
+            # A feed that re-reads behind its cursor learns what was delivered.
+            acknowledge = getattr(ref.observation_feed, "acknowledge", None)
+            if callable(acknowledge):
+                acknowledge(observations)
+
+    @staticmethod
+    def _storable_proposals(ref: EnabledAgent, proposals: Any) -> list[dict[str, Any]]:
+        """Return the proposals :func:`proposal_problem` accepts; log and
+        count each one it drops under ``phase="proposal_invalid"``.
+        """
+        if not isinstance(proposals, list | tuple):
+            AGENT_RUNTIME_FAILURES.labels(
+                plugin_id=ref.plugin_id, phase=PROPOSAL_INVALID_PHASE
+            ).inc()
+            log.warning(
+                "agent %s propose() returned a %s, not a list; dropped",
+                ref.plugin_id,
+                type(proposals).__name__,
+            )
+            return []
+        storable: list[dict[str, Any]] = []
+        for proposal in proposals:
+            problem = proposal_problem(proposal)
+            if problem is None:
+                storable.append(proposal)
+                continue
+            AGENT_RUNTIME_FAILURES.labels(
+                plugin_id=ref.plugin_id, phase=PROPOSAL_INVALID_PHASE
+            ).inc()
+            log.warning(
+                "agent %s proposal dropped, the store would reject it: %s (subject_id=%r)",
+                ref.plugin_id,
+                problem,
+                proposal.get("subject_id") if isinstance(proposal, Mapping) else None,
+            )
+        return storable
 
     async def _persist(
         self,

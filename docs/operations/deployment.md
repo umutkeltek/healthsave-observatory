@@ -72,6 +72,14 @@ Start the stack after secrets are set:
 docker compose up -d
 ```
 
+Compose pulls the release's pre-built images for `linux/amd64` and `linux/arm64` from GitHub Container Registry: `ghcr.io/umutkeltek/healthsave-observatory` (API, migrations, worker) and `ghcr.io/umutkeltek/healthsave-observatory-web`. Their tag follows the release you checked out, so `git checkout vX.Y.Z` and then `docker compose up -d` moves you to that release's images. To build from your checkout instead (development, an unreleased branch, or a host that cannot reach `ghcr.io`):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.override.yml up -d --build
+```
+
+To make building the default for this checkout, `healthsave` commands included, add `COMPOSE_FILE=docker-compose.yml:docker-compose.build.override.yml` to `.env`.
+
 Database, Grafana, and Observatory web bind to loopback by default where applicable. To reach web or Grafana from another device on your LAN, set bind addresses deliberately:
 
 ```bash
@@ -81,7 +89,7 @@ WEB_BIND=0.0.0.0
 
 With `WEB_BIND=0.0.0.0`, keep `WEB_PASSWORD` set (setup generates it) so the dashboard asks for a password.
 
-Do not expose plain HTTP directly to the internet. For remote access, put the API, Observatory web, and Grafana behind HTTPS with deliberate auth; see [Reverse proxy](reverse-proxy.md).
+Do not expose plain HTTP directly to the internet. For remote access without opening a port, use the optional Tailscale profile; see [Remote access without opening ports](remote-access.md). Otherwise put the API, Observatory web, and Grafana behind HTTPS with deliberate auth; see [Reverse proxy](reverse-proxy.md).
 
 ## Optional Local AI
 
@@ -107,15 +115,29 @@ Docker-capable LXC can work, but Docker-in-LXC often needs privileged container 
 
 TimescaleDB is the stateful piece. Put Docker volumes on reliable storage and follow [Backups & migrations](backup-and-migrations.md).
 
+### Backups
+
+Backups are free and take one command each:
+
+```bash
+healthsave backup                     # one file: database, .env and config.yaml
+healthsave backup --out /mnt/nas/hs   # or straight into a folder you already back up
+healthsave restore FILE               # takes a safety backup of the current database first
+```
+
+The file is not encrypted and holds health data and the secrets in `.env`, so encrypt it before it leaves the machine, for example with `gpg -c FILE`. `healthsave update` takes a backup before it changes anything. Details: [Backups & migrations](backup-and-migrations.md).
+
+If you would rather have this done for you, [Observatory Care](https://healthsave.app/pricing/?utm_source=observatory_deploy#care) ($99 a year or $9 a month) encrypts each backup with a passphrase that stays in your `.env`, copies it on a schedule to storage you choose through rclone, test-restores a backup into a throwaway database to prove it opens, and rolls back an update in one command. The backups go only to that storage, never to HealthSave. If you stop paying, Care commands stop 14 days after the licence ends; the server, plain backups and restoring your encrypted backups keep working. [What Care adds](observatory-care.md).
+
 ## Connect iOS App
 
-Open HealthSave on iPhone, then Settings -> Server Sync. Use the LAN URL printed by `healthsave doctor`, for example:
+Run `healthsave pair` and scan its QR code with the iPhone Camera: HealthSave opens Server Sync with the address and key filled in (without Pro it sends the last 7 days; your whole history needs Pro). Or, with HealthSave Pro, open Settings -> Server Sync and use the LAN URL printed by `healthsave doctor`, for example:
 
 ```text
 http://<server-lan-ip>:8000
 ```
 
-Do not use `localhost` from the phone. Set the API key if you configured one, then tap **Sync New Data**.
+Do not use `localhost` from the phone. Set the API key if you configured one, then tap **Sync Latest Changes**. Automatic sync needs Pro; see [Connect HealthSave](../connect-healthsave.md#free-and-pro).
 
 ## See Also
 

@@ -68,9 +68,10 @@ def test_normalize_recovery_emits_metrics_per_scored_item():
             }
         ]
     )
-    assert out["heart_rate_variability"] == [
+    assert out["heart_rate_variability_rmssd"] == [
         {"date": "2026-05-22T08:00:00Z", "qty": 64.3, "source": SOURCE_TAG}
     ]
+    assert "heart_rate_variability" not in out
     assert out["blood_oxygen"][0]["qty"] == 97.0
     assert out["body_temperature"][0]["qty"] == 35.2
     assert out["resting_heart_rate"][0]["qty"] == 58.0
@@ -93,7 +94,7 @@ def test_normalize_recovery_skips_missing_fields_silently():
     )
     assert out["recovery_score"][0]["qty"] == 73.0
     assert out["recovery_calibrating"][0]["qty"] == 0.0
-    assert out["heart_rate_variability"] == []
+    assert out["heart_rate_variability_rmssd"] == []
     assert out["blood_oxygen"] == []
 
 
@@ -218,6 +219,9 @@ def test_normalize_workouts_matches_ios_emitted_shape():
     # 1500 kJ -> 358.51 kcal (rounded to 2 dp)
     assert sample["activeEnergy"] == 358.51
     assert sample["distance"] == 6500.0
+    # The workout carries its ascent under the phone apps' wire key, so it
+    # lands in workouts.elevation_gain_m beside distance.
+    assert sample["elevationGain"] == 123.4
     assert sample["source"] == SOURCE_TAG
     assert out["workout_altitude_gain_m"][0]["qty"] == 123.4
     assert out["workout_zone_1_minutes"][0]["qty"] == 10.0

@@ -81,6 +81,7 @@
     "heart_rate": "count/min",
     "heart_rate_recovery": "count/min",
     "heart_rate_variability": "ms",
+    "heart_rate_variability_rmssd": "ms",
     "height": "m",
     "inhaler_usage": "count",
     "insulin_delivery": "IU",

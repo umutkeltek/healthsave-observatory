@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -97,3 +98,38 @@ def test_env_job_enable_override_respects_falsey_values(tmp_path, monkeypatch):
     monkeypatch.setenv("ANALYSIS_TREND_ANALYSIS_ENABLED", "0")
     config = load_config(tmp_path / "missing-config.yaml")
     assert config.analysis.trend_analysis.enabled is False
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [("", None), ("  ", None), (None, None), ("true", True), ("0", False)],
+)
+def test_env_bool_treats_empty_values_as_unset(monkeypatch, raw, expected):
+    from analysis.config import _env_bool
+
+    if raw is None:
+        monkeypatch.delenv("ANALYSIS_DAILY_BRIEFING_ENABLED", raising=False)
+    else:
+        monkeypatch.setenv("ANALYSIS_DAILY_BRIEFING_ENABLED", raw)
+    assert _env_bool("ANALYSIS_DAILY_BRIEFING_ENABLED") is expected
+
+
+@pytest.mark.parametrize("raw", ["", "   "])
+def test_empty_job_env_keeps_the_yaml_enable_flag(tmp_path, monkeypatch, raw):
+    # docker-compose.yml passes ANALYSIS_*_ENABLED as ${NAME:-}, so an install
+    # whose .env never sets them sends "". setup writes enabled: true to
+    # config.yaml; that must win, or a fresh stack runs with every job off.
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("analysis:\n  daily_briefing:\n    enabled: true\n")
+    monkeypatch.setenv("ANALYSIS_DAILY_BRIEFING_ENABLED", raw)
+    config = load_config(config_path)
+    assert config.analysis.daily_briefing.enabled is True
+
+
+@pytest.mark.parametrize("raw", ["", "  "])
+def test_empty_egress_env_stays_fail_closed(tmp_path, monkeypatch, raw):
+    monkeypatch.setenv("LLM_ALLOW_CLOUD_EGRESS", raw)
+    monkeypatch.setenv("LLM_REDACT_CLOUD_PROMPTS", raw)
+    config = load_config(tmp_path / "missing-config.yaml")
+    assert config.llm.allow_cloud_egress is False
+    assert config.llm.redact_cloud_prompts is True

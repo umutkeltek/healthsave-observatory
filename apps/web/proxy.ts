@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 
+import { SIGN_IN_REQUIRED } from "./app/lib/session";
 import { BARE_LAYOUT_HEADER, isPublicRequest, isValidSessionToken, SESSION_COOKIE } from "./app/lib/webAuth";
 import { resolveWebAuth } from "./app/lib/webAuthStore.server";
 
@@ -41,7 +42,14 @@ export async function proxy(request: NextRequest) {
     if (pathname !== "/") login.searchParams.set("next", `${pathname}${search}`);
     return NextResponse.redirect(login);
   }
-  return NextResponse.json({ detail: "sign_in_required" }, { status: 401 });
+  if (request.headers.has("next-action")) {
+    // A server action: Next's client rejects the action call with a text/plain
+    // error body as the message, so the page can show "signed out" instead of
+    // its UI-bug card (app/lib/session.ts). Any other body type arrives there
+    // as "An unexpected response was received from the server."
+    return new NextResponse(SIGN_IN_REQUIRED, { status: 401, headers: { "content-type": "text/plain" } });
+  }
+  return NextResponse.json({ detail: SIGN_IN_REQUIRED }, { status: 401 });
 }
 
 // Only content-hashed build output skips the check. A prefix-style exclusion such

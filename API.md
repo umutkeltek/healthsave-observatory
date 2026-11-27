@@ -168,6 +168,7 @@ Workout samples can include these fields:
   "source": "Apple Watch",
   "activeEnergy": 420,
   "distance": 6500,
+  "elevationGain": 84.5,
   "avgHeartRate": 145,
   "maxHeartRate": 178,
   "heartRateData": [
@@ -188,6 +189,16 @@ Workout samples can include these fields:
 The reference server stores the workout summary fields in `workouts`.
 `heartRateData` and `route` are accepted as part of the client payload but are
 not persisted by this small-footprint server.
+
+`elevationGain` is the workout's total ascent in metres (HealthSave iOS 1.9.4+,
+from the workout's own elevation-ascended metadata). It is sent only when the
+device recorded one, a recorded flat workout as `0`, and it lands in
+`workouts.elevation_gain_m` (1.5.0+). A workout re-sent without it keeps the
+value already stored. A value that is not a finite number >= 0 (negative, NaN
+or infinite, `true` or `false`, or a string that does not parse as a number) is
+dropped: the workout is stored without it, and a value already stored for that
+workout is kept. A number sent as a string, such as `"84.5"`, is read as that
+number. Servers before 1.5.0 accept the key and ignore it.
 
 ### Full HealthKit Metric Catalog
 
@@ -739,6 +750,15 @@ Example response:
 > unauthenticated; the Whoop webhook authenticates via its HMAC signature, not
 > `X-API-Key`.
 
+**Participant keys (migration 029):** `X-API-Key` may also be a participant key minted by
+`healthsave participants add`. An `ingest` key reaches only the phone surface (`/api/apple/batch`,
+`/api/apple/status`, `/api/apple/coverage`, `/api/v2/apple/batch`, `/api/v2/sync/runs/*`) and always
+as its own owner; a `read` key reaches GETs on that surface and the owner-scoped reads below, as its
+own owner; anything else is 403. The owner-scoped reads (`/metrics/{metric_id}/series`, `/series`,
+`/export/metrics`, `/export`, `/sources`, `/devices`, `/streams`, `/streams/{stream_id}`, `/readiness`)
+take an optional `owner=<uuid>`: the admin key may name any owner (default: the default owner); a
+read key may name only its own. See [Participants](docs/operations/participants.md).
+
 | Endpoint | Method | Auth | Purpose |
 |----------|--------|------|---------|
 | `/api/v2/meta` | GET | open | v2 version axes (api_contract / ontology / normalizer / fusion_policy) |
@@ -779,8 +799,19 @@ Example response:
 | `/api/v2/settings/analytical-time` | GET, PUT | key | person-local time zone and physiological-day boundary for reproducible calendar analyses |
 | `/api/v2/moments` | GET, POST | key | list / create personal-context moments (illness, travel, lifestyle events) |
 | `/api/v2/moments/{moment_id}` | PUT, DELETE | key | update / delete one moment |
+| `/api/v2/labs` | GET | key | blood test results per marker (LOINC), each with the lab's own reference range and its lab stream; the labs that sent them |
+| `/api/v2/labs/{loinc}` | GET | key | one marker's results, oldest first (`422` for a malformed LOINC code, `404` when there are none) |
+| `/api/v2/lab-imports` | GET, POST | admin key | list private documents; upload raw CSV/PDF bytes with `X-File-Name` for local extraction and review (5 MB, 12 pages) |
+| `/api/v2/lab-imports/catalog` | GET | admin key | supported test codes, names and units |
+| `/api/v2/lab-imports/{document_id}` | GET, DELETE | admin key | reopen a draft; delete an explicitly confirmed document and optionally its last-written results |
+| `/api/v2/lab-imports/{document_id}/deletion` | GET | admin key | preview the document and count results still owned by this import |
+| `/api/v2/lab-imports/{document_id}/commit` | POST | admin key | validate explicitly confirmed rows; atomically save observations and an immutable receipt/report |
+| `/api/v2/lab-imports/{document_id}/original` | GET | admin key | original private attachment, with no-store and nosniff headers |
+| `/api/v2/lab-imports/{document_id}/report` | GET | admin key | source-backed descriptive report; 409 until the draft is confirmed |
+| `/api/v2/year/{year}` | GET | key | Year in Health: one calendar year read as coverage, in the person's analytical days (months covered, sources per month, each source's first/last observation, every run of days with no data per kind of data, headline numbers computed per source and never averaged across sources, limitation codes; `?owner=`; `422` for a year that has not started) |
 | `/api/v2/export/metrics` | GET | key | list exportable metrics with counts + date ranges |
 | `/api/v2/export` | GET | key | export one metric (or `all`) as JSON or CSV |
+| `/api/v2/owners` | GET | admin key | people this Observatory holds data for: the default owner plus one entry per participant key (label, live scopes, last ingest); drives the web participant switcher |
 | `/api/v2/sources/whoop/webhook` | POST | HMAC | Whoop push webhook; authenticity via `X-WHOOP-Signature` |
 
 ## Compatibility Notes
@@ -1063,7 +1094,8 @@ mirror; enforced by `tests/contract/test_ios_v2_headers_in_sync.py`).
 Workouts are `HKSample`s too, so they carry `uuid`, `startDate`, `endDate`
 and `tzOffsetMinutes` like every anchored family, plus the v1 keys
 (`name`, `start`, `end`, `duration`, `activeEnergy`, `distance`,
-`avgHeartRate`, `maxHeartRate`, `source`) unchanged.
+`avgHeartRate`, `maxHeartRate`, `source`) unchanged, and `elevationGain` when
+the workout recorded one (iOS 1.9.4+; see Workout Payload Details).
 
 ### iOS route selection
 
@@ -1120,3 +1152,34 @@ For anyone implementing this route rather than running datahub:
   layer; no v1 routes are touched.
 - **Android adoption is a follow-up** (Slice 8 of Plan 2026-09-03) — Android
   does not emit the v2 wire yet.
+
+## Private genetic evidence (v2)
+
+Admin-only, primary-person records. All responses are private/no-store. See
+[the workflow and scientific limits](docs/capture/genetic-evidence.md).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/v2/genetics` | List private genetic documents |
+| POST | `/api/v2/genetics` | Import and match a genotype file locally |
+| GET | `/api/v2/genetics/reference` | Installed public references and update status |
+| POST | `/api/v2/genetics/reference` | Start explicit public ClinVar installation/update |
+| GET | `/api/v2/genetics/{document_id}` | Document, latest report and version list |
+| GET | `/api/v2/genetics/{document_id}/reports/{report_id}` | Immutable saved evidence report |
+| GET | `/api/v2/genetics/{document_id}/original` | Download a retained original |
+| DELETE | `/api/v2/genetics/{document_id}/original` | Remove the original, preserve reports |
+| POST | `/api/v2/genetics/{document_id}/reanalyze` | Analyze retained original using current reference |
+| DELETE | `/api/v2/genetics/{document_id}` | Delete document, original and all report versions |
+
+Upload raw bytes with `Content-Type: application/octet-stream`, a URL-encoded
+`X-File-Name`, `X-Genome-Assembly: GRCh37` or `GRCh38`,
+`X-Genetic-Consent: accepted`, and `X-Forward-Strand: confirmed`.
+`X-Retain-Original: true` opts into retaining the original; omission leaves it off.
+
+Reference updates accept `{"assembly":"GRCh38","confirmed":true}` and return
+202 with process status. Reanalysis accepts `{"confirmed":true}`. Deletion
+accepts `{"confirmation":"<exact document UUID>"}`. Wrong ownership is rejected.
+No public reference download occurs as a side effect of uploading private data.
+Unsupported or inconsistent input returns 422; missing reference/original 409;
+size overflow 413; another active analysis 429. The single analysis slot is per
+API process; reference installation uses a cross-process filesystem lock.

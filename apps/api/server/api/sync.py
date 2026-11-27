@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 from storage.defaults import sync_receipt_repository
 from storage.ports import SyncReceiptRepository
 
-from ..ingestion.owner import OWNER_HEADER, resolve_owner_id
+from ..ingestion.owner import OWNER_HEADER, participant_owner_id, resolve_owner_id
 from . import deps
 from .deps import get_session, verify_api_key
 
@@ -52,18 +53,45 @@ async def setup_diagnostics() -> dict:
     }
 
 
+def _caller_owner_id(request: Request | None) -> UUID | None:
+    """Whose runs a phone-surface read sees: the participant key's owner, else
+    the X-User-Id resolution every phone route uses (the default owner unless
+    ALLOW_MULTI_USER). ``None`` only for direct calls without a request (the
+    response-corpus generator), which keep the unscoped pre-029 query."""
+
+    if request is None:
+        return None
+    try:
+        return participant_owner_id(request) or resolve_owner_id(request.headers.get(OWNER_HEADER))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"invalid {OWNER_HEADER}: {exc}") from exc
+
+
 @router.get("/api/v2/sync/runs/latest", dependencies=[Depends(verify_api_key)])
-async def latest_sync_run(session: Any = Depends(get_session)) -> dict:
+async def latest_sync_run(
+    session: Any = Depends(get_session),
+    request: Request = None,  # type: ignore[assignment]  # injected by FastAPI
+) -> dict:
     """Summarize the most recently observed HealthSave sync run."""
 
-    return await _SYNC_RECEIPTS.latest_sync_run(session)
+    owner_id = _caller_owner_id(request)
+    if owner_id is None:
+        return await _SYNC_RECEIPTS.latest_sync_run(session)
+    return await _SYNC_RECEIPTS.latest_sync_run(session, owner_id=owner_id)
 
 
 @router.get("/api/v2/sync/runs/{sync_run_id}", dependencies=[Depends(verify_api_key)])
-async def sync_run(sync_run_id: str, session: Any = Depends(get_session)) -> dict:
+async def sync_run(
+    sync_run_id: str,
+    session: Any = Depends(get_session),
+    request: Request = None,  # type: ignore[assignment]  # injected by FastAPI
+) -> dict:
     """Return the delivery receipt summary for one HealthSave sync run."""
 
-    return await _SYNC_RECEIPTS.sync_run(session, sync_run_id)
+    owner_id = _caller_owner_id(request)
+    if owner_id is None:
+        return await _SYNC_RECEIPTS.sync_run(session, sync_run_id)
+    return await _SYNC_RECEIPTS.sync_run(session, sync_run_id, owner_id=owner_id)
 
 
 class SyncRunSummaryPayload(BaseModel):
@@ -119,7 +147,9 @@ async def put_sync_run_summary(
     if not run_id or len(run_id) > 128:
         raise HTTPException(status_code=422, detail="sync_run_id must be 1-128 characters")
     try:
-        owner_id = resolve_owner_id(request.headers.get(OWNER_HEADER))
+        owner_id = participant_owner_id(request) or resolve_owner_id(
+            request.headers.get(OWNER_HEADER)
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"invalid {OWNER_HEADER}: {exc}") from exc
 

@@ -5,18 +5,16 @@ from .base import SYSTEM_PROMPT
 DAILY_BRIEFING_PROMPT_TEMPLATE: str = """\
 You are generating today's morning briefing.
 
-Period summary (yesterday):
+Period summary (yesterday; averages, with your recent usual level):
 {period_summary}
 
 Detected anomalies (values more than a few standard deviations from the
 user's 30-day personal baseline):
 {anomalies}
 
-If the anomaly block reads as "no unusual readings vs baseline", briefly
-affirm that and move on - do not invent anomalies. If it lists any,
-narrate them contextually (one or two sentences each), lead with the
-highest-severity item, and remind the user that a single-day deviation
-is signal, not diagnosis.
+If the anomaly block reads as "no unusual readings vs baseline", say so in
+one sentence and move on - do not invent anomalies. If it lists any,
+describe each in one or two sentences, highest severity first.
 
 Trends detected:
 {trends}
@@ -24,12 +22,11 @@ Trends detected:
 Correlations worth noting:
 {correlations}
 
-Data sufficiency: {days_of_data}/{minimum_required} days of history.
+Days with data in this period: {days_of_data}.
 
-Produce a 150-250 word narrative in the style specified by the system
-prompt. Lead with the single most actionable finding. Close with one
-implementation-intention suggestion ("If X today, then Y") when a
-recent behavior pattern supports it.
+Write a 120-200 word narrative in the style the system prompt sets. Lead
+with the largest change, with its own number from above. End with one small,
+practical suggestion for today that fits that change.
 """
 
 

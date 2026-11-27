@@ -11,6 +11,7 @@ import { cache } from "react";
 
 import {
   ApiError,
+  currentOwner,
   type AnalyticalTimeSettings,
   type Candidates,
   type Correlation,
@@ -23,10 +24,13 @@ import {
   fetchExportMetrics,
   fetchFindings,
   fetchIntelligence,
+  fetchLabMarker,
+  fetchLabs,
   fetchLatest,
   fetchMetrics,
   fetchMoments,
   fetchNarratives,
+  fetchOwners,
   fetchPrivacy,
   fetchReadiness,
   fetchReceipts,
@@ -34,22 +38,30 @@ import {
   fetchSeriesBatch,
   fetchSources,
   fetchStreams,
+  fetchYear,
   isNarratorOff,
   type Finding,
   type IntelligenceView,
+  type LabMarkerDetail,
+  type LabsOverview,
   type InsightsLatest,
   type MetricSeries,
   type MetricSummary,
   type Moment,
   type NarrativeHistoryItem,
+  OWNERS_CACHE_KEY,
+  OWNERS_TTL_MS,
+  type OwnerView,
   type Privacy,
   type Readiness,
   type Receipts,
   type SourceView,
   type StreamView,
+  type YearInHealth,
 } from "./api";
 import { formatAgo } from "./format";
-import { hasUsablePoints } from "./ranges";
+import { hasUsablePoints, type RangeSeries } from "./ranges";
+import { ownerCacheKey, PRIMARY_ONLY } from "./participants";
 import { swrCache } from "./ttlCache";
 
 // The one logged choke point for swallowed fetch failures: a card rendering
@@ -58,6 +70,8 @@ import { swrCache } from "./ttlCache";
 // Deduped per label+message so a hot page doesn't spam.
 const _warned = new Set<string>();
 function swallow(label: string, error: unknown): null {
+  // A primary-only surface while a participant is selected is not a failure.
+  if (error instanceof ApiError && error.detail === PRIMARY_ONLY) return null;
   const message = error instanceof Error ? error.message : String(error);
   const key = `${label}:${message}`;
   if (!_warned.has(key)) {
@@ -66,6 +80,22 @@ function swallow(label: string, error: unknown): null {
   }
   return null;
 }
+
+// Process-level SWR keyed per person: with a participant selected (migration
+// 029) a cached answer for one person must never serve another.
+async function ownerSwr<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
+  return swrCache(ownerCacheKey(key, await currentOwner()), ttlMs, fetcher);
+}
+
+// The people this Observatory holds data for; the shell shows its participant
+// switcher only when there is more than one. Not person data, so one cache key.
+export const safeOwners = cache(async (): Promise<OwnerView[] | null> => {
+  try {
+    return (await swrCache(OWNERS_CACHE_KEY, OWNERS_TTL_MS, fetchOwners)).owners;
+  } catch (error) {
+    return swallow("owners", error);
+  }
+});
 
 // Curated sparkline metrics for the Data view grid. Each is a real ontology
 // metric_id the v2 series endpoint serves; an empty one renders its own state.
@@ -77,7 +107,7 @@ export const GRID_METRICS: { id: string; title: string }[] = [
   { id: "vital.heart_rate", title: "Heart Rate" },
   { id: "vital.resting_heart_rate", title: "Resting Heart Rate" },
   { id: "vital.walking_heart_rate_average", title: "Walking Heart Rate" },
-  { id: "vital.hrv_sdnn", title: "Heart Rate Variability" },
+  { id: "vital.hrv_sdnn", title: "Heart Rate Variability (SDNN)" },
   { id: "vital.respiratory_rate", title: "Respiratory Rate" },
   { id: "mobility.walking_speed", title: "Walking Speed" },
   { id: "mobility.walking_step_length", title: "Step Length" },
@@ -89,18 +119,32 @@ export const GRID_METRICS: { id: string; title: string }[] = [
 
 export async function safeAnalyticalTime(): Promise<AnalyticalTimeSettings | null> {
   try {
-    return await swrCache("analytical-time", 30_000, fetchAnalyticalTime);
+    return await ownerSwr("analytical-time", 30_000, fetchAnalyticalTime);
   } catch (error) {
     return swallow("analytical-time", error);
   }
 }
 
-export async function safeSeries(id: string, range = "7d"): Promise<MetricSeries | null> {
+// One series read, three outcomes. The backend's 404 means it does not know
+// the metric: "not-found", which is not an outage.
+export type SeriesRead =
+  | { kind: "series"; series: MetricSeries }
+  | { kind: "not-found" }
+  | { kind: "unreachable" };
+
+export async function safeSeriesRead(id: string, range = "7d"): Promise<SeriesRead> {
   try {
-    return await swrCache(`series:${id}:${range}`, 30_000, () => fetchSeries(id, range));
+    return { kind: "series", series: await ownerSwr(`series:${id}:${range}`, 30_000, () => fetchSeries(id, range)) };
   } catch (error) {
-    return swallow("loader", error);
+    if (error instanceof ApiError && error.status === 404) return { kind: "not-found" };
+    swallow("loader", error);
+    return { kind: "unreachable" };
   }
+}
+
+export async function safeSeries(id: string, range = "7d"): Promise<MetricSeries | null> {
+  const read = await safeSeriesRead(id, range);
+  return read.kind === "series" ? read.series : null;
 }
 
 // One request for many metrics, keyed by metric id. Falls back to the
@@ -112,7 +156,7 @@ const batchSeriesCached = cache(
     const ids = idsKey.split("\u0000");
     const map = new Map<string, MetricSeries>();
     try {
-      const batch = await swrCache(`series-batch:${idsKey}:${range}`, 30_000, () =>
+      const batch = await ownerSwr(`series-batch:${idsKey}:${range}`, 30_000, () =>
         fetchSeriesBatch(ids, range),
       );
       for (const item of batch.series) {
@@ -154,7 +198,7 @@ export function safeSeriesMany(ids: string[], range = "7d"): Promise<Map<string,
 // and refreshed in the background.
 export const safeMetrics = cache(async (): Promise<MetricSummary[] | null> => {
   try {
-    return await swrCache("metrics-catalog", 300_000, fetchMetrics);
+    return await ownerSwr("metrics-catalog", 300_000, fetchMetrics);
   } catch (error) {
     return swallow("loader", error);
   }
@@ -162,7 +206,7 @@ export const safeMetrics = cache(async (): Promise<MetricSummary[] | null> => {
 
 export const safeReadiness = cache(async (): Promise<Readiness | null> => {
   try {
-    return await swrCache("readiness", 30_000, fetchReadiness);
+    return await ownerSwr("readiness", 30_000, fetchReadiness);
   } catch (error) {
     return swallow("loader", error);
   }
@@ -188,7 +232,7 @@ export const safeExportMetrics = cache(async (): Promise<ExportMetricInfo[] | nu
   try {
     // Counts one full-table aggregate per exportable metric - ride the SWR
     // cache like the other heavy coverage reads.
-    return await swrCache("export-metrics", 60_000, fetchExportMetrics);
+    return await ownerSwr("export-metrics", 60_000, fetchExportMetrics);
   } catch (error) {
     return swallow("loader", error);
   }
@@ -228,7 +272,7 @@ export const safePrivacy = cache(async (): Promise<Privacy | null> => {
 
 export const safeReceipts = cache(async (): Promise<Receipts | null> => {
   try {
-    return await swrCache("receipts", 60_000, () => fetchReceipts());
+    return await ownerSwr("receipts", 60_000, () => fetchReceipts());
   } catch (error) {
     return swallow("loader", error);
   }
@@ -261,6 +305,12 @@ export async function safeIntelligence(): Promise<IntelligenceView | null> {
 // a thrown fetch, so all-null ⇒ unreachable.
 export type DataState = "data" | "empty" | "unreachable";
 
+// True when a participant is being viewed: primary-only reads (findings,
+// correlations, briefs, experiments) are then withheld, not failed.
+export async function viewingParticipant(): Promise<boolean> {
+  return (await currentOwner()) !== null;
+}
+
 export async function dataState(): Promise<DataState> {
   const [readiness, latest, findings] = await Promise.all([
     safeReadiness(),
@@ -281,23 +331,20 @@ export async function hasAnyData(): Promise<boolean> {
 }
 
 // ── Range-fallback loader ────────────────────────────────────────────────
-// When the requested period holds no usable observations, re-fetch with the
-// widest available window so the UI can show the oldest data it actually has.
-// The caller receives `{ requested, fallback }`; it should render the
-// fallback data with an explicit disclosure, never relabel old data as
-// belonging to the requested period.
-export async function safeSeriesWithFallback(
-  id: string,
-  range: string,
-): Promise<{ requested: MetricSeries | null; fallback: MetricSeries | null }> {
-  if (range === "all") {
-    const series = await safeSeries(id, "all");
-    return { requested: series, fallback: null };
-  }
+// When the requested range answers with no usable readings, re-read the
+// widest window so the view can show the data that does exist - as a
+// "fallback" the caller must label as all time (see rangeSeriesView). A
+// requested range that could not be read is "unreachable": never answer a
+// failed read with another window's data.
+export async function safeSeriesForRange(id: string, range: string): Promise<RangeSeries> {
   const requested = await safeSeries(id, range);
-  if (hasUsablePoints(requested)) return { requested, fallback: null };
-  const fallback = await safeSeries(id, "all");
-  return { requested, fallback: hasUsablePoints(fallback) ? fallback : null };
+  if (requested === null) return { kind: "unreachable" };
+  if (hasUsablePoints(requested)) return { kind: "requested", series: requested };
+  if (range === "all") return { kind: "empty", olderData: "none" };
+  const allTime = await safeSeries(id, "all");
+  if (allTime === null) return { kind: "empty", olderData: "unknown" };
+  if (hasUsablePoints(allTime)) return { kind: "fallback", series: allTime };
+  return { kind: "empty", olderData: "none" };
 }
 
 // Identity / provenance loaders - the Sources view. Each returns the inner
@@ -306,10 +353,45 @@ export async function safeSeriesWithFallback(
 
 export async function safeMoments(limit = 50): Promise<Moment[]> {
   try {
-    const result = await swrCache("moments", 30_000, () => fetchMoments(limit));
+    const result = await ownerSwr("moments", 30_000, () => fetchMoments(limit));
     return result.moments;
   } catch (error) {
     return swallow("moments", error) ?? [];
+  }
+}
+
+// Labs: null means "backend unreachable" (the page says so); an empty record
+// is a real LabsOverview with no markers.
+export async function safeLabs(): Promise<LabsOverview | null> {
+  try {
+    return await fetchLabs();
+  } catch (error) {
+    return swallow("labs", error);
+  }
+}
+
+export async function safeLabMarker(loinc: string): Promise<LabMarkerDetail | null> {
+  try {
+    return await fetchLabMarker(loinc);
+  } catch (error) {
+    return swallow("labs", error);
+  }
+}
+
+// Year in Health. `summary` null with `notStarted` false means the backend
+// failed or is unreachable (the page says so). `notStarted` means the year has
+// not begun in the person's own time zone (the API's 422), which the server's
+// clock cannot know: around New Year the page falls back to the year before.
+// Not cached here: the API caches the year under the owner's last ingest time
+// and time setting, so a sync shows on the next page view.
+export type YearLoad = { summary: YearInHealth | null; notStarted: boolean };
+
+export async function loadYear(year: number): Promise<YearLoad> {
+  try {
+    return { summary: await fetchYear(year), notStarted: false };
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 422) return { summary: null, notStarted: true };
+    return { summary: swallow("year", error), notStarted: false };
   }
 }
 
@@ -366,8 +448,9 @@ export async function loadReadinessSparklines(
 export type PostureChip = { text: string; ok: boolean };
 
 export function postureChip(privacy: Privacy | null): PostureChip {
-  // Backend unreachable: assert nothing we can't verify - just "on-host".
-  if (!privacy) return { text: "on-host", ok: true };
+  // The privacy read failed: the posture is unknown. Never show the safe
+  // (green) state for something that could not be checked.
+  if (!privacy) return { text: "posture unknown", ok: false };
   if (isNarratorOff(privacy.provider)) return { text: "on-host · no egress", ok: true };
   if (privacy.is_local) return { text: `local · ${privacy.provider}`, ok: true };
   if (privacy.cloud_active) return { text: `cloud · ${privacy.provider}`, ok: false };

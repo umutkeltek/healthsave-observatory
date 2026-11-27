@@ -8,7 +8,9 @@ Pins the rotation contract:
   * the legacy ``HDH_TOKEN_ENC_KEY`` is adopted as a one-entry ``v0`` ring
     AND a ciphertext sealed by ``auth.encrypt`` opens through that ring
     (zero-config back-compat),
-  * ``HDH_KEYRING`` takes precedence over the legacy key,
+  * ``HDH_KEYRING`` takes precedence over the legacy key for new seals,
+    while the legacy key still opens what it sealed (no lockout when a
+    ring is introduced without listing it),
   * tamper / wrong-key surfaces as :class:`TokenEncryptionError`,
   * malformed ``HDH_KEYRING`` fails loud, never silently empty.
 """
@@ -152,6 +154,58 @@ def test_legacy_key_adopted_as_v0_and_opens_auth_encrypt_ciphertext(monkeypatch)
         # ring (same underlying key) — the zero-config migration guarantee.
         legacy_ct = encrypt("from-oauth-tokens", key=legacy_key)
         assert unseal(legacy_ct) == "from-oauth-tokens"
+    finally:
+        _keyring_from_env.cache_clear()
+
+
+def test_setting_a_ring_later_keeps_opening_keys_saved_under_the_legacy_key(monkeypatch):
+    # A self-hoster saves an AI provider key while only HDH_TOKEN_ENC_KEY is
+    # set, then adds HDH_KEYRING without listing the old key. The saved key
+    # must still open: they should never have to re-enter it.
+    ring_key, legacy_key = generate_key(), generate_key()
+    monkeypatch.delenv(KEYRING_ENV, raising=False)
+    monkeypatch.setenv(ENV_KEY, legacy_key)
+    _keyring_from_env.cache_clear()
+    try:
+        saved_before = seal("saved-before-the-ring")
+        assert saved_before.key_version == LEGACY_KEY_VERSION
+
+        monkeypatch.setenv(KEYRING_ENV, f"v1:{ring_key}")
+        _keyring_from_env.cache_clear()
+        assert unseal(saved_before.ciphertext) == "saved-before-the-ring"
+        # New seals still use the ring's head, never the legacy key.
+        assert active_key_version() == "v1"
+        assert seal("saved-after").key_version == "v1"
+    finally:
+        _keyring_from_env.cache_clear()
+
+
+def test_the_legacy_key_is_added_once_and_never_clashes_with_a_v0_id(monkeypatch):
+    ring_key, other_v0, legacy_key = generate_key(), generate_key(), generate_key()
+    monkeypatch.setenv(ENV_KEY, legacy_key)
+    try:
+        # The ring already lists the legacy key: nothing is duplicated.
+        monkeypatch.setenv(KEYRING_ENV, f"v1:{ring_key},v0:{legacy_key}")
+        _keyring_from_env.cache_clear()
+        assert unseal(encrypt("listed", key=legacy_key)) == "listed"
+
+        # The ring uses "v0" for a different key: both keys still open.
+        monkeypatch.setenv(KEYRING_ENV, f"v1:{ring_key},v0:{other_v0}")
+        _keyring_from_env.cache_clear()
+        assert unseal(encrypt("legacy", key=legacy_key)) == "legacy"
+        assert unseal(encrypt("other", key=other_v0)) == "other"
+        assert active_key_version() == "v1"
+    finally:
+        _keyring_from_env.cache_clear()
+
+
+def test_a_broken_legacy_key_does_not_break_a_good_ring(monkeypatch):
+    ring_key = generate_key()
+    monkeypatch.setenv(ENV_KEY, "not-a-fernet-key")
+    monkeypatch.setenv(KEYRING_ENV, f"v1:{ring_key}")
+    _keyring_from_env.cache_clear()
+    try:
+        assert unseal(seal("still-works").ciphertext) == "still-works"
     finally:
         _keyring_from_env.cache_clear()
 

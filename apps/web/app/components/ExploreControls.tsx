@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useOptimistic, useState, useTransition } from "react";
 import {
   CHART_KINDS,
   EXPLORE_GRAINS,
@@ -10,12 +10,19 @@ import {
   EXPLORE_STATS,
   MAX_EXPLORE_METRICS_PER_PANEL,
   MAX_EXPLORE_PANELS,
+  MAX_SAVED_VIEW_NAME,
   encodeExploreState,
+  parseSavedViews,
+  shortViewName,
   type ChartKind,
   type ExplorePanel,
   type ExploreState,
+  type SavedView,
 } from "../lib/explore";
 import { saveExplorePanelAction } from "../lib/actions";
+import { fillTemplate } from "../lib/i18n";
+import { runAction } from "../lib/session";
+import { useI18n } from "./I18nProvider";
 
 // Client islands for the Explore dashboard. They hold no data — they read the
 // current dashboard from the URL (via the `state` prop the server parsed) and
@@ -24,11 +31,19 @@ import { saveExplorePanelAction } from "../lib/actions";
 
 export type MetricOpt = { id: string; display_name: string; category: string };
 
-function useExploreNav() {
+// `shown` is the dashboard as just picked; `pending` holds until the server
+// re-render behind router.replace lands (seconds on a slow link).
+function useExploreNav(state: ExploreState) {
   const router = useRouter();
   const pathname = usePathname();
-  return (next: ExploreState) =>
-    router.replace(`${pathname}?${encodeExploreState(next)}`, { scroll: false });
+  const [pending, startTransition] = useTransition();
+  const [shown, setShown] = useOptimistic(state);
+  const nav = (next: ExploreState) =>
+    startTransition(() => {
+      setShown(next);
+      router.replace(`${pathname}?${encodeExploreState(next)}`, { scroll: false });
+    });
+  return { shown, pending, nav };
 }
 
 function MetricSelect({
@@ -62,21 +77,21 @@ function MetricSelect({
   );
 }
 
-type SavedView = { name: string; qs: string };
 const VIEWS_KEY = "explore_views";
 
 // Saved views persist in localStorage (per-browser; fine for a single-user
 // self-hosted product). Each stores the current URL query, so opening one just
 // navigates there — the whole dashboard is already URL-encoded.
-function SavedViews({ current }: { current: string }) {
+export function SavedViews({ current }: { current: string }) {
   const router = useRouter();
+  const { dict } = useI18n();
   const [views, setViews] = useState<SavedView[]>([]);
   const [name, setName] = useState("");
+  const limitNote = fillTemplate(dict.prefs.viewNameLimit, { max: MAX_SAVED_VIEW_NAME });
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(VIEWS_KEY);
-      if (raw) setViews(JSON.parse(raw));
+      setViews(parseSavedViews(localStorage.getItem(VIEWS_KEY)));
     } catch {
       // ignore malformed storage
     }
@@ -93,27 +108,28 @@ function SavedViews({ current }: { current: string }) {
   const save = () => {
     const n = name.trim();
     if (!n) return;
-    persist([...views.filter((v) => v.name !== n), { name: n, qs: current }]);
+    persist(parseSavedViews(JSON.stringify([...views, { name: n, qs: current }])));
     setName("");
   };
   const remove = (n: string) => persist(views.filter((v) => v.name !== n));
 
   return (
     <div className="saved-views">
-      <span className="saved-views-label">Views</span>
+      <span className="saved-views-label">{dict.explore.views}</span>
       {views.map((v) => (
         <span key={v.name} className="panel-chip saved-view-chip">
           <button
             type="button"
             className="saved-view-open"
+            title={v.name}
             onClick={() => router.push(`/explore?${v.qs}`)}
           >
-            {v.name}
+            {shortViewName(v.name)}
           </button>
           <button
             type="button"
             className="panel-chip-x"
-            aria-label={`Delete view ${v.name}`}
+            aria-label={fillTemplate(dict.explore.deleteView, { name: v.name })}
             onClick={() => remove(v.name)}
           >
             ×
@@ -122,7 +138,9 @@ function SavedViews({ current }: { current: string }) {
       ))}
       <input
         className="filter-select saved-view-input"
-        placeholder="Save this view as…"
+        placeholder={dict.explore.saveAsPlaceholder}
+        maxLength={MAX_SAVED_VIEW_NAME}
+        title={limitNote}
         value={name}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => {
@@ -130,48 +148,54 @@ function SavedViews({ current }: { current: string }) {
         }}
       />
       <button type="button" className="btn-ghost panel-remove-btn" onClick={save} disabled={!name.trim()}>
-        Save
+        {dict.explore.save}
       </button>
+      {name.length >= MAX_SAVED_VIEW_NAME ? <span className="meta">{limitNote}</span> : null}
     </div>
   );
 }
 
 // Save-to-Today: persists the current explore dashboard as a compact card on
 // the Today page. Uses a server action (cookie-backed, revalidates /).
-function SaveToToday({ current }: { current: string }) {
-  const [, startTransition] = useTransition();
+export function SaveToToday({ current, empty }: { current: string; empty: boolean }) {
+  const [pending, startTransition] = useTransition();
   const [label, setLabel] = useState("");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Older views this save pushed off Today, named until the next save.
+  const [removed, setRemoved] = useState<string[]>([]);
+  const { dict } = useI18n();
 
   const save = () => {
     const name = label.trim();
     if (!name) return;
     setError(null);
+    setRemoved([]);
     startTransition(async () => {
-      const result = await saveExplorePanelAction(current, name);
+      const result = await runAction(() => saveExplorePanelAction(current, name));
       if (result.ok) {
         setSaved(true);
+        setRemoved(result.removed ?? []);
         setLabel("");
         setTimeout(() => setSaved(false), 2000);
       } else {
-        setError(result.error ?? "Could not save this view to Today.");
+        setError(result.error ?? dict.explore.saveFailed);
       }
     });
   };
 
   return (
-    <div className="saved-views" style={{ marginTop: 8 }}>
-      <span className="saved-views-label">Pin to Today</span>
+    <div className="saved-views" style={{ marginTop: 8 }} data-pending={pending || undefined} aria-busy={pending}>
+      <span className="saved-views-label">{dict.explore.pinToToday}</span>
       {saved ? (
         <span className="panel-chip" style={{ color: "var(--up)", borderColor: "var(--up)" }}>
-          ✓ Saved!
+          ✓ {dict.explore.saved}
         </span>
       ) : (
         <>
           <input
             className="filter-select saved-view-input"
-            placeholder="Label this view…"
+            placeholder={dict.explore.labelPlaceholder}
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             onKeyDown={(e) => {
@@ -182,9 +206,10 @@ function SaveToToday({ current }: { current: string }) {
             type="button"
             className="btn-ghost panel-remove-btn"
             onClick={save}
-            disabled={!label.trim()}
+            disabled={pending || !label.trim() || empty}
+            title={empty ? dict.prefs.emptyView : undefined}
           >
-            Pin
+            {dict.explore.pin}
           </button>
         </>
       )}
@@ -193,13 +218,18 @@ function SaveToToday({ current }: { current: string }) {
           {error}
         </span>
       )}
+      {removed.length > 0 && (
+        <span className="meta" role="status">
+          {fillTemplate(dict.prefs.todayRemoved, { labels: removed.join(", ") })}
+        </span>
+      )}
     </div>
   );
 }
 
 // Global dashboard controls + add-panel.
-export function ExploreControls({ state, metrics }: { state: ExploreState; metrics: MetricOpt[] }) {
-  const nav = useExploreNav();
+export function ExploreControls({ state: serverState, metrics }: { state: ExploreState; metrics: MetricOpt[] }) {
+  const { shown: state, pending, nav } = useExploreNav(serverState);
   const set = (patch: Partial<ExploreState>) => nav({ ...state, ...patch });
   const addPanel = (metricId: string) => {
     if (state.panels.length >= MAX_EXPLORE_PANELS) return;
@@ -207,7 +237,7 @@ export function ExploreControls({ state, metrics }: { state: ExploreState; metri
   };
 
   return (
-    <div className="explore-controls card">
+    <div className="explore-controls card" aria-busy={pending} data-pending={pending || undefined}>
       <div className="explore-control">
         <label>Range</label>
         <select
@@ -284,7 +314,7 @@ export function ExploreControls({ state, metrics }: { state: ExploreState; metri
       <SavedViews current={encodeExploreState(state)} />
 
       {/* Save-to-Today: persists this dashboard as a compact card on / */}
-      <SaveToToday current={encodeExploreState(state)} />
+      <SaveToToday current={encodeExploreState(state)} empty={state.panels.length === 0} />
     </div>
   );
 }
@@ -299,7 +329,9 @@ export function PanelToolbar({
   index: number;
   metrics: MetricOpt[];
 }) {
-  const nav = useExploreNav();
+  // Only the busy state is used here: an optimistic move or removal would
+  // redraw this toolbar for a different panel than the chart under it.
+  const { pending, nav } = useExploreNav(state);
   const panel = state.panels[index];
   const nameById = new Map(metrics.map((m) => [m.id, m.display_name] as const));
 
@@ -328,7 +360,7 @@ export function PanelToolbar({
   const canOverlay = panel.chart === "line";
 
   return (
-    <div className="panel-toolbar">
+    <div className="panel-toolbar" aria-busy={pending} data-pending={pending || undefined}>
       <div className="panel-metrics">
         {panel.metrics.map((id) => (
           <span key={id} className="panel-chip">

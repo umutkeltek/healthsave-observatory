@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 
 import { triggerAnalysisAction } from "../lib/actions";
+import { runAction } from "../lib/session";
 
 // "Compute relationships now" affordance on /relationships. Mirrors
 // RefreshInsightsButton's calm pending caption; a disabled analysis block
@@ -14,7 +15,7 @@ export function RunCorrelationButton() {
   const run = () =>
     startTransition(async () => {
       setNote(null);
-      const result = await triggerAnalysisAction("correlation_analysis");
+      const result = await runAction(() => triggerAnalysisAction("correlation_analysis"));
       if (!result.ok) {
         const detail = result.error ?? "";
         setNote(

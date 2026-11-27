@@ -1,0 +1,27 @@
+# Build the Observatory images from this checkout instead of pulling the
+# published release images (docker-compose.yml). Use it for development, an
+# unreleased branch, or a host that cannot reach ghcr.io:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.build.override.yml up -d --build
+#
+# To make it the default for this checkout (the `healthsave` CLI included),
+# add one line to .env:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.build.override.yml
+#
+# The builds are tagged with the image names docker-compose.yml uses. They stay
+# on this machine; nothing is pushed.
+services:
+  migrate:
+    build: .
+  api:
+    build: .
+  worker:
+    build: .
+  agents:
+    build: .
+  homeassistant-mqtt:
+    build: .
+  web:
+    build:
+      context: ./apps/web

@@ -29,7 +29,15 @@ ENV_REDIRECT_URI = "WHOOP_REDIRECT_URI"
 
 
 class WhoopOAuthError(Exception):
-    """Raised when Whoop's OAuth endpoint returns an error or malformed payload."""
+    """Raised when Whoop's OAuth endpoint returns an error or malformed payload.
+
+    ``status_code`` is the token endpoint's HTTP status when it answered with
+    one, so a caller can tell a Whoop outage (5xx) from a refused token.
+    """
+
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,7 +170,10 @@ def _materialize_token(response: _HttpResponse, *, owner_id: UUID) -> OAuthToken
     """Parse a Whoop token response into an :class:`OAuthToken` or raise."""
     if response.status_code != 200:
         body = getattr(response, "text", "<no body>")
-        raise WhoopOAuthError(f"whoop token endpoint returned HTTP {response.status_code}: {body}")
+        raise WhoopOAuthError(
+            f"whoop token endpoint returned HTTP {response.status_code}: {body}",
+            status_code=response.status_code,
+        )
     payload = response.json()
     if "access_token" not in payload:
         raise WhoopOAuthError(f"whoop response missing access_token: {payload}")

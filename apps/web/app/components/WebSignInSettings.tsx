@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { setWebPasswordAction, turnOffWebSignInAction } from "../lib/webAuthActions";
+import { runAction } from "../lib/session";
 
 type Props = {
   mode: "password" | "off";
@@ -24,7 +25,7 @@ export function WebSignInSettingsForm({ mode, source, minLength }: Props) {
 
   const run = (action: () => Promise<{ ok: boolean; error?: string }>, success: string) =>
     startTransition(async () => {
-      const result = await action();
+      const result = await runAction(action);
       setStatus(result.ok ? { ok: true, text: success } : { ok: false, text: result.error ?? "Could not save." });
       if (result.ok) {
         setCurrent("");

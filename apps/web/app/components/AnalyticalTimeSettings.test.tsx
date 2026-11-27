@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AnalyticalTimeSettingsForm } from "./AnalyticalTimeSettings";
+import { AnalyticalTimeSettingsForm, TimeBasisStatus, TimeBasisSummary } from "./AnalyticalTimeSettings";
 import type { AnalyticalTimeSettings } from "../lib/api";
 
 const BASE_SETTINGS: AnalyticalTimeSettings = {
@@ -50,5 +50,32 @@ describe("AnalyticalTimeSettingsForm", () => {
   test("save button reads 'Save time basis' when idle", () => {
     const html = renderToStaticMarkup(<AnalyticalTimeSettingsForm initial={BASE_SETTINGS} />);
     expect(html).toContain("Save time basis");
+  });
+});
+
+describe("TimeBasisSummary", () => {
+  // The bug: "Current basis" printed the form's draft, so an unsaved (or
+  // failed) change read as the basis the analyses use.
+  test("the current basis is the saved one; a different draft is marked unsaved", () => {
+    const html = renderToStaticMarkup(
+      <TimeBasisSummary saved={BASE_SETTINGS} draft={{ time_zone: "UTC", day_boundary_minutes: 0 }} />,
+    );
+    expect(html).toContain("Current basis: Europe/Istanbul · day boundary 04:00");
+    expect(html).toContain("Not saved yet: UTC · day boundary 00:00");
+  });
+
+  test("a draft equal to the saved basis shows no unsaved line", () => {
+    const html = renderToStaticMarkup(
+      <TimeBasisSummary saved={BASE_SETTINGS} draft={{ time_zone: "Europe/Istanbul", day_boundary_minutes: 240 }} />,
+    );
+    expect(html).toContain("Current basis: Europe/Istanbul · day boundary 04:00");
+    expect(html).not.toContain("Not saved yet");
+  });
+});
+
+describe("TimeBasisStatus", () => {
+  test("a failed save renders as an error whatever its wording", () => {
+    const html = renderToStaticMarkup(<TimeBasisStatus status={{ kind: "error", message: "Saved state unknown" }} />);
+    expect(html).toContain("exp-error");
   });
 });

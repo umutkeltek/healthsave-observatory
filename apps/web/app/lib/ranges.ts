@@ -51,3 +51,56 @@ export function shortDate(iso: string): string {
     ? date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
     : iso;
 }
+
+// What a detail view can show for one requested range. Each case is its own
+// state so a failed read can never pass for another range's data:
+//   requested   - the requested range answered with usable readings
+//   fallback    - the requested range answered with none; this is the ALL-TIME
+//                 series, and it must be labelled as all time
+//   empty       - nothing usable; olderData says whether all time was checked
+//   unreachable - the requested range could not be read at all
+export type RangeSeries =
+  | { kind: "requested"; series: MetricSeries }
+  | { kind: "fallback"; series: MetricSeries }
+  | { kind: "empty"; olderData: "none" | "unknown" }
+  | { kind: "unreachable" };
+
+export type RangeSeriesView = {
+  series: MetricSeries | null;
+  /** The window the shown readings actually cover. */
+  windowLabel: string;
+  /** Disclosure to show above the chart, or null when the range speaks for itself. */
+  note: string | null;
+};
+
+export function rangeSeriesView(read: RangeSeries, range: string): RangeSeriesView {
+  const requested = rangeLabel(range);
+  switch (read.kind) {
+    case "requested":
+      return { series: read.series, windowLabel: requested, note: null };
+    case "fallback": {
+      const coverage = seriesCoverage(read.series.points);
+      const span = coverage ? ` (${shortDate(coverage.first)} → ${shortDate(coverage.last)})` : "";
+      return {
+        series: read.series,
+        windowLabel: RANGE_LABELS.all,
+        note: `No readings in the ${requested} range. Showing all ${coverage?.count ?? 0} available readings${span} instead.`,
+      };
+    }
+    case "empty":
+      return {
+        series: null,
+        windowLabel: requested,
+        note:
+          read.olderData === "unknown"
+            ? `No readings in the ${requested} range. Older readings could not be checked right now.`
+            : null,
+      };
+    case "unreachable":
+      return {
+        series: null,
+        windowLabel: requested,
+        note: `The Observatory API did not answer for the ${requested} range, so no readings can be shown right now.`,
+      };
+  }
+}

@@ -17,7 +17,6 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from ..change_phrasing import normalize_direction_magnitude
 from ..egress import (
     Destination,
     EgressDenied,
@@ -30,7 +29,7 @@ from ..egress import (
 from ..netguard import assert_safe_probe_target
 from ..redaction import RedactionPolicy
 from .prompts.base import SYSTEM_PROMPT
-from .safety import inject_disclaimer
+from .safety import has_substance, inject_disclaimer, scrub_narrative
 
 log = logging.getLogger("healthsave.analysis")
 
@@ -485,7 +484,23 @@ class HealthLLMClient:
                 + ")"
             )
 
-        narrative = inject_disclaimer(normalize_direction_magnitude(raw))
+        # Enforce the system prompt's rules on the reply: drop sentences that
+        # interpret health or give advice, round long decimals. A reply with
+        # nothing left is a failed attempt, so the next candidate is tried and
+        # no hollow brief is stored.
+        scrubbed = scrub_narrative(raw, allow_doctor="severity alert" in payload)
+        if scrubbed.removed:
+            log.warning(
+                "narrator: %s broke the narration rules; removed %d sentence(s)",
+                model,
+                len(scrubbed.removed),
+            )
+        if not scrubbed.text.strip() or (scrubbed.removed and not has_substance(scrubbed.text)):
+            raise LLMUnavailableError(
+                f"model {model!r} returned a narrative the safety filter emptied "
+                f"({len(scrubbed.removed)} sentence(s) removed)"
+            )
+        narrative = inject_disclaimer(scrubbed.text)
         return InsightResult(
             narrative=narrative,
             tokens_in=tokens_in,

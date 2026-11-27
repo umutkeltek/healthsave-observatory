@@ -6,38 +6,8 @@ const GENERIC_BRIEF_TITLES = new Set([
   "weekly health summary",
 ]);
 
-const DIRECTION_WORD =
-  "decreased|decreases|decreasing|decrease|dropped|drops|dropping|drop|fell|falls|falling|fall|declined|declines|declining|decline|reduced|reduces|reducing|reduction|lowered|lowers|lowering|lower|increased|increases|increasing|increase|rose|rises|rising|rise|grew|grows|growing|growth|gained|gains|gaining|gain|improved|improves|improving|improvement|higher|lost|loss|down|up";
-
-const SIGN = "[-+\\u2212\\u2013]";
-const NUMBER = "\\d+(?:\\.\\d+)?";
-const UNIT = "(?:%|\\s+percent(?:age)?\\b)";
-
-// Mirrors analysis.change_phrasing.normalize_direction_magnitude. Direction
-// words take an absolute magnitude; "changed by -1.7%" is left alone.
-export function agreeDirectionAndMagnitude(text: string): string {
-  const wordThenSigned = new RegExp(
-    `\\b(${DIRECTION_WORD})\\b(\\s+(?:by|of))?\\s*${SIGN}\\s*(${NUMBER})\\s*(${UNIT})`,
-    "gi",
-  );
-  const signedThenWord = new RegExp(
-    `${SIGN}\\s*(${NUMBER})\\s*(${UNIT})\\s+(${DIRECTION_WORD})\\b`,
-    "gi",
-  );
-  const afterWord = text.replace(
-    wordThenSigned,
-    (_match, word: string, mid: string | undefined, num: string, unit: string) => {
-      const glue = mid ? `${mid} ` : " ";
-      return `${word}${glue}${num}${unit}`;
-    },
-  );
-  return afterWord.replace(signedThenWord, (_match, num: string, unit: string, word: string) => {
-    return `${num}${unit} ${word}`;
-  });
-}
-
 function stripInlineMarkdown(line: string): string {
-  return agreeDirectionAndMagnitude(line)
+  return line
     .replace(/^#{1,6}\s+/, "")
     .replace(/^\s*[-*]\s+/, "")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
@@ -52,12 +22,23 @@ function stripInlineMarkdown(line: string): string {
     .trim();
 }
 
+// The medical note the narrator appends (and the longer one older briefs carry)
+// is shown once, as a small caption under the brief, not as a paragraph of it.
+export const BRIEF_NOTE = "General wellness information, not medical advice.";
+
+function isMedicalNote(paragraph: string): boolean {
+  return /not medical advice/i.test(paragraph);
+}
+
 export function briefParagraphs(narrative: string): string[] {
   return narrative
     .replace(/\r\n/g, "\n")
     .split(/\n{2,}|\n/)
     .map(stripInlineMarkdown)
-    .filter((paragraph) => Boolean(paragraph) && !GENERIC_BRIEF_TITLES.has(paragraph.toLowerCase()));
+    .filter(
+      (paragraph) =>
+        Boolean(paragraph) && !GENERIC_BRIEF_TITLES.has(paragraph.toLowerCase()) && !isMedicalNote(paragraph),
+    );
 }
 
 export function briefLeadSentence(narrative: string | null | undefined): string | null {
@@ -72,3 +53,46 @@ export function briefLeadSentence(narrative: string | null | undefined): string 
   const sentence = text.match(/^.+?[.!?](?=\s|$)/)?.[0] ?? text.slice(0, 180);
   return sentence.trim();
 }
+
+// A brief broken into what the card shows: the main read, up to two supporting
+// points, and the closing suggestion. Headings the narrator writes on their
+// own line ("Recovery", "Activity:") are never a sentence.
+export type BriefRead = { lead: string | null; takeaways: string[]; suggestion: string | null };
+
+const SUGGESTION =
+  /\b(try|consider|take|taking|aim|start|add|keep|walk|stroll|stretch|bedtime|wind down|could|might|small step|one thing)\b/i;
+
+function stripBriefLabel(text: string): string {
+  return text.replace(/^(Recovery|Summary|Today|This week|Weekly brief):\s*/i, "").trim();
+}
+
+function isSentence(text: string): boolean {
+  return text.split(/\s+/).filter(Boolean).length >= 4;
+}
+
+// "Additionally, try ..." reads oddly once it stands alone on the card.
+function dropConnector(text: string): string {
+  const trimmed = text.replace(/^(additionally|also|finally|lastly|plus|in addition|on top of that),?\s+/i, "");
+  return (trimmed[0]?.toUpperCase() ?? "") + trimmed.slice(1);
+}
+
+export function briefRead(narrative: string): BriefRead {
+  const sentences = briefParagraphs(narrative)
+    .flatMap((paragraph) => stripBriefLabel(paragraph).split(/(?<=[.!?])\s+/))
+    .map((sentence) => sentence.trim())
+    .filter(isSentence);
+  // The narrator is asked to end with one or two small suggestions: take the
+  // trailing sentences that read like one, at most two.
+  const tail: string[] = [];
+  for (let i = sentences.length - 1; i > 0 && tail.length < 2; i--) {
+    if (!SUGGESTION.test(sentences[i])) break;
+    tail.unshift(sentences[i]);
+  }
+  const body = sentences.slice(0, sentences.length - tail.length);
+  return {
+    lead: body[0] ?? null,
+    takeaways: body.slice(1, 3),
+    suggestion: tail.length > 0 ? dropConnector(tail.join(" ")) : null,
+  };
+}
+

@@ -35,6 +35,12 @@ class GoogleHealthSource(Source):
         owner_id: Any,
         token_store: Any,
     ):
+        """Return a non-expired token or None (no token stored).
+
+        Token state is committed on its own, before any data is fetched, so a
+        later fetch or write failure cannot roll back a refreshed token or a
+        recorded refresh failure (see the Whoop plugin).
+        """
         from .oauth import GoogleHealthClientConfig, refresh_access_token
 
         token = await token_store.get_token(
@@ -46,6 +52,16 @@ class GoogleHealthSource(Source):
             return None
 
         if token.is_expired():
+            # Serialize refreshes of this token: a concurrent poll or webhook may
+            # already have spent the refresh token. Re-read it under a row lock.
+            lock_token = getattr(token_store, "lock_token", None)
+            if lock_token is not None:
+                token = await lock_token(
+                    session, provider=GOOGLE_HEALTH_PROVIDER, owner_id=owner_id
+                )
+                if token is None or not token.is_expired():
+                    await session.commit()  # release the lock
+                    return token
             oauth_config = payload.get("oauth_config") or GoogleHealthClientConfig.from_env()
             if not token.refresh_token:
                 message = "google health access token expired with no refresh_token stored"
@@ -55,6 +71,7 @@ class GoogleHealthSource(Source):
                     owner_id=owner_id,
                     error_message=message,
                 )
+                await session.commit()
                 raise GoogleHealthOAuthError(message)
             try:
                 new_token = await refresh_access_token(
@@ -64,14 +81,17 @@ class GoogleHealthSource(Source):
                     owner_id=owner_id,
                 )
                 await token_store.put_token(session, new_token, event_kind="refreshed")
+                await session.commit()
                 token = new_token
             except Exception as exc:
+                await session.rollback()
                 await token_store.record_refresh_failure(
                     session,
                     provider=GOOGLE_HEALTH_PROVIDER,
                     owner_id=owner_id,
                     error_message=str(exc),
                 )
+                await session.commit()
                 raise
 
         return token
@@ -98,7 +118,8 @@ class GoogleHealthSource(Source):
         )
         if token is None:
             log.warning("google health: no stored token owner=%s - skip poll", owner_id)
-            return {"accepted": 0, "rejected": 0}
+            # skipped_no_token: nothing was polled, so the worker keeps its cursor.
+            return {"accepted": 0, "rejected": 0, "skipped_no_token": 1}
 
         effective_since = since if since is not None else datetime.now(UTC) - DEFAULT_LOOKBACK
         points = await fetch_steps(

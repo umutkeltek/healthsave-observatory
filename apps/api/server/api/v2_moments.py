@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated
 
 from contracts._base import V2Model
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import Field, StringConstraints, field_validator
+from pydantic import Field, StringConstraints, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.timescale.moments import GRADES, MOMENT_KINDS, default_repository
 
@@ -36,6 +36,20 @@ class MomentListResponse(V2Model):
     count: int
 
 
+def _in_utc(value: datetime, name: str) -> datetime:
+    """``value`` in UTC, or a ValueError (a 422) when UTC cannot hold it.
+
+    Year 1 at a positive offset, or year 9999 at a negative one, falls outside
+    what datetime can represent in UTC. The conversion raises OverflowError,
+    which pydantic does not turn into a validation error (a 500 here, and the
+    database driver would raise the same converting it to store).
+    """
+    try:
+        return value.astimezone(UTC)
+    except (OverflowError, ValueError, OSError) as exc:
+        raise ValueError(f"{name} is outside the supported date range") from exc
+
+
 class CreateMomentRequest(V2Model):
     kind: str
     title: str = Field(min_length=1, max_length=200)
@@ -57,6 +71,18 @@ class CreateMomentRequest(V2Model):
         if value is not None and value not in GRADES:
             raise ValueError(f"grade must be one of: {', '.join(sorted(GRADES))}")
         return value
+
+    @model_validator(mode="after")
+    def validate_range(self) -> CreateMomentRequest:
+        # A model validator adds no JSON-schema constraint, so the OpenAPI
+        # contract is unchanged. PUT replaces the whole row, so the body
+        # alone decides the stored range. astimezone() compares naive and
+        # aware values the way asyncpg stores a naive one (local time).
+        start = _in_utc(self.start_at, "start_at")
+        end = _in_utc(self.end_at, "end_at") if self.end_at is not None else None
+        if end is not None and end < start:
+            raise ValueError("end_at must not be before start_at")
+        return self
 
 
 class UpdateMomentRequest(CreateMomentRequest):

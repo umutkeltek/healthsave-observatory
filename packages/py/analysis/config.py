@@ -156,9 +156,14 @@ _JOB_ENABLE_ENV: dict[str, str] = {
 
 
 def _env_bool(name: str) -> bool | None:
-    """Parse a boolean .env value, or None when the var is unset."""
+    """Parse a boolean .env value, or None when the var is unset.
+
+    Empty or whitespace-only counts as unset: docker-compose.yml passes every
+    override as ``${NAME:-}``, so an unset .env entry arrives as "" and must
+    fall back to config.yaml (and to the fail-closed defaults), not read as off.
+    """
     raw = os.getenv(name)
-    if raw is None:
+    if raw is None or not raw.strip():
         return None
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 

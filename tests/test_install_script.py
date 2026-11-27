@@ -58,6 +58,8 @@ def _install(
             "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
             "HEALTHSAVE_OBSERVATORY_REPO": str(repo),
             "HEALTHSAVE_OBSERVATORY_HOME": str(target),
+            # Never ask GitHub from a test: a missing file is "lookup failed".
+            "HEALTHSAVE_OBSERVATORY_RELEASES_API": (tmp_path / "no-release.json").as_uri(),
             **extra_env,
         },
         stdin=subprocess.DEVNULL,
@@ -87,3 +89,29 @@ def test_install_without_release_tags_fails_and_cleans_up(tmp_path: Path) -> Non
     assert proc.returncode != 0
     assert "no vX.Y.Z release tag" in proc.stderr
     assert not target.exists()
+
+
+def _published(tmp_path: Path, tag: str) -> str:
+    """A file:// stand-in for GitHub's releases/latest answer."""
+    answer = tmp_path / "latest-release.json"
+    answer.write_text(
+        f'{{"url": "x", "tag_name": "{tag}", "name": "HealthSave Observatory {tag}"}}\n'
+    )
+    return answer.as_uri()
+
+
+def test_install_prefers_the_published_release(tmp_path: Path) -> None:
+    """A pushed tag whose release workflow has not published yet is not installed."""
+    repo = _repo_with_tags(tmp_path, ["v1.9.0", "v1.10.0"])
+    proc, target = _install(
+        tmp_path, repo, HEALTHSAVE_OBSERVATORY_RELEASES_API=_published(tmp_path, "v1.9.0")
+    )
+    assert _git(target, "tag", "--points-at", "HEAD").split() == ["v1.9.0"], proc.stderr
+
+
+def test_install_ignores_a_published_tag_the_clone_lacks(tmp_path: Path) -> None:
+    repo = _repo_with_tags(tmp_path, ["v1.9.0", "v1.10.0"])
+    proc, target = _install(
+        tmp_path, repo, HEALTHSAVE_OBSERVATORY_RELEASES_API=_published(tmp_path, "v3.0.0")
+    )
+    assert _git(target, "tag", "--points-at", "HEAD").split() == ["v1.10.0"], proc.stderr

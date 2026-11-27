@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from storage.defaults import export_repository
 from storage.ports import ExportRepository
 
+from .access import ReadOwner
 from .deps import get_session, verify_api_key
 
 router = APIRouter(prefix="/api/v2", dependencies=[Depends(verify_api_key)])
@@ -34,8 +35,9 @@ _MAX_EXPORT_LIMIT = 100_000
 @router.get("/export/metrics")
 async def list_export_metrics(
     session: AsyncSession = Depends(get_session),
+    owner_id: ReadOwner = DEFAULT_OWNER_ID,
 ) -> list[dict]:
-    return await _EXPORT_REPO.list_available_metrics(session, owner_id=DEFAULT_OWNER_ID)
+    return await _EXPORT_REPO.list_available_metrics(session, owner_id=owner_id)
 
 
 @router.get("/export")
@@ -47,6 +49,7 @@ async def export_data(
     days: int | None = Query(None),
     limit: int | None = Query(None),
     session: AsyncSession = Depends(get_session),
+    owner_id: ReadOwner = DEFAULT_OWNER_ID,
 ):
     # Normalize the FastAPI Query() defaults to real values so the handler
     # behaves identically whether FastAPI resolved the query string or the
@@ -77,7 +80,7 @@ async def export_data(
             csv_data = await _EXPORT_REPO.export_metric_csv(
                 session,
                 metric=metric,
-                owner_id=DEFAULT_OWNER_ID,
+                owner_id=owner_id,
                 date_from=date_from,
                 date_to=date_to,
                 limit=limit,
@@ -93,7 +96,7 @@ async def export_data(
     if metric == "all":
         return await _EXPORT_REPO.export_all_json(
             session,
-            owner_id=DEFAULT_OWNER_ID,
+            owner_id=owner_id,
             date_from=date_from,
             date_to=date_to,
             limit=limit,
@@ -103,7 +106,7 @@ async def export_data(
         return await _EXPORT_REPO.export_metric_json(
             session,
             metric=metric,
-            owner_id=DEFAULT_OWNER_ID,
+            owner_id=owner_id,
             date_from=date_from,
             date_to=date_to,
             limit=limit,

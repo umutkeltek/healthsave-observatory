@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { type ReactNode, Suspense } from "react";
 
-import { CommandPalette } from "./components/CommandPalette";
 import { I18nProvider } from "./components/I18nProvider";
-import { PaletteHost } from "./components/PaletteHost";
+import { ShellPalette } from "./components/PaletteHost";
+import { ParticipantSwitcher } from "./components/ParticipantSwitcher";
 import { Shell } from "./components/Shell";
 import {
   SidebarStatus,
@@ -15,6 +15,7 @@ import {
 import "./globals.css";
 import { getAvailableLocales, getLocale } from "./lib/i18n.server";
 import { getDensity } from "./lib/prefs";
+import { renderedSettledMark } from "./lib/ttlCache";
 import { BARE_LAYOUT_HEADER } from "./lib/webAuth";
 import { hasWebSession } from "./lib/webSession.server";
 
@@ -58,6 +59,12 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <I18nProvider locale={locale} availableLocales={availableLocales}>
             <Shell
               density={density}
+              renderedSettled={renderedSettledMark()}
+              participantSwitcher={
+                <Suspense fallback={null}>
+                  <ParticipantSwitcher />
+                </Suspense>
+              }
               sidebarStatus={
                 <Suspense fallback={<SidebarStatusFallback />}>
                   <SidebarStatus />
@@ -72,9 +79,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               {children}
             </Shell>
             {/* Command palette: pages-only while the catalog streams in. */}
-            <Suspense fallback={<CommandPalette metrics={[]} />}>
-              <PaletteHost />
-            </Suspense>
+            <ShellPalette />
           </I18nProvider>
         )}
       </body>

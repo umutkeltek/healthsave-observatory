@@ -127,6 +127,19 @@ class _CanonicalRepo:
         return len(observations)
 
 
+class _Session:
+    """Records commits/rollbacks: token state is committed before any fetch."""
+
+    def __init__(self) -> None:
+        self.events: list[str] = []
+
+    async def commit(self) -> None:
+        self.events.append("commit")
+
+    async def rollback(self) -> None:
+        self.events.append("rollback")
+
+
 @dataclass
 class _TokenStore:
     """In-memory token store mimicking the storage.timescale.oauth_tokens module."""
@@ -295,6 +308,7 @@ async def test_ingest_happy_path_with_fresh_token():
             "token_store": token_store,
             "oauth_config": _oauth_config(),
             "canonical_repository": _CanonicalRepo(),
+            "stream_registry": _StreamRegistry(),
         }
     )
 
@@ -320,7 +334,8 @@ async def test_ingest_happy_path_with_fresh_token():
     assert {c.device_id for c in storage.ingest_calls} == {1}
     # The recorded metrics include the ones normalize_* emits.
     written_metrics = {c.metric for c in storage.ingest_calls}
-    assert "heart_rate_variability" in written_metrics
+    assert "heart_rate_variability_rmssd" in written_metrics
+    assert "heart_rate_variability" not in written_metrics
     assert "blood_oxygen" in written_metrics
     assert "workouts" in written_metrics
     assert "strain" in written_metrics
@@ -346,15 +361,22 @@ async def test_ingest_writes_canonical_workout_session_for_fusion():
             "token_store": token_store,
             "oauth_config": _oauth_config(),
             "canonical_repository": canonical_repo,
+            "stream_registry": _StreamRegistry(),
         }
     )
 
     legacy_accepted = sum(len(call.samples) for call in storage.ingest_calls)
-    assert result == {"accepted": legacy_accepted + 1, "rejected": 0}
+    # One workout session plus the recovery's three readings.
+    assert result == {"accepted": legacy_accepted + 4, "rejected": 0}
     assert len(canonical_repo.insert_calls) == 1
     inserted_session, observations = canonical_repo.insert_calls[0]
     assert inserted_session is session
-    assert len(observations) == 1
+    assert [o.metric_id for o in observations] == [
+        "workout.session",
+        "vital.hrv_rmssd",
+        "vital.resting_heart_rate",
+        "vital.blood_oxygen",
+    ]
 
     obs = observations[0]
     expected_source_id = identity.source_uuid(DEFAULT_OWNER_ID, "whoop-healthsave")
@@ -405,19 +427,23 @@ async def test_ingest_refreshes_expired_token_and_audits_refreshed_event():
         post_responses={"oauth2/token": refresh_response},
     )
     plugin = WhoopSource(load_manifest(PLUGIN_DIR / "plugin.yaml"))
+    session = _Session()
 
     result = await plugin.ingest(
         {
             "storage": storage,
-            "session": object(),
+            "session": session,
             "http_client": http,
             "token_store": token_store,
             "oauth_config": _oauth_config(),
             "canonical_repository": _CanonicalRepo(),
+            "stream_registry": _StreamRegistry(),
         }
     )
 
     assert result["accepted"] > 0
+    # The rotated token is committed before any fetch can fail the poll.
+    assert session.events == ["commit"]
     # Refresh happened
     assert len(http.post_calls) == 1
     assert http.post_calls[0]["data"]["grant_type"] == "refresh_token"
@@ -444,12 +470,13 @@ async def test_ingest_records_refresh_failure_and_reraises():
         post_responses={"oauth2/token": refresh_response},
     )
     plugin = WhoopSource(load_manifest(PLUGIN_DIR / "plugin.yaml"))
+    session = _Session()
 
     with pytest.raises(WhoopOAuthError):
         await plugin.ingest(
             {
                 "storage": storage,
-                "session": object(),
+                "session": session,
                 "http_client": http,
                 "token_store": token_store,
                 "oauth_config": _oauth_config(),
@@ -458,6 +485,8 @@ async def test_ingest_records_refresh_failure_and_reraises():
 
     assert len(token_store.refresh_failures) == 1
     assert "401" in token_store.refresh_failures[0] or "HTTP" in token_store.refresh_failures[0]
+    # The failure is committed so the worker's rollback cannot erase it.
+    assert session.events[-1] == "commit"
     # No metric writes when refresh failed.
     assert storage.ingest_calls == []
 
@@ -475,12 +504,13 @@ async def test_ingest_expired_token_with_no_refresh_token_audits_and_raises():
     token_store = _TokenStore(initial_token=token_no_refresh)
     http = _HttpClient(get_responses=_default_get_responses())
     plugin = WhoopSource(load_manifest(PLUGIN_DIR / "plugin.yaml"))
+    session = _Session()
 
     with pytest.raises(WhoopOAuthError):
         await plugin.ingest(
             {
                 "storage": storage,
-                "session": object(),
+                "session": session,
                 "http_client": http,
                 "token_store": token_store,
                 "oauth_config": _oauth_config(),
@@ -488,6 +518,7 @@ async def test_ingest_expired_token_with_no_refresh_token_audits_and_raises():
         )
     assert len(token_store.refresh_failures) == 1
     assert "refresh_token" in token_store.refresh_failures[0]
+    assert session.events == ["commit"]
 
 
 @pytest.mark.asyncio
@@ -518,3 +549,181 @@ async def test_ingest_with_empty_data_returns_zero():
     # Device still gets created (call shape consistency); no metric writes.
     assert storage.devices == {"Whoop": 1}
     assert storage.ingest_calls == []
+
+
+# ── A 401 on a token that looks valid is refreshed once (M14) ──────────────
+
+
+class _TokenCheckingHttp(_HttpClient):
+    """Answers 401 to any GET made with a refused access token."""
+
+    def __init__(self, *, refused: set[str], **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.refused = refused
+        self.bearers: list[str] = []
+
+    async def get(self, url, *, params=None, headers=None):
+        bearer = (headers or {}).get("Authorization", "").removeprefix("Bearer ")
+        self.bearers.append(bearer)
+        if bearer in self.refused:
+            self.get_calls.append({"url": url, "params": dict(params or {})})
+            return _Response(401, {"message": "Authorization was not valid"})
+        return await super().get(url, params=params, headers=headers)
+
+
+def _token_without_expiry() -> OAuthToken:
+    """Whoop sent no expires_in: the token never looks expired."""
+    return OAuthToken(
+        owner_id=DEFAULT_OWNER_ID,
+        provider=PROVIDER,
+        access_token="AT-dead",
+        refresh_token="RT-live",
+        expires_at=None,
+        scopes=("read:recovery", "offline"),
+    )
+
+
+_REFRESHED = _Response(
+    200,
+    {
+        "access_token": "AT-new",
+        "refresh_token": "RT-new",
+        "expires_in": 3600,
+        "scope": "read:recovery offline",
+        "token_type": "Bearer",
+    },
+)
+
+
+@pytest.mark.asyncio
+async def test_a_refused_token_that_looks_valid_is_refreshed_once_and_the_poll_succeeds():
+    token_store = _TokenStore(initial_token=_token_without_expiry())
+    http = _TokenCheckingHttp(
+        refused={"AT-dead"},
+        get_responses=_default_get_responses(),
+        post_responses={"oauth2/token": _REFRESHED},
+    )
+
+    result = await WhoopSource(load_manifest(PLUGIN_DIR / "plugin.yaml")).ingest(
+        {
+            "storage": _RecordingStorage(),
+            "session": _Session(),
+            "http_client": http,
+            "token_store": token_store,
+            "oauth_config": _oauth_config(),
+            "canonical_repository": _CanonicalRepo(),
+            "stream_registry": _StreamRegistry(),
+        }
+    )
+
+    assert result["accepted"] > 0
+    assert [call["data"]["refresh_token"] for call in http.post_calls] == ["RT-live"]
+    assert [kind for _, kind in token_store.put_calls] == ["refreshed"]
+    assert http.bearers[0] == "AT-dead" and set(http.bearers[1:]) == {"AT-new"}
+
+
+@pytest.mark.asyncio
+async def test_a_token_refused_again_after_its_refresh_fails_the_poll_without_looping():
+    token_store = _TokenStore(initial_token=_token_without_expiry())
+    http = _TokenCheckingHttp(
+        refused={"AT-dead", "AT-new"},
+        get_responses=_default_get_responses(),
+        post_responses={"oauth2/token": _REFRESHED},
+    )
+
+    with pytest.raises(Exception, match="HTTP 401"):
+        await WhoopSource(load_manifest(PLUGIN_DIR / "plugin.yaml")).ingest(
+            {
+                "storage": _RecordingStorage(),
+                "session": _Session(),
+                "http_client": http,
+                "token_store": token_store,
+                "oauth_config": _oauth_config(),
+                "canonical_repository": _CanonicalRepo(),
+                "stream_registry": _StreamRegistry(),
+            }
+        )
+    assert len(http.post_calls) == 1, "one refresh, not a loop"
+
+
+@pytest.mark.asyncio
+async def test_a_refused_token_with_no_refresh_token_fails_as_before():
+    token = OAuthToken(
+        owner_id=DEFAULT_OWNER_ID,
+        provider=PROVIDER,
+        access_token="AT-dead",
+        refresh_token=None,
+        expires_at=None,
+    )
+    http = _TokenCheckingHttp(refused={"AT-dead"}, get_responses=_default_get_responses())
+
+    with pytest.raises(Exception, match="HTTP 401"):
+        await WhoopSource(load_manifest(PLUGIN_DIR / "plugin.yaml")).ingest(
+            {
+                "storage": _RecordingStorage(),
+                "session": _Session(),
+                "http_client": http,
+                "token_store": _TokenStore(initial_token=token),
+                "oauth_config": _oauth_config(),
+                "canonical_repository": _CanonicalRepo(),
+                "stream_registry": _StreamRegistry(),
+            }
+        )
+    assert http.post_calls == []
+
+
+class _StreamRegistry:
+    """Records the Whoop stream registration instead of writing it."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    async def record_origins(self, session, **kwargs):
+        self.calls.append(kwargs)
+        return 1
+
+
+class _InsertRepo:
+    def __init__(self) -> None:
+        self.inserted: list[Any] = []
+
+    async def insert_many(self, session, observations):
+        self.inserted.extend(observations)
+        return len(observations)
+
+
+@pytest.mark.asyncio
+async def test_recovery_readings_reach_the_canonical_store_on_the_whoop_stream():
+    """HRV goes to RMSSD (never SDNN); RHR and SpO2 are Whoop's own rows."""
+
+    canonical_repo = _CanonicalRepo()
+    registry = _StreamRegistry()
+    plugin = WhoopSource(load_manifest(PLUGIN_DIR / "plugin.yaml"))
+    await plugin.ingest(
+        {
+            "storage": _RecordingStorage(),
+            "session": object(),
+            "http_client": _HttpClient(get_responses=_default_get_responses()),
+            "token_store": _TokenStore(initial_token=_fresh_token()),
+            "oauth_config": _oauth_config(),
+            "canonical_repository": canonical_repo,
+            "stream_registry": registry,
+        }
+    )
+    _, observations = canonical_repo.insert_calls[0]
+    recovery = [o for o in observations if o.metric_id != "workout.session"]
+    whoop_stream = identity.stream_id(DEFAULT_OWNER_ID, "whoop-healthsave", "whoop")
+    assert {o.metric_id for o in recovery} == {
+        "vital.hrv_rmssd",
+        "vital.resting_heart_rate",
+        "vital.blood_oxygen",
+    }
+    assert "vital.hrv_sdnn" not in {o.metric_id for o in observations}
+    assert {o.stream_id for o in recovery} == {whoop_stream}
+    assert {o.source_id for o in recovery} == {
+        identity.source_uuid(DEFAULT_OWNER_ID, "whoop-healthsave")
+    }
+    assert {o.value.unit for o in recovery} == {"ms", "bpm", "%"}
+    assert registry.calls == [
+        {"owner_id": DEFAULT_OWNER_ID, "plugin_id": "whoop-healthsave", "origins": ["Whoop"]}
+    ]

@@ -6,11 +6,14 @@ import { BaselineRibbon } from "./BaselineRibbon";
 import { deserializeExploreState, fetchRange, filterWindow } from "../lib/explore";
 import { safeSeriesMany } from "../lib/load";
 import { removeSavedPanelAction } from "../lib/actions";
+import { type Dictionary, fillTemplate } from "../lib/i18n";
 
 type Props = {
   id: string;
   label: string;
   encodedState: string;
+  // The interface language's catalog: the card's own words come from it.
+  dict: Dictionary;
 };
 
 async function removePanel(id: string) {
@@ -18,13 +21,23 @@ async function removePanel(id: string) {
   await removeSavedPanelAction(id);
 }
 
-export async function ExplorePanelCard({ id, label, encodedState }: Props) {
+export async function ExplorePanelCard({ id, label, encodedState, dict }: Props) {
   const state = deserializeExploreState(encodedState);
-  if (!state) return null;
-
   // Collect all unique metrics across all panels
-  const metricIds = [...new Set(state.panels.flatMap((p) => p.metrics))];
-  if (metricIds.length === 0) return null;
+  const metricIds = state ? [...new Set(state.panels.flatMap((p) => p.metrics))] : [];
+  // A view with nothing to draw still shows, so it can be removed: rendering
+  // nothing left an invisible card holding one of Today's slots.
+  if (!state || metricIds.length === 0) {
+    return (
+      <article className="card explore-panel-card">
+        <div className="card-title">
+          <span>{label}</span>
+          <RemoveSavedPanel id={id} label={label} dict={dict} />
+        </div>
+        <p className="empty">{dict.prefs.emptySaved}</p>
+      </article>
+    );
+  }
 
   const seriesMap = await safeSeriesMany(metricIds, fetchRange(state));
 
@@ -32,16 +45,7 @@ export async function ExplorePanelCard({ id, label, encodedState }: Props) {
     <article className="card explore-panel-card">
       <div className="card-title">
         <span>{label}</span>
-        <form action={removePanel.bind(null, id)}>
-          <button
-            type="submit"
-            className="btn-ghost panel-remove-btn"
-            aria-label={`Remove "${label}" from Today`}
-            style={{ fontSize: "0.8rem" }}
-          >
-            Remove
-          </button>
-        </form>
+        <RemoveSavedPanel id={id} label={label} dict={dict} />
       </div>
 
       <div className="explore-panel-metrics">
@@ -68,7 +72,7 @@ export async function ExplorePanelCard({ id, label, encodedState }: Props) {
                     ariaLabel={`${metricId} — ${label}`}
                   />
                 ) : (
-                  <p className="empty">Not enough data.</p>
+                  <p className="empty">{dict.explore.notEnoughData}</p>
                 )}
               </div>
             );
@@ -76,5 +80,20 @@ export async function ExplorePanelCard({ id, label, encodedState }: Props) {
         )}
       </div>
     </article>
+  );
+}
+
+function RemoveSavedPanel({ id, label, dict }: { id: string; label: string; dict: Dictionary }) {
+  return (
+    <form action={removePanel.bind(null, id)}>
+      <button
+        type="submit"
+        className="btn-ghost panel-remove-btn"
+        aria-label={fillTemplate(dict.explore.removeFromToday, { label })}
+        style={{ fontSize: "0.8rem" }}
+      >
+        {dict.explore.remove}
+      </button>
+    </form>
   );
 }

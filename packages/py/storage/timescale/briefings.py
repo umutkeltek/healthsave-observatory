@@ -280,6 +280,132 @@ class TimescaleBriefingRepository:
             for row in rows
         ]
 
+    async def fetch_anomalies_between(
+        self,
+        session: AsyncSession,
+        *,
+        after: datetime,
+        until: datetime,
+        severities: Iterable[str] | None = None,
+        exclude_ids: Iterable[int] = (),
+        limit: int = 1000,
+    ) -> list[FindingRow]:
+        """Anomaly findings with ``after < created_at <= until``, oldest first,
+        leaving out ``exclude_ids``.
+
+        The agents' anomaly feed re-scans a window behind its watermark with
+        this: ``created_at`` is the writing transaction's START, so a long
+        transaction (a daily briefing holds one through its LLM call) can
+        commit findings stamped earlier than ones the feed already passed.
+        """
+        params: dict[str, Any] = {
+            "after": after,
+            "until": until,
+            "exclude": sorted({int(i) for i in exclude_ids}),
+            "limit": limit,
+        }
+        severity_sql = ""
+        severity_list = sorted(set(severities)) if severities is not None else []
+        if severity_list:
+            params["severities"] = severity_list
+            severity_sql = " AND severity = ANY(CAST(:severities AS TEXT[]))"
+        sql = text(
+            f"""
+            SELECT id, metric, severity, structured_data, created_at
+              FROM analysis_findings
+             WHERE finding_type = 'anomaly'
+               AND created_at > :after
+               AND created_at <= :until
+               AND id <> ALL(CAST(:exclude AS BIGINT[])){severity_sql}
+             ORDER BY created_at ASC, id ASC
+             LIMIT :limit
+            """
+        )
+        rows = (await session.execute(sql, params)).fetchall()
+        return [
+            FindingRow(
+                id=row.id,
+                metric=row.metric,
+                severity=getattr(row, "severity", None),
+                structured_data=_parse_structured_data(row.structured_data),
+                created_at=row.created_at,
+            )
+            for row in rows
+        ]
+
+    async def fetch_anomalies_after(
+        self,
+        session: AsyncSession,
+        *,
+        after: datetime | None,
+        severities: Iterable[str] | None = None,
+        limit: int = 100,
+    ) -> list[FindingRow]:
+        """Anomaly findings created strictly after ``after``, oldest first.
+
+        The page reader behind the agents' anomaly feed, which keeps a
+        ``created_at`` watermark and asks for what came after it. Unlike
+        :meth:`fetch_anomalies` (newest first, for dashboards), a backlog
+        larger than ``limit`` drains over several calls instead of losing
+        its oldest rows.
+
+        One analysis run inserts all of its findings in one transaction, so
+        they share one ``created_at``. A page never splits such a group: when
+        the ``limit``-th row's timestamp continues past the limit, the page
+        carries the rest of that group too. The caller can then exclude
+        everything at or before the page's last ``created_at`` without
+        skipping a row. ``limit`` is therefore a soft cap, exceeded only by
+        the size of that last group.
+        """
+        where_clauses = ["finding_type = 'anomaly'"]
+        params: dict[str, Any] = {"limit": limit}
+
+        if after is not None:
+            where_clauses.append("created_at > :after")
+            params["after"] = after
+
+        if severities is not None:
+            severity_list = sorted(set(severities))
+            if severity_list:
+                placeholders = []
+                for index, value in enumerate(severity_list):
+                    name = f"severity_{index}"
+                    placeholders.append(f":{name}")
+                    params[name] = value
+                where_clauses.append(f"severity IN ({', '.join(placeholders)})")
+
+        where_sql = " AND ".join(where_clauses)
+        sql = text(
+            f"""
+            WITH page_end AS (
+                SELECT max(created_at) AS created_at
+                  FROM (
+                      SELECT created_at
+                        FROM analysis_findings
+                       WHERE {where_sql}
+                       ORDER BY created_at ASC
+                       LIMIT :limit
+                  ) AS first_rows
+            )
+            SELECT id, metric, severity, structured_data, created_at
+              FROM analysis_findings
+             WHERE {where_sql}
+               AND created_at <= (SELECT created_at FROM page_end)
+             ORDER BY created_at ASC, id ASC
+            """
+        )
+        rows = (await session.execute(sql, params)).fetchall()
+        return [
+            FindingRow(
+                id=row.id,
+                metric=row.metric,
+                severity=getattr(row, "severity", None),
+                structured_data=_parse_structured_data(row.structured_data),
+                created_at=row.created_at,
+            )
+            for row in rows
+        ]
+
     async def fetch_trends(
         self,
         session: AsyncSession,
@@ -446,6 +572,18 @@ async def fetch_anomalies(
 ) -> list[FindingRow]:
     return await default_repository.fetch_anomalies(
         session, since=since, severities=severities, limit=limit
+    )
+
+
+async def fetch_anomalies_after(
+    session: AsyncSession,
+    *,
+    after: datetime | None,
+    severities: Iterable[str] | None = None,
+    limit: int = 100,
+) -> list[FindingRow]:
+    return await default_repository.fetch_anomalies_after(
+        session, after=after, severities=severities, limit=limit
     )
 
 

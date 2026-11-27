@@ -44,3 +44,15 @@ def test_web_experimental_locale_flag_is_wired_and_safe_by_default():
 
     assert "HEALTHSAVE_EXPERIMENTAL_LOCALES: ${HEALTHSAVE_EXPERIMENTAL_LOCALES:-0}" in compose
     assert "HEALTHSAVE_EXPERIMENTAL_LOCALES=0" in env_example
+
+
+def test_web_trust_proxy_flag_is_wired_and_off_by_default():
+    # The sign-in limiter keys on the forwarded client address only when
+    # WEB_TRUST_PROXY says a trusted reverse proxy is in front. A flag in .env
+    # that compose never passes to the container is a silent no-op, so the
+    # mapping is pinned here; the default must stay off.
+    compose = (_ROOT / "docker-compose.yml").read_text()
+    env_example = (_ROOT / ".env.example").read_text()
+
+    assert "WEB_TRUST_PROXY: ${WEB_TRUST_PROXY:-false}" in compose
+    assert "WEB_TRUST_PROXY=false" in env_example

@@ -17,8 +17,8 @@ import { ZoneBar } from "../ZoneBar";
 import { currentAnalyticalDayOfWeek, timeBasisLabel, UTC_TIME_BASIS } from "../../lib/analyticalTime";
 import { dayOfWeekPivot, distribution, hrZoneHistogram, weekHourPivot } from "../../lib/analytics";
 import type { MetricSeries, MetricSummary, SeriesPoint, StreamView } from "../../lib/api";
-import { demoPatternSeries } from "../../lib/demoSeries";
 import {
+  type DataState,
   GRID_METRICS,
   loadReadinessSparklines,
   safeAnalyticalTime,
@@ -26,12 +26,15 @@ import {
   safeMetrics,
   safeReadiness,
   safeSeries,
+  safeSeriesRead,
   safeStreams,
 } from "../../lib/load";
 import { friendlyName } from "../../lib/provenance";
-import { rangeLabel } from "../../lib/ranges";
+import { hasUsablePoints, rangeLabel } from "../../lib/ranges";
 
 export const RANGES = ["24h", "7d", "30d", "90d", "1y", "all"];
+// The range the Data page shows when the URL names none it knows.
+export const DEFAULT_DATA_RANGE = "7d";
 // N+1 guard: never fetch more than this many series in one render. The default
 // (unfiltered) grid uses the smaller ceiling; an explicit category filter may
 // show a few more, but stays bounded.
@@ -49,8 +52,12 @@ export type DataFilters = {
 
 type Card = { metric: MetricSummary; series: MetricSeries | null };
 
-export function shouldUseDemoPatterns(series: MetricSeries | null): boolean {
-  return series === null;
+// The Patterns panels read the selected metric's own series. A read that failed
+// (or never happened because the catalog failed) is "unreachable" and shows no
+// panels: demo readings never stand in for a person's data outside /demo.
+export function patternsState(series: MetricSeries | null): DataState {
+  if (series === null) return "unreachable";
+  return hasUsablePoints(series) ? "data" : "empty";
 }
 
 export function buildSourceLabels(points: SeriesPoint[], streams: StreamView[]): Record<string, string> {
@@ -112,6 +119,8 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
 
   // Resolve the visible metric set from the active filters, bounded to guard N+1.
   let visible: MetricSummary[];
+  // Default-grid metrics that only earn a card when they hold readings.
+  const optional = new Set<string>();
   if (all.length === 0) {
     visible = fallback;
   } else if (metricSel) {
@@ -122,24 +131,47 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
     const byId = new Map(all.map((m) => [m.id, m]));
     const defaults = GRID_METRICS.map((g) => byId.get(g.id)).filter((m): m is MetricSummary => Boolean(m));
     visible = (defaults.length ? defaults : all).slice(0, DEFAULT_CAP);
+    // RMSSD is its own HRV measure: when it streams it gets its own card
+    // right after SDNN, never merged into it (healthOpinion.ts).
+    const rmssd = byId.get("vital.hrv_rmssd");
+    const sdnnAt = visible.findIndex((m) => m.id === "vital.hrv_sdnn");
+    if (rmssd && sdnnAt >= 0) {
+      visible.splice(sdnnAt + 1, 0, rmssd);
+      optional.add(rmssd.id);
+    }
   }
   const isDefault = !metricSel && !categorySel;
   // A metric id in the URL that resolves to nothing (backend reachable) is an
   // invalid selection — show an honest empty state, not "0 metrics" + demo.
   const unknownMetric = Boolean(metricSel) && all.length > 0 && visible.length === 0;
 
-  const [seriesList, sleep] = await Promise.all([
-    Promise.all(visible.map((m) => safeSeries(m.id, range))),
+  const [allReads, sleep] = await Promise.all([
+    Promise.all(visible.map((m) => safeSeriesRead(m.id, range))),
     isDefault ? safeSeries("sleep.stage", range) : Promise.resolve(null),
   ]);
+  const shown = visible.map((m, i) => {
+    const read = allReads[i];
+    return !optional.has(m.id) || (read.kind === "series" && read.series.points.length > 0);
+  });
+  visible = visible.filter((_, i) => shown[i]);
+  const reads = allReads.filter((_, i) => shown[i]);
 
   // Source + device facets from the actually-fetched points.
+  const seriesList = reads.map((read) => (read.kind === "series" ? read.series : null));
+  // A metric the backend answered 404 for is not found, not unreachable.
+  const notFound = new Set(visible.filter((_, i) => reads[i].kind === "not-found").map((m) => m.id));
   const allPoints = seriesList.flatMap((s) => s?.points ?? []);
   const sourceLabels = buildSourceLabels(allPoints, streams ?? []);
   const sources = [...new Set(allPoints.map((p) => p.source_id))]
     .map((id) => ({ id, label: sourceLabels[id] ?? id }))
     .sort((a, b) => a.label.localeCompare(b.label));
   const streamLabels = new Map((streams ?? []).map((s) => [s.id, s.device_label ?? s.source_plugin_id]));
+  // Device names for a card that shows two sources apart: the stream's own
+  // label ("Apple Watch", "Whoop"), falling back to the source name.
+  const deviceLabels: Record<string, string> = {
+    ...sourceLabels,
+    ...Object.fromEntries((streams ?? []).map((s) => [s.id, s.device_label ?? friendlyName(s.source_plugin_id)])),
+  };
   const deviceIds = [...new Set(allPoints.map((p) => p.stream_id).filter((s): s is string => Boolean(s)))];
   const devices = deviceIds
     .map((id) => ({ id, label: streamLabels.get(id) ?? id }))
@@ -162,7 +194,7 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
   );
 
   // Patterns panels for a single selected metric (exotic Grafana panels,
-  // computed from its series points). Falls back to a labelled demo offline.
+  // computed from its series points). Unreachable when that read failed.
   const selectedMetric: MetricSummary | null = metricSel
     ? (all.find((m) => m.id === metricSel) ??
       fallback.find((m) => m.id === metricSel) ?? {
@@ -174,19 +206,22 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
       })
     : null;
 
-  let patterns: { metric: MetricSummary; points: SeriesPoint[]; unit: string; isHr: boolean; demo: boolean } | null =
-    null;
+  let patterns: { metric: MetricSummary; points: SeriesPoint[]; unit: string; isHr: boolean } | null = null;
+  let patternsUnavailable: { metric: MetricSummary; reason: "not-found" | "unreachable" } | null = null;
   if (selectedMetric) {
     const liveSeries = cards.length === 1 && cards[0].metric.id === metricSel ? cards[0].series : null;
-    const demo = shouldUseDemoPatterns(liveSeries);
-    const src = demo ? demoPatternSeries(selectedMetric) : (liveSeries as MetricSeries);
-    patterns = {
-      metric: selectedMetric,
-      points: src.points,
-      unit: src.metric.canonical_unit ?? "",
-      isHr: selectedMetric.id.includes("heart_rate") || src.metric.canonical_unit === "bpm",
-      demo,
-    };
+    if (notFound.has(selectedMetric.id)) {
+      patternsUnavailable = { metric: selectedMetric, reason: "not-found" };
+    } else if (patternsState(liveSeries) === "unreachable") {
+      patternsUnavailable = { metric: selectedMetric, reason: "unreachable" };
+    } else if (liveSeries) {
+      patterns = {
+        metric: selectedMetric,
+        points: liveSeries.points,
+        unit: liveSeries.metric.canonical_unit ?? "",
+        isHr: selectedMetric.id.includes("heart_rate") || liveSeries.metric.canonical_unit === "bpm",
+      };
+    }
   }
 
   return (
@@ -201,6 +236,15 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
         sources={sources}
         devices={devices}
         ranges={RANGES}
+        defaultRange={DEFAULT_DATA_RANGE}
+        selected={{
+          range,
+          category: categorySel,
+          metric: metricSel,
+          source: sourceSel,
+          device: deviceSel,
+          sort: sortSel,
+        }}
       />
 
       <SourceDistribution dist={dist} sourceLabels={sourceLabels} />
@@ -216,17 +260,33 @@ export async function ExplorerSection({ filters }: { filters: DataFilters }) {
       )}
       <section className="grid">
         {cards.map(({ metric, series }) => (
-          <MetricCard key={metric.id} series={series} fallbackTitle={metric.display_name} />
+          <MetricCard
+            key={metric.id}
+            series={series}
+            fallbackTitle={metric.display_name}
+            missing={notFound.has(metric.id)}
+            sourceLabels={deviceLabels}
+          />
         ))}
         {isDefault && <SleepCard series={sleep} />}
       </section>
 
+      {patternsUnavailable && !unknownMetric && (
+        <>
+          <div className="section-label">Patterns · {patternsUnavailable.metric.display_name}</div>
+          <article className="card">
+            <p className="empty">
+              {patternsUnavailable.reason === "not-found"
+                ? `No signal called “${patternsUnavailable.metric.id}” on this Observatory. Pick one from the filter above.`
+                : "The Observatory API did not answer, so patterns for this signal cannot be shown right now."}
+            </p>
+          </article>
+        </>
+      )}
+
       {patterns && !unknownMetric && (
         <>
-          <div className="section-label">
-            Patterns · {patterns.metric.display_name}
-            {patterns.demo ? " · demo" : ""}
-          </div>
+          <div className="section-label">Patterns · {patterns.metric.display_name}</div>
           <div className="today-grid prov-grid">
             <article className="card col-8">
               <div className="card-title">When in the week</div>

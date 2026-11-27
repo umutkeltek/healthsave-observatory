@@ -35,13 +35,29 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from auth import DEFAULT_OWNER_ID, active_key_version, last4, seal, unseal
+from auth import (
+    DEFAULT_OWNER_ID,
+    TokenEncryptionError,
+    active_key_version,
+    last4,
+    seal,
+    unseal,
+)
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # ──────────────────────────────────────────────────────────────────────
 # Frozen views — what callers get back. Credential views are key-free.
 # ──────────────────────────────────────────────────────────────────────
+
+
+class SavedKeyUnreadable(TokenEncryptionError):
+    """A saved provider key exists, but no key in this server's ring opens it.
+
+    Typed so the API can tell the person to enter the key again instead of
+    answering with a server error. Subclasses :class:`auth.TokenEncryptionError`,
+    so every existing handler of that error still catches it.
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,6 +164,12 @@ _AUDIT_EVENT_TYPES = frozenset(
 )
 
 
+# First key of the two-key advisory lock that serializes one owner's fallback
+# chain replacements (the second key is the owner id's hash). Two-key locks
+# never collide with single-bigint keys such as the migration runner's.
+_FALLBACK_CHAIN_LOCK_CLASS = 753266017
+
+
 def _parse_metadata(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
@@ -250,6 +272,18 @@ class TimescaleIntelligenceRepository:
                 "key_last4": last4(api_key),
             },
         )
+        # A new key was never tested: drop the stale result on every
+        # connection that uses this credential.
+        await session.execute(
+            text(
+                """
+                UPDATE llm_connections
+                   SET last_test_status = NULL, last_test_at = NULL
+                 WHERE credential_id = :id AND owner_id = :owner_id
+                """
+            ),
+            {"id": credential_id, "owner_id": str(owner_id)},
+        )
         await self.record_audit(
             session,
             owner_id=owner_id,
@@ -299,8 +333,9 @@ class TimescaleIntelligenceRepository:
 
         Returns the plaintext key for the resolver that must call the provider,
         or None when the connection has no credential. The API layer must NOT
-        serialize this. Raises :class:`auth.TokenEncryptionError` if no ring key
-        opens the ciphertext (e.g. a retired key was dropped too early).
+        serialize this. Raises :class:`SavedKeyUnreadable` (an
+        :class:`auth.TokenEncryptionError`) if no ring key opens the ciphertext
+        (e.g. a retired key was dropped too early).
         """
         row = (
             await session.execute(
@@ -317,7 +352,10 @@ class TimescaleIntelligenceRepository:
         ).first()
         if row is None or row.api_key_enc is None:
             return None
-        return unseal(bytes(row.api_key_enc), key_version=row.key_version)
+        try:
+            return unseal(bytes(row.api_key_enc), key_version=row.key_version)
+        except TokenEncryptionError as exc:
+            raise SavedKeyUnreadable(str(exc)) from exc
 
     # ── connections ─────────────────────────────────────────────────
 
@@ -371,6 +409,18 @@ class TimescaleIntelligenceRepository:
                    SET provider = :provider, display_name = :display_name,
                        base_url = :base_url, destination = :destination,
                        credential_id = :credential_id, enabled = :enabled,
+                       -- A test result describes the provider, endpoint and
+                       -- key it ran against (SET reads the old row here).
+                       last_test_status = CASE WHEN (provider IS DISTINCT FROM :provider
+                                                    OR base_url IS DISTINCT FROM :base_url
+                                                    OR credential_id IS DISTINCT FROM
+                                                       CAST(:credential_id AS BIGINT))
+                                               THEN NULL ELSE last_test_status END,
+                       last_test_at = CASE WHEN (provider IS DISTINCT FROM :provider
+                                                    OR base_url IS DISTINCT FROM :base_url
+                                                    OR credential_id IS DISTINCT FROM
+                                                       CAST(:credential_id AS BIGINT))
+                                           THEN NULL ELSE last_test_at END,
                        updated_at = NOW()
                  WHERE id = :id AND owner_id = :owner_id
                 RETURNING id, provider, display_name, base_url, destination,
@@ -602,6 +652,7 @@ class TimescaleIntelligenceRepository:
         consent_text_hash: str | None = None,
         consented_by: str | None = None,
         actor: str | None = None,
+        reason: str | None = None,
     ) -> None:
         """Record (or revoke) cloud-egress consent on the head row + audit it.
 
@@ -612,16 +663,23 @@ class TimescaleIntelligenceRepository:
         NOT egress until consent is granted here. The row must already exist
         (created by :meth:`update_settings`); consent is a decision *about* an
         existing posture, so we update, never insert.
+
+        Consent changes the effective posture, so like :meth:`update_settings`
+        it bumps ``revision`` in-SQL and audits before/after. With no head row
+        the UPDATE matches nothing and the audit carries no revision.
         """
         if granted:
-            await session.execute(
+            result = await session.execute(
                 text(
                     """
                     UPDATE intelligence_settings
                        SET allow_cloud_egress = TRUE,
                            consent_version = :version, consent_text_hash = :hash,
-                           consented_at = NOW(), consented_by = :by, updated_at = NOW()
+                           consented_at = NOW(), consented_by = :by,
+                           revision = intelligence_settings.revision + 1,
+                           updated_at = NOW()
                      WHERE owner_id = :owner_id
+                    RETURNING revision
                     """
                 ),
                 {
@@ -632,24 +690,35 @@ class TimescaleIntelligenceRepository:
                 },
             )
         else:
-            await session.execute(
+            result = await session.execute(
                 text(
                     """
                     UPDATE intelligence_settings
                        SET allow_cloud_egress = FALSE,
                            consent_version = NULL, consent_text_hash = NULL,
-                           consented_at = NULL, consented_by = NULL, updated_at = NOW()
+                           consented_at = NULL, consented_by = NULL,
+                           revision = intelligence_settings.revision + 1,
+                           updated_at = NOW()
                      WHERE owner_id = :owner_id
+                    RETURNING revision
                     """
                 ),
                 {"owner_id": str(owner_id)},
             )
+        row = result.first()
+        after = row.revision if row is not None else None
         await self.record_audit(
             session,
             owner_id=owner_id,
             actor=actor,
+            before_revision=(after - 1) if after is not None else None,
+            after_revision=after,
             event_type="consent_granted" if granted else "consent_revoked",
-            metadata={"consent_version": consent_version} if granted else {},
+            metadata=(
+                {"consent_version": consent_version}
+                if granted
+                else ({"reason": reason} if reason else {})
+            ),
         )
 
     # ── fallback chain ──────────────────────────────────────────────
@@ -700,7 +769,20 @@ class TimescaleIntelligenceRepository:
         Delete-then-insert keeps the ``UNIQUE(owner_id, priority)`` constraint
         trivially satisfied and makes reordering a single call. The caller's
         transaction makes it atomic.
+
+        Replacements for one owner are serialized by a transaction-scoped
+        advisory lock taken first. Without it, two concurrent saves interleave:
+        the second DELETE cannot see the first save's uncommitted rows, so its
+        INSERT hits the unique constraint (a 500), or it skips rows the first
+        save already removed and that save's chain outlives a later clear. The
+        lock is held to commit/rollback, so the second save's DELETE sees the
+        first save's committed chain. An advisory lock, not ``FOR UPDATE`` on
+        the head row, because the head row may not exist yet on a first save.
         """
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(:lock_class, hashtext(CAST(:owner_id AS TEXT)))"),
+            {"lock_class": _FALLBACK_CHAIN_LOCK_CLASS, "owner_id": str(owner_id)},
+        )
         await session.execute(
             text("DELETE FROM llm_fallback_routes WHERE owner_id = :owner_id"),
             {"owner_id": str(owner_id)},
@@ -765,6 +847,23 @@ class TimescaleIntelligenceRepository:
                 "metadata": json.dumps(metadata or {}),
             },
         )
+
+    async def record_audit_isolated(self, session: AsyncSession, **kwargs: Any) -> None:
+        """:meth:`record_audit` inside a SAVEPOINT, for best-effort callers.
+
+        A failed statement aborts the whole PostgreSQL transaction, so a caller
+        that catches the error and carries on would fail on its next write. The
+        savepoint confines the failure to the audit row: on error it is rolled
+        back and the exception re-raised, and the caller's transaction stays
+        usable.
+        """
+        savepoint = await session.begin_nested()
+        try:
+            await self.record_audit(session, **kwargs)
+        except BaseException:
+            await savepoint.rollback()
+            raise
+        await savepoint.commit()
 
     async def list_audit_events(
         self,

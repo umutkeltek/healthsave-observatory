@@ -19,17 +19,20 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID
 
 from analysis.statistical.gates import check_sufficiency
 from analysis.types import DataSummary
+from contracts._base import DEFAULT_OWNER_ID
 from contracts.ontology import get_metric
 from fastapi import APIRouter, Depends
 from storage.defaults import readiness_repository
 from storage.ports import ReadinessRepository
 
 from ..db.session import async_session
+from .access import ReadOwner
 from .deps import verify_api_key
-from .swr import v2_read_cache
+from .swr import owner_cache_key, v2_read_cache
 
 router = APIRouter(prefix="/api/v2", dependencies=[Depends(verify_api_key)])
 _READINESS_REPO: ReadinessRepository = readiness_repository()
@@ -54,6 +57,35 @@ async def _load_canonical_sources() -> list[dict[str, Any]]:
     """
     async with async_session() as session:
         return await _READINESS_REPO.fetch_canonical_sources(session)
+
+
+def _owner_loaders(owner_id: UUID):
+    """SWR keys + loaders for one owner's coverage and source aggregates.
+
+    The default owner keeps the original keys (``canonical_coverage`` /
+    ``canonical_sources``) that ingest drops and ``/api/v2/receipts`` shares;
+    any other owner (a participant, migration 029) gets its own keys so one
+    person's cached aggregate never answers for another.
+    """
+
+    if owner_id == DEFAULT_OWNER_ID:
+        return (
+            ("canonical_coverage", _load_canonical_coverage),
+            ("canonical_sources", _load_canonical_sources),
+        )
+
+    async def _coverage() -> list[dict[str, Any]]:
+        async with async_session() as session:
+            return await _READINESS_REPO.fetch_canonical_coverage(session, owner_id=owner_id)
+
+    async def _sources() -> list[dict[str, Any]]:
+        async with async_session() as session:
+            return await _READINESS_REPO.fetch_canonical_sources(session, owner_id=owner_id)
+
+    return (
+        (owner_cache_key("canonical_coverage", owner_id), _coverage),
+        (owner_cache_key("canonical_sources", owner_id), _sources),
+    )
 
 
 # The gates a single metric's coverage can actually evaluate: total
@@ -90,7 +122,7 @@ def _grade(summary: DataSummary) -> dict[str, Any]:
 
 
 @router.get("/readiness")
-async def readiness() -> dict:
+async def readiness(owner_id: ReadOwner = DEFAULT_OWNER_ID) -> dict:
     """Per-metric coverage + analyzability, plus source attribution and freshness."""
     # Both aggregates walk the whole canonical store — served through the
     # process-level SWR cache so the scan runs at most once per TTL, not per
@@ -98,9 +130,10 @@ async def readiness() -> dict:
     # owns its own session (see _load_canonical_* above), so a stale hit's
     # background refresh can outlive this request, and the two gets can run
     # concurrently instead of queuing behind one shared connection.
+    coverage_loader, sources_loader = _owner_loaders(owner_id)
     coverage, sources = await asyncio.gather(
-        v2_read_cache.get("canonical_coverage", _load_canonical_coverage),
-        v2_read_cache.get("canonical_sources", _load_canonical_sources),
+        v2_read_cache.get(*coverage_loader),
+        v2_read_cache.get(*sources_loader),
     )
 
     metrics: list[dict[str, Any]] = []

@@ -78,6 +78,9 @@ class AnalysisScheduler:
                 id="daily_briefing",
                 max_instances=1,
                 coalesce=True,
+                # Another run of the type in progress (a trigger route's):
+                # skip this tick, do not queue behind it.
+                kwargs={"skip_if_busy": True},
             )
             log.info("registered daily_briefing cron=%s", daily.cron)
 
@@ -88,6 +91,9 @@ class AnalysisScheduler:
                 id="anomaly_check",
                 max_instances=1,
                 coalesce=True,
+                # Another run of the type in progress (a trigger route's):
+                # skip this tick, do not queue behind it.
+                kwargs={"skip_if_busy": True},
             )
             log.info("registered anomaly_check cron=%s", anomaly.cron)
 
@@ -98,6 +104,9 @@ class AnalysisScheduler:
                 id="trend_analysis",
                 max_instances=1,
                 coalesce=True,
+                # Another run of the type in progress (a trigger route's):
+                # skip this tick, do not queue behind it.
+                kwargs={"skip_if_busy": True},
             )
             log.info("registered trend_analysis cron=%s", trend.cron)
 
@@ -108,6 +117,9 @@ class AnalysisScheduler:
                 id="correlation_analysis",
                 max_instances=1,
                 coalesce=True,
+                # Another run of the type in progress (a trigger route's):
+                # skip this tick, do not queue behind it.
+                kwargs={"skip_if_busy": True},
             )
             log.info("registered correlation_analysis cron=%s", correlation.cron)
 
@@ -118,6 +130,9 @@ class AnalysisScheduler:
                 id="weekly_summary",
                 max_instances=1,
                 coalesce=True,
+                # Another run of the type in progress (a trigger route's):
+                # skip this tick, do not queue behind it.
+                kwargs={"skip_if_busy": True},
             )
             log.info("registered weekly_summary cron=%s", weekly.cron)
 
@@ -128,6 +143,9 @@ class AnalysisScheduler:
                 id="recovery_check",
                 max_instances=1,
                 coalesce=True,
+                # Another run of the type in progress (a trigger route's):
+                # skip this tick, do not queue behind it.
+                kwargs={"skip_if_busy": True},
             )
             log.info("registered recovery_check cron=%s", recovery.cron)
 

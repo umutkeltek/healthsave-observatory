@@ -10,6 +10,8 @@
 // pure `FindingCardView` renders from props so it unit-tests and renders
 // standalone.
 
+import type { ReactNode } from "react";
+
 import type { Finding, FindingCard as FindingCardModel, MetricSeries } from "../lib/api";
 import {
   cardMetricIsPlottable,
@@ -44,6 +46,10 @@ type ViewProps = {
   unit?: string | null;
   live?: boolean;
   createdAt?: string | null;
+  // Optional overrides for surfaces whose metric is not an ontology series
+  // (e.g. a LOINC lab marker): a caller-supplied title and proof figure.
+  title?: string;
+  figure?: ReactNode;
 };
 
 export function FindingCardView({
@@ -53,6 +59,8 @@ export function FindingCardView({
   unit,
   live,
   createdAt,
+  title,
+  figure,
 }: ViewProps) {
   const chips = findingCardChips(card);
   const plottable = values && values.length >= 2 && cardMetricIsPlottable(card.metric);
@@ -63,13 +71,17 @@ export function FindingCardView({
   return (
     <article className="card fc">
       <header className="fc-head">
-        <span className="fc-metric">{userFindingTitle({ ...FALLBACK_FINDING, metric: card.metric, finding_type: card.finding_type })}</span>
+        <span className="fc-metric">
+          {title ?? userFindingTitle({ ...FALLBACK_FINDING, metric: card.metric, finding_type: card.finding_type })}
+        </span>
         {createdAt && <span className="fc-when mono">{fmtDate(createdAt)}</span>}
       </header>
 
       <h3 className="fc-claim">{card.claim}</h3>
 
-      {plottable ? (
+      {figure ? (
+        <div className="fc-fig">{figure}</div>
+      ) : plottable ? (
         <div className="fc-fig">
           <BaselineRibbon
             values={values as number[]}

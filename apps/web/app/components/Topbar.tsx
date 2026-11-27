@@ -12,6 +12,9 @@ const TITLE_KEYS = {
   "/": ["today", "todaySub"],
   "/sleep": ["sleep", "sleepSub"],
   "/activity": ["activity", "activitySub"],
+  "/labs": ["labs", "labsSub"],
+  "/genetics": ["genetics", "geneticsSub"],
+  "/year": ["year", "yearSub"],
   "/demo": ["today", "demoSub"],
   "/experiments": ["experiments", "experimentsSub"],
   "/timeline": ["timeline", "timelineSub"],
@@ -30,9 +33,11 @@ const TITLE_KEYS = {
 
 export function Topbar({
   status,
+  renderedSettled,
   onMenu,
 }: {
   status: ReactNode;
+  renderedSettled?: number;
   onMenu?: () => void;
 }) {
   const pathname = usePathname();
@@ -67,7 +72,7 @@ export function Topbar({
         </button>
         <LanguageSwitcher compact />
         <div className="topbar-health" aria-label={dict.chrome.serviceStatus}>
-          <LiveStatus />
+          <LiveStatus renderedSettled={renderedSettled} />
           {status}
         </div>
         <ThemeToggle />

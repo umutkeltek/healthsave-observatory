@@ -1,0 +1,182 @@
+{
+  "$defs": {
+    "LabDocumentPage": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "enum": [
+            "text",
+            "ocr",
+            "csv"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "page": {
+          "title": "Page",
+          "type": "integer"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "page",
+        "text",
+        "method"
+      ],
+      "title": "LabDocumentPage",
+      "type": "object"
+    },
+    "LabReviewRow": {
+      "additionalProperties": false,
+      "properties": {
+        "confirmed": {
+          "default": false,
+          "title": "Confirmed",
+          "type": "boolean"
+        },
+        "lab": {
+          "default": "",
+          "maxLength": 160,
+          "title": "Lab",
+          "type": "string"
+        },
+        "loinc": {
+          "default": "",
+          "maxLength": 20,
+          "title": "Loinc",
+          "type": "string"
+        },
+        "marker_name": {
+          "default": "",
+          "maxLength": 160,
+          "title": "Marker Name",
+          "type": "string"
+        },
+        "panel": {
+          "default": "",
+          "maxLength": 160,
+          "title": "Panel",
+          "type": "string"
+        },
+        "reference_high": {
+          "default": "",
+          "maxLength": 80,
+          "title": "Reference High",
+          "type": "string"
+        },
+        "reference_low": {
+          "default": "",
+          "maxLength": 80,
+          "title": "Reference Low",
+          "type": "string"
+        },
+        "row_id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Row Id",
+          "type": "string"
+        },
+        "specimen_datetime": {
+          "default": "",
+          "maxLength": 80,
+          "title": "Specimen Datetime",
+          "type": "string"
+        },
+        "unit": {
+          "default": "",
+          "maxLength": 80,
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "default": "",
+          "maxLength": 80,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "row_id"
+      ],
+      "title": "LabReviewRow",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "file_name": {
+      "title": "File Name",
+      "type": "string"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "owner_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "pages": {
+      "items": {
+        "$ref": "#/$defs/LabDocumentPage"
+      },
+      "title": "Pages",
+      "type": "array"
+    },
+    "rows": {
+      "items": {
+        "$ref": "#/$defs/LabReviewRow"
+      },
+      "title": "Rows",
+      "type": "array"
+    },
+    "sha256": {
+      "title": "Sha256",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "committed"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "workspace_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "file_name",
+    "sha256",
+    "created_at",
+    "status",
+    "pages",
+    "rows",
+    "warnings"
+  ],
+  "title": "LabImportDraft",
+  "type": "object"
+}

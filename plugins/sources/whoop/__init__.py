@@ -92,8 +92,21 @@ class WhoopSource(Source):
         owner_id: Any,
         token_store: Any,
         oauth_config: Any,
+        rejected_access_token: str | None = None,
     ):
-        """Return a non-expired OAuthToken or None (no token stored)."""
+        """Return a non-expired OAuthToken or None (no token stored).
+
+        ``rejected_access_token`` is an access token Whoop just answered with
+        401: it is refreshed even though it looks unexpired (Whoop sent no
+        ``expires_in``, or revoked it early), unless a concurrent caller has
+        already stored a different one.
+
+        Token state is committed on its own, before any data is fetched: Whoop
+        invalidates the old refresh token the moment a refresh succeeds, so a
+        refreshed token rolled back by a later fetch or write failure would
+        leave only a dead token stored. A refresh failure is committed too, so
+        a dead connector leaves a trace in ``oauth_token_events``.
+        """
         from .oauth import (
             WhoopClientConfig,
             WhoopOAuthError,
@@ -104,7 +117,21 @@ class WhoopSource(Source):
         if token is None:
             return None
 
-        if token.is_expired():
+        def needs_refresh(candidate: Any) -> bool:
+            return candidate.is_expired() or (
+                rejected_access_token is not None
+                and candidate.access_token == rejected_access_token
+            )
+
+        if needs_refresh(token):
+            # Serialize refreshes of this token: a concurrent poll or webhook may
+            # already have spent the refresh token. Re-read it under a row lock.
+            lock_token = getattr(token_store, "lock_token", None)
+            if lock_token is not None:
+                token = await lock_token(session, provider=PROVIDER, owner_id=owner_id)
+                if token is None or not needs_refresh(token):
+                    await session.commit()  # release the lock
+                    return token
             if oauth_config is None:
                 oauth_config = WhoopClientConfig.from_env()
             if not token.refresh_token:
@@ -112,6 +139,7 @@ class WhoopSource(Source):
                 await token_store.record_refresh_failure(
                     session, provider=PROVIDER, owner_id=owner_id, error_message=msg
                 )
+                await session.commit()
                 raise WhoopOAuthError(msg)
             try:
                 new_token = await refresh_access_token(
@@ -121,14 +149,17 @@ class WhoopSource(Source):
                     owner_id=owner_id,
                 )
                 await token_store.put_token(session, new_token, event_kind="refreshed")
+                await session.commit()
                 token = new_token
             except Exception as e:
+                await session.rollback()
                 await token_store.record_refresh_failure(
                     session,
                     provider=PROVIDER,
                     owner_id=owner_id,
                     error_message=str(e),
                 )
+                await session.commit()
                 raise
 
         return token
@@ -143,6 +174,7 @@ class WhoopSource(Source):
         from storage.timescale.observations import default_repository as default_canonical_repo
 
         from .fetch import (
+            WhoopFetchError,
             fetch_body_measurement,
             fetch_cycles,
             fetch_recovery,
@@ -150,6 +182,7 @@ class WhoopSource(Source):
             fetch_workouts,
         )
         from .normalize import (
+            canonical_recovery_observations,
             canonical_session_observations,
             normalize_body_measurement,
             normalize_cycles,
@@ -183,27 +216,45 @@ class WhoopSource(Source):
         )
         if token is None:
             log.warning("whoop: no stored token for owner=%s — skip poll", owner_id)
-            return {"accepted": 0, "rejected": 0}
+            # skipped_no_token: nothing was polled, so the worker keeps its cursor.
+            return {"accepted": 0, "rejected": 0, "skipped_no_token": 1}
 
         # 3. Pick a cursor: explicit since= wins; otherwise default lookback.
         effective_since = since if since is not None else datetime.now(UTC) - DEFAULT_LOOKBACK
 
         # 4. Fetch each resource. Whoop allows parallel calls; sequential
         #    is simpler and the per-day record count is tiny.
-        access_token = token.access_token
-        recovery_items = await fetch_recovery(
-            http_client, access_token=access_token, since=effective_since
-        )
-        sleep_items = await fetch_sleep(
-            http_client, access_token=access_token, since=effective_since
-        )
-        workout_items = await fetch_workouts(
-            http_client, access_token=access_token, since=effective_since
-        )
-        cycle_items = await fetch_cycles(
-            http_client, access_token=access_token, since=effective_since
-        )
-        body_item = await fetch_body_measurement(http_client, access_token=access_token)
+        async def fetch_all(access_token: str) -> tuple[Any, ...]:
+            return (
+                await fetch_recovery(http_client, access_token=access_token, since=effective_since),
+                await fetch_sleep(http_client, access_token=access_token, since=effective_since),
+                await fetch_workouts(http_client, access_token=access_token, since=effective_since),
+                await fetch_cycles(http_client, access_token=access_token, since=effective_since),
+                await fetch_body_measurement(http_client, access_token=access_token),
+            )
+
+        try:
+            fetched = await fetch_all(token.access_token)
+        except WhoopFetchError as exc:
+            # A 401 on a token we think is valid (no expires_in was sent, or
+            # Whoop revoked it early): refresh once and fetch again. Without
+            # this the token was never refreshed and every poll failed.
+            if exc.status_code != 401 or not token.refresh_token:
+                raise
+            log.warning("whoop: access token refused (401); refreshing it once")
+            token = await self._load_valid_token(
+                payload,
+                session=session,
+                http_client=http_client,
+                owner_id=owner_id,
+                token_store=token_store,
+                oauth_config=oauth_config,
+                rejected_access_token=token.access_token,
+            )
+            if token is None:
+                raise
+            fetched = await fetch_all(token.access_token)
+        recovery_items, sleep_items, workout_items, cycle_items, body_item = fetched
 
         # 5. Normalize each into per-metric sample lists.
         per_metric: dict[str, list[dict[str, Any]]] = {}
@@ -235,7 +286,12 @@ class WhoopSource(Source):
             owner_id=owner_id,
             provider_subject_id=provider_subject_id,
         )
+        # Recovery HRV (RMSSD), resting heart rate and blood oxygen: each its
+        # own canonical metric on the Whoop stream, never merged with another
+        # device's reading of the same metric.
+        canonical_observations += canonical_recovery_observations(recovery_items, owner_id=owner_id)
         if canonical_observations:
+            await _record_whoop_stream(payload, session, owner_id)
             accepted += await canonical_repository.insert_many(session, canonical_observations)
 
         log.info(
@@ -248,14 +304,27 @@ class WhoopSource(Source):
         return {"accepted": accepted, "rejected": 0}
 
     async def handle_webhook(self, payload: dict[str, Any]) -> dict[str, int]:
-        """Fetch + ingest the single Whoop resource referenced by a webhook event."""
+        """Apply one Whoop webhook event.
+
+        ``*.updated``: fetch the referenced resource and ingest it. If Whoop no
+        longer has it (404, deleted since the event was sent) there is nothing
+        to ingest, and the event is acknowledged with ``missing: 1``.
+
+        ``*.deleted``: nothing is fetched (the resource is gone). A deleted
+        workout's canonical session is marked superseded. The legacy
+        per-metric rows a Whoop record wrote carry no Whoop id, so they stay;
+        the result's ``deleted`` count says how many canonical rows changed.
+        """
         from .fetch import (
             PATH_RECOVERY,
             PATH_SLEEP,
             PATH_WORKOUT,
+            WhoopFetchError,
             fetch_one,
         )
         from .normalize import (
+            NORMALIZER_ID,
+            canonical_recovery_observations,
             normalize_recovery,
             normalize_sleep,
             normalize_workouts,
@@ -287,6 +356,43 @@ class WhoopSource(Source):
         http_client = payload["http_client"]
         owner_id = payload.get("owner_id", DEFAULT_OWNER_ID)
 
+        if event_type.endswith(".deleted"):
+            deleted = 0
+            if normalizer is normalize_workouts:
+                from storage.timescale.observations import (
+                    default_repository as default_canonical_repo,
+                )
+
+                canonical_repository = payload.get("canonical_repository") or (
+                    default_canonical_repo
+                )
+                deleted = await canonical_repository.supersede_source_records(
+                    session,
+                    owner_id=owner_id,
+                    normalizer_id=NORMALIZER_ID,
+                    source_record_uids=[str(resource_id)],
+                )
+                if deleted:
+                    # A fused workout's other copy (Apple Health / Health
+                    # Connect) was hidden as non-primary: it counts again.
+                    from storage.timescale.fusion import (
+                        default_repository as default_fusion_repo,
+                    )
+
+                    fusion_repository = payload.get("fusion_repository") or default_fusion_repo
+                    await fusion_repository.revoke_unqualified_assignments(
+                        session, owner_id=owner_id, decided_by="whoop-webhook"
+                    )
+            log.info(
+                "whoop webhook deletion owner=%s event_type=%s resource_id=%s superseded=%d "
+                "(legacy per-metric rows carry no Whoop id and stay)",
+                owner_id,
+                event_type,
+                resource_id,
+                deleted,
+            )
+            return {"accepted": 0, "rejected": 0, "deleted": deleted}
+
         token_store = payload.get("token_store")
         if token_store is None:
             from storage.timescale import oauth_tokens as token_store  # type: ignore[no-redef]
@@ -304,7 +410,38 @@ class WhoopSource(Source):
             log.warning("whoop webhook: no stored token for owner=%s — skip event", owner_id)
             return {"accepted": 0, "rejected": 0}
 
-        data = await fetch_one(http_client, access_token=token.access_token, path=resolved_path)
+        try:
+            try:
+                data = await fetch_one(
+                    http_client, access_token=token.access_token, path=resolved_path
+                )
+            except WhoopFetchError as exc:
+                if exc.status_code != 401 or not token.refresh_token:
+                    raise
+                log.warning("whoop webhook: access token refused (401); refreshing it once")
+                token = await self._load_valid_token(
+                    payload,
+                    session=session,
+                    http_client=http_client,
+                    owner_id=owner_id,
+                    token_store=token_store,
+                    oauth_config=oauth_config,
+                    rejected_access_token=token.access_token,
+                )
+                if token is None:
+                    raise
+                data = await fetch_one(
+                    http_client, access_token=token.access_token, path=resolved_path
+                )
+        except WhoopFetchError as exc:
+            if exc.status_code != 404:
+                raise
+            log.info(
+                "whoop webhook: %s %s is gone (404); nothing to ingest",
+                event_type,
+                resource_id,
+            )
+            return {"accepted": 0, "rejected": 0, "missing": 1}
         normalized = normalizer([data])
         device_id = await storage.get_or_create_device(session, DEVICE_NAME)
         accepted = 0
@@ -313,6 +450,18 @@ class WhoopSource(Source):
                 accepted += await storage.ingest_metric(
                     session, device_id, metric, samples, owner_id
                 )
+        if normalizer is normalize_recovery:
+            recovery_observations = canonical_recovery_observations([data], owner_id=owner_id)
+            if recovery_observations:
+                from storage.timescale.observations import (
+                    default_repository as default_canonical_repo,
+                )
+
+                canonical_repository = payload.get("canonical_repository") or (
+                    default_canonical_repo
+                )
+                await _record_whoop_stream(payload, session, owner_id)
+                accepted += await canonical_repository.insert_many(session, recovery_observations)
 
         log.info(
             "whoop webhook complete owner=%s accepted=%d event_type=%s resource_id=%s",
@@ -325,6 +474,21 @@ class WhoopSource(Source):
 
     async def shutdown(self) -> None:
         log.info("whoop plugin shutdown")
+
+
+async def _record_whoop_stream(payload: dict[str, Any], session: Any, owner_id: Any) -> None:
+    """Register the Whoop source and stream, so pages and the AI connector name
+    its readings "Whoop" instead of an id. Idempotent upsert."""
+
+    stream_registry = payload.get("stream_registry")
+    if stream_registry is None:
+        from storage.timescale import registry as stream_registry  # type: ignore[no-redef]
+
+    from .normalize import ORIGIN_PROVIDER, SOURCE_TAG
+
+    await stream_registry.record_origins(
+        session, owner_id=owner_id, plugin_id=ORIGIN_PROVIDER, origins=[SOURCE_TAG]
+    )
 
 
 __all__ = [

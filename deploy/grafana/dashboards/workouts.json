@@ -330,7 +330,7 @@
       "targets": [
         {
           "datasource": {"type": "grafana-postgresql-datasource", "uid": "healthsave-pg"},
-          "rawSql": "SELECT start_time, sport_type, duration_ms/60000 AS duration_min, avg_hr, max_hr, calories, distance_m/1000.0 AS distance_km FROM workouts WHERE $__timeFilter(start_time) AND device_id IN ($device) ORDER BY start_time DESC",
+          "rawSql": "SELECT start_time, sport_type, duration_ms/60000 AS duration_min, avg_hr, max_hr, calories, distance_m/1000.0 AS distance_km, elevation_gain_m FROM workouts WHERE $__timeFilter(start_time) AND device_id IN ($device) ORDER BY start_time DESC",
           "format": "table",
           "refId": "A"
         }
@@ -390,6 +390,13 @@
             "properties": [
               {"id": "displayName", "value": "Distance (km)"},
               {"id": "unit", "value": "km"}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "elevation_gain_m"},
+            "properties": [
+              {"id": "displayName", "value": "Elevation gain (m)"},
+              {"id": "unit", "value": "lengthm"}
             ]
           }
         ]

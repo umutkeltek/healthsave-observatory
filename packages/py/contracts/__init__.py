@@ -54,6 +54,28 @@ from .data import (
     SourceCapability,
 )
 from .findings import FindingCard
+from .genetics import (
+    GeneticDeletion,
+    GeneticDeletionReceipt,
+    GeneticDocument,
+    GeneticDocumentDetail,
+    GeneticIndex,
+    GeneticReanalysis,
+    GeneticReferenceStatus,
+    GeneticReferenceUpdate,
+    GeneticReport,
+)
+from .lab_imports import (
+    LabImportCatalog,
+    LabImportDeletion,
+    LabImportDeletionPreview,
+    LabImportDeletionReceipt,
+    LabImportDraft,
+    LabImportIndex,
+    LabImportReceipt,
+    LabImportReport,
+    LabImportReview,
+)
 from .narrative import (
     Claim,
     EvidenceRef,
@@ -98,7 +120,25 @@ ALL_MODELS: tuple[type[V2Model], ...] = (
     NarrativeArtifact,
     # findings
     FindingCard,
+    LabImportCatalog,
+    LabImportDeletion,
+    LabImportDeletionPreview,
+    LabImportDeletionReceipt,
+    LabImportDraft,
+    LabImportIndex,
+    LabImportReceipt,
+    LabImportReport,
+    LabImportReview,
     # ui
+    GeneticDeletion,
+    GeneticDeletionReceipt,
+    GeneticDocument,
+    GeneticDocumentDetail,
+    GeneticIndex,
+    GeneticReanalysis,
+    GeneticReferenceStatus,
+    GeneticReferenceUpdate,
+    GeneticReport,
     Annotation,
     SeriesResponse,
     ChartSpec,

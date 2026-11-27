@@ -108,7 +108,7 @@ async def test_polar_ingest_returns_zero_when_no_token_stored():
         }
     )
 
-    assert result == {"accepted": 0, "rejected": 0}
+    assert result == {"accepted": 0, "rejected": 0, "skipped_no_token": 1}
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,35 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "assembly": {
+      "enum": [
+        "GRCh37",
+        "GRCh38"
+      ],
+      "title": "Assembly",
+      "type": "string"
+    },
+    "confirmed": {
+      "default": false,
+      "title": "Confirmed",
+      "type": "boolean"
+    },
+    "owner_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "workspace_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "assembly"
+  ],
+  "title": "GeneticReferenceUpdate",
+  "type": "object"
+}

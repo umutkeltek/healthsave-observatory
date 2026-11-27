@@ -7,7 +7,9 @@ list as applied.
 
 Exit codes:
 
-  0  every migration applied successfully (or no work to do)
+  0  every migration applied successfully (or no work to do); an
+     applied migration edited since it ran is reported on stderr but
+     does not change the exit code
   1  required env var missing
   2  one migration failed; the transaction was rolled back and
      re-running is safe
@@ -55,6 +57,13 @@ async def _run() -> int:
         print("schema already up-to-date")
     if result.skipped:
         print(f"({len(result.skipped)} migration(s) already tracked)")
+    # Loud but not fatal: the api waits on this service completing.
+    for name in result.checksum_mismatches:
+        print(
+            f"ERROR: applied migration {name} was edited after it was applied "
+            "(checksum mismatch); restore it and add a new migration instead",
+            file=sys.stderr,
+        )
     return 0
 
 

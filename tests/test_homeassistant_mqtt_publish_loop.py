@@ -15,15 +15,24 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
+import types
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from homeassistant_mqtt.bridge import HomeAssistantMQTTConfig
+from homeassistant_mqtt.client import PahoMQTTPublisher
+from homeassistant_mqtt.config import load_config_from_env
 from homeassistant_mqtt.liveness import BridgeStalled, LivenessWatchdog
-from homeassistant_mqtt.main import _run_loop, _warn_for_reserved_prefixes, publish_once
+from homeassistant_mqtt.main import (
+    _run_loop,
+    _warn_for_reserved_prefixes,
+    build_session_messages,
+    publish_once,
+)
 from homeassistant_mqtt.snapshot import (
     HealthSnapshot,
     MetricReadinessSnapshot,
@@ -318,6 +327,99 @@ async def test_publish_once_filters_source_layer_with_slug_allowlist():
     assert "homeassistant/sensor/observatory_bug_c_probe/heart_rate/config" not in topics
 
 
+def _will_topic_of(monkeypatch, config: HomeAssistantMQTTConfig) -> str:
+    """The topic the broker flips to "offline" when this config's connection dies."""
+
+    fake_client = MagicMock()
+    mqtt_mod = types.ModuleType("paho.mqtt.client")
+    mqtt_mod.CallbackAPIVersion = types.SimpleNamespace(VERSION2=2)  # type: ignore[attr-defined]
+    mqtt_mod.Client = MagicMock(return_value=fake_client)  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "paho", types.ModuleType("paho"))
+    monkeypatch.setitem(sys.modules, "paho.mqtt", types.ModuleType("paho.mqtt"))
+    monkeypatch.setitem(sys.modules, "paho.mqtt.client", mqtt_mod)
+
+    PahoMQTTPublisher(config).connect()
+    fake_client.will_set.assert_called_once()
+    return fake_client.will_set.call_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_every_discovered_entity_follows_the_connection_last_will(monkeypatch):
+    """M19: MQTT allows one Last Will per connection, and a legacy alias
+    publishes over the primary's connection. Legacy discovery used to name its
+    own ``healthtrack/status`` topic, which nothing flips to "offline", so a dead
+    bridge left every legacy entity showing its last value as live. Every
+    discovery payload the bridge emits (primary or legacy; aggregate, readiness
+    or per-source) must name the topic the will covers. Entity identity stays.
+    """
+
+    for var in (
+        "HA_MQTT_STATE_TOPIC_PREFIX",
+        "HA_MQTT_DEVICE_IDENTIFIER",
+        "HA_MQTT_DEVICE_NAME",
+        "HA_MQTT_DISCOVERY_PREFIX",
+        "HA_MQTT_LEGACY_DEVICE_IDENTIFIER",
+        "HA_MQTT_LEGACY_DEVICE_NAME",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("HA_MQTT_LEGACY_STATE_TOPIC_PREFIX", "healthtrack")
+    bridge_config = load_config_from_env()
+    will_topic = _will_topic_of(monkeypatch, bridge_config.mqtt)
+
+    aggregate = HealthSnapshot(
+        collected_at=datetime(2026, 11, 9, 9, 0, tzinfo=UTC),
+        heart_rate=72,
+        hrv_7d_avg=None,
+        steps_today=4200,
+        last_sleep_hours=None,
+        source_model="HealthSave",
+        room_health_state=None,
+        metric_readiness={
+            "step_count": MetricReadinessSnapshot(
+                metric="step_count", window_key="today_local", ready=True, status="ready"
+            )
+        },
+    )
+    per_source = [
+        SourceHealthSnapshot(
+            collected_at=aggregate.collected_at,
+            source_id="Apple Watch",
+            heart_rate=72,
+            hrv_latest_ms=58.0,
+        )
+    ]
+    publisher = _RecordingPublisher(config=bridge_config.mqtt)
+    with patch("homeassistant_mqtt.main.async_session", _FakeAsyncSessionFactory()):
+        await publish_once(
+            _StubRepository(aggregate=aggregate, per_source=per_source),
+            publisher,
+            publish_configs=bridge_config.publish_configs,
+            readiness_entities=True,
+        )
+    messages = build_session_messages(bridge_config.publish_configs) + publisher.published
+
+    discovery = {topic: payload for topic, payload, _ in messages if topic.endswith("/config")}
+    assert {
+        "homeassistant/sensor/observatory/heart_rate/config",
+        "homeassistant/sensor/healthtrack/heart_rate/config",
+        "homeassistant/binary_sensor/healthtrack/steps_today_ready/config",
+        "homeassistant/sensor/healthtrack_apple_watch/heart_rate/config",
+    } <= discovery.keys()
+    off_will = {
+        topic: payload["availability_topic"]
+        for topic, payload in discovery.items()
+        if payload["availability_topic"] != will_topic
+    }
+    assert off_will == {}, f"entities not covered by the will on {will_topic}"
+
+    # HA keys entities on unique_id and derives entity ids from object_id; both
+    # are unchanged for the legacy alias, so existing users keep their entities.
+    legacy_hr = discovery["homeassistant/sensor/healthtrack/heart_rate/config"]
+    assert legacy_hr["unique_id"] == "healthtrack_heart_rate"
+    assert legacy_hr["object_id"] == "heart_rate"
+    assert legacy_hr["state_topic"] == "healthtrack/sensor/state"
+
+
 def test_reserved_healthsave_prefix_logs_ios_app_collision_warning(caplog):
     configs = (
         HomeAssistantMQTTConfig(),
@@ -454,3 +556,144 @@ async def test_run_loop_healthy_updates_heartbeat_and_stops_cleanly(tmp_path):
     # Heartbeat written with a real float timestamp; loop exited without stalling.
     assert heartbeat.exists()
     float(heartbeat.read_text())
+
+
+# --- Aged-out sources (M19) ---------------------------------------------------
+#
+# A source that drops out of fetch_snapshots_by_source (no recent row in any of
+# its windows) used to keep its retained discovery AND retained state on the
+# broker forever, so Home Assistant showed a frozen sensor as current. These
+# tests pin the fix: per-source entities expire in HA once the bridge stops
+# refreshing them, the bridge clears the retained state of a source it saw age
+# out, and it never deletes the entities themselves.
+
+
+class _AgingRepository:
+    """Serves one per-source list per cycle; stops the loop after the last one."""
+
+    def __init__(
+        self,
+        cycles: list[list[SourceHealthSnapshot] | Exception],
+        publisher: _RecordingPublisher,
+        stop_event: asyncio.Event,
+    ) -> None:
+        self._cycles = cycles
+        self._publisher = publisher
+        self._stop_event = stop_event
+        # Index into publisher.published where each cycle's messages begin.
+        self.cycle_starts: list[int] = []
+
+    async def fetch_snapshot(self, _session) -> HealthSnapshot:
+        return _live_snapshot_repository()._aggregate
+
+    async def fetch_snapshots_by_source(self, _session) -> list[SourceHealthSnapshot]:
+        self.cycle_starts.append(len(self._publisher.published))
+        cycle = self._cycles[len(self.cycle_starts) - 1]
+        if len(self.cycle_starts) == len(self._cycles):
+            self._stop_event.set()
+        if isinstance(cycle, Exception):
+            raise cycle
+        return cycle
+
+
+def _source(source_id: str, **values: Any) -> SourceHealthSnapshot:
+    return SourceHealthSnapshot(
+        collected_at=datetime(2026, 11, 9, 9, 0, tzinfo=UTC),
+        source_id=source_id,
+        heart_rate=values.get("heart_rate"),
+        hrv_latest_ms=values.get("hrv_latest_ms"),
+        steps_today=values.get("steps_today"),
+        last_sleep_hours=values.get("last_sleep_hours"),
+    )
+
+
+async def _drive_cycles(tmp_path, cycles) -> tuple[_RecordingPublisher, list[int]]:
+    stop_event = asyncio.Event()
+    publisher = _RecordingPublisher()
+    repository = _AgingRepository(cycles, publisher, stop_event)
+    loop = asyncio.get_running_loop()
+    with patch("homeassistant_mqtt.main.async_session", _FakeAsyncSessionFactory()):
+        await asyncio.wait_for(
+            _run_loop(
+                repository=repository,
+                publisher=publisher,
+                publish_configs=(publisher.config,),
+                stop_event=stop_event,
+                watchdog=LivenessWatchdog(deadline_seconds=100),
+                heartbeat_path=str(tmp_path / "heartbeat"),
+                publish_interval_seconds=0,
+                now=loop.time,
+            ),
+            timeout=5.0,
+        )
+    return publisher, repository.cycle_starts
+
+
+@pytest.mark.asyncio
+async def test_aged_out_source_expires_in_ha_and_loses_its_retained_state(tmp_path):
+    watch = _source("Apple Watch", heart_rate=72, hrv_latest_ms=58.0)
+    iphone = _source("iPhone", steps_today=4200)
+    publisher, starts = await _drive_cycles(tmp_path, [[watch, iphone], [watch]])
+    first, second = publisher.published[: starts[1]], publisher.published[starts[1] :]
+
+    # Every per-source entity tells HA to expire it once the bridge stops
+    # refreshing its state topic: the bridge republishes each live source every
+    # cycle, so only a source that aged out of the snapshot (or a dead bridge)
+    # goes quiet that long. Several skipped cycles must not flap it.
+    interval = publisher.config.publish_interval_seconds
+    source_discovery = [
+        payload
+        for topic, payload, _ in first
+        if topic.startswith("homeassistant/sensor/observatory_")
+    ]
+    assert source_discovery
+    for payload in source_discovery:
+        assert payload.get("expire_after", 0) >= 3 * interval, payload["unique_id"]
+
+    # The iPhone aged out: its retained state is cleared (an empty retained
+    # payload deletes it on the broker) so an HA restart cannot replay it as
+    # current. Its discovery is left alone: the entities stay, unavailable.
+    assert ("observatory/source/iphone/state", "", True) in second
+    assert not [t for t, _, _ in second if t.startswith("homeassistant/sensor/observatory_iphone")]
+    # The still-live watch is untouched by the cleanup.
+    assert ("observatory/source/apple_watch/state", "", True) not in second
+    assert "observatory/source/apple_watch/state" in [t for t, _, _ in second]
+
+
+@pytest.mark.asyncio
+async def test_failed_source_fetch_is_not_mistaken_for_every_source_aging_out(tmp_path):
+    watch = _source("Apple Watch", heart_rate=72)
+    publisher, starts = await _drive_cycles(
+        tmp_path, [[watch], RuntimeError("db stalled"), [watch]]
+    )
+
+    cleared = [topic for topic, payload, _ in publisher.published if payload == ""]
+    assert cleared == []
+
+
+@pytest.mark.asyncio
+async def test_clearing_an_aged_out_source_retries_after_an_outage():
+    watch = _source("Apple Watch", heart_rate=72)
+    retained: set[str] = set()
+    aggregate = _live_snapshot_repository()._aggregate
+
+    async def cycle(per_source, publisher):
+        with patch("homeassistant_mqtt.main.async_session", _FakeAsyncSessionFactory()):
+            await publish_once(
+                _StubRepository(aggregate=aggregate, per_source=per_source),
+                publisher,
+                retained_source_topics=retained,
+            )
+
+    await cycle([watch], _RecordingPublisher())
+    assert retained == {"observatory/source/apple_watch/state"}
+
+    # The watch ages out while the broker is unreachable: nothing went out, so
+    # the bridge must still remember the topic it has to clear.
+    await cycle([], _LoopPublisher(connected=False))
+    assert retained == {"observatory/source/apple_watch/state"}
+
+    reconnected = _RecordingPublisher()
+    await cycle([], reconnected)
+    assert ("observatory/source/apple_watch/state", "", True) in reconnected.published
+    assert retained == set()

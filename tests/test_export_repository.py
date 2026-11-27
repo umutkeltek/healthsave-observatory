@@ -81,6 +81,41 @@ async def test_workouts_export_never_references_legacy_altitude_gain():
     assert "altitude_gain_m" not in sql
 
 
+def test_workouts_export_lists_elevation_gain_beside_distance():
+    columns = METRIC_EXPORTS["workouts"].columns
+    assert columns.index("elevation_gain_m") == columns.index("distance_m") + 1
+
+
+@pytest.mark.asyncio
+async def test_workouts_export_returns_elevation_gain_as_number_or_null():
+    """Workouts stored before migration 037, or recorded without it, read null."""
+
+    repo = TimescaleExportRepository()
+    start = datetime(2026, 11, 15, 8, 0, tzinfo=UTC)
+    base = (start, start, "Hiking", 9_000_000, 120.0, 151.0, 820.0, 11250.0)
+    session = _QueueSession([_Result(rows=[(*base, 412.6, "Apple Watch"), (*base, None, "Whoop")])])
+
+    rows = await repo.export_metric_json(session, metric="workouts")
+
+    assert "elevation_gain_m" in session.calls[0][0]
+    assert [row["elevation_gain_m"] for row in rows] == [412.6, None]
+    assert [row["distance_m"] for row in rows] == [11250.0, 11250.0]
+    assert [row["source_id"] for row in rows] == ["Apple Watch", "Whoop"]
+
+
+@pytest.mark.asyncio
+async def test_workouts_csv_has_an_elevation_gain_column():
+    repo = TimescaleExportRepository()
+    start = datetime(2026, 11, 15, 8, 0, tzinfo=UTC)
+    row = (start, start, "Hiking", 9_000_000, None, None, None, 11250.0, 412.6, "Apple Watch")
+    session = _QueueSession([_Result(rows=[row])])
+
+    header, line = (await repo.export_metric_csv(session, metric="workouts")).splitlines()
+
+    assert header.split(",")[7:9] == ["distance_m", "elevation_gain_m"]
+    assert line.split(",")[7:9] == ["11250.0", "412.6"]
+
+
 @pytest.mark.asyncio
 async def test_unknown_metric_raises_key_error():
     repo = TimescaleExportRepository()
@@ -181,3 +216,11 @@ async def test_list_available_metrics_returns_every_whitelisted_metric():
     assert by_metric["heart_rate"]["count"] == 2
     assert by_metric["heart_rate"]["oldest"] == "2026-05-01T12:00:00+00:00"
     assert by_metric["vo2_max"]["display_name"] == "VO2 Max"
+
+
+def test_export_filters_status_on_exactly_the_tables_that_keep_superseded_rows() -> None:
+    """One list: a table added to SOURCE_UUID_TABLES is filtered by the export too."""
+    from storage.timescale import export
+    from storage.timescale.measurements import SOURCE_UUID_TABLES
+
+    assert frozenset(SOURCE_UUID_TABLES) == export._SUPERSEDABLE_TABLES

@@ -1,3 +1,13 @@
+# HealthSave Observatory runs from the images each release publishes
+# (.github/workflows/release.yml), so `docker compose up -d` pulls instead of
+# building. The tag defaults to the release this file belongs to: checking out
+# another release tag (`healthsave update`, or by hand) switches the images
+# with it. Leave HEALTHSAVE_VERSION unset unless you mean to run images from a
+# different release than the checkout.
+#
+# To build from this checkout instead (development, an unreleased branch, or a
+# host that cannot reach ghcr.io), add docker-compose.build.override.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.build.override.yml up -d --build
 services:
   db:
     image: ${TIMESCALE_IMAGE:-timescale/timescaledb:2.17.2-pg16}
@@ -18,7 +28,7 @@ services:
       retries: 5
 
   migrate:
-    build: .
+    image: ghcr.io/umutkeltek/healthsave-observatory:${HEALTHSAVE_VERSION:-v1.5.3}
     command: ["python", "-m", "scripts.migrate"]
     restart: "no"
     depends_on:
@@ -28,7 +38,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://healthsave:${DB_PASSWORD:?DB_PASSWORD must be set (see .env.example)}@db:5432/healthsave
 
   api:
-    build: .
+    image: ghcr.io/umutkeltek/healthsave-observatory:${HEALTHSAVE_VERSION:-v1.5.3}
     restart: unless-stopped
     depends_on:
       db:
@@ -45,6 +55,7 @@ services:
       # surface regardless; raw non-compose runs inherit the app's default-deny (503).
       ALLOW_NO_AUTH: ${ALLOW_NO_AUTH:-true}
       ALLOW_MULTI_USER: ${ALLOW_MULTI_USER:-}
+      GENETICS_REFERENCE_DIR: /app/genetics
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
@@ -66,6 +77,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       HDH_TOKEN_ENC_KEY: ${HDH_TOKEN_ENC_KEY:-}
+      HDH_KEYRING: ${HDH_KEYRING:-}
       WHOOP_CLIENT_ID: ${WHOOP_CLIENT_ID:-}
       WHOOP_CLIENT_SECRET: ${WHOOP_CLIENT_SECRET:-}
       WHOOP_REDIRECT_URI: ${WHOOP_REDIRECT_URI:-}
@@ -93,6 +105,7 @@ services:
       ANALYSIS_RECOVERY_ENABLED: ${ANALYSIS_RECOVERY_ENABLED:-}
     volumes:
       - ${ANALYSIS_CONFIG_FILE:-./config.yaml.example}:/app/config.yaml:ro
+      - genetics_reference:/app/genetics
     ports:
       - "${API_HOST_PORT:-8000}:8000"
     healthcheck:
@@ -106,7 +119,7 @@ services:
   # API uptime is no longer coupled to scheduler bugs/memory/experiments.
   # Same image as api; different command. Single replica per deployment.
   worker:
-    build: .
+    image: ghcr.io/umutkeltek/healthsave-observatory:${HEALTHSAVE_VERSION:-v1.5.3}
     command: ["python", "-m", "worker.main"]
     restart: unless-stopped
     depends_on:
@@ -137,6 +150,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       HDH_TOKEN_ENC_KEY: ${HDH_TOKEN_ENC_KEY:-}
+      HDH_KEYRING: ${HDH_KEYRING:-}
       WHOOP_CLIENT_ID: ${WHOOP_CLIENT_ID:-}
       WHOOP_CLIENT_SECRET: ${WHOOP_CLIENT_SECRET:-}
       WHOOP_REDIRECT_URI: ${WHOOP_REDIRECT_URI:-}
@@ -173,7 +187,7 @@ services:
   # `agents.enabled` allowlist, the service idles; enable concrete agent ids in
   # config.yaml before running `docker compose --profile agents up -d agents`.
   agents:
-    build: .
+    image: ghcr.io/umutkeltek/healthsave-observatory:${HEALTHSAVE_VERSION:-v1.5.3}
     command: ["python", "-m", "agents.main"]
     restart: unless-stopped
     profiles: ["agents"]
@@ -269,7 +283,7 @@ services:
   # Publishes retained MQTT discovery + state topics (`healthsave_*`) so
   # Home Assistant dashboards/automations do not need direct DB access.
   homeassistant-mqtt:
-    build: .
+    image: ghcr.io/umutkeltek/healthsave-observatory:${HEALTHSAVE_VERSION:-v1.5.3}
     command: ["python", "-m", "homeassistant_mqtt.main"]
     restart: unless-stopped
     profiles: ["home-assistant"]
@@ -298,6 +312,7 @@ services:
       HA_MQTT_PUBLISH_INTERVAL_SECONDS: ${HA_MQTT_PUBLISH_INTERVAL_SECONDS:-60}
       HA_MQTT_LIVENESS_DEADLINE_SECONDS: ${HA_MQTT_LIVENESS_DEADLINE_SECONDS:-300}
       HA_MQTT_HEARTBEAT_PATH: ${HA_MQTT_HEARTBEAT_PATH:-/tmp/ha_mqtt_heartbeat}
+      HEALTHSAVE_BRIDGE_OWNER: ${HEALTHSAVE_BRIDGE_OWNER:-}
     # "Up" must not lie: the bridge writes a heartbeat on every successful
     # publish; if it goes stale the container reports unhealthy (and the liveness
     # watchdog exits non-zero so restart:unless-stopped revives a clean process).
@@ -339,8 +354,7 @@ services:
   # browser never sees it. Like Grafana it exposes PHI, so it binds to loopback
   # by default (SECURITY-005); set WEB_BIND=0.0.0.0 to reach it from your LAN.
   web:
-    build:
-      context: ./apps/web
+    image: ghcr.io/umutkeltek/healthsave-observatory-web:${HEALTHSAVE_VERSION:-v1.5.3}
     restart: unless-stopped
     depends_on:
       api:
@@ -354,16 +368,54 @@ services:
       # Mixed into the session-cookie key; changing it signs every browser out.
       WEB_SESSION_SECRET: ${WEB_SESSION_SECRET:-}
       HEALTHSAVE_EXPERIMENTAL_LOCALES: ${HEALTHSAVE_EXPERIMENTAL_LOCALES:-0}
+      # true only when a reverse proxy you trust is the only way to the web
+      # port: the sign-in limiter then counts wrong passwords per client
+      # address. Off, every address shares one bucket (10 a minute).
+      WEB_TRUST_PROXY: ${WEB_TRUST_PROXY:-false}
     # Settings -> Web sign-in writes its (hashed) setting here.
     volumes:
       - web_data:/app/data
     ports:
       - "${WEB_BIND:-127.0.0.1}:4173:4173"
 
+  # Tailscale sidecar, opt-in via the `tailscale` profile: the web app and the
+  # API on your tailnet, over HTTPS, without opening a port on your router.
+  #   https://<TAILSCALE_HOSTNAME>.<tailnet>.ts.net        -> web (4173)
+  #   https://<TAILSCALE_HOSTNAME>.<tailnet>.ts.net:8443   -> API (8000)
+  # Only devices on your tailnet can connect: Funnel stays off
+  # (deploy/tailscale/serve.json) and no host port is published. Userspace
+  # networking, so no /dev/net/tun or extra capabilities. --no-logs-no-support
+  # keeps tailscaled from uploading its own logs to Tailscale. The auth key is
+  # used once, at first login; the node identity lives in tailscale_state.
+  # See docs/operations/remote-access.md.
+  tailscale:
+    image: ${TAILSCALE_IMAGE:-tailscale/tailscale:stable}
+    restart: unless-stopped
+    profiles: ["tailscale"]
+    hostname: ${TAILSCALE_HOSTNAME:-healthsave-observatory}
+    depends_on:
+      api:
+        condition: service_started
+      web:
+        condition: service_started
+    environment:
+      TS_AUTHKEY: ${TAILSCALE_AUTHKEY:-}
+      TS_HOSTNAME: ${TAILSCALE_HOSTNAME:-healthsave-observatory}
+      TS_AUTH_ONCE: "true"
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_USERSPACE: "true"
+      TS_TAILSCALED_EXTRA_ARGS: --no-logs-no-support
+    volumes:
+      - tailscale_state:/var/lib/tailscale
+      - ./deploy/tailscale/serve.json:/config/serve.json:ro
+
 volumes:
+  genetics_reference:
   db_data:
   web_data:
   grafana_data:
   mqtt_data:
   mqtt_log:
   ollama_models:
+  tailscale_state:

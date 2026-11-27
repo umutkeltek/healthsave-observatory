@@ -162,3 +162,50 @@ async def test_single_flight_two_stale_hits_trigger_exactly_one_background_fetch
 
     await _only_task(cache)
     assert counter.calls == 2  # the seed fetch + exactly one background refresh
+
+
+@pytest.mark.asyncio
+async def test_a_refresh_that_began_before_a_drop_does_not_cache_pre_write_data():
+    """Ingest drops a key; a refresh already reading the old state must not
+    re-cache that old state as fresh for a whole TTL."""
+    cache = SwrCache()
+    assert await cache.get("k", _const("v1"), ttl_seconds=60) == "v1"
+    cache._entries["k"].fetched_at -= 120  # stale
+
+    release = asyncio.Event()
+
+    async def pre_write_snapshot():
+        await release.wait()
+        return "pre-write"
+
+    assert await cache.get("k", pre_write_snapshot, ttl_seconds=60) == "v1"
+    cache.drop("k")  # the ingest commits and invalidates
+    release.set()
+    await asyncio.gather(*cache._background_tasks)
+
+    assert await cache.get("k", _const("post-write"), ttl_seconds=60) == "post-write"
+
+
+@pytest.mark.asyncio
+async def test_a_cold_fetch_that_began_before_a_drop_is_not_cached():
+    cache = SwrCache()
+    release = asyncio.Event()
+
+    async def pre_write_snapshot():
+        await release.wait()
+        return "pre-write"
+
+    pending = asyncio.create_task(cache.get("k", pre_write_snapshot, ttl_seconds=60))
+    await asyncio.sleep(0)
+    cache.drop("k")
+    release.set()
+    assert await pending == "pre-write"  # that request still gets its answer
+
+    assert await cache.get("k", _const("post-write"), ttl_seconds=60) == "post-write"
+
+
+def _const(value):
+    async def fetch():
+        return value
+
+    return fetch

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "app.healthsave/observatory",
+  "title": "HealthSave Observatory",
+  "description": "Ask your AI client about data on your own HealthSave Observatory using a read-only connection.",
+  "repository": {
+    "url": "https://github.com/umutkeltek/healthsave-observatory",
+    "source": "github",
+    "subfolder": "packages/mcp"
+  },
+  "websiteUrl": "https://healthsave.app/observatory/",
+  "version": "1.5.4",
+  "packages": [
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/umutkeltek/healthsave-observatory:v1.5.4",
+      "runtimeHint": "docker",
+      "runtimeArguments": [
+        {"type": "positional", "value": "-i"},
+        {"type": "positional", "value": "--rm"},
+        {"type": "named", "name": "--env", "value": "HEALTHSAVE_URL"},
+        {"type": "named", "name": "--env", "value": "HEALTHSAVE_API_KEY"}
+      ],
+      "packageArguments": [
+        {"type": "positional", "value": "/opt/healthsave-mcp/bin/healthsave-mcp"}
+      ],
+      "environmentVariables": [
+        {
+          "name": "HEALTHSAVE_URL",
+          "description": "Your Observatory URL, reachable from the computer running your MCP client.",
+          "isRequired": true
+        },
+        {
+          "name": "HEALTHSAVE_API_KEY",
+          "description": "The read-only key created by healthsave mcp on your Observatory.",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ],
+      "transport": {"type": "stdio"}
+    }
+  ]
+}

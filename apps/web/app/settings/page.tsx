@@ -3,6 +3,7 @@ import { Suspense } from "react";
 
 import {
   AnalyticalTimeSection,
+  BackupsSection,
   PreferencesSection,
   ServicesSection,
   SystemSection,
@@ -40,6 +41,7 @@ export default function SettingsPage() {
       <Suspense fallback={<CardSkeleton />}>
         <WebSignInSection />
       </Suspense>
+      <BackupsSection />
       <Suspense fallback={<CardSkeleton />}>
         <SystemSection />
       </Suspense>

@@ -13,7 +13,6 @@ and the post-ingest anomaly trigger.
 
 import hashlib
 import hmac
-import json
 import logging
 import os
 from datetime import UTC, datetime
@@ -41,7 +40,7 @@ from storage.timescale.sync_receipts import (
     record_sync_receipt,
 )
 
-from ..ingestion.owner import OWNER_HEADER, resolve_owner_id
+from ..ingestion.owner import OWNER_HEADER, participant_owner_id, resolve_owner_id
 from ..ingestion.parsers import group_samples_by_device
 from ..ingestion.storage import (
     AuditLog,
@@ -60,7 +59,7 @@ from .metrics import (
     RAW_LOG_ORPHANED,
     SYNC_RECEIPT_WRITE_FAILURES,
 )
-from .swr import v2_read_cache
+from .swr import owner_cache_key, v2_read_cache
 
 # v2 canonical write (Decision C). Stable source id for the Apple Health /
 # HealthSave source; production adapter selection lives behind storage.defaults.
@@ -204,7 +203,11 @@ async def apple_batch(
     started_at = perf_counter()
     try:
         raw_payload = await request.json()
-    except json.JSONDecodeError as exc:
+    except ValueError as exc:
+        # Malformed JSON, a body that is not UTF-8, or an integer longer than
+        # Python's int-string limit (4,300 digits; json raises a plain
+        # ValueError for it): the body can never parse, so it gets the same
+        # terminal 400, never a 500 the app would retry forever.
         raise HTTPException(status_code=400, detail="invalid JSON body") from exc
     payload_hash = await _trusted_payload_hash(request)
     try:
@@ -226,7 +229,9 @@ async def apple_batch(
         )
 
     try:
-        owner_id = resolve_owner_id(request.headers.get(OWNER_HEADER))
+        owner_id = participant_owner_id(request) or resolve_owner_id(
+            request.headers.get(OWNER_HEADER)
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"invalid {OWNER_HEADER}: {exc}") from exc
 
@@ -288,6 +293,7 @@ async def apple_batch(
                 session,
                 owner_id=owner_id,
                 idempotency_key=idempotency_key,
+                sync_run_id=_header(request.headers, "X-HealthSave-Sync-Run-ID"),
                 payload_hash=payload_hash,
                 status="empty",
                 response_payload=response,
@@ -386,6 +392,7 @@ async def apple_batch(
                 session,
                 owner_id=owner_id,
                 idempotency_key=idempotency_key,
+                sync_run_id=_header(request.headers, "X-HealthSave-Sync-Run-ID"),
                 payload_hash=payload_hash,
                 status="processed",
                 response_payload=response,
@@ -411,7 +418,7 @@ async def apple_batch(
         # after every fresh deploy). Drop only the affected keys so unrelated
         # read-page SWR entries stay warm.
         for key in ("canonical_coverage", "canonical_sources"):
-            v2_read_cache.drop(key)
+            v2_read_cache.drop(owner_cache_key(key, owner_id))
     except Exception as exc:
         try:
             RAW_LOG_ORPHANED.labels(metric=metric).inc()

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 
 import { clearFocusGoalAction, setFocusGoalAction } from "../lib/actions";
+import { runAction } from "../lib/session";
 import type { FocusGoal } from "../lib/prefs";
 
 // Curated focus presets - every metric id is a real ontology id, so the
@@ -43,8 +44,9 @@ export function FocusGoalPicker({ active }: { active: FocusGoal | null }) {
   const choose = (goal: FocusGoal) => {
     setError(null);
     startTransition(async () => {
-      const result =
-        active?.title === goal.title ? await clearFocusGoalAction() : await setFocusGoalAction(goal);
+      const result = await runAction(() =>
+        active?.title === goal.title ? clearFocusGoalAction() : setFocusGoalAction(goal),
+      );
       if (!result.ok) setError(result.error ?? "Could not update the focus goal.");
     });
   };

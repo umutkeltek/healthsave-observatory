@@ -10,11 +10,17 @@ producing the config the :class:`~analysis.llm.client.HealthLLMClient` consumes.
 Design rules:
 
 * **DB is an overlay, env is the floor.** When the owner has no settings row
-  (table empty), ``mode`` is ``off``, or the DB read fails for any reason, the
-  resolver returns the env ``base`` unchanged. The narrator must never fail to
-  run because the settings table is missing or a query hiccups — the worst case
-  is "behave like before the UI existed". Defensive by design so the per-job
-  reload is safe to ship before the table is even applied live.
+  (table empty), ``mode`` is ``off``, or the settings table does not exist
+  yet, the resolver returns the env ``base`` unchanged: the UI has not taken
+  over, so the env (including its cloud-egress opt-in) is what the operator
+  chose. The narrator must never fail to run because of a missing table or a
+  query hiccup.
+* **Fail closed on cloud egress.** Once the UI may have taken over (a settings
+  row with ``mode`` local/cloud, or a read that failed so we cannot tell), the
+  env's cloud-egress opt-in is no longer the person's decision: they may have
+  chosen local, revoked consent, or consented only to a different
+  destination. Every fallback to ``base`` on those paths therefore turns
+  cloud egress off; local narration still runs.
 * **``mode`` is the master switch.** Cloud egress is permitted only when
   ``mode == 'cloud'`` AND the explicit opt-in is set; ``mode == 'local'`` forces
   ``allow_cloud_egress`` off no matter what the column says. The egress gate
@@ -53,21 +59,27 @@ async def resolve_llm_config(
     try:
         settings = await repo.get_settings(session, owner_id=owner_id)
     except Exception as exc:  # noqa: BLE001 - never let config-read break narration
-        log.warning("intelligence: settings read failed (%s); using env config", exc)
-        return base
+        if _is_undefined_table(exc):
+            # Before migration 017: the UI cannot have been used.
+            return base
+        log.warning(
+            "intelligence: settings read failed (%s); using env config without cloud egress",
+            exc,
+        )
+        return _without_cloud_egress(base)
 
     if settings is None or settings.mode == "off":
         return base
     if settings.primary_connection_id is None:
         log.info("intelligence: mode=%s but no primary connection; using env config", settings.mode)
-        return base
+        return _without_cloud_egress(base)
 
     try:
         primary = await repo.get_connection(
             session, connection_id=settings.primary_connection_id, owner_id=owner_id
         )
         if primary is None or not primary.enabled:
-            return base
+            return _without_cloud_egress(base)
         primary_key = (
             await repo.get_connection_secret(session, connection_id=primary.id, owner_id=owner_id)
             if primary.credential_id is not None
@@ -75,8 +87,11 @@ async def resolve_llm_config(
         )
         fallback = await _resolve_fallback(session, repo, owner_id=owner_id)
     except Exception as exc:  # noqa: BLE001 - same fail-safe as above
-        log.warning("intelligence: connection resolve failed (%s); using env config", exc)
-        return base
+        log.warning(
+            "intelligence: connection resolve failed (%s); using env config without cloud egress",
+            exc,
+        )
+        return _without_cloud_egress(base)
 
     # mode is the master switch: only mode='cloud' + opt-in permits egress.
     allow_cloud = settings.mode == "cloud" and bool(settings.allow_cloud_egress)
@@ -102,6 +117,25 @@ async def resolve_llm_config(
             "fallback": fallback,
         }
     )
+
+
+def _without_cloud_egress(base: LLMConfig) -> LLMConfig:
+    """``base`` with its cloud-egress opt-in withdrawn (``base`` itself if already off)."""
+    if not base.allow_cloud_egress:
+        return base
+    return base.model_copy(update={"allow_cloud_egress": False})
+
+
+def _is_undefined_table(exc: BaseException) -> bool:
+    """True when ``exc`` (or its cause chain) is PostgreSQL's undefined_table (42P01)."""
+    seen: set[int] = set()
+    error: BaseException | None = exc
+    while error is not None and id(error) not in seen:
+        seen.add(id(error))
+        if getattr(error, "sqlstate", None) == "42P01" or getattr(error, "pgcode", None) == "42P01":
+            return True
+        error = getattr(error, "orig", None) or error.__cause__
+    return False
 
 
 async def _resolve_fallback(session, repo, *, owner_id: UUID) -> list[LLMFallbackEntry]:

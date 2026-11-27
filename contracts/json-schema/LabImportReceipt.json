@@ -1,0 +1,52 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "inserted": {
+      "title": "Inserted",
+      "type": "integer"
+    },
+    "owner_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "report_url": {
+      "title": "Report Url",
+      "type": "string"
+    },
+    "result_count": {
+      "title": "Result Count",
+      "type": "integer"
+    },
+    "unchanged": {
+      "title": "Unchanged",
+      "type": "integer"
+    },
+    "updated": {
+      "title": "Updated",
+      "type": "integer"
+    },
+    "workspace_id": {
+      "default": "00000000-0000-0000-0000-000000000001",
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "inserted",
+    "updated",
+    "unchanged",
+    "result_count",
+    "report_url"
+  ],
+  "title": "LabImportReceipt",
+  "type": "object"
+}

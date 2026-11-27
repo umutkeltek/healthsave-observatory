@@ -262,10 +262,11 @@ async def test_insert_many_only_updates_newer_apple_daily_total_corrections() ->
     # that kept the stale value.
     assert "canonical_observations.aggregation_scope = EXCLUDED.aggregation_scope" in sql
     assert "'owner_all_source_day_total'" not in sql, "the guard must not special-case one scope"
-    # A deletion stays authoritative: re-ingesting a superseded row must not
-    # resurrect it. Only a genuinely new sample (new uuid -> new dedup_key ->
-    # new row) brings data back.
-    assert "canonical_observations.status = 'active'" in sql
+    # A deleted (superseded) row comes back only through the recency ladder:
+    # HKSample.uuid survives delete-and-reinsert, so a later request re-adding
+    # the same sample reactivates it; a deletion in the same request (applied
+    # after the write) still wins. tests/e2e/test_canonical_readd_after_deletion_e2e.py
+    assert "canonical_observations.status IN ('active', 'superseded')" in sql
     assert "canonical_observations.normalizer_id = 'apple_health'" in sql
     assert "EXCLUDED.normalizer_id = 'apple_health'" in sql
     assert "raw_payload_ref" in sql

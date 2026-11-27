@@ -257,3 +257,38 @@ def test_docker_image_copies_parity_manifest_for_readiness_runtime() -> None:
     assert "COPY contracts/parity.json ./contracts/parity.json" in dockerfile.read_text(
         encoding="utf-8"
     )
+
+
+def test_readiness_marks_a_metric_whose_every_batch_failed_as_failed() -> None:
+    """Every batch failed: nothing is pending, the server rejected them all.
+
+    This used to read "pending_processing" (or "receipt_only"), as if the data
+    were on its way.
+    """
+    now = datetime(2026, 7, 1, 19, 30, tzinfo=UTC)
+    row = _coverage_row(
+        batches_seen=2,
+        batches_processed=0,
+        batches_failed=2,
+        records_accepted=0,
+        receipt_sample_window={"min_sample_time": None, "max_sample_time": None},
+        destination_row_count=0,
+        latest_destination_sample_time=None,
+        freshness_state="unknown",
+    )
+
+    result = build_decision_readiness([row], now=now, known_metrics=("step_count",))
+    readiness = result["per_metric"][0]
+
+    assert readiness["ready"] is False
+    assert readiness["status"] == "failed"
+    assert readiness["reason"] == "every_received_batch_failed"
+
+
+def test_readiness_still_waits_on_unprocessed_batches_that_did_not_fail() -> None:
+    now = datetime(2026, 7, 1, 19, 30, tzinfo=UTC)
+    row = _coverage_row(batches_seen=1, batches_processed=0, batches_failed=0)
+
+    result = build_decision_readiness([row], now=now, known_metrics=("step_count",))
+
+    assert result["per_metric"][0]["status"] == "pending_processing"

@@ -9,8 +9,565 @@ Plugins carry their own versions.
 
 ## [Unreleased]
 
+### Upgrade
+
+- If you connected Whoop, run the Whoop back-fill once after the update
+  (dry run first). It turns the Whoop recovery readings your server already
+  stored into shown readings; it only adds, never touches Apple Watch or
+  SDNN readings, and a second run adds nothing:
+
+  ```bash
+  docker compose exec api python -m scripts.backfill_whoop_recovery --dry-run
+  docker compose exec api python -m scripts.backfill_whoop_recovery
+  ```
+
+### Fixed
+
+- **Whoop recovery readings show.** Whoop's HRV (as RMSSD, never SDNN),
+  resting heart rate and blood oxygen now reach the pages, the metric list
+  and the AI connector, each named "Whoop".
+- **Two devices are never averaged.** When an Apple Watch and a Whoop both
+  report a reading, the Data page shows each device with its own value and
+  line, Today names the device it shows and gives the other's reading beside
+  it, and the AI connector lists both. The weekly brief, the recovery score
+  and the correlations read one device per metric instead of averaging all
+  of them.
+
+## [1.5.3] - 2026-11-25
+
+The second heart rate variability measure, RMSSD, now shows. HealthSave for
+iPhone 1.9.8 on iOS 27 and the Android app send it; until now the server stored
+it but no page, list or AI connector showed it.
+
+### Upgrade
+
+```bash
+healthsave update --to v1.5.3
+```
+
+- No migration and no `.env` change.
+- **Run the back-fill once** after the update, from your Observatory folder.
+  It turns the RMSSD readings your server already stored into shown readings.
+  First the dry run, which writes nothing and prints how many readings it
+  would add; then the real run:
+
+  ```bash
+  docker compose exec api python -m scripts.backfill_metric --metric heart_rate_variability_rmssd --dry-run
+  docker compose exec api python -m scripts.backfill_metric --metric heart_rate_variability_rmssd
+  ```
+
+  It only adds RMSSD readings, never changes or removes anything, and never
+  touches your SDNN readings. A reading HealthKit later deleted stays deleted.
+  Running it again adds nothing. If you never sent RMSSD it reports 0.
+
+### Fixed
+
+- **RMSSD is its own metric.** `heart_rate_variability_rmssd` now becomes
+  `vital.hrv_rmssd` ("Heart Rate Variability (RMSSD)", ms), next to and apart
+  from `vital.hrv_sdnn`. Before, each such batch logged
+  `v2 dual-write divergence ... canonical_accepted=0`.
+- **Whoop recovery HRV is recorded as RMSSD**, the measure Whoop reports, no
+  longer under the SDNN name. Readings stored by older versions stay where
+  they are.
+
+### Added
+
+- **RMSSD on the web.** Today and Data show an "HRV · RMSSD" card right after
+  SDNN, only when RMSSD has readings, with one line on how to read it: "A
+  second way to measure HRV. Compare it only with its own past readings." The
+  two are never merged, averaged or drawn on one line. The Library page has
+  its own notes.
+- **RMSSD in the AI connector.** `today_vs_usual` lists it as a separate,
+  labelled reading against its own usual range; `metric_trend` reads
+  `vital.hrv_rmssd`. Both HRV measures carry a `how_to_read` line.
+- **RMSSD in the weekly brief's summary**, on its own baseline.
+- `scripts/backfill_metric.py`: the one-metric back-fill above.
+
+### Known gap
+
+- Whoop's recovery readings (HRV, resting heart rate, blood oxygen) are still
+  stored only in the older per-metric tables, so the pages above do not show
+  them yet. Unchanged from earlier versions.
+
+### Docs
+
+- The capture docs say which sending needs HealthSave Pro (the QR pairing
+  screen sends by hand without it) and name the app's real buttons.
+
+## [1.5.2] - 2026-11-21
+
+Settings now has a Backups card that shows the two backup commands, and the
+docs say plainly what the optional Observatory Care licence is.
+
+### Upgrade
+
+```bash
+healthsave update --to v1.5.2
+```
+
+- No migration and no `.env` change.
+
+### Added
+
+- **Backups card in Settings.** It names `healthsave backup` and
+  `healthsave restore FILE`, which are free, and adds one line with a link to
+  Observatory Care. The card loads nothing from outside your server. The link
+  opens only when you click it, and it sends no referrer, so your server's
+  address is not passed on.
+
+### Docs
+
+- The README, the deployment guide, the backup guide and the Care page now say
+  what Observatory Care costs ($99 a year or $9 a month) and what it adds:
+  encrypted, scheduled, off-site backups to storage you choose, restore drills,
+  and update rollback. The free backup and restore come first and are
+  unchanged. The links to the pricing page carry a `utm_source` tag, so the
+  website can count which page a visit came from. Observatory itself still has
+  no analytics.
+
+## [1.5.1] - 2026-11-18
+
+Three fixes: the Whoop webhook refuses old and repeated deliveries, briefs stop
+saying "down -4.8%", and one kind of broken upload no longer jams a metric.
+
+### Upgrade
+
+```bash
+healthsave update --to v1.5.1
+```
+
+- No migration and no `.env` change.
+
+### Fixed
+
+- **Whoop webhook: old or repeated deliveries.** With `WHOOP_CLIENT_SECRET`
+  set, a Whoop push is accepted only when its signed time is within 5 minutes
+  of your server's clock, and the same delivery sent twice in that time is
+  applied once (the repeat is answered 200 with `"duplicate": 1`). Before, a
+  captured signed delivery could be sent again at any later time. If your
+  server's clock is more than 5 minutes off, pushes are refused with 401; the
+  30-minute Whoop poll still brings the data in. Without `WHOOP_CLIENT_SECRET`
+  nothing changes.
+- **Briefs no longer say "down -4.8%".** The daily and weekly brief could put a
+  minus sign after a word that already says the number fell ("down -4.8%",
+  "decreased by -1.7%"). That minus is now removed from the written brief; no
+  number changes. A sign that is the number itself ("change -4.8%", ranges,
+  temperatures) stays as written. Briefs already stored keep their wording.
+- **One broken upload no longer jams its metric.** An upload holding a number
+  more than 4,300 digits long, or a body that is not UTF-8, was answered with a
+  server error (500), which the iPhone and Android apps retry forever, so that
+  one batch held up its metric. It is now answered 400 `invalid JSON body`, the
+  answer any malformed upload already gets and the apps treat as final. The
+  Whoop webhook had the same gap and is fixed too. Real uploads never contain
+  such a number, and every other answer is unchanged, so the apps need no
+  update.
+
+Workouts keep their elevation gain, from the iPhone app through to the export,
+Grafana and your AI. Blood test reports (CSV or PDF) and raw DNA files can be
+read on your own server. Per-day charts read one day at a time. And a long list
+of fixes for what the server, the connectors and the web app did when something
+failed halfway.
+
+### Upgrade
+
+```bash
+healthsave update --to v1.5.0
+```
+
+- Eight migrations, 030 to 037, run on boot (the `migrate` service, before
+  `api` and `worker` start). All are additive: new tables for connector poll
+  cursors, lab documents and genetic reports, new columns, one index, and one
+  more allowed audit event type. No existing row changes. 037 adds
+  `workouts.elevation_gain_m`, empty until a phone or connector fills it.
+  Nothing to change in `.env` for them.
+- **Run the migrations before starting the new image.** The worker's source
+  polls and the connector authorize scripts (`scripts/whoop_authorize.py`
+  and the others) read and write the column migration 033 adds; against a
+  database without it every source poll fails and authorizing fails. `docker
+  compose up` and `healthsave update` already run `migrate` first; only a
+  hand-run container started without it is affected.
+- The migration runner now records a checksum for each applied file; its
+  first run records them for the files your database already ran. If a file
+  changes after it ran, `migrate` logs an ERROR naming it on every run. It
+  still exits 0, so the stack starts.
+- `HDH_KEYRING` now reaches the `api` and `worker` containers. The code read
+  it before, but `docker-compose.yml` never passed it through, so a value in
+  `.env` had no effect. Once it does, a non-empty ring decides which key seals
+  and opens the saved AI provider keys. Nothing to do before upgrading:
+  provider keys saved so far still open, because the key in
+  `HDH_TOKEN_ENC_KEY` is always kept as a fallback for opening them, even
+  when the ring does not list it. New keys are saved with the ring's first
+  key.
+  - If a saved key ever cannot be opened (for example, both keys were
+    changed), Test connection on the Intelligence settings page now says so
+    and asks you to enter the key again, instead of failing with a server
+    error.
+- New optional `WEB_TRUST_PROXY` (default `false`, passed to the `web`
+  container). Set it to `true` only when a reverse proxy you trust is the only
+  way to the web port: the sign-in limiter then counts wrong passwords per
+  client address, so a guesser elsewhere cannot lock you out, with a ceiling
+  of thirty a minute across all addresses. Left `false`, sign-in keeps one
+  shared count of ten a minute, as before; the sign-in page now says how long
+  to wait.
+- A new Docker volume, `genetics_reference`, holds the public ClinVar
+  reference if you install one (see Genetics below). `docker compose up`
+  creates it. Allow about 3 GB of free disk for each genome build you install.
+- The API image now includes Poppler and Tesseract, so blood test PDFs,
+  scanned ones too, are read on your server; the image is larger. Running the
+  API from source, put `pdfinfo`, `pdftotext`, `pdftoppm` and `tesseract` on
+  its PATH.
+- If you run your own copy of `deploy/reverse-proxy/nginx.conf`, replace it
+  with the new one. It sends the web app's own upload and export paths
+  (`/api/genetics`, `/api/lab-imports`, `/api/export`, `/api/changes`) to the
+  web app, which checks the sign-in; allows 50 MB genotype uploads and 5 MB
+  lab uploads; and streams them instead of writing them to temporary files.
+  Any other proxy in front needs to allow 50 MB request bodies and 120 seconds
+  for a genotype upload.
+- After `healthsave update`, run `healthsave mcp` again and paste the new setup
+  line into your AI client to get the new `workouts` tool.
+
+### Added
+
+- Workouts now keep their elevation gain: the total ascent in metres, when the
+  watch recorded one. iPhone app 1.9.4 and later sends it; the Whoop connector
+  fills it from Whoop's altitude gain. It shows in the workouts export
+  (`elevation_gain_m`, JSON and CSV), the Grafana workout log, and each record
+  of the MCP `workouts` tool. Workouts saved before this release read empty
+  until the phone sends them again (in the iPhone app, Backfill Past Data); a
+  re-send without the value, from an older app or another source, never
+  clears one already saved. Android does not send it yet.
+- MCP: a ninth read-only tool, `workouts`. One record per workout over a period
+  or between two dates (`from_date`, `to_date`): start and end in the time
+  zone it was recorded in, type, duration, active energy, distance, elevation
+  gain, average and highest heart rate, and the device that recorded it. The
+  newest 60 are listed one by one; longer periods add counts per source and
+  per month. A session that two devices recorded is listed twice and marked,
+  never merged or added. ([Give your AI a body](docs/mcp.md))
+- MCP: `sleep_summary`, `activity_summary`, `today_vs_usual`, `metric_trend`
+  and `workouts` now say when the phone last synced before a finished day ended
+  (limitation `awaiting_sync`, and `awaiting_sync` on that day's row or night),
+  so a morning read no longer passes off a partial yesterday, or a night that
+  has not arrived yet, as final. Shown only when the phone app reports its
+  syncs to the Observatory.
+- Blood test reports in the browser. **Labs → Import a lab report** takes a
+  CSV, a text PDF or a scanned PDF (up to 5 MB and 12 pages). Text extraction and
+  OCR run on your server. You check each row against the original, pick the
+  test, correct values, units or ranges, and confirm it; nothing enters Labs
+  before that. A saved import keeps the original file and a report: each
+  result against the range your lab printed, and the change from your previous
+  result for the same test at the same lab. Deleting an import removes the
+  original and its report together, and, if you choose, the results it wrote.
+  ([Blood test results](docs/capture/labs-csv.md))
+- Genetics (**Explore → Genetics**). Match a 23andMe- or Ancestry-style raw
+  data file, or a single-sample VCF, against public ClinVar annotations on your
+  own server. First install the ClinVar reference for GRCh37 or GRCh38 from
+  that page. A report lists each match with ClinVar's classification and review
+  status, says what was left out and why, and links to the public ClinVar
+  record. It is evidence with its sources, not a diagnosis or a risk score. The
+  original file is kept only if you choose to; reports stay until you delete
+  them. Admin only, and only for the primary person.
+  ([Private genetic evidence](docs/capture/genetic-evidence.md))
+- Web: a day ruler under per-day charts. The Today reading card and the Sleep
+  and Activity 30-day trends read one day at a time: press or drag on the
+  chart, or use the arrow keys on the ruler, and one line gives that day's
+  value against your usual range. A missing day stays a gap. A vertical swipe
+  over a chart still scrolls the page.
+- Briefs may now add short general wellness context and one small everyday
+  suggestion, shown under "Try this", with a one-line note that this is not
+  medical advice. They still never diagnose, name a condition, mention
+  medication or a dose, or set diet or weight targets; a sentence that does is
+  removed before you see it.
+- API: `/api/v2/lab-imports` and `/api/v2/genetics` routes behind the two
+  features above ([API reference](API_REFERENCE.md)).
+
+### Changed
+
+- Sleep's 30-day trend shows one value per night. When a date has two sleep
+  sessions it shows the longest and says so, never an average. Activity's
+  steps take one value per day (the all-source day total, otherwise one
+  stream), as Today does, instead of plotting every source's points as one
+  line.
+- Cards drop their tinted backgrounds; colour is kept for the data.
+- Briefs describe what was measured, in rounded numbers and plain metric names.
+  Before, a local model often turned them into health claims, repeated example
+  numbers from its own instructions as if they were data, or printed raw
+  decimals. The weekly brief no longer says "1 day of data" for a full week.
+- Finding titles use the catalog's metric names in sentence case ("Heart rate
+  variability (SDNN) trending up", "Steps averaged 8,357"), and p-values read
+  the way people write them ("p < 0.001").
+- Finding cards no longer turn a p-value or a severity into a confidence level
+  (`confidence` is now empty). They say instead that p-values are exploratory:
+  repeated tests are not corrected for, and medical significance is not
+  assessed.
+
+### Fixed
+
+- Phone sync:
+  - A batch whose attempt failed can be sent again; the failed attempt no
+    longer ties its idempotency key to that body.
+  - Sync coverage counts only processed batches as delivered, and readiness
+    says "failed" when every batch received failed.
+  - A stored batch's receipt names its sync run in the same transaction.
+  - On the v2 batch route, a sample deleted in the same batch that added it is
+    never copied into the v1 tables, and the v1 copy takes its device from the
+    samples actually copied.
+  - A revised sleep night replaces the earlier one instead of failing; a sample
+    sent again after it was deleted counts again; a re-sent copy of a fused
+    workout keeps its fusion.
+- Connectors (Whoop, Amazfit, Polar, Google):
+  - After a dead token, a vendor outage or a stopped worker, the next poll
+    reaches back to the last successful one (up to 30 days) instead of leaving
+    a permanent gap. A range the vendor refuses is given up after 3 polls, one
+    it keeps timing out on after 12, while recent data keeps arriving. A vendor
+    outage uses up neither count, authorizing a token resets both, and a gap
+    that was given up on is recorded and listed with the sync anomalies.
+  - A poll skipped for want of a token is recorded as skipped, not as a
+    success, and does not move the cursor.
+  - Token refreshes: one at a time per token, committed on their own, keeping
+    the account details stored when you authorized. A refused access token
+    that looks valid is refreshed once, and a vendor request that fails for a
+    moment is retried before the poll fails.
+  - Whoop webhook: a workout deleted in Whoop is removed here too (before, the
+    deletion failed and the workout stayed), and a failure that repeats is
+    never answered with a 500.
+  - The worker closes pipeline runs that were left marked as running.
+- Workouts recorded by two devices: a rejected pair is decided once instead of
+  on every poll, a device link that stops qualifying undoes the fusion it
+  made, and deleting a fused workout makes the other copy count again.
+- AI settings and privacy:
+  - Cloud consent is withdrawn when the mode or the cloud destination changes,
+    or prompt redaction is turned off. A fallback to the `.env` narrator never
+    carries a cloud opt-in.
+  - A changed endpoint or key clears the old connection test result; two saves
+    of the fallback chain take turns; granting or withdrawing consent counts as
+    a settings change.
+  - A brief written by a fallback narrator no longer fails after the narrator
+    answered: migration 030 allows the audit entry that records the switch.
+- Analysis, agents, experiments and moments:
+  - One analysis run of each type at a time, across processes; a triggered run
+    waits for the one in progress instead of being skipped; a run that hits a
+    database error is recorded as failed.
+  - The anomaly watcher works through a backlog oldest first and sees findings
+    committed late; a proposal the store rejects is dropped instead of being
+    retried forever.
+  - Experiments: an invalid design is refused before it is stored; only a
+    collecting experiment can be abandoned; an analysis run cannot complete an
+    abandoned one.
+  - A moment that ends before it starts, or whose time cannot be held in UTC,
+    is refused with a 422, not a 500.
+- Labs: a number such as "1,250", which reads as 1250 on a US report and 1.25
+  on a German one, is refused with a message naming both readings instead of
+  being read as 1.25. A value or range that overflows after unit conversion,
+  or a date out of range, is a row error instead of a failure.
+- `GET /api/apple/status` and coverage: one metric whose query fails no longer
+  makes every metric after it read zero, and after a statement timeout the
+  remaining metrics are skipped at once instead of each waiting out the
+  timeout. The response shape is unchanged.
+- The export returns only active rows from the tables that keep superseded
+  ones.
+- A raw replay refuses when the rows could belong to another person, and the
+  check works on a database without the `api_keys` table.
+- Home Assistant: entities under a legacy topic prefix turn unavailable when
+  the MQTT bridge stops, and a source that ages out turns unavailable, instead
+  of freezing on the last value.
+- MCP: `metric_trend` on `workout.session` no longer answers "use
+  sleep_summary for sleep stages". It names the tool that reads the metric.
+- Web app:
+  - A read that fails says the server did not answer; it never shows demo
+    data. An expired session reads as signed out; a failed privacy read shows
+    "unknown", never "stays local" or "off"; a metric the server does not know
+    reads as not found; empty, unreachable and withheld for this person read
+    differently; Library detail never labels all-time data as the requested
+    range.
+  - The read cache no longer serves stale data as current. A write clears the
+    reads it changes, new data on the server expires them, and the cache is
+    bounded.
+  - Which person a page is about is decided in one place, and the export
+    follows the same decision.
+  - Sign-in: with `WEB_TRUST_PROXY`, wrong passwords from one address no
+    longer lock the owner out; a blocked sign-in shows a readable page, not raw
+    JSON; Sign in is disabled while it is sending.
+  - Today and Explore: a pin or saved view that does not fit is no longer
+    dropped without a word; the customizer is a real modal that keeps focus
+    and locks while saving; an emptied view cannot be saved to Today, and a
+    saved view with no panels can still be removed.
+  - The brief card shows the current brief and says what a refresh did; the
+    Intelligence form sends only the fields the selected mode shows; an
+    integration that stopped syncing no longer reads "connected"; a completed
+    experiment no longer blocks testing the same pair again.
+  - Language and theme: error messages and status pills follow the interface
+    language, a language picked in one tab reaches the others, and the
+    last-resort error page follows the saved theme. The search box finds every
+    page the sidebar shows.
+  - Phones and tablets, 320 px and up: touch targets at least 44 px, form
+    fields that do not zoom, a sidebar that scrolls, a phone drawer that does
+    not scroll the page behind it, charts that answer a tap or a finger drag
+    while a vertical swipe still scrolls, and tables, chips and labels that fit
+    instead of overflowing.
+  - Dark mode: native controls render dark, text on dark cards reaches 4.5:1
+    contrast, chips, sparklines and legends stay visible, and printed reports
+    use the light palette.
+
+### Compatibility
+
+- No change to the routes the iPhone app depends on (`POST /api/apple/batch`,
+  `GET /api/apple/status`, `GET /api/health`), to any other v1 route, or to
+  `/api/insights/*`. Everything new is under `/api/v2/`.
+- Older iPhone and Android apps work with 1.5.0 unchanged. iPhone app 1.9.4
+  works with a 1.4.0 server: its workouts are accepted there and the elevation
+  gain is ignored.
+- The 1.5.0 AI connector works with a 1.4.0 server (the `workouts` tool then
+  leaves elevation gain out), and a 1.4.0 connector keeps working with 1.5.0,
+  without the `workouts` tool.
+- The workouts CSV export has a new column, `elevation_gain_m`, right after
+  `distance_m`, so `source_id` moves one column to the right. A script that
+  reads columns by their header name is unaffected; one that reads them by
+  position must be updated. The JSON export gains the same key.
+
+### Privacy
+
+- Lab reports and genotype files are read on your server. No cloud AI, OCR
+  service or other outside service receives them.
+- Installing the ClinVar reference is the one new outbound connection: it
+  downloads a fixed public file from NCBI (`ftp.ncbi.nlm.nih.gov`) over HTTPS,
+  only after you confirm it on the Genetics page, and sends no personal data.
+  Updates are never automatic. Opening a ClinVar link in a report is an
+  ordinary link to NCBI's site.
+- Only the admin key reaches DNA records and lab documents. Read keys,
+  including the one your AI client uses, and ingest keys cannot.
+- Originals and reports are stored in PostgreSQL with the rest of your record
+  and are in your backups. Genetics adds no encryption beyond your database's
+  own.
+
+## [1.4.0] - 2026-11-07
+
+Give your AI a body: your own Claude can read your record. `healthsave mcp`
+prints one line that connects Claude Code or Claude Desktop to this server,
+read-only.
+
+### Upgrade
+
+```bash
+healthsave update --to v1.4.0
+```
+
+- No migration and no `.env` change on upgrade. `healthsave mcp` adds
+  `MCP_READ_KEY` to `.env` the first time you run it.
+- The API image now also carries the MCP server
+  (`/opt/healthsave-mcp/bin/healthsave-mcp`, in its own environment; the
+  server's own packages are unchanged).
+
+### Added
+
+- MCP read server (`packages/mcp`, [Give your AI a body](docs/mcp.md)). Eight
+  read-only tools: overview, today against your usual, sleep, activity, one
+  metric over time, findings, blood test results and Year in Health. Ask "how
+  did I sleep this year?" and it answers from your own record: nights, hours
+  asleep, bedtimes, stages, the nights with no data, month by month. Every
+  answer carries its units, the endpoints it read and plain limitation codes.
+  Two sources are never averaged.
+- `healthsave mcp` prints the setup line for Claude Code, the config block for
+  Claude Desktop and a Docker line, with this server's address and a read key
+  filled in. `healthsave mcp --check` starts the server the way an AI client
+  does and calls one tool. `healthsave mcp key --rotate` replaces the key.
+- A read key for the primary person. Until now a read key always belonged to a
+  participant. The new key reads your readings plus findings, correlations, lab
+  results and your time setting, so your AI client never needs the admin key.
+  A participant can never be bound to the primary person's record, even with
+  the same name as that key.
+
+### Privacy and safety
+
+- The MCP server sends only `GET` requests, to the address you give it and
+  nowhere else; it does not follow redirects or use proxy settings. It hands
+  your AI per-day, per-night and per-month summaries, not raw readings; lab
+  results are listed one by one (at most 20 per marker).
+- No read key may call any route that writes. A test now fails the build if
+  one ever can.
+- What your AI reads goes to that AI's provider, like the rest of your
+  conversation. Your record stays on your hardware.
+
+### Not yet
+
+- ChatGPT. It reaches MCP servers from OpenAI's cloud, so it would need your
+  Observatory open to the internet.
+- A read covers at most 5,000 readings per request; the tools say from which
+  day an answer is complete when a long period is cut.
+
+
+## [1.3.0] - 2026-11-07
+
+Year in Health: one calendar year of your record on one page, with every gap
+shown and each device kept separate, plus a share card that carries no
+personal numbers unless you add them.
+
+### Upgrade
+
+```bash
+healthsave update --to v1.3.0
+```
+
+- No migration and no `.env` change. Existing installs keep every setting.
+- The new page reads the data you already have; nothing is recomputed or
+  rewritten.
+
+### Added
+
+- Year in Health. `/year` in the dashboard shows one calendar year of your
+  record: a month-by-month strip of small calendars, one strip per kind of data
+  (heart, sleep, activity, body, ...) with every day without data drawn and
+  listed, the devices that sent data and when each one started or stopped, and
+  a few numbers for each device on its own (two devices are never averaged into
+  one number). Low coverage is marked, and a block says what the view cannot
+  tell you. `GET /api/v2/year/{year}` returns the same facts for scripts and
+  takes `?owner=` like the other person-scoped reads. Days follow your
+  analytical time setting (time zone and day start).
+- A share card for the year: a 1080 x 1350 SVG drawn on your server (the PNG
+  download is made from it in your browser). By default it shows only the shape of the year (which days have data,
+  where the gaps are) and the year itself: no counts, no dates, no device
+  names. Tick "Show my numbers" or "Show device names" on the page to add them.
+  Nothing leaves your server unless you post the file yourself.
+
+## [1.2.0] - 2026-11-03
+
+A new install is locked down from the first start: it gets an API key, a
+dashboard password and a QR code to pair the app. Releases now ship as
+pre-built images, and `healthsave update`, `backup` and `restore` handle
+upgrades and backups. Observatory Care, an optional licence, adds encrypted
+off-site backups, restore drills and update rollback. Everything that was free
+stays free.
+
+### Upgrade
+
+```bash
+git fetch --tags
+git checkout v1.2.0
+docker compose up -d
+```
+
+- From this release on, `docker compose up -d` pulls pre-built images for
+  `linux/amd64` and `linux/arm64` instead of building them on your machine.
+  To keep building from source, add the build override:
+  `docker compose -f docker-compose.yml -f docker-compose.build.override.yml up -d --build`.
+- Two additive migrations run on the first `docker compose up -d`: `028_lab_results`
+  (blood test results) and `029_api_keys` (participant keys). They add tables and
+  change nothing you already have; the `migrate` service applies them before the
+  API starts, as always.
+- Your `.env` is not changed. An install without an API key, dashboard
+  password or broker login keeps working as before, and `healthsave doctor`
+  says what is open. `healthsave pair --new-key` adds a key; then pair the
+  phone again.
+- For later releases, `healthsave update` does all of this for you, and takes
+  a backup first.
+
 ### Security
 
+- `healthsave setup basic` now generates an API key. A fresh install no longer
+  accepts unauthenticated reads and writes from everyone on your network.
+  Existing installs keep their `.env` untouched.
+- New `healthsave pair` shows the server URL, the API key and, when `qrencode`
+  is installed, a QR code for the HealthSave app. `healthsave pair --new-key`
+  rotates the key and restarts the API and web.
 - The Observatory web dashboard asks for a password when `WEB_PASSWORD` is set.
   Setup generates one for new installs, and `healthsave pair` shows it. Without
   a session, pages redirect to `/login` and every data route (including the
@@ -21,15 +578,8 @@ Plugins carry their own versions.
   generated `WEB_SESSION_SECRET`; server actions check the session themselves;
   ten wrong passwords in a minute pause sign-in; sign-in and sign-out refuse
   cross-site posts.
-- `healthsave setup basic` now generates an API key. A fresh install no longer
-  accepts unauthenticated reads and writes from everyone on your network.
-  Existing installs keep their `.env` untouched.
-- New `healthsave pair` shows the server URL, the API key and, when `qrencode`
-  is installed, a QR code for the HealthSave app. `healthsave pair --new-key`
-  rotates the key and restarts the API and web.
 - `healthsave doctor` warns when no API key is set.
 - Advanced setup suggests a generated key instead of open access.
-
 - `SECURITY.md` says how to report a vulnerability privately.
 - The reverse-proxy example no longer carries the maintainer's hostnames and
   LAN address: `server_name _`, and `generate-self-signed.sh` takes
@@ -37,15 +587,55 @@ Plugins carry their own versions.
 
 ### Added
 
+- Pre-built images for `linux/amd64` and `linux/arm64`, signed with cosign:
+  `ghcr.io/umutkeltek/healthsave-observatory` (API, migrations, worker, agents
+  and the Home Assistant bridge) and `ghcr.io/umutkeltek/healthsave-observatory-web`.
+  `docker-compose.yml` pulls the images of the release you checked out;
+  `docker-compose.build.override.yml` builds them from source instead.
+- Lab results. `healthsave labs import FILE.csv` loads blood test results with
+  LOINC ids; `GET /api/v2/labs` and `GET /api/v2/labs/{loinc}` return each marker
+  against the lab's own printed range and your own history. Results from two labs
+  stay separate rows and are never averaged. A Labs page shows the trend per
+  marker and one cross-match card (ferritin against resting heart rate) with its
+  coverage and limits. (migration `028_lab_results`)
+- Participants. One Observatory can hold several people. `healthsave participants
+  add NAME` prints a pairing code for the free app; the data lands under that
+  person's own key. The `.env` API key stays the admin key and sees everyone;
+  `GET /api/v2/owners` lists people, nine `/api/v2/*` reads take `?owner=`, and the
+  web dashboard gets a participant switcher. `healthsave participants revoke`
+  refuses a key everywhere. The phone routes are unchanged. (migration
+  `029_api_keys`)
+- Home Assistant pack under `integrations/home-assistant/pack/`: three blueprints
+  (wind-down from sleep length, a recovery-aware morning in plain words, a
+  low-data warning) and a plain-cards Body dashboard, built on the bridge's own
+  `sensor.healthsave_observatory_*` entities.
+- The Home Assistant / MQTT bridge publishes one person only. It reads the
+  default owner (the person behind the `.env` API key) unless
+  `HEALTHSAVE_BRIDGE_OWNER` names another participant's id; a second person's
+  rows never reach a published payload.
+- Observatory Care, an optional licence for people who want their install
+  looked after ([docs](docs/operations/observatory-care.md)):
+  `healthsave backup --encrypt`, `--offsite REMOTE` (through rclone, to storage
+  you own) and `--schedule daily|weekly`; `healthsave restore --drill FILE`,
+  which restores a backup into a throwaway database and compares every table's
+  row count; and `healthsave update --rollback`. `healthsave license` installs
+  and shows the licence file, which is checked on your machine against a
+  built-in public key and never phones home. Encrypted backups still restore
+  without a licence.
+- Remote access without opening ports: an optional `tailscale` Compose profile
+  serves the web app and the API on your tailnet over HTTPS, with no router
+  port opened and Funnel off. See
+  [Remote access](docs/operations/remote-access.md).
 - Settings -> Web sign-in sets, changes or turns off the dashboard password
   (changes need the current password; this browser stays signed in, others are
   signed out). It is stored as a salted scrypt hash in the new `web_data`
   volume and takes over from `WEB_PASSWORD`. `healthsave web-password reset`
   removes it when the password is lost.
 - `healthsave update [--to TAG]` moves a git install to the newest release:
-  backup first, then checkout of the tag, then a rebuild of exactly the
-  services that were running. It refuses local edits to tracked files and
-  prints the way back if the new release does not start.
+  backup first, then checkout of the tag, then a restart of exactly the
+  services that were running, on the new release's images. It refuses local
+  edits to tracked files and prints the way back if the new release does not
+  start.
 - `healthsave backup` writes the database (`pg_dump`), `.env` and
   `config.yaml` to one owner-only `.tar` file. `healthsave restore FILE`
   saves the current database first, then restores with TimescaleDB's
@@ -65,19 +655,48 @@ Plugins carry their own versions.
   Findings fill in without any AI setup. Advanced setup now keeps them on when
   you skip Ollama. Existing `config.yaml` files and `config.yaml.example` are
   unchanged.
-
 - The AI narrator no longer downloads LiteLLM's model price list from GitHub
   each time LiteLLM loads (it uses the bundled copy), and LiteLLM telemetry is
   off. Bundled Grafana no longer sends usage reports or checks for updates.
   Neither request carried health data, but neither went through the egress
   gate.
+- The web app runs on Node.js 22. Node.js 20 no longer gets security fixes.
+- Today shows compact readings, links each reading and finding to its
+  evidence, and has larger touch targets on phones.
 
 ### Fixed
 
-- The installers check out the newest `vX.Y.Z` release instead of `main`.
+- A fresh install no longer starts with every analysis job off. Compose passes
+  an empty `ANALYSIS_*_ENABLED` value when `.env` does not set one, and an
+  empty value counted as "off", overriding `config.yaml`. Empty now means "not
+  set". The same applies to `LLM_REDACT_CLOUD_PROMPTS`, so an empty value
+  keeps cloud-prompt redaction on.
+- The installers install the newest published release instead of `main`.
   `npx healthsave` defaulted to a `v0.1.5` tag that never existed, so a fresh
-  `npx` install failed. Set `HEALTHSAVE_OBSERVATORY_REF` (or `--ref`) to pick a
+  `npx` install failed. "Newest published" means the GitHub Release, which
+  exists only once that release's images are published; without it, the
+  newest `vX.Y.Z` tag. Set `HEALTHSAVE_OBSERVATORY_REF` (or `--ref`) to pick a
   tag, branch or commit. The npm bootstrapper is now 0.2.0.
+- Activity summaries keep every field when a batch arrives, stand hours
+  included.
+- Replaying an old batch no longer makes sync readiness report a metric as
+  behind when newer data is already stored.
+- Testing the AI connection from Settings accepts the same local model hosts
+  the server already trusts.
+
+### Compatibility
+
+- The routes the App Store app depends on are unchanged: `POST /api/apple/batch`,
+  `GET /api/apple/status` and `GET /api/health`. The OpenAPI lock changed only
+  in its version number.
+- The remote VM deploy (`deploy/remote-vm/deploy.sh`) still builds from the
+  deployed commit, with the same ports and image names as before.
+
+### Known limits
+- The bundled Grafana dashboards still read across every person on an
+  Observatory that holds participants; filter them per panel or keep Grafana
+  off such an install. Findings and the weekly Body Brief are produced for the
+  primary person only.
 
 ## [1.1.0] - 2026-10-04
 

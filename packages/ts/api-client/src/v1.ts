@@ -568,6 +568,112 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/genetics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Index */
+        get: operations["index_api_v2_genetics_get"];
+        put?: never;
+        /** Upload */
+        post: operations["upload_api_v2_genetics_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/genetics/reference": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reference Status */
+        get: operations["reference_status_api_v2_genetics_reference_get"];
+        put?: never;
+        /** Update Reference */
+        post: operations["update_reference_api_v2_genetics_reference_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/genetics/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detail */
+        get: operations["detail_api_v2_genetics__document_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Document */
+        delete: operations["delete_document_api_v2_genetics__document_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/genetics/{document_id}/original": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Original */
+        get: operations["original_api_v2_genetics__document_id__original_get"];
+        put?: never;
+        post?: never;
+        /** Discard Original */
+        delete: operations["discard_original_api_v2_genetics__document_id__original_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/genetics/{document_id}/reanalyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reanalyze */
+        post: operations["reanalyze_api_v2_genetics__document_id__reanalyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/genetics/{document_id}/reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report Version */
+        get: operations["report_version_api_v2_genetics__document_id__reports__report_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/insights/correlations": {
         parameters: {
             query?: never;
@@ -770,6 +876,167 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/lab-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Index */
+        get: operations["index_api_v2_lab_imports_get"];
+        put?: never;
+        /** Upload */
+        post: operations["upload_api_v2_lab_imports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/lab-imports/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Catalog */
+        get: operations["catalog_api_v2_lab_imports_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/lab-imports/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Draft */
+        get: operations["draft_api_v2_lab_imports__document_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Document */
+        delete: operations["delete_document_api_v2_lab_imports__document_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/lab-imports/{document_id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commit */
+        post: operations["commit_api_v2_lab_imports__document_id__commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/lab-imports/{document_id}/deletion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Deletion Preview */
+        get: operations["deletion_preview_api_v2_lab_imports__document_id__deletion_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/lab-imports/{document_id}/original": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Original */
+        get: operations["original_api_v2_lab_imports__document_id__original_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/lab-imports/{document_id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report */
+        get: operations["report_api_v2_lab_imports__document_id__report_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/labs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Labs
+         * @description Every marker with its results, newest marker first, plus the labs.
+         */
+        get: operations["list_labs_api_v2_labs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/labs/{loinc}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Lab Marker
+         * @description One marker's results, oldest first, each with its lab and the lab's range.
+         */
+        get: operations["get_lab_marker_api_v2_labs__loinc__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/meta": {
         parameters: {
             query?: never;
@@ -865,6 +1132,30 @@ export interface paths {
         post?: never;
         /** Delete Moment */
         delete: operations["delete_moment_api_v2_moments__moment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/owners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Owners
+         * @description The default owner first (``label`` null), then one entry per participant.
+         *
+         *     A participant whose keys are all revoked stays listed with
+         *     ``active: false``: revoking a key stops new data, it does not delete the
+         *     person's history.
+         */
+        get: operations["owners_api_v2_owners_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1174,6 +1465,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/year/{year}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Year In Health
+         * @description One year of the record: months, sources, device changes, every gap.
+         */
+        get: operations["year_in_health_api_v2_year__year__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1285,6 +1596,22 @@ export interface components {
             /** Redact Cloud Prompts */
             redact_cloud_prompts?: boolean | null;
         };
+        /**
+         * Confounder
+         * @description A competing explanation the engine already accounts for or flags.
+         *
+         *     Mirrors the context-suppression rules in the detectors (workout-window HR
+         *     spikes, post-workout HRV drops, the sleep window) so a card can say *why* a
+         *     reading might not mean what it looks like.
+         */
+        Confounder: {
+            /** Description */
+            description: string;
+            /** Kind */
+            kind: string;
+            /** Metric */
+            metric?: string | null;
+        };
         /** ConnectionInput */
         ConnectionInput: {
             /** Api Key */
@@ -1306,6 +1633,28 @@ export interface components {
             consent_version?: string | null;
             /** Granted */
             granted: boolean;
+        };
+        /**
+         * Coverage
+         * @description Data sufficiency behind the finding — the ``gates.py`` verdict, surfaced.
+         *
+         *     A finding is only emitted once its producer's sufficiency gate passed, so
+         *     ``is_sufficient`` is typically ``True``; ``note`` records the threshold that
+         *     was cleared (e.g. "≥14 observations over ≥7 days"). ``days_until_sufficient``
+         *     is only meaningful on the not-yet-analyzable path a future producer might
+         *     surface.
+         */
+        Coverage: {
+            /** Days Until Sufficient */
+            days_until_sufficient?: number | null;
+            /** Days With Data */
+            days_with_data?: number | null;
+            /** Is Sufficient */
+            is_sufficient?: boolean | null;
+            /** Note */
+            note?: string | null;
+            /** Observation Count */
+            observation_count?: number | null;
         };
         /** CreateExperimentRequest */
         CreateExperimentRequest: {
@@ -1399,6 +1748,20 @@ export interface components {
              */
             proposal_id: string;
         };
+        /**
+         * Delta
+         * @description The change: current vs baseline.
+         */
+        Delta: {
+            /** Absolute */
+            absolute?: number | null;
+            /** Direction */
+            direction?: ("up" | "down" | "flat") | null;
+            /** Pct */
+            pct?: number | null;
+            /** Unit */
+            unit?: string | null;
+        };
         /** DeviceIdentityLinkCreate */
         DeviceIdentityLinkCreate: {
             /**
@@ -1477,6 +1840,54 @@ export interface components {
             /** Total */
             total?: number | null;
         };
+        /**
+         * EffectSize
+         * @description How big the effect is, method-tagged so the UI can label it honestly.
+         *
+         *     ``kind`` names the statistic (``z_score`` / ``spearman_rho`` /
+         *     ``slope_per_day`` / ``cohens_d`` …) so a reader never confuses a correlation
+         *     coefficient with a standardized mean difference. ``p_value`` rides alongside
+         *     the magnitude (significance ≠ size) rather than being a separate top-level
+         *     card field.
+         */
+        EffectSize: {
+            /** Kind */
+            kind?: string | null;
+            /** Label */
+            label?: string | null;
+            /** P Value */
+            p_value?: number | null;
+            /** Value */
+            value?: number | null;
+        };
+        /**
+         * ExperimentCandidateRef
+         * @description Machine hook linking ``next_question`` to the experiments surface.
+         *
+         *     Deliberately speaks the ``/api/v2/experiments/candidates`` vocabulary
+         *     (metric pair + lever/outcome/verdict/protocol from the readiness classifier)
+         *     — the candidate shape the experiment engine already ranks, so nothing new is
+         *     invented here. The ``POST /api/v2/experiments`` create body renames the pair
+         *     to ``lever_metric_id`` / ``outcome_metric_id``: the values are identical, only
+         *     the field names differ, so the client maps ``lever`` → ``lever_metric_id`` and
+         *     ``outcome`` → ``outcome_metric_id`` when promoting a candidate.
+         */
+        ExperimentCandidateRef: {
+            /** Lever */
+            lever?: string | null;
+            /** Metric A */
+            metric_a: string;
+            /** Metric B */
+            metric_b: string;
+            /** Outcome */
+            outcome?: string | null;
+            /** Required Days */
+            required_days?: number | null;
+            /** Suggested Protocol */
+            suggested_protocol?: string | null;
+            /** Verdict */
+            verdict?: string | null;
+        };
         /** ExperimentListResponse */
         ExperimentListResponse: {
             /** Count */
@@ -1525,6 +1936,40 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * FindingCard
+         * @description The versioned content model for one evidence-linked finding.
+         *
+         *     ``claim`` / ``metric`` / ``schema_version`` are required; everything else is
+         *     optional so legacy or thin findings are represented without fabrication.
+         */
+        FindingCard: {
+            baseline_window?: components["schemas"]["WindowRef"] | null;
+            /** Claim */
+            claim: string;
+            /** Confidence */
+            confidence?: ("low" | "medium" | "high") | null;
+            /** Confounders */
+            confounders?: components["schemas"]["Confounder"][];
+            coverage?: components["schemas"]["Coverage"] | null;
+            current_window?: components["schemas"]["WindowRef"] | null;
+            delta?: components["schemas"]["Delta"] | null;
+            effect_size?: components["schemas"]["EffectSize"] | null;
+            /** Finding Type */
+            finding_type?: string | null;
+            /** Limitations */
+            limitations?: string[];
+            /** Metric */
+            metric: string;
+            next_question?: components["schemas"]["NextQuestion"] | null;
+            /**
+             * Schema Version
+             * @default 1
+             */
+            schema_version: number;
+            /** Sources */
+            sources?: components["schemas"]["SourceRef"][];
+        };
         /** FindingResponse */
         FindingResponse: {
             /** Created At */
@@ -1540,6 +1985,354 @@ export interface components {
             /** Structured Data */
             structured_data?: Record<string, never> | null;
         };
+        /** GeneticAnnotation */
+        GeneticAnnotation: {
+            /** Alternate */
+            alternate: string;
+            /** Alternate Copies */
+            alternate_copies: number;
+            /** Call Quality */
+            call_quality: string;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "pathogenic" | "benign" | "uncertain" | "conflicting" | "other";
+            /** Chromosome */
+            chromosome: string;
+            /** Conditions */
+            conditions: string;
+            /** Conflicting */
+            conflicting: boolean;
+            /** Depth */
+            depth: number | null;
+            /** Details Truncated */
+            details_truncated: boolean;
+            /** Gene */
+            gene: string;
+            /** Genotype */
+            genotype: string;
+            /** Genotype Quality */
+            genotype_quality: number | null;
+            /** Hgvs */
+            hgvs: string;
+            /** Position */
+            position: number;
+            /** Reference */
+            reference: string;
+            /** Review Stars */
+            review_stars: number;
+            /** Source Classification */
+            source_classification: string;
+            /** Source Review Status */
+            source_review_status: string;
+            /** Source Url */
+            source_url: string;
+            /** Variation Id */
+            variation_id: string;
+        };
+        /** GeneticDeletion */
+        GeneticDeletion: {
+            /**
+             * Confirmation
+             * Format: uuid
+             */
+            confirmation: string;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** GeneticDeletionReceipt */
+        GeneticDeletionReceipt: {
+            /** Deleted Reports */
+            deleted_reports: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** GeneticDocument */
+        GeneticDocument: {
+            /**
+             * Assembly
+             * @enum {string}
+             */
+            assembly: "GRCh37" | "GRCh38";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Original Retained */
+            original_retained: boolean;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /** Sha256 */
+            sha256: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** GeneticDocumentDetail */
+        GeneticDocumentDetail: {
+            document: components["schemas"]["GeneticDocument"];
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            report: components["schemas"]["GeneticReport"];
+            /** Reports */
+            reports: components["schemas"]["GeneticReportVersion"][];
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** GeneticIndex */
+        GeneticIndex: {
+            /** Documents */
+            documents: components["schemas"]["GeneticDocument"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** GeneticReanalysis */
+        GeneticReanalysis: {
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** GeneticReference */
+        GeneticReference: {
+            /**
+             * Assembly
+             * @enum {string}
+             */
+            assembly: "GRCh37" | "GRCh38";
+            /** Excluded Reference Records */
+            excluded_reference_records: number;
+            /** Index Version */
+            index_version: string;
+            /**
+             * Installed At
+             * Format: date-time
+             */
+            installed_at: string;
+            /** Record Count */
+            record_count: number;
+            /** Release Date */
+            release_date: string;
+            /** Sha256 */
+            sha256: string;
+            /** Source Url */
+            source_url: string;
+        };
+        /** GeneticReferenceJob */
+        GeneticReferenceJob: {
+            /** Assembly */
+            assembly?: ("GRCh37" | "GRCh38") | null;
+            /**
+             * Bytes Downloaded
+             * @default 0
+             */
+            bytes_downloaded: number;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /**
+             * Records Indexed
+             * @default 0
+             */
+            records_indexed: number;
+            /** Started At */
+            started_at?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "idle" | "downloading" | "indexing" | "complete" | "failed" | "interrupted";
+        };
+        /** GeneticReferenceStatus */
+        GeneticReferenceStatus: {
+            job: components["schemas"]["GeneticReferenceJob"];
+            /** References */
+            references: components["schemas"]["GeneticReference"][];
+        };
+        /** GeneticReferenceUpdate */
+        GeneticReferenceUpdate: {
+            /**
+             * Assembly
+             * @enum {string}
+             */
+            assembly: "GRCh37" | "GRCh38";
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** GeneticReport */
+        GeneticReport: {
+            /** Annotations */
+            annotations: components["schemas"]["GeneticAnnotation"][];
+            /**
+             * Assembly
+             * @enum {string}
+             */
+            assembly: "GRCh37" | "GRCh38";
+            /** Assembly In File */
+            assembly_in_file: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Engine Version */
+            engine_version: string;
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Input Counts */
+            input_counts: {
+                [key: string]: number;
+            };
+            /** Input Format */
+            input_format: string;
+            /** Input Sha256 */
+            input_sha256: string;
+            /** Limitations */
+            limitations: string[];
+            /** Matched Annotations */
+            matched_annotations: number;
+            /** Matched Loci */
+            matched_loci: number;
+            /** Omitted Annotations */
+            omitted_annotations: number;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            reference: components["schemas"]["GeneticReference"];
+            /** Reference Mismatch Loci */
+            reference_mismatch_loci: number;
+            /** Unmatched Loci */
+            unmatched_loci: number;
+            /** Warnings */
+            warnings: string[];
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** GeneticReportVersion */
+        GeneticReportVersion: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Engine Version */
+            engine_version: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Reference Release */
+            reference_release: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1551,6 +2344,638 @@ export interface components {
             /** Recent Findings */
             recent_findings?: components["schemas"]["FindingResponse"][];
             weekly_summary?: components["schemas"]["WeeklySummaryResponse"] | null;
+        };
+        /** LabAssessmentView */
+        LabAssessmentView: {
+            /** Change */
+            change: number | null;
+            /** Change Pct */
+            change_pct: number | null;
+            /** Change Withheld */
+            change_withheld: string | null;
+            /** Direction */
+            direction: string | null;
+            /** Latest Band */
+            latest_band: string;
+            /** Outside Streak */
+            outside_streak: number;
+            /** Previous From Other Lab */
+            previous_from_other_lab: boolean;
+            /** Previous Specimen At */
+            previous_specimen_at: string | null;
+            /** Prior Count */
+            prior_count: number;
+            /** Prior Max */
+            prior_max: number | null;
+            /** Prior Min */
+            prior_min: number | null;
+            /** Versus History */
+            versus_history: string | null;
+        };
+        /** LabCrossMatchView */
+        LabCrossMatchView: {
+            card: components["schemas"]["FindingCard"] | null;
+            /** Reason */
+            reason: string | null;
+            /** Related Label */
+            related_label: string;
+            /** Related Metric Id */
+            related_metric_id: string;
+            /** Related Unit */
+            related_unit: string;
+            /** Stream Id */
+            stream_id: string | null;
+            /** Stream Label */
+            stream_label: string | null;
+        };
+        /** LabDocumentPage */
+        LabDocumentPage: {
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "text" | "ocr" | "csv";
+            /** Page */
+            page: number;
+            /** Text */
+            text: string;
+        };
+        /** LabEvidenceSource */
+        LabEvidenceSource: {
+            /** Accessed On */
+            accessed_on: string;
+            /** Id */
+            id: string;
+            /** Scope */
+            scope: string;
+            /** Title */
+            title: string;
+            /** Url */
+            url: string;
+        };
+        /** LabGapView */
+        LabGapView: {
+            /** Bands Disagree */
+            bands_disagree: boolean;
+            /** Days Apart */
+            days_apart: number;
+            /** Difference */
+            difference: number | null;
+            /** Difference Pct */
+            difference_pct: number | null;
+            /** Earlier Band */
+            earlier_band: string;
+            /**
+             * Earlier Id
+             * Format: uuid
+             */
+            earlier_id: string;
+            /** Earlier Lab */
+            earlier_lab: string;
+            /**
+             * Earlier Specimen At
+             * Format: date-time
+             */
+            earlier_specimen_at: string;
+            /** Earlier Value */
+            earlier_value: number;
+            /** Later Band */
+            later_band: string;
+            /**
+             * Later Id
+             * Format: uuid
+             */
+            later_id: string;
+            /** Later Lab */
+            later_lab: string;
+            /**
+             * Later Specimen At
+             * Format: date-time
+             */
+            later_specimen_at: string;
+            /** Later Value */
+            later_value: number;
+            /** Unit */
+            unit: string;
+        };
+        /** LabImportCatalog */
+        LabImportCatalog: {
+            /** Markers */
+            markers: components["schemas"]["LabImportMarker"][];
+        };
+        /** LabImportDeletion */
+        LabImportDeletion: {
+            /**
+             * Confirmation
+             * Format: uuid
+             */
+            confirmation: string;
+            /**
+             * Delete Results
+             * @default false
+             */
+            delete_results: boolean;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** LabImportDeletionPreview */
+        LabImportDeletionPreview: {
+            /**
+             * Explanation
+             * @default Deletes this original and saved report. Optionally deletes results last written by this import; later corrections and other reports are preserved. Copies in your downloads or backups are separate.
+             */
+            explanation: string;
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Linked Result Count */
+            linked_result_count: number;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** LabImportDeletionReceipt */
+        LabImportDeletionReceipt: {
+            /** Deleted Results */
+            deleted_results: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** LabImportDraft */
+        LabImportDraft: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /** Pages */
+            pages: components["schemas"]["LabDocumentPage"][];
+            /** Rows */
+            rows: components["schemas"]["LabReviewRow"][];
+            /** Sha256 */
+            sha256: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "committed";
+            /** Warnings */
+            warnings: string[];
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** LabImportIndex */
+        LabImportIndex: {
+            /** Documents */
+            documents: components["schemas"]["LabImportIndexItem"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** LabImportIndexItem */
+        LabImportIndexItem: {
+            /** Committed At */
+            committed_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Sha256 */
+            sha256: string;
+        };
+        /** LabImportMarker */
+        LabImportMarker: {
+            /** Loinc */
+            loinc: string;
+            /** Name */
+            name: string;
+            /** Unit */
+            unit: string;
+        };
+        /** LabImportReceipt */
+        LabImportReceipt: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Inserted */
+            inserted: number;
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /** Report Url */
+            report_url: string;
+            /** Result Count */
+            result_count: number;
+            /** Unchanged */
+            unchanged: number;
+            /** Updated */
+            updated: number;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** LabImportReport */
+        LabImportReport: {
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Imported At
+             * Format: date-time
+             */
+            imported_at: string;
+            /** Limitations */
+            limitations: string[];
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /** Report Version */
+            report_version: string;
+            /** Results */
+            results: components["schemas"]["LabReportResult"][];
+            /** Review Status */
+            review_status: string;
+            /** Sha256 */
+            sha256: string;
+            /** Sources */
+            sources: components["schemas"]["LabEvidenceSource"][];
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** LabImportReview */
+        LabImportReview: {
+            /**
+             * Owner Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            owner_id: string;
+            /** Rows */
+            rows: components["schemas"]["LabReviewRow"][];
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @default 00000000-0000-0000-0000-000000000001
+             */
+            workspace_id: string;
+        };
+        /** LabMarkerDetail */
+        LabMarkerDetail: {
+            assessment: components["schemas"]["LabAssessmentView"] | null;
+            cross_match: components["schemas"]["LabCrossMatchView"] | null;
+            /** Display Unit */
+            display_unit: string;
+            /**
+             * First Specimen At
+             * Format: date-time
+             */
+            first_specimen_at: string;
+            /** Gap Count */
+            gap_count: number;
+            /** Gaps */
+            gaps: components["schemas"]["LabGapView"][];
+            /** Lab Count */
+            lab_count: number;
+            /**
+             * Last Specimen At
+             * Format: date-time
+             */
+            last_specimen_at: string;
+            /** Loinc */
+            loinc: string;
+            /** Metric Id */
+            metric_id: string;
+            /** Name */
+            name: string;
+            /** Related Metric Id */
+            related_metric_id: string | null;
+            /** Result Count */
+            result_count: number;
+            /** Results */
+            results: components["schemas"]["LabResultView"][];
+            /** Unit */
+            unit: string;
+        };
+        /** LabMarkerView */
+        LabMarkerView: {
+            assessment: components["schemas"]["LabAssessmentView"] | null;
+            /** Display Unit */
+            display_unit: string;
+            /**
+             * First Specimen At
+             * Format: date-time
+             */
+            first_specimen_at: string;
+            /** Gap Count */
+            gap_count: number;
+            /** Lab Count */
+            lab_count: number;
+            /**
+             * Last Specimen At
+             * Format: date-time
+             */
+            last_specimen_at: string;
+            /** Loinc */
+            loinc: string;
+            /** Metric Id */
+            metric_id: string;
+            /** Name */
+            name: string;
+            /** Related Metric Id */
+            related_metric_id: string | null;
+            /** Result Count */
+            result_count: number;
+            /** Results */
+            results: components["schemas"]["LabResultView"][];
+            /** Unit */
+            unit: string;
+        };
+        /** LabReportComparison */
+        LabReportComparison: {
+            /** Absolute Change */
+            absolute_change: number;
+            /**
+             * Method
+             * @default Most recent earlier result from the same lab, test and normalized unit.
+             */
+            method: string;
+            /** Percent Change */
+            percent_change: number | null;
+            /**
+             * Previous Specimen At
+             * Format: date-time
+             */
+            previous_specimen_at: string;
+            /** Previous Value */
+            previous_value: number;
+        };
+        /** LabReportResult */
+        LabReportResult: {
+            /** Comparator */
+            comparator: string | null;
+            comparison?: components["schemas"]["LabReportComparison"] | null;
+            /** Lab */
+            lab: string;
+            /** Loinc */
+            loinc: string;
+            /** Marker */
+            marker: string;
+            /** Measurement Quality */
+            measurement_quality: string;
+            /** Medical Evidence */
+            medical_evidence: string;
+            /** Observation */
+            observation: string;
+            /** Personal Pattern */
+            personal_pattern: string;
+            /** Quality Flags */
+            quality_flags: string[];
+            /** Reference High */
+            reference_high: number | null;
+            /** Reference Low */
+            reference_low: number | null;
+            /** Source Excerpt */
+            source_excerpt: string | null;
+            /** Source Ids */
+            source_ids: string[];
+            /** Source Page */
+            source_page: number | null;
+            /**
+             * Specimen At
+             * Format: date-time
+             */
+            specimen_at: string;
+            /** Unit */
+            unit: string;
+            /** Value */
+            value: number;
+        };
+        /** LabResultView */
+        LabResultView: {
+            /** Band */
+            band: string;
+            /** Band Fraction */
+            band_fraction: number | null;
+            /** Comparator */
+            comparator: string | null;
+            /** Date Only */
+            date_only: boolean;
+            /** Display Unit */
+            display_unit: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Lab */
+            lab: string;
+            /** Panel */
+            panel: string | null;
+            /** Quality Flags */
+            quality_flags: string[];
+            /** Reference High */
+            reference_high: number | null;
+            /** Reference Low */
+            reference_low: number | null;
+            /** Source Plugin Id */
+            source_plugin_id: string;
+            /**
+             * Specimen At
+             * Format: date-time
+             */
+            specimen_at: string;
+            /**
+             * Stream Id
+             * Format: uuid
+             */
+            stream_id: string;
+            /** Unit */
+            unit: string;
+            /** Value */
+            value: number;
+        };
+        /** LabReviewRow */
+        LabReviewRow: {
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /**
+             * Lab
+             * @default
+             */
+            lab: string;
+            /**
+             * Loinc
+             * @default
+             */
+            loinc: string;
+            /**
+             * Marker Name
+             * @default
+             */
+            marker_name: string;
+            /**
+             * Panel
+             * @default
+             */
+            panel: string;
+            /**
+             * Reference High
+             * @default
+             */
+            reference_high: string;
+            /**
+             * Reference Low
+             * @default
+             */
+            reference_low: string;
+            /** Row Id */
+            row_id: string;
+            /**
+             * Specimen Datetime
+             * @default
+             */
+            specimen_datetime: string;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+            /**
+             * Value
+             * @default
+             */
+            value: string;
+        };
+        /** LabSourceView */
+        LabSourceView: {
+            /**
+             * First Specimen At
+             * Format: date-time
+             */
+            first_specimen_at: string;
+            /** Lab */
+            lab: string;
+            /**
+             * Last Specimen At
+             * Format: date-time
+             */
+            last_specimen_at: string;
+            /** Result Count */
+            result_count: number;
+            /** Source Plugin Id */
+            source_plugin_id: string;
+            /**
+             * Stream Id
+             * Format: uuid
+             */
+            stream_id: string;
+        };
+        /** LabsOverview */
+        LabsOverview: {
+            /** Count */
+            count: number;
+            /** Labs */
+            labs: components["schemas"]["LabSourceView"][];
+            /** Markers */
+            markers: components["schemas"]["LabMarkerView"][];
+            /** Result Count */
+            result_count: number;
         };
         /** MomentListResponse */
         MomentListResponse: {
@@ -1582,6 +3007,39 @@ export interface components {
             title: string;
             /** Updated At */
             updated_at: string | null;
+        };
+        /**
+         * NextQuestion
+         * @description The flywheel field: prose + an optional promotable experiment candidate.
+         */
+        NextQuestion: {
+            experiment_candidate?: components["schemas"]["ExperimentCandidateRef"] | null;
+            /** Prose */
+            prose: string;
+        };
+        /** OwnerView */
+        OwnerView: {
+            /** Active */
+            active: boolean;
+            /** Created At */
+            created_at: string | null;
+            /** Id */
+            id: string;
+            /** Is Default */
+            is_default: boolean;
+            /** Label */
+            label: string | null;
+            /** Last Ingest At */
+            last_ingest_at: string | null;
+            /** Scopes */
+            scopes: string[];
+        };
+        /** OwnersResponse */
+        OwnersResponse: {
+            /** Count */
+            count: number;
+            /** Owners */
+            owners: components["schemas"]["OwnerView"][];
         };
         /** PhaseView */
         PhaseView: {
@@ -1762,6 +3220,16 @@ export interface components {
             matched_pairs: number;
             /** Rejected */
             rejected: number;
+        };
+        /**
+         * SourceRef
+         * @description Where the underlying data came from (provenance, at card granularity).
+         */
+        SourceRef: {
+            /** Label */
+            label?: string | null;
+            /** Source Plugin Id */
+            source_plugin_id?: string | null;
         };
         /** SourceView */
         SourceView: {
@@ -2002,6 +3470,266 @@ export interface components {
             week_end?: string | null;
             /** Week Start */
             week_start?: string | null;
+        };
+        /**
+         * WindowRef
+         * @description A time window a finding is measured over (current or baseline).
+         */
+        WindowRef: {
+            /** End */
+            end?: string | null;
+            /** Label */
+            label?: string | null;
+            /** N */
+            n?: number | null;
+            /** Start */
+            start?: string | null;
+        };
+        /** YearDeviceChangeView */
+        YearDeviceChangeView: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "first_seen" | "last_seen";
+            /** Label */
+            label: string;
+            /**
+             * Stream Id
+             * Format: uuid
+             */
+            stream_id: string;
+        };
+        /** YearFamilyView */
+        YearFamilyView: {
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "ok" | "low" | "none" | "future";
+            /** Days With Data */
+            days_with_data: number;
+            /** Days Without Data */
+            days_without_data: number;
+            /** First Day */
+            first_day: string | null;
+            /** Gaps */
+            gaps: components["schemas"]["YearGapView"][];
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Last Day */
+            last_day: string | null;
+            /** Longest Inside Gap */
+            longest_inside_gap: number;
+            /** Mask */
+            mask: string;
+            /** Metric Ids */
+            metric_ids: string[];
+        };
+        /** YearGapView */
+        YearGapView: {
+            /** Days */
+            days: number;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "before_first" | "inside" | "after_last" | "no_data";
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+        };
+        /** YearHeadlineView */
+        YearHeadlineView: {
+            /** Basis */
+            basis: string;
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "ok" | "low" | "none" | "future";
+            /** Days */
+            days: number | null;
+            /** High */
+            high: number | null;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Low */
+            low: number | null;
+            /** Of Days */
+            of_days: number | null;
+            /** Source Label */
+            source_label: string | null;
+            /** Stream Id */
+            stream_id: string | null;
+            /** Unit */
+            unit: string | null;
+            /** Value */
+            value: number;
+        };
+        /** YearInHealth */
+        YearInHealth: {
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "ok" | "low" | "none" | "future";
+            /** Day Boundary */
+            day_boundary: string;
+            /** Day Family Counts */
+            day_family_counts: number[];
+            /** Days In Window */
+            days_in_window: number;
+            /** Days With Data */
+            days_with_data: number;
+            /** Device Changes */
+            device_changes: components["schemas"]["YearDeviceChangeView"][];
+            /** Families */
+            families: components["schemas"]["YearFamilyView"][];
+            /** First Day */
+            first_day: string | null;
+            /** Gaps */
+            gaps: components["schemas"]["YearGapView"][];
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Headlines */
+            headlines: components["schemas"]["YearHeadlineView"][];
+            /** Last Day */
+            last_day: string | null;
+            /** Limitations */
+            limitations: components["schemas"]["YearLimitationView"][];
+            /** Longest Inside Gap */
+            longest_inside_gap: number;
+            /** Mask */
+            mask: string;
+            /** Months */
+            months: components["schemas"]["YearMonthView"][];
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /** Sources */
+            sources: components["schemas"]["YearSourceView"][];
+            /** Time Zone */
+            time_zone: string;
+            /**
+             * Window End
+             * Format: date
+             */
+            window_end: string;
+            /**
+             * Window Start
+             * Format: date
+             */
+            window_start: string;
+            /** Withheld */
+            withheld: components["schemas"]["YearWithheldView"][];
+            /** Year */
+            year: number;
+        };
+        /** YearLimitationView */
+        YearLimitationView: {
+            /** Code */
+            code: string;
+            /** Count */
+            count: number | null;
+            /** Day */
+            day: string | null;
+        };
+        /** YearMonthView */
+        YearMonthView: {
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "ok" | "low" | "none" | "future";
+            /** Coverage */
+            coverage: number | null;
+            /** Days */
+            days: number;
+            /** Days With Data */
+            days_with_data: number;
+            /** Families */
+            families: string[];
+            /** First Seen Ids */
+            first_seen_ids: string[];
+            /** Last Seen Ids */
+            last_seen_ids: string[];
+            /** Month */
+            month: number;
+            /** Source Ids */
+            source_ids: string[];
+        };
+        /** YearSourceView */
+        YearSourceView: {
+            /** Days With Data */
+            days_with_data: number;
+            /** Families */
+            families: string[];
+            /**
+             * First Day
+             * Format: date
+             */
+            first_day: string;
+            /** First Seen At */
+            first_seen_at: string | null;
+            /** Label */
+            label: string;
+            /**
+             * Last Day
+             * Format: date
+             */
+            last_day: string;
+            /** Last Seen At */
+            last_seen_at: string | null;
+            /** Months */
+            months: number[];
+            /** New This Year */
+            new_this_year: boolean;
+            /** Source Plugin Id */
+            source_plugin_id: string;
+            /** Stopped This Year */
+            stopped_this_year: boolean;
+            /**
+             * Stream Id
+             * Format: uuid
+             */
+            stream_id: string;
+        };
+        /** YearWithheldView */
+        YearWithheldView: {
+            /** Days */
+            days: number;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Reason */
+            reason: string;
+            /** Source Label */
+            source_label: string | null;
+            /** Stream Id */
+            stream_id: string | null;
         };
     };
     responses: never;
@@ -2565,6 +4293,8 @@ export interface operations {
             query?: {
                 limit?: number | null;
                 offset?: number;
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
             };
             header?: {
                 "x-api-key"?: string;
@@ -2801,6 +4531,8 @@ export interface operations {
                 to?: string | null;
                 days?: number | null;
                 limit?: number | null;
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
             };
             header?: {
                 "x-api-key"?: string;
@@ -2832,7 +4564,10 @@ export interface operations {
     };
     list_export_metrics_api_v2_export_metrics_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
+            };
             header?: {
                 "x-api-key"?: string;
             };
@@ -2848,6 +4583,347 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    index_api_v2_genetics_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneticIndex"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_api_v2_genetics_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneticDocumentDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reference_status_api_v2_genetics_reference_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneticReferenceStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_reference_api_v2_genetics_reference_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeneticReferenceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneticReferenceStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detail_api_v2_genetics__document_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneticDocumentDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_document_api_v2_genetics__document_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeneticDeletion"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneticDeletionReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    original_api_v2_genetics__document_id__original_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_original_api_v2_genetics__document_id__original_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeneticDeletion"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneticDocument"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reanalyze_api_v2_genetics__document_id__reanalyze_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeneticReanalysis"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneticReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_version_api_v2_genetics__document_id__reports__report_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneticReport"];
                 };
             };
             /** @description Validation Error */
@@ -3199,6 +5275,371 @@ export interface operations {
             };
         };
     };
+    index_api_v2_lab_imports_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabImportIndex"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_api_v2_lab_imports_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabImportDraft"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    catalog_api_v2_lab_imports_catalog_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabImportCatalog"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_api_v2_lab_imports__document_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabImportDraft"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_document_api_v2_lab_imports__document_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabImportDeletion"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabImportDeletionReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_api_v2_lab_imports__document_id__commit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabImportReview"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabImportReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deletion_preview_api_v2_lab_imports__document_id__deletion_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabImportDeletionPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    original_api_v2_lab_imports__document_id__original_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_api_v2_lab_imports__document_id__report_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabImportReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_labs_api_v2_labs_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabsOverview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_lab_marker_api_v2_labs__loinc__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                loinc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabMarkerDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     v2_meta_api_v2_meta_get: {
         parameters: {
             query?: never;
@@ -3244,6 +5685,8 @@ export interface operations {
             query?: {
                 range?: string;
                 stream_id?: string | null;
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
             };
             header?: {
                 "x-api-key"?: string;
@@ -3413,6 +5856,37 @@ export interface operations {
             };
         };
     };
+    owners_api_v2_owners_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     privacy_api_v2_privacy_get: {
         parameters: {
             query?: never;
@@ -3446,7 +5920,10 @@ export interface operations {
     };
     readiness_api_v2_readiness_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
+            };
             header?: {
                 "x-api-key"?: string;
             };
@@ -3514,6 +5991,8 @@ export interface operations {
                 ids: string;
                 range?: string;
                 stream_id?: string | null;
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
             };
             header?: {
                 "x-api-key"?: string;
@@ -3634,6 +6113,8 @@ export interface operations {
             query?: {
                 limit?: number | null;
                 offset?: number;
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
             };
             header?: {
                 "x-api-key"?: string;
@@ -3688,6 +6169,8 @@ export interface operations {
             query?: {
                 limit?: number | null;
                 offset?: number;
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
             };
             header?: {
                 "x-api-key"?: string;
@@ -3719,7 +6202,10 @@ export interface operations {
     };
     get_stream_api_v2_streams__stream_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
+            };
             header?: {
                 "x-api-key"?: string;
             };
@@ -3900,6 +6386,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    year_in_health_api_v2_year__year__get: {
+        parameters: {
+            query?: {
+                /** @description Owner whose data to read. Admin keys may name any owner (default: the default owner); a participant read key may only name its own. */
+                owner?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string;
+            };
+            path: {
+                /** @description Calendar year, like 2026 */
+                year: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YearInHealth"];
                 };
             };
             /** @description Validation Error */

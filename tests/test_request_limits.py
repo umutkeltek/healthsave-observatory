@@ -19,8 +19,12 @@ import server.main as main_module  # noqa: E402
 
 
 class _Req:
-    def __init__(self, headers):
+    def __init__(self, headers, *, method="POST", path="/api/apple/batch"):
+        from types import SimpleNamespace
+
         self.headers = headers
+        self.method = method
+        self.url = SimpleNamespace(path=path)
 
 
 async def _ok_next(request):
@@ -95,3 +99,21 @@ async def test_export_preserves_small_explicit_limit(monkeypatch):
     monkeypatch.setattr(export_module, "_EXPORT_REPO", repo)
     await export_module.export_data(metric="heart_rate", format="json", limit=25, session=object())
     assert repo.limit == 25
+
+
+@pytest.mark.asyncio
+async def test_genotype_body_limit_does_not_change_mobile_or_other_routes():
+    size = 20 * 1024 * 1024
+    result = await main_module.limit_request_body_size(
+        _Req({"content-length": str(size)}, path="/api/v2/genetics"), _ok_next
+    )
+    assert result == "passed-through"
+    for path in ("/api/apple/batch", "/api/v2/apple/batch", "/api/v2/genetics/reference"):
+        result = await main_module.limit_request_body_size(
+            _Req({"content-length": str(size)}, path=path), _ok_next
+        )
+        assert result.status_code == 413
+    response = await main_module.limit_request_body_size(
+        _Req({"content-length": str(50 * 1024 * 1024 + 1)}, path="/api/v2/genetics"), _ok_next
+    )
+    assert response.status_code == 413

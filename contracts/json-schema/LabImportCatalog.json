@@ -1,0 +1,43 @@
+{
+  "$defs": {
+    "LabImportMarker": {
+      "additionalProperties": false,
+      "properties": {
+        "loinc": {
+          "title": "Loinc",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "loinc",
+        "name",
+        "unit"
+      ],
+      "title": "LabImportMarker",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "markers": {
+      "items": {
+        "$ref": "#/$defs/LabImportMarker"
+      },
+      "title": "Markers",
+      "type": "array"
+    }
+  },
+  "required": [
+    "markers"
+  ],
+  "title": "LabImportCatalog",
+  "type": "object"
+}

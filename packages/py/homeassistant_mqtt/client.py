@@ -145,14 +145,32 @@ class PahoMQTTPublisher:
         self._publish_each(self._client, messages)
         return True
 
+    def _status_topics(self) -> list[str]:
+        """Every availability topic this session asserts "online".
+
+        The will covers only the first. The rest are legacy compat topics that
+        no discovery payload names any more (``<legacy>/status``,
+        ``healthtrack/availability``), so only a graceful close can turn them
+        "offline".
+        """
+
+        topics = [availability_topic(self.config)]
+        if self._on_connect_messages is not None:
+            with contextlib.suppress(Exception):
+                topics.extend(
+                    topic
+                    for topic, payload, _retain in self._on_connect_messages()
+                    if payload == "online"
+                )
+        return list(dict.fromkeys(topics))
+
     def close(self) -> None:
         if self._client is not None:
             # Announce "offline" on graceful shutdown too (the LWT only fires on
             # an ungraceful drop), so HA reflects the bridge state either way.
-            with contextlib.suppress(Exception):
-                self._client.publish(
-                    availability_topic(self.config), "offline", qos=_QOS, retain=True
-                ).wait_for_publish()
+            for topic in self._status_topics():
+                with contextlib.suppress(Exception):
+                    self._client.publish(topic, "offline", qos=_QOS, retain=True).wait_for_publish()
             self._connected.clear()
             self._client.loop_stop()
             self._client.disconnect()

@@ -34,6 +34,13 @@ The PHI surface (`/api/apple/*` and the v2 read API) is gated by an API key:
   every start. `healthsave doctor` flags it too. Leave authentication on for any
   deployment that holds real data.
 
+- **Participant keys.** `healthsave participants add NAME` mints one key per
+  participant for a coach or clinic Observatory ([Participants](participants.md)).
+  Only its SHA-256 is stored. A participant key reaches only the phone routes
+  (or, with `--read`, that person's own reads), always as its own person, so a
+  phone can neither read the dashboard nor write into someone else's data.
+  `healthsave participants revoke NAME` answers that key `401` from then on.
+
 The **Observatory web dashboard** asks for a password when one is set. Set,
 change or turn it off in **Settings -> Web sign-in** (changing it or turning it
 off asks for the current password). That choice is stored as a salted scrypt
@@ -48,8 +55,12 @@ cannot be cracked back to the password. Changing either value signs every
 browser out. Without a session, every page (including ones that only 404)
 redirects to `/login`, data routes and server actions return `401`, and each
 server action checks the session again itself. Ten wrong passwords in a minute
-pause sign-in for that minute. Sign-in and sign-out only accept form posts from
-the dashboard's own pages.
+pause sign-in, and the sign-in page says how long to wait. By default every
+browser shares that count. With `WEB_TRUST_PROXY=true` (only when a reverse
+proxy you trust is the only way to the web port) each client address has its
+own count of ten, and thirty wrong passwords a minute from all addresses
+together pause sign-in for everyone. Sign-in and sign-out only accept form
+posts from the dashboard's own pages.
 
 The cookie is sent to every port on the same host, so other web apps on the same
 machine can see it. If that matters to you, give the dashboard its own hostname

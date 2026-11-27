@@ -30,7 +30,7 @@ import uuid
 from contracts._base import DEFAULT_OWNER_ID
 from replay.orchestrator import replay_apple_raw_payloads
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from storage.timescale.ingest import fetch_raw_payloads
+from storage.timescale.ingest import fetch_raw_payloads, ingest_owner_ids
 from storage.timescale.observations import CanonicalObservationRepository
 
 # Must match apps/api/server/api/ingest.py::APPLE_HEALTHKIT_SOURCE_ID.
@@ -41,6 +41,21 @@ async def run(*, dry_run: bool, limit: int, max_pages: int | None) -> None:
     url = os.environ["DATABASE_URL"]
     engine = create_async_engine(url)
     repo = CanonicalObservationRepository()
+
+    # raw_ingestion_log has no owner_id: every replayed row lands on the default
+    # owner. That is only true when nobody else can have sent a batch.
+    async with AsyncSession(engine) as session:
+        other_owners = sorted(
+            str(owner) for owner in await ingest_owner_ids(session) if owner != DEFAULT_OWNER_ID
+        )
+    if other_owners:
+        await engine.dispose()
+        raise SystemExit(
+            "refusing to replay: raw_ingestion_log does not record whose batch each row is, "
+            f"and {len(other_owners)} other owner(s) have keys or data here "
+            f"({', '.join(other_owners)}). Replaying would write their health data into the "
+            "default owner's history."
+        )
     run_id = uuid.uuid4()
 
     # The orchestrator reads one page; we capture the page's max raw id to

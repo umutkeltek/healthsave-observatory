@@ -1,0 +1,13 @@
+specimen_datetime,loinc,marker_name,value,unit,reference_low,reference_high,lab,panel
+2025-11-18,2276-4,Ferritin,64,ng/mL,30,400,Northfield Diagnostics,Iron studies
+2025-11-18,718-7,Hemoglobin,14.6,g/dL,13.5,17.5,Northfield Diagnostics,Complete blood count
+2025-11-18,4548-4,HbA1c,5.3,%,4.0,5.6,Northfield Diagnostics,
+2026-03-10T08:15:00+01:00,2276-4,Ferritin,41,ng/mL,30,400,Northfield Diagnostics,Iron studies
+2026-03-10T08:15:00+01:00,718-7,Hemoglobin,14.1,g/dL,13.5,17.5,Northfield Diagnostics,Complete blood count
+2026-03-10T08:15:00+01:00,4548-4,HbA1c,5.5,%,4.0,5.6,Northfield Diagnostics,
+2026-03-10T08:15:00+01:00,1988-5,CRP,<0.5,mg/L,,5,Northfield Diagnostics,
+2026-09-08T07:50:00+02:00,2276-4,Ferritin,24,ng/mL,30,400,Northfield Diagnostics,Iron studies
+2026-09-08T07:50:00+02:00,718-7,Hemoglobin,13.2,g/dL,13.5,17.5,Northfield Diagnostics,Complete blood count
+2026-09-08T07:50:00+02:00,4548-4,HbA1c,5.7,%,4.0,5.6,Northfield Diagnostics,
+2026-09-17,2276-4,Ferritin,19,ug/L,15,300,Harbor Clinical Lab,
+2026-09-17,718-7,Haemoglobin,128,g/L,130,170,Harbor Clinical Lab,Full blood count

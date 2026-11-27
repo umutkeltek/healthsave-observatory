@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from contracts._base import DEFAULT_OWNER_ID
 from normalization.mappers import DAILY_ACTIVITY_QUANTITY_FIELDS
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,8 +39,26 @@ DATE_ROLLUP_METRICS: tuple[str, ...] = (
 )
 
 
-def _destination_union_sql() -> str:
+_COVERAGE_OWNER = "owner_id = CAST(:owner_id AS UUID)"
+_COVERAGE_RECEIPT_OWNER = "(owner_id = CAST(:owner_id AS UUID) OR owner_id IS NULL)"
+
+
+def _scope_fragment(fragment: str) -> str:
+    """Add the ``:owner_id`` predicate to one ``destination_union`` SELECT."""
+
+    head, group, tail = fragment.partition(" GROUP BY")
+    if " WHERE " in head:
+        head = head.replace(" WHERE ", f" WHERE {_COVERAGE_OWNER} AND ", 1)
+    else:
+        head = f"{head} WHERE {_COVERAGE_OWNER}"
+    return head + group + tail
+
+
+def _destination_union_sql(scoped: bool = False) -> str:
     """Build the ``destination_union`` CTE body.
+
+    ``scoped=True`` filters every destination table to the ``:owner_id`` bind
+    parameter; the default keeps the historical unscoped SQL byte for byte.
 
     The ``daily_activity`` quantity rollups are derived from the source-of-truth
     mapper (``DAILY_ACTIVITY_QUANTITY_FIELDS``) so a newly added field can never
@@ -100,16 +119,29 @@ def _destination_union_sql() -> str:
         "max(time) AS latest_sample_at FROM quantity_samples "
         f"WHERE metric_name <> '{ECG_DESTINATION_METRIC}' GROUP BY metric_name"
     )
+    if scoped:
+        fragments = [_scope_fragment(fragment) for fragment in fragments]
     return "\n                UNION ALL\n                ".join(fragments)
 
 
-def _sync_coverage_query() -> str:
+def _sync_coverage_query(owner_id: UUID | None = None) -> str:
     """Assemble the full metric-coverage SQL.
 
     The ``destination_union`` body and the date-rollup metric list are
     interpolated from trusted internal constants (never client input).
+
+    ``owner_id`` scopes receipts and destinations to one person through the
+    ``:owner_id`` bind parameter; ``None`` keeps the historical unscoped SQL.
+    The default owner also owns receipts with a NULL owner (pre-migration 024).
     """
 
+    receipt_where = ""
+    if owner_id is not None:
+        receipt_where = (
+            f" WHERE {_COVERAGE_RECEIPT_OWNER}"
+            if owner_id == DEFAULT_OWNER_ID
+            else f" WHERE {_COVERAGE_OWNER}"
+        )
     date_rollup_in = ", ".join(f"'{metric}'" for metric in DATE_ROLLUP_METRICS)
     return f"""
             WITH receipt_coverage AS (
@@ -131,13 +163,20 @@ def _sync_coverage_query() -> str:
                     END AS storage_result_level,
                     coalesce(sum(records_skipped), 0) AS records_skipped,
                     max(coalesce(completed_at, received_at)) AS newest_receipt_at,
-                    min(sample_min_at) AS receipt_sample_min_at,
-                    max(sample_max_at) AS receipt_sample_max_at
-                FROM healthsave_sync_receipts
+                    -- Only processed batches stored their samples. A failed
+                    -- batch's window must not read as delivered: for day-total
+                    -- metrics it would stretch the stored day's coverage below.
+                    min(sample_min_at) FILTER (
+                        WHERE status = 'processed'
+                    ) AS receipt_sample_min_at,
+                    max(sample_max_at) FILTER (
+                        WHERE status = 'processed'
+                    ) AS receipt_sample_max_at
+                FROM healthsave_sync_receipts{receipt_where}
                 GROUP BY metric
             ),
             destination_union AS (
-                {_destination_union_sql()}
+                {_destination_union_sql(scoped=owner_id is not None)}
             ),
             destination_coverage AS (
                 SELECT
@@ -289,10 +328,9 @@ async def claim_receipt_idempotency(
                 completed_at = NULL
             WHERE
                 healthsave_sync_receipts.payload_hash IS NULL
-                OR (
-                    healthsave_sync_receipts.status = 'failed'
-                    AND healthsave_sync_receipts.payload_hash = EXCLUDED.payload_hash
-                )
+                -- A failed attempt stored nothing and froze no response, so it
+                -- does not pin the key to its body: any retry may reclaim it.
+                OR healthsave_sync_receipts.status = 'failed'
                 OR (
                     healthsave_sync_receipts.status IN ('processed', 'empty')
                     AND healthsave_sync_receipts.payload_hash = EXCLUDED.payload_hash
@@ -355,8 +393,13 @@ async def complete_receipt_idempotency(
     storage_result_level: str = "accepted_only",
     sample_min_at: str | None = None,
     sample_max_at: str | None = None,
+    sync_run_id: str | None = None,
 ) -> None:
-    """Freeze a claimed response inside the ingest transaction."""
+    """Freeze a claimed response inside the ingest transaction.
+
+    ``sync_run_id`` is written here, in the ingest transaction, so the receipt
+    names its run even when the later best-effort enrichment fails.
+    """
 
     if status not in {"processed", "empty"}:
         raise ValueError("a successful idempotency claim must complete as processed or empty")
@@ -367,6 +410,7 @@ async def complete_receipt_idempotency(
             UPDATE healthsave_sync_receipts
             SET
                 status = :status,
+                sync_run_id = COALESCE(:sync_run_id, sync_run_id),
                 records_received = :records_received,
                 records_accepted = :records_accepted,
                 records_skipped = :records_skipped,
@@ -391,6 +435,7 @@ async def complete_receipt_idempotency(
             "idempotency_key": idempotency_key,
             "payload_hash": payload_hash,
             "status": status,
+            "sync_run_id": sync_run_id,
             "records_received": records_received,
             "records_accepted": records_accepted,
             "records_skipped": records_skipped,
@@ -689,6 +734,7 @@ async def record_sync_run_summary(
                 client_started_at = EXCLUDED.client_started_at,
                 client_completed_at = EXCLUDED.client_completed_at,
                 updated_at = NOW()
+            WHERE healthsave_sync_run_summaries.owner_id = EXCLUDED.owner_id
             RETURNING received_at, updated_at
             """
         ),
@@ -714,10 +760,31 @@ async def record_sync_run_summary(
     return {
         "status": "ok",
         "sync_run_id": sync_run_id,
-        "recorded": True,
+        # False only when the run id already belongs to another owner: a
+        # participant key never overwrites someone else's run summary.
+        "recorded": row is not None,
         "received_at": stamped.get("received_at"),
         "updated_at": stamped.get("updated_at"),
     }
+
+
+def _owner_filter(owner_id: UUID | None) -> tuple[str, dict[str, str]]:
+    """``AND`` clause scoping receipt/summary reads to one owner.
+
+    ``None`` keeps the pre-029 unscoped SQL byte for byte. Receipts written
+    before migration 024 carry a NULL owner; they were all the default
+    owner's, so the default owner's scope includes them and a single-owner
+    install answers exactly as before.
+    """
+
+    if owner_id is None:
+        return "", {}
+    if owner_id == DEFAULT_OWNER_ID:
+        return (
+            " AND (owner_id = CAST(:owner_id AS UUID) OR owner_id IS NULL)",
+            {"owner_id": str(owner_id)},
+        )
+    return " AND owner_id = CAST(:owner_id AS UUID)", {"owner_id": str(owner_id)}
 
 
 def _format_run_summary(row: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -741,16 +808,25 @@ def _format_run_summary(row: dict[str, Any] | None) -> dict[str, Any] | None:
     }
 
 
-async def _latest_run_summary(session: AsyncSession) -> dict[str, Any] | None:
-    result = await session.execute(text(_RUN_SUMMARY_SELECT + " ORDER BY received_at DESC LIMIT 1"))
+async def _latest_run_summary(
+    session: AsyncSession, owner_id: UUID | None = None
+) -> dict[str, Any] | None:
+    clause, params = _owner_filter(owner_id)
+    sql = _RUN_SUMMARY_SELECT
+    if clause:
+        sql += " WHERE TRUE" + clause
+    result = await session.execute(text(sql + " ORDER BY received_at DESC LIMIT 1"), params)
     row = result.mappings().first()
     return dict(row) if row is not None else None
 
 
-async def _run_summary(session: AsyncSession, sync_run_id: str) -> dict[str, Any] | None:
+async def _run_summary(
+    session: AsyncSession, sync_run_id: str, owner_id: UUID | None = None
+) -> dict[str, Any] | None:
+    clause, params = _owner_filter(owner_id)
     result = await session.execute(
-        text(_RUN_SUMMARY_SELECT + " WHERE sync_run_id = :sync_run_id"),
-        {"sync_run_id": sync_run_id},
+        text(_RUN_SUMMARY_SELECT + " WHERE sync_run_id = :sync_run_id" + clause),
+        {"sync_run_id": sync_run_id, **params},
     )
     row = result.mappings().first()
     return dict(row) if row is not None else None
@@ -773,7 +849,7 @@ def _newer(left: Any, right: Any) -> bool:
     return _compare_time_values(left, right) > 0
 
 
-async def latest_sync_run(session: AsyncSession) -> dict[str, Any]:
+async def latest_sync_run(session: AsyncSession, owner_id: UUID | None = None) -> dict[str, Any]:
     """Summarize the most recently observed HealthSave sync run.
 
     "Observed" means EITHER the server received batches for it (receipts) OR the
@@ -788,24 +864,26 @@ async def latest_sync_run(session: AsyncSession) -> dict[str, Any]:
     alias, dict literal or item assignment) — ``test_ios_v2_surface.py`` pins
     them here. Keep the SQL and the zero-delivery literal inline.
     """
+    owner_clause, owner_params = _owner_filter(owner_id)
 
     result = await session.execute(
         text(
-            """
+            f"""
             SELECT sync_run_id
             FROM healthsave_sync_receipts
-            WHERE sync_run_id IS NOT NULL
+            WHERE sync_run_id IS NOT NULL{owner_clause}
             ORDER BY received_at DESC, id DESC
             LIMIT 1
             """
-        )
+        ),
+        owner_params,
     )
     row = result.mappings().first()
     receipt_run: dict[str, Any] | None = None
     if row is not None:
         summary_result = await session.execute(
             text(
-                """
+                f"""
                 SELECT
                     sync_run_id,
                     min(received_at) AS started_at,
@@ -829,16 +907,16 @@ async def latest_sync_run(session: AsyncSession) -> dict[str, Any]:
                     max(sample_max_at) AS sample_max_at,
                     array_agg(DISTINCT metric ORDER BY metric) AS metrics
                 FROM healthsave_sync_receipts
-                WHERE sync_run_id = :sync_run_id
+                WHERE sync_run_id = :sync_run_id{owner_clause}
                 GROUP BY sync_run_id
                 """
             ),
-            {"sync_run_id": row["sync_run_id"]},
+            {"sync_run_id": row["sync_run_id"], **owner_params},
         )
         summary_row = summary_result.mappings().first()
         receipt_run = dict(summary_row) if summary_row is not None else None
 
-    latest_summary = await _latest_run_summary(session)
+    latest_summary = await _latest_run_summary(session, owner_id)
 
     if receipt_run is None and latest_summary is None:
         return {"status": "empty", "message": "No HealthSave sync receipts recorded yet."}
@@ -861,7 +939,7 @@ async def latest_sync_run(session: AsyncSession) -> dict[str, Any]:
         if same_run:
             run_summary = latest_summary
         else:
-            run_summary = await _run_summary(session, receipt_run["sync_run_id"])
+            run_summary = await _run_summary(session, receipt_run["sync_run_id"], owner_id)
         summary["evidence"] = _evidence_label(True, run_summary is not None)
     else:
         assert latest_summary is not None
@@ -899,16 +977,19 @@ async def latest_sync_run(session: AsyncSession) -> dict[str, Any]:
     return summary
 
 
-async def sync_run(session: AsyncSession, sync_run_id: str) -> dict[str, Any]:
+async def sync_run(
+    session: AsyncSession, sync_run_id: str, owner_id: UUID | None = None
+) -> dict[str, Any]:
     """Return a receipt-level summary for one HealthSave sync run.
 
     This is a delivery receipt summary: it proves Data Hub saw and accepted
     batches for the run. It does not claim manifest-level sample verification.
     """
+    owner_clause, owner_params = _owner_filter(owner_id)
 
     result = await session.execute(
         text(
-            """
+            f"""
             SELECT
                 metric,
                 min(received_at) AS started_at,
@@ -932,15 +1013,15 @@ async def sync_run(session: AsyncSession, sync_run_id: str) -> dict[str, Any]:
                 max(sample_max_at) AS sample_max_at,
                 max(sample_max_at) AS latest_sample_at
             FROM healthsave_sync_receipts
-            WHERE sync_run_id = :sync_run_id
+            WHERE sync_run_id = :sync_run_id{owner_clause}
             GROUP BY metric
             ORDER BY metric
             """
         ),
-        {"sync_run_id": sync_run_id},
+        {"sync_run_id": sync_run_id, **owner_params},
     )
     rows = [dict(row) for row in result.mappings().all()]
-    run_summary = await _run_summary(session, sync_run_id)
+    run_summary = await _run_summary(session, sync_run_id, owner_id)
     if not rows:
         if run_summary is None:
             return {
@@ -1031,10 +1112,19 @@ async def sync_run(session: AsyncSession, sync_run_id: str) -> dict[str, Any]:
     }
 
 
-async def sync_coverage(session: AsyncSession) -> dict[str, Any]:
-    """Return metric-level receipt and destination sample coverage."""
+async def sync_coverage(session: AsyncSession, owner_id: UUID | None = None) -> dict[str, Any]:
+    """Return metric-level receipt and destination sample coverage.
 
-    result = await session.execute(text(_sync_coverage_query()))
+    ``owner_id=None`` is the historical all-rows read (the phone-facing sync
+    routes); the Home Assistant bridge passes its owner.
+    """
+
+    if owner_id is None:
+        result = await session.execute(text(_sync_coverage_query()))
+    else:
+        result = await session.execute(
+            text(_sync_coverage_query(owner_id)), {"owner_id": str(owner_id)}
+        )
     rows = [_format_coverage_row(dict(row)) for row in result.mappings().all()]
     decision_readiness = build_decision_readiness(rows)
     return {
@@ -1207,17 +1297,49 @@ async def sync_anomalies(session: AsyncSession, lookback_minutes: int = 15) -> d
             ),
         },
         "anomalies": anomalies,
+        # Additive: windows a source poll (Whoop, Amazfit, Polar, Google)
+        # could not backfill and gave up on. Not part of "status", which stays
+        # about overlapping phone syncs; a gap is history, not a live problem.
+        "source_backfill_gaps": await _source_backfill_gaps(session),
     }
+
+
+async def _source_backfill_gaps(session: AsyncSession) -> list[dict[str, Any]]:
+    from storage.timescale.source_poll_cursors import list_unfilled_gaps
+
+    return [
+        {
+            "type": "source_backfill_given_up",
+            "severity": "warning",
+            "provider": gap["provider"],
+            "unfilled_from": gap["unfilled_gap_start"],
+            "unfilled_to": gap["unfilled_gap_end"],
+            "last_successful_poll_at": gap["last_success_at"],
+            "message": (
+                f"{gap['provider']} did not serve the data between the two times above, "
+                "so the backfill was given up and that stretch is missing here."
+            ),
+            "recommended_action": (
+                "If you need it, export that stretch from the vendor's own app and "
+                "import it, or re-authorize the connection to try the backfill again."
+            ),
+        }
+        for gap in await list_unfilled_gaps(session)
+    ]
 
 
 class TimescaleSyncReceiptRepository:
     """Timescale-backed :class:`storage.ports.SyncReceiptRepository`."""
 
-    async def latest_sync_run(self, session: AsyncSession) -> dict[str, Any]:
-        return await latest_sync_run(session)
+    async def latest_sync_run(
+        self, session: AsyncSession, owner_id: UUID | None = None
+    ) -> dict[str, Any]:
+        return await latest_sync_run(session, owner_id)
 
-    async def sync_run(self, session: AsyncSession, sync_run_id: str) -> dict[str, Any]:
-        return await sync_run(session, sync_run_id)
+    async def sync_run(
+        self, session: AsyncSession, sync_run_id: str, owner_id: UUID | None = None
+    ) -> dict[str, Any]:
+        return await sync_run(session, sync_run_id, owner_id)
 
     async def record_sync_run_summary(self, session: AsyncSession, **fields: Any) -> dict[str, Any]:
         return await record_sync_run_summary(session, **fields)

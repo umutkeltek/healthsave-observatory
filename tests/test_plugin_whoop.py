@@ -134,7 +134,7 @@ async def test_whoop_ingest_returns_zero_when_no_token_stored():
             "token_store": _NoTokenStore(),
         }
     )
-    assert result == {"accepted": 0, "rejected": 0}
+    assert result == {"accepted": 0, "rejected": 0, "skipped_no_token": 1}
 
 
 # ──────────────────────────────────────────────────────────────────────

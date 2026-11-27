@@ -170,6 +170,15 @@ export function appendSavedPanel(panels: SavedPanel[], panel: SavedPanel): Saved
   return candidates;
 }
 
+/**
+ * The saved views a save pushed off Today (appendSavedPanel keeps the newest
+ * within the count and cookie-size limits). A view replaced by one with the
+ * same label is not counted: the person chose that.
+ */
+export function evictedPanels(before: SavedPanel[], after: SavedPanel[], added: SavedPanel): SavedPanel[] {
+  return before.filter((panel) => panel.label !== added.label && !after.some((kept) => kept.id === panel.id));
+}
+
 export async function getSavedPanels(): Promise<SavedPanel[]> {
   const jar = await cookies();
   return parseSavedPanels(jar.get(SAVED_PANELS_COOKIE)?.value);

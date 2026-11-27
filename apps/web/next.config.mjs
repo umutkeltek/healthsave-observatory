@@ -14,6 +14,9 @@ const nextConfig = {
   // Next.js 16.2+; browsers that don't support it fall back to full navigation.
   experimental: {
     viewTransition: true,
+    // The authenticated import proxy applies its own 50 MB bound. Allow the
+    // middleware to forward these requests intact to that validation boundary.
+    proxyClientMaxBodySize: "52mb",
   },
   turbopack: {
     root: appRoot,
@@ -22,7 +25,9 @@ const nextConfig = {
   // directly; this rewrite lets any client-side fetch hit same-origin /api/*.
   async rewrites() {
     const api = process.env.API_BASE ?? "http://localhost:8000";
-    return [{ source: "/api/:path*", destination: `${api}/api/:path*` }];
+    // Dynamic local route handlers (including reviewed document imports) must
+    // run before the generic backend proxy, just like static local handlers.
+    return { fallback: [{ source: "/api/:path*", destination: `${api}/api/:path*` }] };
   },
 };
 

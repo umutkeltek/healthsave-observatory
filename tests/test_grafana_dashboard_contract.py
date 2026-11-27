@@ -9,6 +9,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 DASHBOARDS = ROOT / "deploy" / "grafana" / "dashboards"
+PUBLIC_OVERVIEW = DASHBOARDS.parent / "public" / "apple-health-observatory.json"
 
 
 def _raw_sql() -> list[tuple[str, str]]:
@@ -25,7 +26,7 @@ def _raw_sql() -> list[tuple[str, str]]:
             for value in node:
                 walk(file_name, value)
 
-    for path in sorted(DASHBOARDS.glob("*.json")):
+    for path in sorted([*DASHBOARDS.glob("*.json"), PUBLIC_OVERVIEW]):
         walk(path.name, json.loads(path.read_text()))
     return queries
 
@@ -220,3 +221,41 @@ def test_raw_heart_rate_panels_bucket_dense_year_ranges():
         assert "time_bucket('1 hour', time)" in sql
         assert "avg(bpm)" in sql
         assert "GROUP BY 1" in sql
+
+
+def test_public_dashboard_selects_its_postgresql_datasource_at_import():
+    raw = PUBLIC_OVERVIEW.read_text()
+    dashboard = json.loads(raw)
+    (datasource_input,) = dashboard["__inputs"]
+    plugin = "grafana-postgresql-datasource"
+    assert datasource_input["type"] == "datasource"
+    assert datasource_input["pluginId"] == plugin
+    assert any(
+        requirement["type"] == "datasource" and requirement["id"] == plugin
+        for requirement in dashboard["__requires"]
+    )
+    assert dashboard["id"] is None
+    provisioned = _dashboard("healthsave-overview.json")
+    assert provisioned["panels"][0]["datasource"]["uid"] not in raw
+
+    selected_datasource = {"type": plugin, "uid": "${" + datasource_input["name"] + "}"}
+    assert dashboard["panels"]
+    for panel in dashboard["panels"]:
+        assert panel["datasource"] == selected_datasource
+        assert panel["targets"]
+        for target in panel["targets"]:
+            assert target["datasource"] == selected_datasource
+            assert target["rawSql"]
+
+
+def test_public_dashboard_queries_follow_the_selected_time_range():
+    dashboard = json.loads(PUBLIC_OVERVIEW.read_text())
+    assert dashboard["timezone"] == "utc"
+    for panel in dashboard["panels"]:
+        for target in panel["targets"]:
+            sql = target["rawSql"]
+            uses_time_filter = "$__timeFilter(" in sql
+            uses_date_bounds = "$__timeFrom()" in sql and "$__timeTo()" in sql
+            assert uses_time_filter or uses_date_bounds, panel["title"]
+            assert "current_date" not in sql.lower(), panel["title"]
+            assert "now()" not in sql.lower(), panel["title"]

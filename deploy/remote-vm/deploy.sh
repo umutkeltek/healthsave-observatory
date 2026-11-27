@@ -98,6 +98,13 @@ git archive --format=tar "$COMMIT_SHA" \
   | gzip -c \
   | ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" "tar xzf - -C '$REMOTE_TMP'"
 
+# docker-compose.yml pulls the published release images. A deploy builds from
+# the archived DEPLOY_REF instead, as it always has: the generated
+# docker-compose.remote-vm.override.yml (compose mode) and
+# docker-compose.external-db.override.yml (external mode) give every service
+# that runs Observatory code a build: and the image name Compose gave those
+# builds before (<project>-<service>), so `up -d --build` and the surgical
+# redeploy recipes keep meaning exactly what they did.
 ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" "sudo bash -lc '
 set -euo pipefail
 if [ ! -f \"$REMOTE_ENV_DIR/.env\" ]; then
@@ -189,13 +196,29 @@ services:
   db:
     ports: !override
       - \"127.0.0.1:\${HEALTH_DATA_HUB_DB_PUBLISH_PORT:-$DB_PUBLISH_PORT}:5432\"
+  migrate:
+    build: .
+    image: $PROJECT_NAME-migrate
   api:
+    build: .
+    image: $PROJECT_NAME-api
     ports: !override
       - \"\${HEALTH_DATA_HUB_API_PORT:-$API_PORT}:8000\"
+  worker:
+    build: .
+    image: $PROJECT_NAME-worker
+  agents:
+    build: .
+    image: $PROJECT_NAME-agents
+  homeassistant-mqtt:
+    build: .
+    image: $PROJECT_NAME-homeassistant-mqtt
   grafana:
     ports: !override
       - \"\${HEALTH_DATA_HUB_GRAFANA_PORT:-$GRAFANA_PORT}:3000\"
   web:
+    build: ./apps/web
+    image: $PROJECT_NAME-web
     ports: !override
       - \"\${HEALTH_DATA_HUB_WEB_PORT:-$WEB_PORT}:4173\"
 EOF
